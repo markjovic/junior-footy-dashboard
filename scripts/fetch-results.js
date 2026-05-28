@@ -1,319 +1,432 @@
 #!/usr/bin/env node
 // scripts/fetch-results.js
-// Fetches PlayHQ results pages for all grades, parses scores,
-// and merges matches into data.json.
 //
-// Reads:  grades.json  — [{ id, name, slug }] in repo root
-//         data.json    — existing data (created if absent)
-// Writes: data.json    — updated in repo root (committed by the workflow)
+// 1. Reads config.json for competition season IDs
+// 2. Calls gradeListDiscoverSeason to discover all grades (diffs against grades.json cache)
+// 3. For each grade, fetches new rounds only via gradeRounds + discoverFixtureByRound
+// 4. Rebuilds roster from match history (current grade = last grade a team appeared in)
+// 5. Merges everything into data.json and exits 0 (changes) or 2 (no changes)
 
 'use strict';
 
-const fs    = require('fs');
-const path  = require('path');
+const fs   = require('fs');
+const path = require('path');
 const https = require('https');
-const http  = require('http');
 
-// jsdom provides a DOM for server-side HTML parsing.
-// Installed by the workflow step: npm install jsdom
-const { JSDOM } = require('jsdom');
+// ─── Paths ────────────────────────────────────────────────────────────────────
 
-// ─── Config ──────────────────────────────────────────────────────────────────
+const ROOT         = path.resolve(__dirname, '..');
+const CONFIG_PATH  = path.join(ROOT, 'config.json');
+const GRADES_PATH  = path.join(ROOT, 'grades.json');
+const DATA_PATH    = path.join(ROOT, 'data.json');
 
-const GRADES_PATH  = path.resolve(__dirname, '..', 'grades.json');
-const DATA_PATH    = path.resolve(__dirname, '..', 'data.json');
-const MAX_ROUND    = parseInt(process.env.MAX_ROUND || '22', 10);
-const FETCH_DELAY  = parseInt(process.env.FETCH_DELAY_MS || '1200', 10);
-const USER_AGENT   = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-// Base URL for all EFNL PlayHQ competition pages.
-// Full round URL: BASE/{slug}/{id}/R{n}
-const PLAYHQ_BASE = 'https://www.playhq.com/afl/org/eastern-football-netball-league/2026';
+const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '500', 10);
+const API_URL     = 'https://api.playhq.com/graphql';
+const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
 
-// ─── Name → age/grade derivation ─────────────────────────────────────────────
+// ─── Date helper ─────────────────────────────────────────────────────────────
 
-function parseNameToAgeGrade(name) {
+function todayAEST() {
+  const now = new Date(Date.now() + 10 * 60 * 60 * 1000);
+  return now.toISOString().slice(0, 10);
+}
+
+// ─── GraphQL queries ──────────────────────────────────────────────────────────
+
+const Q_GRADE_LIST = `
+query gradeListDiscoverSeason($id: String!) {
+  discoverSeason(seasonID: $id) {
+    id
+    name
+    grades {
+      id
+      name
+    }
+  }
+}`;
+
+const Q_GRADE_ROUNDS = `
+query gradeRounds($gradeID: ID!) {
+  discoverGrade(gradeID: $gradeID) {
+    id
+    name
+    rounds {
+      id
+      name
+      number
+      isFinalsRound
+      provisionalDates
+    }
+  }
+}`;
+
+const Q_FIXTURE = `
+query discoverFixtureByRound($roundID: ID!) {
+  discoverFixtureByRound(roundID: $roundID) {
+    games {
+      id
+      home {
+        ... on DiscoverTeam {
+          id
+          name
+          logo { sizes { url dimensions { width height } } }
+        }
+      }
+      away {
+        ... on DiscoverTeam {
+          id
+          name
+          logo { sizes { url dimensions { width height } } }
+        }
+      }
+      result {
+        home {
+          statistics { count type { value } }
+        }
+        away {
+          statistics { count type { value } }
+        }
+      }
+      status { value }
+      date
+      allocation {
+        court {
+          venue {
+            name
+            suburb
+            state
+            latitude
+            longitude
+          }
+        }
+      }
+    }
+  }
+}`;
+
+// ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function gqlPost(query, variables) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ query, variables });
+    const req = https.request(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent':     USER_AGENT,
+        'Accept':         'application/json',
+      },
+      timeout: 20000,
+    }, res => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { data += c; });
+      res.on('end', () => {
+        if (res.statusCode !== 200)
+          return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ─── Name helpers ─────────────────────────────────────────────────────────────
+
+// Derive { age, rawGrade } from a PlayHQ grade name e.g. "U12 Girls B"
+function parseGradeName(name) {
   const m = name.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*)$/i);
   if (m) return { age: m[1].trim(), rawGrade: m[2].toUpperCase() };
   return { age: name, rawGrade: '' };
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/** Plain HTTP(S) GET → string (null on non-200, follows one redirect) */
-function fetchUrl(url) {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    const req = client.get(url, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-AU,en;q=0.9',
-      },
-      timeout: 20000,
-    }, res => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        return fetchUrl(res.headers.location).then(resolve).catch(reject);
-      }
-      if (res.statusCode !== 200) {
-        console.log(`        [HTTP ${res.statusCode}] ${url}`);
-        res.resume();
-        return resolve(null);
-      }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { body += chunk; });
-      res.on('end', () => resolve(body));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error(`Timeout: ${url}`)); });
-  });
-}
-
-/** cleanTeam — mirrors the dashboard's cleanTeam() */
+// Strip age suffix and trailing colour word from team names e.g. "Norwood U12" → "Norwood"
 function cleanTeam(name) {
-  let n = name.replace(/\s+U\d+\s*/g, ' ').replace(/\s+$/, '').trim();
-  const colours = ['Purple','Gold','Blue','Red','Green','White','Black','Silver','Navy','Yellow','Orange','Teal'];
-  colours.forEach(c => {
+  let n = name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
+  ['Purple','Gold','Blue','Red','Green','White','Black','Silver',
+   'Navy','Yellow','Orange','Teal'].forEach(c => {
     n = n.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim();
   });
   return n;
 }
 
-// ─── Round page analysis ──────────────────────────────────────────────────────
-
-// Three possible outcomes when fetching a round page:
-const ROUND_STATUS = {
-  NO_PAGE:   'NO_PAGE',   // non-200, page doesn't exist → end of season
-  FUTURE:    'FUTURE',    // games listed but none are Final → not played yet
-  COMPLETED: 'COMPLETED', // at least one game is Final → collect results
-};
-
-/**
- * analyseRoundPage
- * Returns { status, matches, round }
- *
- * Status logic:
- *   NO_PAGE   — html is null, or no [role="listitem"] blocks found at all
- *   FUTURE    — listitem blocks exist but none contain "Final" → scheduled, not played
- *   COMPLETED — at least one listitem contains "Final" → results available
- *
- * This correctly handles:
- *   - Bye rounds (no listitems on the page) → NO_PAGE, skip and continue
- *   - Grading rounds where girls grades sat out → same
- *   - Future rounds → FUTURE, stop fetching this grade
- *   - Partial results (some finals, some not) → COMPLETED, collect what's there
- */
-function analyseRoundPage(html, age, rawGrade) {
-  if (!html) return { status: ROUND_STATUS.NO_PAGE, matches: [], round: null };
-
-  let doc;
-  try {
-    doc = new JSDOM(html).window.document;
-  } catch (e) {
-    console.error('  JSDOM parse error:', e.message);
-    return { status: ROUND_STATUS.NO_PAGE, matches: [], round: null };
-  }
-
-  const gameBlocks = Array.from(doc.querySelectorAll('[role="listitem"]'));
-
-  // No game blocks at all → bye round or end of season
-  if (!gameBlocks.length) {
-    return { status: ROUND_STATUS.NO_PAGE, matches: [], round: null };
-  }
-
-  // Check whether any game is marked Final
-  const anyFinal = gameBlocks.some(b => /Final/i.test(b.textContent));
-  if (!anyFinal) {
-    // Games are scheduled but not yet played
-    return { status: ROUND_STATUS.FUTURE, matches: [], round: null };
-  }
-
-  // At least some finals — parse round number and collect results
-  const roundH3 = Array.from(doc.querySelectorAll('h3'))
-    .find(h => /Round\s+\d+/i.test(h.textContent));
-  const roundMatch = roundH3?.textContent.match(/(\d+)/);
-  const round = roundMatch ? parseInt(roundMatch[1], 10) : null;
-
-  // Allow page title to override age/rawGrade (same fallback chain as dashboard)
-  const title = doc.querySelector('title')?.textContent || '';
-  const titleAge = title.match(/\b(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys|Womens?|Mens?))?)\b/i);
-  if (titleAge) {
-    age = titleAge[1]
-      .replace(/\s+/g, ' ').trim()
-      .split(' ')
-      .map((w, i) => i === 0 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
-  }
-  const titleGrade = title.match(/U\d+[^-–]*[-–]\s*([A-Z]\d?)/i);
-  if (titleGrade) rawGrade = titleGrade[1].toUpperCase();
-  const gradeFromURL = html.match(/\/u\d+(?:-(?:girls|boys|womens?|mens?))?-([a-z]\d?)\//i);
-  if (!titleGrade && gradeFromURL) rawGrade = gradeFromURL[1].toUpperCase();
-
-  const matches = [];
-
-  gameBlocks.forEach(block => {
-    if (!/Final/i.test(block.textContent)) return;
-
-    const logoEls = block.querySelectorAll('[data-testid$="-team-logo"]');
-    if (logoEls.length < 2) return;
-    const homeName = cleanTeam(logoEls[0].dataset.testid.replace(/-team-logo$/, ''));
-    const awayName = cleanTeam(logoEls[1].dataset.testid.replace(/-team-logo$/, ''));
-
-    const allSpans = Array.from(block.querySelectorAll('span'));
-    const scorePairs = [];
-    for (let i = 0; i < allSpans.length - 1; i++) {
-      const a = allSpans[i].textContent.trim();
-      const b = allSpans[i + 1].textContent.trim();
-      if (/^\d+$/.test(a) && /^\d+\.\d+$/.test(b)) {
-        const total = parseInt(a, 10);
-        const [g, bh] = b.split('.').map(Number);
-        scorePairs.push({ total, g: g || 0, b: bh || 0 });
-      }
-    }
-    if (scorePairs.length < 2) return;
-
-    const vLink = block.querySelector('a[href*="maps.google"]');
-    const venue    = vLink ? vLink.textContent.trim().split('/')[0].trim() : '';
-    const venueUrl = vLink ? vLink.getAttribute('href') : '';
-
-    const hLogoImg = logoEls[0].querySelector('img');
-    const aLogoImg = logoEls[1].querySelector('img');
-
-    const id = `${age}|${rawGrade}|${round}|${[homeName, awayName].sort().join('|')}`;
-
-    matches.push({
-      id, age, rawGrade, round,
-      home: homeName, away: awayName,
-      hScore: scorePairs[0].total, hG: scorePairs[0].g, hB: scorePairs[0].b,
-      aScore: scorePairs[1].total, aG: scorePairs[1].g, aB: scorePairs[1].b,
-      venue, venueUrl,
-      hLogo: hLogoImg?.src || '',
-      aLogo: aLogoImg?.src || '',
-    });
-  });
-
-  return { status: ROUND_STATUS.COMPLETED, matches, round };
+function getStat(stats, type) {
+  const s = (stats || []).find(s => s.type.value === type);
+  return s ? s.count : 0;
 }
 
-// ─── Per-grade fetcher ────────────────────────────────────────────────────────
+function getLogoUrl(logo) {
+  if (!logo?.sizes?.length) return '';
+  return (logo.sizes.find(s => s.dimensions?.width === 64) || logo.sizes[0]).url;
+}
 
-/**
- * fetchGrade
- *
- * - Starts from (highestKnownRound + 1) to skip already-stored data
- * - COMPLETED → collect results, advance to next round
- * - NO_PAGE   → could be a bye; increment round counter and keep trying
- *               (up to MAX_EMPTY_SKIP consecutive empty rounds before giving up)
- * - FUTURE    → round is scheduled but not played yet; stop
- */
+// ─── Grade discovery ──────────────────────────────────────────────────────────
+
+async function discoverGrades(competitions) {
+  // Load cached grade list
+  let cached = [];
+  if (fs.existsSync(GRADES_PATH)) {
+    try { cached = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8')); }
+    catch (e) { console.warn('Could not parse grades.json — treating as empty'); }
+  }
+  const cachedById = new Map(cached.map(g => [g.id, g]));
+
+  const allGrades = [];
+  let gradeChanges = false;
+
+  for (const comp of competitions) {
+    console.log(`\nDiscovering grades for: ${comp.name} (seasonID: ${comp.seasonID})`);
+
+    let res;
+    try {
+      res = await gqlPost(Q_GRADE_LIST, { id: comp.seasonID });
+      await sleep(FETCH_DELAY);
+    } catch (e) {
+      console.error(`  gradeListDiscoverSeason failed: ${e.message}`);
+      continue;
+    }
+
+    const grades = res?.data?.discoverSeason?.grades || [];
+    console.log(`  Found ${grades.length} grade(s) from PlayHQ`);
+
+    // Diff against cache
+    const liveIds = new Set(grades.map(g => g.id));
+    const cachedIds = new Set([...cachedById.keys()].filter(id =>
+      cached.find(g => g.id === id)?.seasonID === comp.seasonID
+    ));
+
+    grades.forEach(g => {
+      const prev = cachedById.get(g.id);
+      if (!prev) {
+        console.log(`  + NEW grade: ${g.name} (${g.id})`);
+        gradeChanges = true;
+      } else if (prev.name !== g.name) {
+        console.log(`  ~ RENAMED: "${prev.name}" → "${g.name}" (${g.id})`);
+        gradeChanges = true;
+      }
+      allGrades.push({ id: g.id, name: g.name, seasonID: comp.seasonID, compName: comp.name });
+    });
+
+    // Log removals
+    cachedIds.forEach(id => {
+      if (!liveIds.has(id)) {
+        const prev = cachedById.get(id);
+        console.log(`  - REMOVED grade: ${prev?.name} (${id})`);
+        gradeChanges = true;
+      }
+    });
+  }
+
+  // Update grades.json cache if anything changed
+  if (gradeChanges || allGrades.length !== cached.length) {
+    fs.writeFileSync(GRADES_PATH, JSON.stringify(allGrades, null, 2), 'utf8');
+    console.log(`\nUpdated grades.json (${allGrades.length} grade(s))`);
+  } else {
+    console.log(`\nGrades unchanged (${allGrades.length} grade(s))`);
+  }
+
+  return allGrades;
+}
+
+// ─── Per-grade results fetcher ────────────────────────────────────────────────
+
 async function fetchGrade(grade, knownRounds) {
-  const { id, name, slug } = grade;
-  const { age, rawGrade } = parseNameToAgeGrade(name);
-  const gradeBase = `${PLAYHQ_BASE}/${slug}/${id}`;
+  const { id, name } = grade;
+  const { age, rawGrade } = parseGradeName(name);
+  const today = todayAEST();
+  const highestKnown = knownRounds.get(`${age}|${rawGrade}`) || 0;
 
-  // Start from the round after the last one we already have
-  const startRound = (knownRounds.get(`${age}|${rawGrade}`) || 0) + 1;
+  console.log(`\n  [${name}] — known up to R${highestKnown}`);
 
-  if (startRound > MAX_ROUND) {
-    console.log(`\n  [${name}] — all rounds already fetched, skipping`);
+  // Get round list for this grade
+  let roundList;
+  try {
+    const res = await gqlPost(Q_GRADE_ROUNDS, { gradeID: id });
+    roundList = res?.data?.discoverGrade?.rounds;
+    await sleep(FETCH_DELAY);
+  } catch (e) {
+    console.log(`    gradeRounds error: ${e.message}`);
     return [];
   }
 
-  console.log(`\n  [${name}] — starting from R${startRound}  (${gradeBase})`);
+  if (!roundList?.length) {
+    console.log(`    no rounds returned`);
+    return [];
+  }
 
   const allMatches = [];
 
-  // Allow skipping up to this many consecutive rounds with no games
-  // before deciding the season is over for this grade.
-  // Set to 5 to safely skip the grading-round byes at the start of the season.
-  const MAX_EMPTY_SKIP = 5;
-  let emptyStreak = 0;
+  for (const round of roundList) {
+    const { id: roundID, number, provisionalDates, isFinalsRound } = round;
 
-  for (let r = startRound; r <= MAX_ROUND; r++) {
-    const url = `${gradeBase}/R${r}`;
-    process.stdout.write(`    R${r} ... `);
+    // Skip already-stored rounds
+    if (number <= highestKnown) {
+      console.log(`    R${number} ... already stored`);
+      continue;
+    }
 
-    let html = null;
+    // Skip rounds whose earliest provisional date is still in the future
+    const dates = provisionalDates || [];
+    const earliest = dates.length ? dates.slice().sort()[0] : null;
+    if (earliest && earliest > today) {
+      console.log(`    R${number} ... future (${earliest}) — stopping`);
+      break;
+    }
+
+    process.stdout.write(`    R${number}${isFinalsRound ? ' [Finals]' : ''} ... `);
+
+    let fixtureRes;
     try {
-      html = await fetchUrl(url);
+      fixtureRes = await gqlPost(Q_FIXTURE, { roundID });
+      await sleep(FETCH_DELAY);
     } catch (e) {
-      console.log(`FETCH ERROR: ${e.message}`);
+      console.log(`API error: ${e.message}`);
       break;
     }
 
-    await sleep(FETCH_DELAY);
+    const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
+    const finalGames = games.filter(g => g.status?.value === 'FINAL');
 
-    // Verbose diagnostics — shows exactly what the script is receiving
-    if (html === null) {
-      console.log('HTTP non-200 — no content');
-    } else {
-      const listitems = (html.match(/role="listitem"/g) || []).length;
-      const finals    = (html.match(/Final/gi) || []).length;
-      const scripts   = (html.match(/<script/gi) || []).length;
-      console.log(`HTTP 200  ${html.length} bytes  listitems=${listitems}  finals=${finals}  scripts=${scripts}`);
-      // Snippet around first listitem to confirm real content vs JS shell
-      const liIdx = html.indexOf('role="listitem"');
-      const snipAt = liIdx > -1 ? Math.max(0, liIdx - 80) : Math.max(0, html.indexOf('<body'));
-      console.log(`    snippet[${snipAt}]: ${html.slice(snipAt, snipAt + 400).replace(/\s+/g, ' ')}`);
+    if (games.length === 0) {
+      // No games — bye round, keep going
+      console.log(`bye — continuing`);
+      continue;
     }
 
-    const { status, matches } = analyseRoundPage(html, age, rawGrade);
-
-    if (status === ROUND_STATUS.COMPLETED) {
-      console.log(`    => COMPLETED: ${matches.length} result(s)`);
-      allMatches.push(...matches);
-      emptyStreak = 0;
-
-    } else if (status === ROUND_STATUS.NO_PAGE) {
-      emptyStreak++;
-      console.log(`    => NO_PAGE [${emptyStreak}/${MAX_EMPTY_SKIP}]`);
-      if (emptyStreak >= MAX_EMPTY_SKIP) {
-        console.log(`    ${MAX_EMPTY_SKIP} consecutive empty rounds — stopping`);
-        break;
-      }
-
-    } else { // FUTURE
-      console.log('    => FUTURE: scheduled but not yet played — stopping');
+    if (finalGames.length === 0) {
+      // Games scheduled but none final — not played yet, stop
+      console.log(`scheduled, not yet played — stopping`);
       break;
     }
+
+    const matches = [];
+    for (const game of finalGames) {
+      const homeName = cleanTeam(game.home?.name || '');
+      const awayName = cleanTeam(game.away?.name || '');
+      if (!homeName || !awayName) continue;
+
+      const hStats = game.result?.home?.statistics || [];
+      const aStats = game.result?.away?.statistics || [];
+      const hG     = getStat(hStats, 'TOTAL_GOALS');
+      const hB     = getStat(hStats, 'TOTAL_BEHINDS');
+      const hScore = getStat(hStats, 'TOTAL_SCORE');
+      const aG     = getStat(aStats, 'TOTAL_GOALS');
+      const aB     = getStat(aStats, 'TOTAL_BEHINDS');
+      const aScore = getStat(aStats, 'TOTAL_SCORE');
+
+      const venue    = game.allocation?.court?.venue?.name    || '';
+      const vSuburb  = game.allocation?.court?.venue?.suburb  || '';
+      const vLat     = game.allocation?.court?.venue?.latitude  || '';
+      const vLng     = game.allocation?.court?.venue?.longitude || '';
+      const venueUrl = vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '';
+
+      // Dedup key — same as dashboard
+      const matchId = `${age}|${rawGrade}|${number}|${[homeName, awayName].sort().join('|')}`;
+
+      matches.push({
+        id: matchId, age, rawGrade, round: number,
+        home: homeName, away: awayName,
+        hScore, hG, hB,
+        aScore, aG, aB,
+        venue, vSuburb, venueUrl,
+        hLogo: getLogoUrl(game.home?.logo),
+        aLogo: getLogoUrl(game.away?.logo),
+        date: game.date || '',
+      });
+    }
+
+    console.log(`${matches.length} result(s)`);
+    allMatches.push(...matches);
   }
 
   return allMatches;
 }
 
+// ─── Roster rebuild ───────────────────────────────────────────────────────────
+// Current grade for each team = the grade they appeared in during their
+// highest round number across all stored matches.
+// If a team appears in two different grades in the same round (shouldn't
+// happen but could during a transition), alphabetically earlier grade wins
+// and a warning is logged.
+
+function rebuildRoster(matches) {
+  // teamKey → { grade, age, round }
+  const latest = new Map();
+
+  matches.forEach(m => {
+    [
+      { name: m.home, grade: m.rawGrade, age: m.age, round: m.round },
+      { name: m.away, grade: m.rawGrade, age: m.age, round: m.round },
+    ].forEach(({ name, grade, age, round }) => {
+      const prev = latest.get(name);
+      if (!prev || round > prev.round) {
+        latest.set(name, { grade, age, round });
+      } else if (round === prev.round && grade !== prev.grade) {
+        // Same round, different grades — take the higher grade (A > B > C > D)
+        const winner = [prev.grade, grade].sort()[0]; // alphabetical sort: A < B < C < D
+        console.warn(`  WARNING: ${name} in both grade ${prev.grade} and ${grade} in R${round} — keeping ${winner}`);
+        latest.set(name, { ...prev, grade: winner });
+      }
+    });
+  });
+
+  // Return in the shape the dashboard expects: { [teamName]: { grade, age } }
+  const roster = {};
+  latest.forEach(({ grade, age }, name) => {
+    roster[name] = { grade, age };
+  });
+  return roster;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // 1. Load grades.json
-  if (!fs.existsSync(GRADES_PATH)) {
-    console.error('grades.json not found at', GRADES_PATH);
+  // 1. Load config.json
+  if (!fs.existsSync(CONFIG_PATH)) {
+    console.error('config.json not found at', CONFIG_PATH);
     process.exit(1);
   }
-  const grades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
-  console.log(`Loaded ${grades.length} grade(s) from grades.json`);
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  const competitions = config.competitions || [];
+  if (!competitions.length) {
+    console.error('No competitions defined in config.json');
+    process.exit(1);
+  }
 
   // 2. Load existing data.json
-  let existing = { matches: [], players: [], roster: {}, gotwFlags: {} };
+  let existing = { matches: [], players: [], gotwFlags: {} };
   if (fs.existsSync(DATA_PATH)) {
     try {
       existing = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
       console.log(`Loaded data.json: ${(existing.matches || []).length} existing match(es)`);
     } catch (e) {
-      console.warn('Could not parse existing data.json — starting fresh');
+      console.warn('Could not parse data.json — starting fresh');
     }
   } else {
-    console.log('No existing data.json — will create');
+    console.log('No data.json — will create');
   }
 
-  // 3. Build dedup map and a per-grade "highest known round" map
+  // 3. Discover grades (diffs against grades.json cache)
+  const grades = await discoverGrades(competitions);
+  if (!grades.length) {
+    console.error('No grades found — aborting');
+    process.exit(1);
+  }
+
+  // 4. Build dedup map and per-grade highest-known-round map from existing matches
   const byId = new Map();
-  // knownRounds: "age|rawGrade" → highest round number already in data.json
-  const knownRounds = new Map();
+  const knownRounds = new Map(); // "age|rawGrade" → highest round in data.json
 
   (existing.matches || []).forEach(m => {
     byId.set(m.id, m);
@@ -321,24 +434,17 @@ async function main() {
     knownRounds.set(key, Math.max(knownRounds.get(key) || 0, m.round));
   });
 
-  // 4. Fetch each grade
+  // 5. Fetch new results for each grade
   let newCount = 0;
   let updatedCount = 0;
 
   for (const grade of grades) {
-    if (!grade.id) {
-      console.log(`\n  Skipping "${grade.name}" — missing id`);
-      continue;
-    }
-
     const matches = await fetchGrade(grade, knownRounds);
 
     for (const m of matches) {
       if (byId.has(m.id)) {
         const prev = byId.get(m.id);
-        const changed = prev.hScore !== m.hScore || prev.aScore !== m.aScore
-                     || prev.hG !== m.hG || prev.hB !== m.hB
-                     || prev.aG !== m.aG || prev.aB !== m.aB;
+        const changed = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
         byId.set(m.id, { ...prev, ...m });
         if (changed) updatedCount++;
       } else {
@@ -348,23 +454,30 @@ async function main() {
     }
   }
 
-  console.log(`\nMerge: ${newCount} new, ${updatedCount} updated, ${byId.size} total`);
+  console.log(`\nMatches: ${newCount} new, ${updatedCount} updated, ${byId.size} total`);
 
-  // 5. Write data.json — preserve all other fields (roster, gotwFlags, players)
+  // 6. Rebuild roster from all match history
+  const allMatches = Array.from(byId.values())
+    .sort((a, b) => a.age.localeCompare(b.age)
+                 || a.rawGrade.localeCompare(b.rawGrade)
+                 || a.round - b.round);
+
+  const roster = rebuildRoster(allMatches);
+  console.log(`Roster: ${Object.keys(roster).length} team(s)`);
+
+  // 7. Write data.json — preserve gotwFlags and players, replace matches and roster
   const merged = {
     ...existing,
-    matches: Array.from(byId.values())
-      .sort((a, b) => a.age.localeCompare(b.age)
-                   || a.rawGrade.localeCompare(b.rawGrade)
-                   || a.round - b.round),
+    matches: allMatches,
+    roster,
+    lastUpdated: new Date().toISOString(),
   };
 
   fs.writeFileSync(DATA_PATH, JSON.stringify(merged, null, 2), 'utf8');
   console.log(`Wrote data.json`);
 
-  // Exit 2 = no changes (workflow uses this to skip the commit step)
   if (newCount === 0 && updatedCount === 0) {
-    console.log('No changes — skipping commit');
+    console.log('No match changes — skipping commit');
     process.exit(2);
   }
 
