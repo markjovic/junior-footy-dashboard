@@ -364,8 +364,15 @@ async function fetchGrade(grade, knownRounds) {
     const finalGames = games.filter(g => g.status?.value === 'FINAL');
 
     if (games.length === 0) {
-      // No games — bye round, keep going
+      // No games — bye round. Record a sentinel so knownRounds advances past it.
       console.log(`bye — continuing`);
+      const byeId = `${age}|${rawGrade}|${number}|__bye__`;
+      if (!byId.has(byeId)) {
+        byId.set(byeId, { id: byeId, age, rawGrade, round: number,
+          home: '__bye__', away: '__bye__',
+          hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
+          venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
+      }
       continue;
     }
 
@@ -501,10 +508,26 @@ async function main() {
   const byId = new Map();
   const knownRounds = new Map(); // "age|rawGrade" → highest round in data.json
 
+  // Build a map of which rounds exist per grade
+  const roundsByGrade = new Map();
   (existing.matches || []).forEach(m => {
     byId.set(m.id, m);
     const key = `${m.age}|${m.rawGrade}`;
-    knownRounds.set(key, Math.max(knownRounds.get(key) || 0, m.round));
+    if (!roundsByGrade.has(key)) roundsByGrade.set(key, new Set());
+    roundsByGrade.get(key).add(m.round);
+  });
+
+  // knownRounds = highest *consecutive* round from R1 with no gaps.
+  // Always start counting from R1. If R1 is missing (e.g. 504 error on first run)
+  // but R2-R6 are stored, knownRounds stays 0 so R1 is retried next run.
+  // Exception: grades that genuinely start later (byes in R1-R4) will have
+  // minRound > 1. For those, we treat the gap as intentional (byes) only if
+  // the gap is covered by bye rounds — determined at fetch time, not here.
+  // Safest approach: always walk from R1, treating missing rounds as gaps.
+  roundsByGrade.forEach((rounds, key) => {
+    let consecutive = 0;
+    for (let r = 1; rounds.has(r); r++) consecutive = r;
+    knownRounds.set(key, consecutive);
   });
 
   // 5. Fetch new results for each grade
@@ -532,10 +555,16 @@ async function main() {
   console.log(`\nMatches: ${newCount} new, ${updatedCount} updated, ${byId.size} total`);
 
   // 6. Rebuild roster from all match history
-  const allMatches = Array.from(byId.values())
+  // Separate real matches from bye sentinels
+  const allValues = Array.from(byId.values());
+  const allMatches = allValues
+    .filter(m => !m.isBye)
     .sort((a, b) => a.age.localeCompare(b.age)
                  || a.rawGrade.localeCompare(b.rawGrade)
                  || a.round - b.round);
+
+  // Include bye sentinels in knownRounds calculation but not in output
+  const allWithByes = allValues.sort((a,b) => a.round - b.round);
 
   const roster = rebuildRoster(allMatches);
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
@@ -543,13 +572,15 @@ async function main() {
   // 7. Write data.json — preserve gotwFlags and players, replace matches and roster
   // Build lastRound map: "age|rawGrade" → highest round in data
   const lastRound = {};
-  // Build teamLogos map: cleanTeamName → logo URL (from most recent match appearance)
   const teamLogos = { ...(existing.teamLogos || {}) };
-  allMatches.forEach(m => {
+  // Use allWithByes for round tracking so byes advance lastRound correctly
+  allWithByes.forEach(m => {
     const key = `${m.age}|${m.rawGrade}`;
     if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
-    if (m.hLogo) teamLogos[m.home] = m.hLogo;
-    if (m.aLogo) teamLogos[m.away] = m.aLogo;
+    if (!m.isBye) {
+      if (m.hLogo) teamLogos[m.home] = m.hLogo;
+      if (m.aLogo) teamLogos[m.away] = m.aLogo;
+    }
   });
 
   // Build compLogos map: compName → logo URL
