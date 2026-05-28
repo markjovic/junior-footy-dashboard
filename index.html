@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EFNL Junior Football — Results Dashboard</title>
+<title>Local Footy Dashboard</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#09090e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="EFNL">
+<meta name="apple-mobile-web-app-title" content="LFD">
 <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -236,10 +236,10 @@ body{overflow-x:hidden}
 </head>
 <body>
 
-<div id="ldr-overlay"><div class="spinner"></div><span class="ldr-txt">EFNL DASHBOARD</span></div>
+<div id="ldr-overlay"><div class="spinner"></div><span class="ldr-txt">LOCAL FOOTY DASHBOARD</span></div>
 
 <header class="hdr">
-  <div class="logo">EFNL <span>Dashboard</span></div>
+  <div class="logo">Local Footy <span>Dashboard</span></div>
   <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.24</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
@@ -956,10 +956,8 @@ function getComps() {
   return [...new Set(S.matches.map(m => m.compName).filter(Boolean))].sort();
 }
 function matchesComp(m) {
-  const comps = getComps();
-  // Only one competition — no filtering needed
-  if (comps.length <= 1) return true;
-  // Always one selected — filter to it
+  // No competition set yet, or only one exists — include everything
+  if (!S.selComp || getComps().length <= 1) return true;
   return m.compName === S.selComp;
 }
 function getAges() { return [...new Set(S.matches.filter(matchesComp).map(m=>m.age))].sort(); }
@@ -1004,17 +1002,18 @@ function renderAgeTabs() {
   const comps = getComps();
   const compGroup = document.getElementById('comp-filter-group');
   if (compGroup) compGroup.style.display = comps.length > 1 ? '' : 'none';
+  // Always ensure one competition is selected — critical for matchesComp() to work
+  if (!S.selComp || !comps.includes(S.selComp)) S.selComp = comps[0] || null;
   if (comps.length > 1) {
-    if (!S.selComp) S.selComp = null; // null = all competitions
-    document.getElementById('comp-filters').innerHTML =
-      [`<button class="fchip${!S.selComp?' on':''}" onclick="selectComp(null)">
-        <span class="gdot" style="background:var(--tx3)"></span>All
-       </button>`]
-      .concat(comps.map(c =>
-        `<button class="fchip${c===S.selComp?' on':''}" onclick="selectComp('${c.replace(/'/g,"\'")}')">
-          <span class="gdot" style="background:var(--tx3)"></span>${c}
-        </button>`
-      )).join('');
+    document.getElementById('comp-filters').innerHTML = comps.map(c => {
+      const logo = S.compLogos[c];
+      const logoHtml = logo
+        ? `<img src="${logo}" style="width:16px;height:16px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0" onerror="this.style.display='none'">`
+        : `<span class="gdot" style="background:var(--tx3)"></span>`;
+      return `<button class="fchip${c===S.selComp?' on':''}" onclick="selectComp('${c.replace(/'/g,"\'")}')">
+        ${logoHtml}<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c}</span>
+      </button>`;
+    }).join('');
   }
 
   const ages = getAges();
@@ -1024,7 +1023,6 @@ function renderAgeTabs() {
       <span class="gdot" style="background:var(--tx3)"></span>${a}
     </button>`
   ).join('');
-  // Keep age-tabs in header empty (element may not exist after our HTML change)
   const hdrTabs = document.getElementById('age-tabs');
   if (hdrTabs) hdrTabs.innerHTML = '';
 }
