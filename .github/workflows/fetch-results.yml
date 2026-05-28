@@ -1,0 +1,100 @@
+name: Fetch PlayHQ Results
+
+on:
+  # Run every hour on Sundays between 10am and 9pm AEST (UTC+10)
+  # UTC equivalents: 00:00–11:00 UTC on Sundays
+  # cron: minute hour day-of-month month day-of-week
+  schedule:
+    - cron: '0 0 * * 0'   # 10:00 AEST
+    - cron: '0 1 * * 0'   # 11:00 AEST
+    - cron: '0 2 * * 0'   # 12:00 AEST
+    - cron: '0 3 * * 0'   # 13:00 AEST
+    - cron: '0 4 * * 0'   # 14:00 AEST
+    - cron: '0 5 * * 0'   # 15:00 AEST
+    - cron: '0 6 * * 0'   # 16:00 AEST
+    - cron: '0 7 * * 0'   # 17:00 AEST
+    - cron: '0 8 * * 0'   # 18:00 AEST
+    - cron: '0 9 * * 0'   # 19:00 AEST
+    - cron: '0 10 * * 0'  # 20:00 AEST
+    - cron: '0 11 * * 0'  # 21:00 AEST
+
+  # Also allow manual runs from the Actions tab (useful for ad-hoc re-fetches
+  # mid-week, testing, or re-running after a grades.json update)
+  workflow_dispatch:
+    inputs:
+      max_round:
+        description: 'Maximum round number to fetch (leave blank for default 22)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # needed to commit data.json back to the repo
+
+jobs:
+  fetch-and-commit:
+    name: Fetch results and update data.json
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch the full history so the commit has the right parent
+          fetch-depth: 1
+
+      # ── 2. Set up Node.js ─────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 3. Install jsdom ──────────────────────────────────────────────────
+      # jsdom is the only runtime dependency — it provides a DOM
+      # implementation for parsing PlayHQ HTML server-side.
+      - name: Install dependencies
+        run: npm install jsdom
+
+      # ── 4. Run the fetch script ───────────────────────────────────────────
+      - name: Fetch PlayHQ results
+        id: fetch
+        env:
+          # Pass optional max_round override from manual trigger input
+          MAX_ROUND: ${{ github.event.inputs.max_round }}
+          # Polite delay between HTTP requests (ms). Increase if rate-limited.
+          FETCH_DELAY_MS: '1200'
+        run: |
+          node scripts/fetch-results.js
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        # Exit code 2 means "no changes" — treat as success
+        continue-on-error: true
+
+      # ── 5. Commit if data changed ─────────────────────────────────────────
+      # The script exits 0 when matches were added/updated, 2 when nothing
+      # changed, and 1 on a hard error. Only commit on exit 0.
+      - name: Commit updated data.json
+        if: steps.fetch.outcome == 'success'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage data.json only (never commit grades.json changes from the script)
+          git add data.json
+
+          # If nothing is staged, data.json was unchanged — skip commit
+          if git diff --cached --quiet; then
+            echo "data.json unchanged — nothing to commit"
+            exit 0
+          fi
+
+          # Build a commit message that says which day and run number
+          RUN_DATE=$(TZ='Australia/Melbourne' date '+%A %-d %B %Y')
+          git commit -m "results: auto-fetch ${RUN_DATE} (run #${{ github.run_number }})"
+          git push
+
+      # ── 6. Fail loudly on a hard error ───────────────────────────────────
+      - name: Check for script errors
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::fetch-results.js exited with an error. Check the logs above."
+          exit 1
