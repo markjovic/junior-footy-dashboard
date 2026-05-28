@@ -8,6 +8,15 @@
         "U9",
         "U10"
       ]
+    },
+    {
+      "name": "WFNL 2026",
+      "seasonID": "2170ac5a",
+      "excludeGrades": [
+        "U8",
+        "U9",
+        "U10"
+      ]
     }
   ]
 }
