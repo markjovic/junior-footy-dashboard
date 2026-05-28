@@ -54,6 +54,8 @@ query gradeListDiscoverSeason($id: String!) {
     grades {
       id
       name
+      age { name value }
+      gender { name value }
     }
   }
 }`;
@@ -160,49 +162,66 @@ function gqlPost(query, variables) {
 // ─── Name helpers ─────────────────────────────────────────────────────────────
 
 // Derive { age, rawGrade } from a PlayHQ grade name e.g. "U12 Girls B"
-function parseGradeName(name) {
-  // Strip leading asterisk e.g. "* Premier - ..."
+function parseGradeName(name, ageName, genderName) {
+  // Uses structured API fields (ageName, genderName) combined with name-based
+  // disambiguation where the API is too coarse (e.g. "Senior" covers
+  // Senior Men, Reserves, U19.5, Veterans).
+
+  // Clean: strip leading asterisk, normalise " - " to " "
   let n = name.replace(/^\*\s*/, '').trim();
-  // Strip sponsor prefix only when followed by a U-age group
-  // e.g. "Deakin Uni - U16 Girls - A" → "U16 Girls - A"
-  n = n.replace(/^.+?-\s*(?=U\d)/i, '');
-  // Replace remaining " - " separators with spaces
   n = n.replace(/\s+-\s+/g, ' ').trim();
 
   // Grading rounds
-  if (/\(Grading\)/i.test(n))
-    return { age: n.replace(/\s*\(Grading\)/i, '').trim(), rawGrade: 'Grading' };
+  if (/\(Grading\)/i.test(n)) {
+    let ageLabel = (ageName?.match(/^U\d/i))
+      ? ageName + (genderName && !['Men','Mixed','Boys'].includes(genderName) ? ' ' + genderName : '')
+      : n.replace(/\s*\(Grading\)/i, '').trim();
+    return { age: ageLabel, rawGrade: 'Grading' };
+  }
 
-  // Junior grades: "U12 B", "U12 Girls B", "U17.5 C", "U13 D1", "U18 Girls A/B"
+  // Extract rawGrade from name: look for Premier, Division N, letter grade, Reserves
+  const divMatch   = n.match(/\b(Premier(?:\s+Division)?|Division \d+)\b/i);
+  const letterMatch = n.match(/\b([A-D]\d*(?:\/[A-D]\d*)?)\s*$/i);
+  const rawGrade = divMatch
+    ? divMatch[1].replace(/Premier Division/i, 'Premier')
+    : letterMatch ? letterMatch[1].toUpperCase() : '';
+
+  // Junior age groups: ageName starts with U (U12, U16, U18 etc.)
+  if (ageName?.match(/^U\d/i)) {
+    const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
+      ? ' ' + genderName : '';
+    return { age: ageName + genderSuffix, rawGrade };
+  }
+
+  // Senior/Open: use name to distinguish Senior Men / Reserves / U19.5 / Veterans
+  if (ageName === 'Senior' || ageName === 'Open' || !ageName) {
+    // Veterans / Masters — name contains Veterans or ageName starts with Master
+    if (/Veterans/i.test(n) || ageName?.match(/^Masters?/i)) {
+      const vGender = /Women/i.test(n) ? 'Women'
+        : /Men/i.test(n) ? 'Men'
+        : genderName === 'Women' ? 'Women' : 'Men';
+      return { age: 'Veterans', rawGrade: vGender };
+    }
+    // U19.5
+    if (/U19\.5/i.test(n)) return { age: 'U19.5', rawGrade };
+    // Reserves / Reserve
+    if (/Reserves?/i.test(n)) return { age: 'Reserve ' + (genderName || 'Men'), rawGrade };
+    // Senior Women / Women divisions
+    if (genderName === 'Women' || /Women/i.test(n)) return { age: 'Senior Women', rawGrade };
+    // Default Senior Men
+    return { age: 'Senior ' + (genderName || 'Men'), rawGrade };
+  }
+
+  // Other structured age (e.g. "Junior", "Intermediate")
+  if (ageName) {
+    return { age: ageName + (genderName ? ' ' + genderName : ''), rawGrade };
+  }
+
+  // Pure fallback: strip sponsor prefix before U-age, try letter grade pattern
+  n = n.replace(/^.+?(?=U\d)/i, '').trim();
   const junior = n.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*(?:\/[A-D]\d*)?)$/i);
   if (junior) return { age: junior[1].trim(), rawGrade: junior[2].toUpperCase() };
-
-  // Senior Men: "Premier Eastland Senior Men", "Division 1 Eastland Senior Men"
-  const seniorMen = n.match(/^(Premier|Division \d+)\s+(?:Eastland\s+)?Senior Men$/i);
-  if (seniorMen) return { age: 'Senior Men', rawGrade: seniorMen[1] };
-
-  // Reserve Men: "Premier Reserve Men", "Division 1 Reserve Men"
-  const reserve = n.match(/^(Premier|Division \d+)\s+Reserve Men$/i);
-  if (reserve) return { age: 'Reserve Men', rawGrade: reserve[1] };
-
-  // U19.5: "Premier U19.5", "Division 1 U19.5"
-  const u195 = n.match(/^(Premier|Division \d+)\s+U19\.5$/i);
-  if (u195) return { age: 'U19.5', rawGrade: u195[1] };
-
-  // Senior Women: "Senior Women Premier Division"
-  if (/Senior Women Premier Division/i.test(n))
-    return { age: 'Senior Women', rawGrade: 'Premier' };
-
-  // Women divisions: "Women Division 1"
-  const women = n.match(/^Women Division (\d+)$/i);
-  if (women) return { age: 'Senior Women', rawGrade: 'Division ' + women[1] };
-
-  // Veterans
-  const vets = n.match(/^Veterans\s*[-–]?\s*(Mens?|Womens?)$/i);
-  if (vets) return { age: 'Veterans', rawGrade: vets[1].replace(/s$/i, '') };
-
-  // Fallback — preserve full name as age, no grade
-  return { age: n, rawGrade: '' };
+  return { age: n, rawGrade };
 }
 
 // Strip age suffix and trailing colour word from team names e.g. "Norwood U12" → "Norwood"
@@ -286,7 +305,15 @@ async function discoverGrades(competitions) {
         console.log(`  ~ RENAMED: "${prev.name}" → "${g.name}" (${g.id})`);
         gradeChanges = true;
       }
-      allGrades.push({ id: g.id, name: g.name, seasonID: comp.seasonID, compName: comp.name, compLogoUrl });
+      allGrades.push({
+        id: g.id,
+        name: g.name,
+        ageName: g.age?.name || '',      // e.g. "Senior", "U12", "U16"
+        genderName: g.gender?.name || '', // e.g. "Men", "Women", "Girls", "Mixed"
+        seasonID: comp.seasonID,
+        compName: comp.name,
+        compLogoUrl,
+      });
     });
 
     // Log removals
@@ -313,8 +340,8 @@ async function discoverGrades(competitions) {
 // ─── Per-grade results fetcher ────────────────────────────────────────────────
 
 async function fetchGrade(grade, knownRounds, byId) {
-  const { id, name } = grade;
-  const { age, rawGrade } = parseGradeName(name);
+  const { id, name, ageName = '', genderName = '' } = grade;
+  const { age, rawGrade } = parseGradeName(name, ageName, genderName);
   const today = todayAEST();
   const highestKnown = knownRounds.get(`${age}|${rawGrade}`) || 0;
 
