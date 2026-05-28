@@ -1,0 +1,492 @@
+[
+  {
+    "id": "6f964e7b",
+    "name": "* Premier - Eastland Senior Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "81980381",
+    "name": "* Premier - Reserve Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "4812bdd1",
+    "name": "* Premier - U19.5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a9fb1c1d",
+    "name": "Division 1 - Eastland Senior Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "283b27af",
+    "name": "Division 1 - Reserve Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "321e3b40",
+    "name": "Division 1 - U19.5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "57c5e2ed",
+    "name": "Division 2 - Eastland Senior Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f695d3b1",
+    "name": "Division 2 - Reserve Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "b0216849",
+    "name": "Division 2 - U19.5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0c7c57cd",
+    "name": "Division 3 - Eastland Senior Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "55eefeb4",
+    "name": "Division 3 - Reserve Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c6be0933",
+    "name": "Division 3 - U19.5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e2637abc",
+    "name": "Division 4 - Eastland Senior Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "54b0742a",
+    "name": "Division 4 - Reserve Men",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3770593d",
+    "name": "Division 4 - U19.5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "4d1752ac",
+    "name": "Deakin Uni Senior Women - Premier Division",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a4fb5680",
+    "name": "Deakin Uni Women - Division 1",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0c8681d2",
+    "name": "Deakin Uni Women - Division 2",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0aa9de39",
+    "name": "Deakin Uni Women - Division 3",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "9afec39a",
+    "name": "Deakin Uni Women - Division 4",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2d5847cb",
+    "name": "Deakin Uni Women - Division 5",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "addbad36",
+    "name": "Veterans - Women",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e2eca367",
+    "name": "U11 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "677e8405",
+    "name": "U11 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5d83a0a7",
+    "name": "U11 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "76f0b381",
+    "name": "U11 - D1",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5b616949",
+    "name": "U11 - D2",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cf3a6b3e",
+    "name": "U12 Girls - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d63d8e20",
+    "name": "U12 Girls - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3e71f3be",
+    "name": "U12 Girls - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "48c16853",
+    "name": "U12 Girls - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e864eaae",
+    "name": "U12 Girls (Grading)",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "49b58774",
+    "name": "U12 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0fd9befd",
+    "name": "U12 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f82f4520",
+    "name": "U12 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "da3d89eb",
+    "name": "U12 - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "93103304",
+    "name": "U13 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "4870f5ca",
+    "name": "U13 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7b48e462",
+    "name": "U13 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6a1525e7",
+    "name": "U13 - D1",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "fda4a8fb",
+    "name": "U13 - D2",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "df754144",
+    "name": "U14 Girls - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "8f58bbe1",
+    "name": "U14 Girls - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "08e277df",
+    "name": "U14 Girls - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f40d348f",
+    "name": "U14 Girls - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3f693849",
+    "name": "U14 Girls (Grading)",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "22e99124",
+    "name": "U14 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e91acd51",
+    "name": "U14 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "340423e6",
+    "name": "U14 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e0661c29",
+    "name": "U14 - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7b3dd013",
+    "name": "U15 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2c572b91",
+    "name": "U15 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "37ac89b2",
+    "name": "U15 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cd7a7967",
+    "name": "U15 - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2da11fec",
+    "name": "U16 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "492b9fba",
+    "name": "U16 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "728bdd9c",
+    "name": "U16 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "531942e0",
+    "name": "Deakin Uni - U16 Girls - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "32a8ecb2",
+    "name": "Deakin Uni - U16 Girls - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5105c3fb",
+    "name": "Deakin Uni - U16 Girls - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a1d9e1f4",
+    "name": "Deakin Uni - U16 Girls - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6e93feb8",
+    "name": "Deakin Uni - U16 Girls (Grading)",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "4a0b5150",
+    "name": "U17.5 - A",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2279d612",
+    "name": "U17.5 - B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "49d53a59",
+    "name": "U17.5 - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "19e5ac9f",
+    "name": "U17.5 - D",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0b22c9cb",
+    "name": "Deakin Uni - U18 Girls - A/B",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a796f6d8",
+    "name": "Deakin Uni - U18 Girls - C",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "e99a8e35",
+    "name": "Deakin Uni - U18 Girls (Grading)",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0569c9ec",
+    "name": "Veterans - Mens",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  }
+]
