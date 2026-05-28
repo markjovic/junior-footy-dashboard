@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.16</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.17</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -389,7 +389,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.16</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.17</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -557,7 +557,7 @@ function parseResultsHTML(html, filename) {
     // Venue
     const vLink = block.querySelector('a[href*="maps.google"]');
     const venue = vLink ? vLink.textContent.trim().split('/')[0].trim() : '';
-    const venueUrl = vLink ? vLink.href : '';
+    const venueUrl = vLink ? vLink.getAttribute('href') : '';
 
     // Logos — the img tags are inside the logo elements
     const hLogoImg = logoEls[0].querySelector('img') || logoEls[0];
@@ -1301,7 +1301,7 @@ function openTeamDrilldown(teamName, grade) {
         ${!valid?`<span style="font-size:8px;color:var(--tx3);flex-shrink:0">not counted</span>`:''}
       </div>
       <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
-      <span style="font-size:9px;color:var(--tx3);text-align:right">${tg}.${tb} – ${og}.${ob}</span>
+      <span style="font-size:9px;color:var(--tx3);text-align:left;white-space:nowrap">${tg}.${tb} – ${og}.${ob}</span>
       <span style="font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${venueLink(m.venue, m.venueUrl)}</span>
     </div>`;
   }).join('') : '<div class="empty"><p>No matches found</p></div>';
