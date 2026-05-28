@@ -554,8 +554,11 @@ function rebuildRoster(matches) {
       if (!prev || round > prev.round) {
         latest.set(key, { grade, age, round });
       } else if (round === prev.round && grade !== prev.grade) {
-        // Same team, same age, same round, different grades — take higher grade
-        const winner = [prev.grade, grade].sort()[0];
+        // Same team, same age, same round, different grades
+        // Prefer non-empty grade, then alphabetically earlier (A < B < C < D)
+        const winner = (!prev.grade && grade) ? grade
+          : (prev.grade && !grade) ? prev.grade
+          : [prev.grade, grade].sort()[0];
         console.warn(`  WARNING: ${name} (${age}) in both grade ${prev.grade} and ${grade} in R${round} — keeping ${winner}`);
         latest.set(key, { ...prev, grade: winner });
       }
