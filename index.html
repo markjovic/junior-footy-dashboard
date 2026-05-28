@@ -183,6 +183,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.1</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -592,29 +593,73 @@ function parseStatsHTML(html, filename) {
 }
 
 function cleanTeam(name) {
-  return name.replace(/\s+U\d+\s*/g, ' ').replace(/\s+$/, '').trim();
+  // Strip age group suffix and normalise spacing
+  let n = name.replace(/\s+U\d+\s*/g, ' ').replace(/\s+$/, '').trim();
+  // Strip trailing colour words: "Norwood Purple" → "Norwood"
+  const colours = ['Purple','Gold','Blue','Red','Green','White','Black','Silver','Navy','Yellow','Orange','Teal'];
+  colours.forEach(c => { n = n.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim(); });
+  return n;
 }
 
 // ═══════════════════════════════════════
-// CREST LOADER — same slug logic as fixture card generator
+// CREST LOADER — matches fixture card generator logic exactly
 // ═══════════════════════════════════════
-const crestCache = {}; // { slug: HTMLImageElement | null }
+const COLOUR_WORDS = ['PURPLE','GOLD','BLUE','RED','GREEN','WHITE','BLACK','SILVER','NAVY','YELLOW','ORANGE','TEAL'];
 
-function teamSlug(name) {
-  return name.toLowerCase()
-    .replace(/\s+(football\s+club|junior\s+football\s+club|fc|jfc|juniors?|sports\s+club|sc)\s*$/i, '')
-    .replace(/\s+/g, '_').trim();
+const CREST_ALIASES = {
+  'NTH RINGWOOD':           'NORTH RINGWOOD',
+  'NORTH RINGWOOD':         'NORTH RINGWOOD',
+  'STH CROYDON':            'SOUTH CROYDON',
+  'SOUTH CROYDON':          'SOUTH CROYDON',
+  'STH BELGRAVE':           'SOUTH BELGRAVE',
+  'SOUTH BELGRAVE':         'SOUTH BELGRAVE',
+  'UPPER FTG':              'UPPER FERNTREE GULLY',
+  'UPPER FERNTREE GULLY':   'UPPER FERNTREE GULLY',
+  'WANTIRNA STH':           'WANTIRNA SOUTH',
+  'WANTIRNA SOUTH':         'WANTIRNA SOUTH',
+  'CROYDON NORTH':          'CROYDON NORTH',
+  'CROYDON NTH':            'CROYDON NORTH',
+  'CROYDON NORTH MLOC':     'CROYDON NORTH',
+  'E RINGWOOD':             'EAST RINGWOOD',
+  'E BURWOOD':              'EAST BURWOOD',
+  'UPWEY TECOMA':           'UPWEY TECOMA',
+  'UPWEY/TECOMA':           'UPWEY TECOMA',
+  'GLEN WAVERLEY ROVERS':   'GLEN WAVERLEY ROVERS',
+  'MT EVELYN':              'MT EVELYN',
+  'MOUNT EVELYN':           'MT EVELYN',
+  'FLEMINGTON JUNIORS':     'FLEMINGTON',
+  'FLEMINGTON':             'FLEMINGTON',
+  'HCFC':                   'HOPPERS CROSSING',
+  'WILLIAMSTOWN JUNIORS':   'WILLIAMSTOWN',
+};
+
+const crestCache = {};
+
+function resolveCrestKey(teamName) {
+  // Uppercase and strip age group
+  let cleaned = teamName.replace(/\s+U\d+.*$/i, '').trim().toUpperCase();
+  // Normalise slash spacing
+  cleaned = cleaned.replace(/\s*\/\s*/g, ' / ');
+  // Joint team: "NORWOOD GOLD / HEATHMONT" → use first part only
+  if (cleaned.includes(' / ')) cleaned = cleaned.split(' / ')[0].trim();
+  // Strip Juniors suffix
+  cleaned = cleaned.replace(/\s+JUNIORS?\s*$/i, '').trim();
+  // Strip club suffixes
+  cleaned = cleaned.replace(/\s+(FOOTBALL\s+CLUB|JUNIOR\s+FOOTBALL\s+CLUB|FC|JFC|SPORTS\s+CLUB|SC)\s*$/i, '').trim();
+  // Strip colour words: "NORWOOD PURPLE" → "NORWOOD"
+  COLOUR_WORDS.forEach(c => { cleaned = cleaned.replace(new RegExp('\\s+' + c + '\\s*$'), '').trim(); });
+  // Resolve alias
+  return CREST_ALIASES[cleaned] || cleaned;
 }
 
 function getCrestImg(teamName) {
-  const slug = teamSlug(teamName);
-  if (slug in crestCache) return crestCache[slug]; // cached (may be null)
-  // Start async load, return null immediately, re-render when loaded
-  crestCache[slug] = null;
+  const key = resolveCrestKey(teamName);
+  if (key in crestCache) return crestCache[key];
+  crestCache[key] = null;
   const img = new Image();
-  img.onload = () => { crestCache[slug] = img; render(); };
-  img.onerror = () => { crestCache[slug] = null; };
-  img.src = `assets/clubs/${slug}/crest.png`;
+  img.onload = () => { crestCache[key] = img; render(); };
+  img.onerror = () => { crestCache[key] = null; };
+  img.src = `assets/clubs/${key.toLowerCase().replace(/\s+/g,'_')}/crest.png`;
   return null;
 }
 
