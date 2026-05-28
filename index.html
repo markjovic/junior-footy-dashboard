@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.32</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.34</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.32</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.34</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -533,8 +533,8 @@ function venueLink(venue, venueUrl, style='') {
   if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;text-decoration-color:rgba(96,165,250,0.4);text-underline-offset:2px;${style}">${venue} ↗</a>`;
   return `<span style="${style}">${venue}</span>`;
 }
-const GRADE_ORDER = ['A','B','C','D','D1','D2','D3','D4','Grading'];
-const GRADE_COL = {A:'#60a5fa',B:'#22c55e',C:'#f97316',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9'};
+const GRADE_ORDER = ['Premier','Division 1','Division 2','Division 3','Division 4','Division 5','A','B','C','D','D1','D2','D3','D4','Men','Women','Grading'];
+const GRADE_COL = {Premier:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6',Men:'#60a5fa',Women:'#f472b6'};
 
 // ═══════════════════════════════════════
 // APP STATE
@@ -827,7 +827,9 @@ function currentGrade(teamName, age, rawGrade) {
 function matchIsValid(m) {
   const hGrade = currentGrade(m.home, m.age, m.rawGrade);
   const aGrade = currentGrade(m.away, m.age, m.rawGrade);
-  return hGrade && aGrade && hGrade === aGrade;
+  // Both grades must match — for senior/women/veterans grades rawGrade is ""
+  // which is valid as long as both teams resolve to the same (empty) grade
+  return hGrade === aGrade && hGrade !== null && hGrade !== undefined;
 }
 
 // The grade a match counts towards (from the roster)
