@@ -295,11 +295,12 @@ async function fetchGrade(grade, knownRounds, byId) {
 
   // Get round list for this grade
   let roundList;
+  let gradeDates = [];
   try {
     const res = await gqlPost(Q_GRADE_ROUNDS, { gradeID: id });
     const gradeData = res?.data?.discoverGrade;
     roundList = gradeData?.rounds;
-    const gradeDates = gradeData?.dates || []; // e.g. ["2026-04","2026-05","2026-08"]
+    gradeDates = gradeData?.dates || []; // e.g. ["2026-04","2026-05","2026-08"]
     await sleep(FETCH_DELAY);
   } catch (e) {
     console.log(`    gradeRounds error: ${e.message}`);
