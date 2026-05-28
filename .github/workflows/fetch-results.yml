@@ -1,7 +1,6 @@
 name: Fetch PlayHQ Results
 
 on:
-  # Run every hour on Sundays between 10am and 9pm AEST (UTC+10)
   schedule:
     - cron: '0 0 * * 0'   # 10:00 AEST
     - cron: '0 1 * * 0'   # 11:00 AEST
@@ -23,7 +22,7 @@ on:
         required: false
         default: ''
       run_migration:
-        description: 'Run grade migration script (yes/no) — use once after deploying updated fetch-results.js'
+        description: 'Run grade migration script (yes/no)'
         required: false
         default: 'no'
 
@@ -49,7 +48,7 @@ jobs:
       - name: Check Node version
         run: node --version
 
-      # ── Migration (one-off, only when run_migration=yes) ─────────────────────
+      # ── Migration (one-off) ───────────────────────────────────────────────────
       - name: Run grade migration
         if: github.event.inputs.run_migration == 'yes'
         run: node scripts/migrate-grades.js
@@ -62,12 +61,15 @@ jobs:
           FETCH_DELAY_MS: '150'
         run: |
           node scripts/fetch-results.js
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-        continue-on-error: true
+          CODE=$?
+          echo "exit_code=${CODE}" >> "$GITHUB_OUTPUT"
+          # 0 = changes written, 2 = no changes — both are fine
+          # 1 = real error — fail the step
+          if [ $CODE -eq 1 ]; then exit 1; fi
+          exit 0
 
       # ── Commit ────────────────────────────────────────────────────────────────
       - name: Commit updated data.json
-        if: steps.fetch.outcome == 'success' || github.event.inputs.run_migration == 'yes'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -87,14 +89,3 @@ jobs:
           fi
           git pull --rebase origin main
           git push
-
-      - name: Check for script errors
-        if: steps.fetch.outcome == 'failure' && github.event.inputs.run_migration != 'yes'
-        run: |
-          # Exit code 2 = no changes (not an error)
-          if [ "${{ steps.fetch.outputs.exit_code }}" = "2" ]; then
-            echo "No changes — skipping commit"
-            exit 0
-          fi
-          echo "::error::fetch-results.js exited with an error. Check the logs above."
-          exit 1
