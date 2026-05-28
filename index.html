@@ -112,7 +112,7 @@ body{overflow-x:hidden}
 /* ── Results ── */
 .rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
 .rnd-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
-.match-row{display:grid;grid-template-columns:28px 1fr 80px 1fr minmax(140px,0.8fr);align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
+.match-row{display:grid;grid-template-columns:28px 1fr 80px 1fr minmax(160px,1fr);align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
 .match-row:hover{background:var(--s2)}
 .mr-left{display:flex;align-items:center;gap:6px;min-width:0}
 .mr-right{display:flex;align-items:center;gap:6px;flex-direction:row-reverse;min-width:0}
@@ -120,7 +120,7 @@ body{overflow-x:hidden}
 .mr-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mr-score{text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:13px}
 .mr-det{font-size:8px;color:var(--tx3);display:block;line-height:1.2;text-align:center;margin-top:1px}
-.mr-venue{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.mr-venue{font-size:9px;color:var(--tx3);text-align:right;white-space:normal;line-height:1.4}
 .mr-grade{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:1px}
 
 /* ── Empty / util ── */
@@ -234,7 +234,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.18</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.19</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
@@ -430,7 +430,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.18</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.19</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -507,7 +507,7 @@ const DEV_MODE = true;
 // ── Venue link helper ──
 function venueLink(venue, venueUrl, style='') {
   if (!venue) return '';
-  if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.2);text-underline-offset:2px;${style}">${venue}</a>`;
+  if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;text-decoration-color:rgba(96,165,250,0.4);text-underline-offset:2px;${style}">${venue} ↗</a>`;
   return `<span style="${style}">${venue}</span>`;
 }
 const GRADE_ORDER = ['A','B','C','D1','D2','D3','D4'];
@@ -1352,7 +1352,7 @@ function openTeamDrilldown(teamName, grade) {
       </div>
       <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
       <span style="font-size:9px;color:var(--tx3);text-align:left;white-space:nowrap">${tg}.${tb} – ${og}.${ob}</span>
-      <span style="font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${venueLink(m.venue, m.venueUrl)}</span>
+      <span style="font-size:9px;color:var(--tx3);white-space:normal;line-height:1.4">${venueLink(m.venue, m.venueUrl)}</span>
     </div>`;
   }).join('') : '<div class="empty"><p>No matches found</p></div>';
 
