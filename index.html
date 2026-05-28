@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.14</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.16</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -389,7 +389,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.14</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.16</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1097,7 +1097,7 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">Grade ${grade}</span>${m.venue?` · ${venueLink(m.venue, m.venueUrl)}`:'​'}</div>
+    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">Grade ${grade}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
@@ -1262,11 +1262,11 @@ function openTeamDrilldown(teamName, grade) {
   document.getElementById('tm-ha').innerHTML = `
     <div class="team-ha-cell">
       <div class="team-ha-lbl">🏠 Home</div>
-      <div class="team-ha-val">${hw}W ${hd}D ${hl}L &nbsp;·&nbsp; ${hf}–${ha}</div>
+      <div class="team-ha-val">${hw}W ${hd}D ${hl}L &nbsp; &middot; &nbsp; ${hf}–${ha}</div>
     </div>
     <div class="team-ha-cell">
       <div class="team-ha-lbl">✈ Away</div>
-      <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp;·&nbsp; ${af}–${aa}</div>
+      <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp; &middot; &nbsp; ${af}–${aa}</div>
     </div>`;
 
   // Results list — all matches, valid ones full opacity, invalid dimmed
@@ -1548,7 +1548,7 @@ function renderGotwPicker() {
         return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
           <input type="radio" name="gotw-pick" value="${m.id}" ${m.id===flaggedId?'checked':''}>
           <span style="flex:1">${m.home} ${m.hScore}–${m.aScore} ${m.away}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Grade ${g} · margin ${margin}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Grade ${g}  &middot;  margin ${margin}</span>
         </label>`;
       }).join('') + `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
         <input type="radio" name="gotw-pick" value="" ${!flaggedId?'checked':''}> Auto (closest margin)
@@ -1619,28 +1619,32 @@ document.getElementById('gotw-age-sel').addEventListener('change', renderGotwRou
 // INIT
 // ═══════════════════════════════════════
 async function init() {
-  // Try loading from data.json first (GitHub Pages hosting) then fall back to storage
-  try {
-    const r = await fetch('data.json');
-    if (r.ok) {
-      const d = await r.json();
-      if (d.matches) S.matches = d.matches;
-      if (d.players) S.players = d.players;
-      if (d.roster)  S.roster  = d.roster;
-      if (d.gotwFlags) S.gotwFlags = d.gotwFlags;
-    }
-  } catch(e) {
-    const [matches,players,roster,gotwFlags] = await Promise.all([
-      sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
-    ]);
-    if (matches) S.matches=matches;
-    if (players) S.players=players;
-    if (roster)  S.roster=roster;
-    if (gotwFlags) S.gotwFlags=gotwFlags;
+  // Always load from storage first
+  const [matches,players,roster,gotwFlags] = await Promise.all([
+    sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
+  ]);
+  if (matches) S.matches=matches;
+  if (players) S.players=players;
+  if (roster)  S.roster=roster;
+  if (gotwFlags) S.gotwFlags=gotwFlags;
+
+  // If running on a server (GitHub Pages), also try data.json and prefer it
+  if (location.protocol !== 'file:') {
+    try {
+      const r = await fetch('data.json');
+      if (r.ok) {
+        const d = await r.json();
+        if (d.matches?.length) S.matches = d.matches;
+        if (d.players?.length) S.players = d.players;
+        if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
+        if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
+      }
+    } catch(e) {}
   }
 
   if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
-  if (ages.length) S.selectedAge=ages[0];
+  const ages = getAges();
+  if (ages.length) S.selectedAge = ages[0];
   render();
   document.getElementById('ldr-overlay').classList.add('gone');
 }
