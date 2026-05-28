@@ -188,9 +188,15 @@ function parseGradeName(name, ageName, genderName) {
 
   // Junior age groups: ageName starts with U (U12, U16, U18 etc.)
   if (ageName?.match(/^U\d/i)) {
+    // Prefer age from grade name when more specific than ageName
+    // e.g. PlayHQ returns ageName="U17" for U17.5 competitions
+    const nameAgeMatch = n.match(/^U(\d+(?:\.\d+)?)/i);
+    const resolvedAge = (nameAgeMatch && nameAgeMatch[0] !== ageName)
+      ? nameAgeMatch[0].toUpperCase()
+      : ageName;
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
       ? ' ' + genderName : '';
-    return { age: ageName + genderSuffix, rawGrade };
+    return { age: resolvedAge + genderSuffix, rawGrade };
   }
 
   // Senior/Open: use name to distinguish Senior Men / Reserves / U19.5 / Veterans
