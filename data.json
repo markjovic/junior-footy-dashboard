@@ -1,259 +1,1654 @@
-{
-  "matches": [
-    {
-      "id": "U14 Girls|A|6|Blackburn Girls|East Ringwood Girls",
-      "age": "U14 Girls",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Blackburn Girls",
-      "away": "East Ringwood Girls",
-      "hScore": 35,
-      "hG": 4,
-      "hB": 11,
-      "aScore": 6,
-      "aG": 1,
-      "aB": 0,
-      "venue": "Morton Park",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo.png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(1).png"
-    },
-    {
-      "id": "U14 Girls|A|6|Norwood Girls|Wantirna South Girls",
-      "age": "U14 Girls",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Wantirna South Girls",
-      "away": "Norwood Girls",
-      "hScore": 39,
-      "hG": 5,
-      "hB": 9,
-      "aScore": 25,
-      "aG": 4,
-      "aB": 1,
-      "venue": "Templeton Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(2).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(3).png"
-    },
-    {
-      "id": "U14 Girls|A|6|Lysterfield Girls|North Ringwood Girls",
-      "age": "U14 Girls",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Lysterfield Girls",
-      "away": "North Ringwood Girls",
-      "hScore": 64,
-      "hG": 9,
-      "hB": 10,
-      "aScore": 8,
-      "aG": 1,
-      "aB": 2,
-      "venue": "Lakesfield Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(4).jpg",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U14%20Girls%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(5).png"
-    },
-    {
-      "id": "U12|A|6|Montrose|North Ringwood",
-      "age": "U12",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Montrose",
-      "away": "North Ringwood",
-      "hScore": 18,
-      "hG": 2,
-      "hB": 6,
-      "aScore": 51,
-      "aG": 7,
-      "aB": 9,
-      "venue": "Elizabeth Bridge Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo.png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(1).png"
-    },
-    {
-      "id": "U12|A|6|Beaconsfield|Lysterfield",
-      "age": "U12",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Beaconsfield",
-      "away": "Lysterfield",
-      "hScore": 26,
-      "hG": 3,
-      "hB": 8,
-      "aScore": 22,
-      "aG": 3,
-      "aB": 4,
-      "venue": "Beaconsfield Holm Park Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(2).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(3).jpg"
-    },
-    {
-      "id": "U12|A|6|Glen Waverley Rovers|South Croydon",
-      "age": "U12",
-      "rawGrade": "A",
-      "round": 6,
-      "home": "Glen Waverley Rovers",
-      "away": "South Croydon",
-      "hScore": 36,
-      "hG": 5,
-      "hB": 6,
-      "aScore": 39,
-      "aG": 6,
-      "aB": 3,
-      "venue": "Brentwood Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(4).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20A,%202026%20Fixture%20_%20PlayHQ_files/logo(5).png"
-    },
-    {
-      "id": "U12|B|6|Mitcham|Vermont",
-      "age": "U12",
-      "rawGrade": "B",
-      "round": 6,
-      "home": "Vermont",
-      "away": "Mitcham",
-      "hScore": 50,
-      "hG": 7,
-      "hB": 8,
-      "aScore": 16,
-      "aG": 2,
-      "aB": 4,
-      "venue": "Vermont Recreation Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo.png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(1).png"
-    },
-    {
-      "id": "U12|B|6|Chirnside Park|Lilydale",
-      "age": "U12",
-      "rawGrade": "B",
-      "round": 6,
-      "home": "Chirnside Park",
-      "away": "Lilydale",
-      "hScore": 35,
-      "hG": 5,
-      "hB": 5,
-      "aScore": 22,
-      "aG": 3,
-      "aB": 4,
-      "venue": "Kimberley Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(2).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(3).png"
-    },
-    {
-      "id": "U12|B|6|Norwood|South Belgrave",
-      "age": "U12",
-      "rawGrade": "B",
-      "round": 6,
-      "home": "South Belgrave",
-      "away": "Norwood",
-      "hScore": 34,
-      "hG": 5,
-      "hB": 4,
-      "aScore": 41,
-      "aG": 6,
-      "aB": 5,
-      "venue": "Narre Warren East Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(4).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(5).png"
-    },
-    {
-      "id": "U12|B|6|Rowville|The Basin",
-      "age": "U12",
-      "rawGrade": "B",
-      "round": 6,
-      "home": "The Basin",
-      "away": "Rowville",
-      "hScore": 52,
-      "hG": 8,
-      "hB": 4,
-      "aScore": 35,
-      "aG": 5,
-      "aB": 5,
-      "venue": "Batterham Reserve",
-      "hLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(6).png",
-      "aLogo": "https://markjovic.github.io/junior-footy-dashboard/Eastern%20Football%20Netball%20League%20U12%20-%20B,%202026%20Fixture%20_%20PlayHQ_files/logo(7).png"
-    }
-  ],
-  "players": [],
-  "roster": {
-    "Blackburn Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "East Ringwood Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Wantirna South Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Norwood Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Lysterfield Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "North Ringwood Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Montrose": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "North Ringwood": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "Beaconsfield": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "Lysterfield": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "Glen Waverley Rovers": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "South Croydon": {
-      "grade": "A",
-      "age": "U12"
-    },
-    "Vermont": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "Mitcham": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "Chirnside Park": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "Lilydale": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "South Belgrave": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "Norwood": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "The Basin": {
-      "grade": "B",
-      "age": "U12"
-    },
-    "Rowville": {
-      "grade": "B",
-      "age": "U12"
-    }
-  },
-  "gotwFlags": {},
-  "exportedAt": "2026-05-28T04:05:09.309Z"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EFNL Junior Football — Results Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#09090e;--s1:#111118;--s2:#18181f;--s3:#20202a;--s4:#28283a;--b1:rgba(255,255,255,0.06);--b2:rgba(255,255,255,0.11);--b3:rgba(255,255,255,0.18);--tx:#e8e8f0;--tx2:rgba(232,232,240,0.58);--tx3:rgba(232,232,240,0.32);--gold:#f0c040;--gold2:rgba(240,192,64,0.12);--gold3:rgba(240,192,64,0.25);--green:#22c55e;--red:#ef4444;--orange:#f97316;--blue:#60a5fa;--purple:#a78bfa;--r:7px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
+body{overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--b3);border-radius:2px}
+
+/* ── Header ── */
+.hdr{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:12px;padding:0 20px;height:52px;background:rgba(9,9,14,0.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--b1)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.5px;color:var(--gold);white-space:nowrap}
+.logo span{color:var(--tx2);font-weight:400}
+/* age-tabs moved to sidebar */
+.age-tab{font-family:'Syne',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid transparent;border-radius:var(--r);color:var(--tx3);cursor:pointer;padding:5px 12px;transition:all .15s}
+.age-tab:hover{color:var(--tx2);border-color:var(--b2)}
+.age-tab.on{color:var(--gold);background:var(--gold2);border-color:var(--gold3)}
+.hdr-btn{font-size:11px;font-weight:500;background:none;border:1px solid var(--b2);border-radius:var(--r);color:var(--tx3);cursor:pointer;padding:5px 11px;transition:all .15s;white-space:nowrap}
+.hdr-btn:hover{color:var(--tx2)}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
+.sidebar{border-right:1px solid var(--b1);padding:16px 12px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
+.main{padding:20px;overflow:hidden;min-width:0}
+
+/* ── Sidebar ── */
+.flabel{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);padding:0 2px;margin-bottom:4px}
+.fgroup{display:flex;flex-direction:column;gap:2px}
+.fchip{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--r);border:1px solid transparent;cursor:pointer;transition:all .12s;font-size:12px;color:var(--tx2);background:none;width:100%;text-align:left}
+.fchip:hover{background:var(--s2);color:var(--tx)}
+.fchip.on{background:var(--s2);border-color:var(--b2);color:var(--tx)}
+.gdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.fsel{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r);color:var(--tx);font-family:'Inter',sans-serif;font-size:12px;padding:6px 8px;width:100%;outline:none;cursor:pointer}
+.fsel:focus{border-color:var(--gold3)}
+.stat-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+.stat-row span:last-child{color:var(--gold);font-family:'DM Mono',monospace}
+
+/* ── Cards ── */
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;overflow:hidden}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--b1)}
+.card-title{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;text-transform:uppercase}
+.card-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)}
+
+/* ── Dashboard grid ── */
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.full{grid-column:1/-1}
+
+/* ── Ladder ── */
+.ldr-tabs{display:flex;gap:1px;padding:8px 10px 0;flex-wrap:wrap}
+.ldr-tab{font-size:10px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.5px;padding:4px 10px;border-radius:4px 4px 0 0;cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--tx3);background:none;transition:all .12s}
+.ldr-tab.on{border-color:var(--b2);background:var(--s2);color:var(--tx)}
+.ldr-pane{display:none}
+.ldr-pane.on{display:block}
+.ldr-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.ldr-tbl th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tx3);font-weight:500;padding:4px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--b1)}
+.ldr-tbl th:nth-child(2){text-align:left}
+.ldr-tbl td{padding:5px 8px;border-top:1px solid var(--b1);text-align:right;color:var(--tx2)}
+.ldr-tbl td:first-child{color:var(--tx3);font-family:'DM Mono',monospace;font-size:10px}
+.ldr-tbl td:nth-child(2){text-align:left}
+.tname{display:flex;align-items:center;gap:6px}
+.tlogo{width:18px;height:18px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0}
+.tnm{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.pts{color:var(--gold)!important;font-family:'DM Mono',monospace;font-weight:500!important}
+.pct-col{font-family:'DM Mono',monospace;font-size:10px}
+.form-wrap{display:flex;gap:2px;justify-content:flex-end}
+.fb{width:14px;height:14px;border-radius:2px;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace}
+.fb.W{background:rgba(34,197,94,.18);color:var(--green)}
+.fb.L{background:rgba(239,68,68,.18);color:var(--red)}
+.fb.D{background:rgba(249,115,22,.18);color:var(--orange)}
+.fb.B{background:var(--s3);color:var(--tx3)}
+
+/* ── GOTW ── */
+.gotw-wrap{padding:14px;display:flex;flex-direction:column;gap:10px}
+.gotw-teams{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gotw-team{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;min-width:0}
+.gotw-logo{width:40px;height:40px;border-radius:50%;object-fit:contain;background:var(--s3)}
+.gotw-name{font-size:10px;text-align:center;color:var(--tx2);line-height:1.3;word-break:break-word}
+.gotw-score{text-align:center;flex-shrink:0}
+.gotw-num{font-family:'Syne',sans-serif;font-weight:800;font-size:30px;line-height:1;color:var(--tx)}
+.gotw-det{font-size:10px;color:var(--tx3);margin-top:3px}
+.gotw-sep{color:var(--tx3);font-size:20px;margin:0 2px}
+.gotw-meta{font-size:10px;color:var(--tx3);text-align:center}
+.gotw-nominees{border-top:1px solid var(--b1);padding-top:8px;display:flex;flex-direction:column;gap:3px}
+.gotw-nom{display:flex;justify-content:space-between;padding:4px 0;font-size:10px;color:var(--tx2)}
+.gotw-nom-score{font-family:'DM Mono',monospace;color:var(--tx)}
+
+/* ── Scorers ── */
+.scorer-row{display:grid;grid-template-columns:24px 1fr 28px 36px;align-items:center;padding:5px 14px;gap:8px;border-top:1px solid var(--b1)}
+.s-rank{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right}
+.s-info{min-width:0}
+.s-name{font-size:12px;font-weight:500;white-space:normal;line-height:1.4;max-width:90px}
+.s-team{font-size:9px;color:var(--tx3);white-space:normal;line-height:1.4;max-width:90px}
+.s-g{font-family:'DM Mono',monospace;font-weight:500;color:var(--gold);font-size:13px;text-align:right}
+.s-gpg{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);text-align:right}
+.gtag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;flex-shrink:0}
+.gtag-neutral{background:rgba(255,255,255,0.07);color:var(--tx3)}
+.gtag-A{background:rgba(96,165,250,.15);color:#60a5fa}
+.gtag-B{background:rgba(34,197,94,.15);color:#22c55e}
+.gtag-C{background:rgba(249,115,22,.15);color:#f97316}
+.gtag-D1{background:rgba(167,139,250,.15);color:#a78bfa}
+.gtag-D2{background:rgba(244,114,182,.15);color:#f472b6}
+.gtag-D3{background:rgba(251,146,60,.15);color:#fb923c}
+
+/* ── Results ── */
+.rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
+.rnd-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
+.match-row{display:grid;grid-template-columns:28px 1fr 80px 1fr minmax(140px,0.8fr);align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
+.match-row:hover{background:var(--s2)}
+.mr-left{display:flex;align-items:center;gap:6px;min-width:0}
+.mr-right{display:flex;align-items:center;gap:6px;flex-direction:row-reverse;min-width:0}
+.mr-logo{width:16px;height:16px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0}
+.mr-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-score{text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:13px}
+.mr-det{font-size:8px;color:var(--tx3);display:block;line-height:1.2;text-align:center;margin-top:1px}
+.mr-venue{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.mr-grade{display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:1px}
+
+/* ── Empty / util ── */
+.empty{padding:28px 14px;text-align:center;color:var(--tx3);font-size:12px}
+.empty p{margin-top:6px}
+.no-data-screen{padding:60px 20px;text-align:center;color:var(--tx3)}
+.no-data-screen h2{font-family:'Syne',sans-serif;font-size:20px;color:var(--tx2);margin-bottom:8px}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);z-index:500;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:24px;width:560px;max-width:96vw;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;gap:18px}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px}
+.ml{font-size:10px;font-weight:500;color:var(--tx3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px}
+.mi{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r);color:var(--tx);font-family:'Inter',sans-serif;font-size:13px;padding:9px 11px;outline:none;width:100%;transition:border-color .15s}
+.mi:focus{border-color:var(--gold3)}
+.mi[type=file]{cursor:pointer}
+.mi[type=password]{letter-spacing:2px}
+.btn-p{background:var(--gold);color:#000;font-weight:700;font-size:13px;border:none;border-radius:var(--r);padding:10px 18px;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.5px;transition:opacity .15s}
+.btn-p:hover{opacity:.88}
+.btn-p:disabled{opacity:.35;cursor:not-allowed}
+.btn-g{background:none;border:1px solid var(--b2);color:var(--tx2);font-size:12px;border-radius:var(--r);padding:8px 14px;cursor:pointer;transition:all .15s}
+.btn-g:hover{color:var(--tx);border-color:var(--b3)}
+.btn-d{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5;font-size:11px;padding:4px 10px;border-radius:var(--r);cursor:pointer}
+.btn-d:hover{background:rgba(239,68,68,.2)}
+.mactions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.alert{padding:9px 12px;border-radius:var(--r);font-size:12px;line-height:1.5}
+.alert-ok{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#86efac}
+.alert-err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#fca5a5}
+.alert-info{background:var(--gold2);border:1px solid var(--gold3);color:var(--gold)}
+.utabs{display:flex;gap:2px;background:var(--s2);border-radius:var(--r);padding:2px}
+.utab{flex:1;text-align:center;padding:6px 8px;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;transition:all .12s;color:var(--tx3);background:none;border:none}
+.utab.on{background:var(--s1);color:var(--tx)}
+.div-h{height:1px;background:var(--b1)}
+
+/* ── Team roster table ── */
+.roster-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.roster-tbl th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--tx3);font-weight:500;padding:4px 8px;text-align:left;border-bottom:1px solid var(--b1)}
+.roster-tbl td{padding:4px 8px;border-top:1px solid var(--b1)}
+.roster-tbl select{background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--tx);font-size:11px;padding:2px 4px}
+.roster-tbl input{background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--tx);font-size:11px;padding:2px 6px;width:100%}
+
+/* ── Team drilldown modal ── */
+.team-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);z-index:400;display:flex;align-items:center;justify-content:center}
+.team-modal{background:var(--s1);border:1px solid var(--b2);border-radius:12px;width:640px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.team-modal-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--b1);flex-shrink:0}
+.team-modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;flex:1}
+.team-modal-body{overflow-y:auto;flex:1}
+.team-stat-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--b1);border-bottom:1px solid var(--b1)}
+.team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
+.team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
+.team-stat-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.team-ha-strip{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--b1)}
+.team-ha-cell{padding:10px 16px;text-align:center}
+.team-ha-cell+.team-ha-cell{border-left:1px solid var(--b1)}
+.team-ha-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.team-ha-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--tx);white-space:nowrap}
+#ldr-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;transition:opacity .3s}
+#ldr-overlay.gone{opacity:0;pointer-events:none}
+.spinner{width:28px;height:28px;border:2px solid var(--b2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ldr-txt{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx3);letter-spacing:1px}
+
+/* ── Upload progress indicator ── */
+.upload-list{display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto}
+.upload-item{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;background:var(--s2);border-radius:5px;font-size:11px}
+.upload-item .ui-grade{font-family:'DM Mono',monospace;font-size:10px}
+.upload-item .ui-ok{color:var(--green)}
+.upload-item .ui-err{color:var(--red)}
+</style>
+</head>
+<body>
+
+<div id="ldr-overlay"><div class="spinner"></div><span class="ldr-txt">EFNL DASHBOARD</span></div>
+
+<header class="hdr">
+  <div class="logo">EFNL <span>Dashboard</span></div>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.17</span>
+  <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
+  <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="fgroup">
+      <div class="flabel">Age group</div>
+      <div id="age-filters"></div>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Grade</div>
+      <div id="grade-filters"></div>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Round</div>
+      <select class="fsel" id="round-sel" onchange="onFilter()"><option value="">All rounds</option></select>
+    </div>
+    <div class="fgroup">
+      <div class="flabel">Team</div>
+      <select class="fsel" id="team-sel" onchange="onFilter()"><option value="">All teams</option></select>
+    </div>
+    <div class="fgroup" style="margin-top:auto">
+      <div class="flabel">Stats</div>
+      <div class="stat-row"><span>Age groups</span><span id="st-ages">0</span></div>
+      <div class="stat-row"><span>Grades</span><span id="st-grades">0</span></div>
+      <div class="stat-row"><span>Matches</span><span id="st-m">0</span></div>
+      <div class="stat-row"><span>Teams</span><span id="st-t">0</span></div>
+      <div class="stat-row"><span>Scorers</span><span id="st-s">0</span></div>
+      <div class="stat-row"><span>Rounds</span><span id="st-r">0</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="no-data" class="no-data-screen">
+      <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.9">
+        <defs>
+          <radialGradient id="nd-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient>
+          <radialGradient id="nd-sh" cx="35%" cy="28%" r="42%"><stop offset="0%" stop-color="rgba(255,255,255,0.28)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/></radialGradient>
+          <clipPath id="nd-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath>
+        </defs>
+        <ellipse cx="88" cy="132" rx="26" ry="5" fill="rgba(0,0,0,0.32)"/>
+        <ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#nd-rg)" transform="rotate(45 80 80)"/>
+        <g clip-path="url(#nd-bc)">
+          <g stroke="white" stroke-width="2.4" stroke-linecap="round">
+            <line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/>
+            <line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/>
+            <line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/>
+            <line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/>
+            <line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/>
+            <line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/>
+          </g>
+          <line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="1.1" stroke-linecap="round"/>
+        </g>
+        <ellipse cx="68" cy="60" rx="9" ry="15" fill="url(#nd-sh)" transform="rotate(45 68 60)"/>
+      </svg>
+      <h2>No data loaded</h2>
+      <p>Click <strong>⚙ Admin</strong> to upload fixture results and stats pages.</p>
+    </div>
+    <div id="dash" style="display:none">
+      <div class="dgrid">
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Ladder</span>
+              <span class="card-meta" id="ldr-meta"></span>
+            </div>
+            <div class="ldr-tabs" id="ldr-tabs"></div>
+            <div id="ldr-bodies"></div>
+          </div>
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Results</span>
+              <span class="card-meta" id="results-meta"></span>
+            </div>
+            <div id="results-body"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">🔥 Game of the week</span>
+              <span class="card-meta" id="gotw-meta"></span>
+            </div>
+            <div id="gotw-body"></div>
+          </div>
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Top scorers</span>
+              <span class="card-meta" id="scorers-meta"></span>
+            </div>
+            <div id="scorers-body"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── ADMIN MODAL ── -->
+<div class="overlay" id="admin-modal" style="display:none" onclick="if(event.target===this)closeAdmin()">
+<div class="modal">
+  <div class="modal-title">Admin</div>
+
+  <!-- Auth gate — populated dynamically by showLoginMode() -->
+  <div id="auth-gate"></div>
+
+  <!-- Admin panels -->
+  <div id="admin-panels" style="display:none">
+
+    <div class="utabs">
+      <button class="utab on" onclick="switchTab('upload',this)">Upload data</button>
+      <button class="utab" onclick="switchTab('roster',this)">Team roster</button>
+      <button class="utab" onclick="switchTab('gotw-tab',this)">Game of week</button>
+      <button class="utab" onclick="switchTab('manage',this)">Manage</button>
+    </div>
+
+    <!-- UPLOAD TAB -->
+    <div id="tab-upload">
+      <div class="utabs" style="margin-bottom:2px">
+        <button class="utab on" onclick="switchUpload('results',this)">Results pages</button>
+        <button class="utab" onclick="switchUpload('stats',this)">Stats pages</button>
+      </div>
+
+      <div id="up-results">
+        <p style="font-size:11px;color:var(--tx3);margin-bottom:8px">Save each grade's fixture/results page from PlayHQ (File → Save Page As). Upload one or more files. Grade is detected from the page.</p>
+        <div class="ml">Select .html files</div>
+        <input type="file" class="mi" id="results-files" accept=".html,.htm" multiple onchange="previewResults(this)">
+        <div id="results-preview" style="display:none;margin-top:8px"></div>
+        <div id="results-fb" style="display:none;margin-top:8px"></div>
+      </div>
+
+      <div id="up-stats" style="display:none">
+        <p style="font-size:11px;color:var(--tx3);margin-bottom:8px">Save each page of each grade's Statistics tab from PlayHQ. Upload all pages at once — grade and page number are detected automatically. Private players are excluded.</p>
+        <div class="ml">Select .html files</div>
+        <input type="file" class="mi" id="stats-files" accept=".html,.htm" multiple onchange="previewStats(this)">
+        <div id="stats-preview" style="display:none;margin-top:8px"></div>
+        <div id="stats-fb" style="display:none;margin-top:8px"></div>
+      </div>
+
+      <div id="upload-fb" style="display:none;margin-top:8px"></div>
+      <div class="mactions" style="margin-top:4px">
+        <button class="btn-g" onclick="closeAdmin()">Close</button>
+        <button class="btn-p" id="btn-save" onclick="commitUpload()">Save</button>
+      </div>
+    </div>
+
+    <!-- ROSTER TAB -->
+    <div id="tab-roster" style="display:none">
+      <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">
+        Set each team's current grade. Teams promoted/relegated mid-season: change their grade here.
+        Matches where both teams share the same grade count for ladder &amp; team stats.
+        Individual player goals always count regardless.
+      </p>
+      <div id="roster-table-wrap">
+        <div class="empty"><p>No teams found. Upload results pages first.</p></div>
+      </div>
+      <div class="mactions" style="margin-top:8px">
+        <button class="btn-g" onclick="closeAdmin()">Close</button>
+        <button class="btn-p" onclick="saveRoster()">Save roster</button>
+      </div>
+    </div>
+
+    <!-- GOTW TAB -->
+    <div id="tab-gotw-tab" style="display:none">
+      <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">
+        Flag the Game of the Week for each round. If none flagged, the closest-margin valid match is used automatically.
+      </p>
+      <div class="fgroup" style="margin-bottom:10px">
+        <div class="ml">Age group</div>
+        <select class="mi" id="gotw-age-sel" onchange="renderGotwPicker()"></select>
+      </div>
+      <div class="fgroup" style="margin-bottom:10px">
+        <div class="ml">Round</div>
+        <select class="mi" id="gotw-round-sel" onchange="renderGotwPicker()"></select>
+      </div>
+      <div id="gotw-picker-list"></div>
+      <div class="mactions" style="margin-top:8px">
+        <button class="btn-g" onclick="closeAdmin()">Close</button>
+        <button class="btn-p" onclick="saveGotwFlags()">Save GOTW</button>
+      </div>
+    </div>
+
+    <!-- MANAGE TAB -->
+    <div id="tab-manage" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
+          <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.17</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
+          <button class="btn-g" onclick="exportData()" style="white-space:nowrap">⬇ data.json</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <span style="color:var(--tx2)">Clear all match results</span>
+          <button class="btn-d" onclick="clearData('matches')">Clear matches</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <span style="color:var(--tx2)">Clear all player stats</span>
+          <button class="btn-d" onclick="clearData('players')">Clear stats</button>
+        </div>
+        <div style="border-top:1px solid var(--b1);padding-top:10px">
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:8px;line-height:1.5">To change your password: generate a hash below, copy it, paste it into <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">ADMIN_HASH</code> in <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">index.html</code>, then re-upload the file to GitHub.</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="password" class="mi" id="hash-pw-input" placeholder="Type new password" style="flex:1;padding:7px 10px;font-size:12px">
+            <button class="btn-g" onclick="generateHash()" style="white-space:nowrap;flex-shrink:0">Generate hash</button>
+          </div>
+          <div id="hash-output" style="display:none;margin-top:8px"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+          <span style="color:var(--tx2)">Reset everything</span>
+          <button class="btn-d" onclick="clearData('all')">⚠ Full reset</button>
+        </div>
+      </div>
+      <div id="manage-fb" style="display:none;margin-top:8px"></div>
+      <div class="mactions" style="margin-top:8px">
+        <button class="btn-g" onclick="closeAdmin()">Close</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ── TEAM DRILLDOWN MODAL ── -->
+<div class="team-modal-overlay" id="team-modal" style="display:none" onclick="if(event.target===this)closeTeamModal()">
+  <div class="team-modal">
+    <div class="team-modal-hdr">
+      <div id="tm-crest"></div>
+      <div class="team-modal-title" id="tm-title"></div>
+      <button class="btn-g" onclick="closeTeamModal()" style="padding:5px 10px;font-size:12px">✕</button>
+    </div>
+    <div class="team-stat-strip" id="tm-stats"></div>
+    <div class="team-ha-strip" id="tm-ha"></div>
+    <div class="team-modal-body" id="tm-body"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// STORAGE
+// ═══════════════════════════════════════
+const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw' };
+
+async function sGet(k){
+  try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
+  try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; }
 }
+async function sSet(k,v){
+  const s=JSON.stringify(v);
+  try{ if(window.storage){ await window.storage.set(k,s); return; } }catch(e){}
+  try{ localStorage.setItem(k,s); }catch(e){}
+}
+async function sDel(k){
+  try{ if(window.storage){ await window.storage.delete(k); return; } }catch(e){}
+  try{ localStorage.removeItem(k); }catch(e){}
+}
+
+// ── DEV MODE — set true to bypass password during testing, false for production ──
+const DEV_MODE = true;
+
+// ── Venue link helper ──
+function venueLink(venue, venueUrl, style='') {
+  if (!venue) return '';
+  if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.2);text-underline-offset:2px;${style}">${venue}</a>`;
+  return `<span style="${style}">${venue}</span>`;
+}
+const GRADE_ORDER = ['A','B','C','D1','D2','D3','D4'];
+const GRADE_COL = {A:'#60a5fa',B:'#22c55e',C:'#f97316',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9'};
+
+// ═══════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════
+let S = {
+  matches: [],   // {id,age,rawGrade,home,away,hScore,hG,hB,aScore,aG,aB,round,venue,hLogo,aLogo}
+  players: [],   // {uuid,name,team,teamRaw,rawGrade,age,gp,goals}
+  roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
+  gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
+  pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
+  selectedAge: null,
+  selGrades: new Set(),
+  selRound: '',
+  selTeam: '',
+  selLdrGrade: null,
+  adminOpen: false,
+  pendingMatches: [],
+  pendingPlayers: [],
+  currentTab: 'upload',
+  currentUploadTab: 'results',
+};
+
+// ═══════════════════════════════════════
+// PARSING — RESULTS/FIXTURE HTML
+// ═══════════════════════════════════════
+function parseResultsHTML(html, filename) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const title = doc.querySelector('title')?.textContent || '';
+  const results = [];
+
+  // Detect age+grade from title e.g. "Eastern Football Netball League U12 - B, 2026 Fixture | PlayHQ"
+  // or "U12 Girls - B, 2026 Fixture | PlayHQ"
+  let age = 'U12', rawGrade = '';
+  // Capture U12, U12 Girls, U12 Boys, U12 Womens etc.
+  const titleAge = title.match(/\b(U\d+(?:\s+(?:Girls|Boys|Womens?|Mens?|Women|Men))?)\b/i);
+  if (titleAge) age = titleAge[1].replace(/\s+/g,' ').trim()
+    .split(' ').map((w,i) => i===0 ? w.toUpperCase() : w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+  const titleGrade = title.match(/U\d+[^-–]*[-–]\s*([A-Z]\d?)/i);
+  if (titleGrade) rawGrade = titleGrade[1].toUpperCase();
+  // Also try from embedded URLs e.g. /u12-girls-b/ or /u12-b/
+  const gradeFromURL = html.match(/\/u\d+(?:-(?:girls|boys|womens?|mens?))?-([a-z]\d?)\//i);
+  if (!rawGrade && gradeFromURL) rawGrade = gradeFromURL[1].toUpperCase();
+
+  // Each game is a div[role="listitem"] — exactly one per game
+  const gameBlocks = doc.querySelectorAll('[role="listitem"]');
+
+  gameBlocks.forEach(block => {
+    // Only process completed games
+    if (!/Final/.test(block.textContent)) return;
+
+    // Team names from logo data-testids e.g. data-testid="Mitcham U12-team-logo"
+    const logoEls = block.querySelectorAll('[data-testid$="-team-logo"]');
+    if (logoEls.length < 2) return;
+    const homeName = cleanTeam(logoEls[0].dataset.testid.replace(/-team-logo$/, ''));
+    const awayName = cleanTeam(logoEls[1].dataset.testid.replace(/-team-logo$/, ''));
+    
+    // Walk all spans in order. Structure is: [total_int, goals.behinds, ..., total_int, goals.behinds]
+    // Pair each integer span with the X.Y span immediately following it.
+    const allSpans = Array.from(block.querySelectorAll('span'));
+    const scorePairs = []; // [{total, g, b}]
+    for (let i = 0; i < allSpans.length - 1; i++) {
+      const a = allSpans[i].textContent.trim();
+      const b = allSpans[i+1].textContent.trim();
+      if (/^\d+$/.test(a) && /^\d+\.\d+$/.test(b)) {
+        const total = parseInt(a);
+        const [g, bh] = b.split('.').map(Number);
+        scorePairs.push({ total, g: g||0, b: bh||0 });
+      }
+    }
+
+    if (scorePairs.length < 2) return;
+    const hScore = scorePairs[0].total;
+    const hG    = scorePairs[0].g;
+    const hB    = scorePairs[0].b;
+    const aScore = scorePairs[1].total;
+    const aG    = scorePairs[1].g;
+    const aB    = scorePairs[1].b;
+
+    // Round — find in page header (h3 with "Round N"), not inside the game block
+    let round = 1;
+    const roundH3 = Array.from(doc.querySelectorAll('h3')).find(h => /Round\s+\d+/i.test(h.textContent));
+    if (roundH3) { const m = roundH3.textContent.match(/(\d+)/); if (m) round = parseInt(m[1]); }
+
+    // Venue
+    const vLink = block.querySelector('a[href*="maps.google"]');
+    const venue = vLink ? vLink.textContent.trim().split('/')[0].trim() : '';
+    const venueUrl = vLink ? vLink.getAttribute('href') : '';
+
+    // Logos — the img tags are inside the logo elements
+    const hLogoImg = logoEls[0].querySelector('img') || logoEls[0];
+    const aLogoImg = logoEls[1].querySelector('img') || logoEls[1];
+    const hLogo = hLogoImg?.src || '';
+    const aLogo = aLogoImg?.src || '';
+
+    const id = `${age}|${rawGrade}|${round}|${[homeName,awayName].sort().join('|')}`;
+    results.push({ id, age, rawGrade, round, home:homeName, away:awayName,
+      hScore, hG, hB, aScore, aG, aB, venue, venueUrl, hLogo, aLogo });
+  });
+
+  return { matches: results, age, rawGrade, count: results.length };
+}
+
+// ═══════════════════════════════════════
+// PARSING — STATS HTML
+// ═══════════════════════════════════════
+function parseStatsHTML(html, filename) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const title = doc.querySelector('title')?.textContent || '';
+
+  // Detect age+grade from title/URL
+  let age = 'U12', rawGrade = '';
+  const titleAge = title.match(/\b(U\d+(?:\s+(?:Girls|Boys|Womens?|Mens?|Women|Men))?)\b/i);
+  if (titleAge) age = titleAge[1].replace(/\s+/g,' ').trim()
+    .split(' ').map((w,i) => i===0 ? w.toUpperCase() : w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+  const titleGrade = title.match(/U\d+[^-–]*[-–]\s*([A-Z]\d?)/i);
+  if (titleGrade) rawGrade = titleGrade[1].toUpperCase();
+  if (!rawGrade) {
+    const gradeURL = html.match(/\/u\d+(?:-(?:girls|boys|womens?|mens?))?-([a-z]\d?)\//i);
+    if (gradeURL) rawGrade = gradeURL[1].toUpperCase();
+  }
+
+  // Page number from pagination or title
+  let pageNum = 1;
+  const activePage = doc.querySelector('[data-testid="page-meta"]')?.textContent || '';
+  // "Showing 51 - 100 of 230" → page 2
+  const showingMatch = activePage.match(/Showing\s+(\d+)/i);
+  if (showingMatch) pageNum = Math.ceil(parseInt(showingMatch[1]) / 50);
+
+  const players = [];
+  const tbody = doc.querySelector('tbody');
+  if (!tbody) return { players, age, rawGrade, count: 0 };
+
+  const rows = tbody.querySelectorAll('tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 5) return;
+
+    // Cell 1: name - check for profile href (private players have none)
+    const nameCell = cells[1];
+    const profileLink = nameCell.querySelector('a[href*="/public/profile/"]');
+    
+    // Skip private players (no profile link, or name literally contains 'private')
+    if (!profileLink) return;
+    const nameText = nameCell.textContent.trim();
+    if (/private/i.test(nameText)) return;
+
+    // Extract UUID from profile URL
+    const uuidMatch = profileLink.href.match(/\/profile\/([a-f0-9-]+)\//i);
+    const uuid = uuidMatch ? uuidMatch[1] : '';
+
+    // Reconstruct full name from the two spans (first name + last name)
+    const nameParts = nameCell.querySelectorAll('a span, a');
+    let name = '';
+    if (nameParts.length >= 1) {
+      // The link itself has the first name, the inner span has the surname
+      name = profileLink.textContent.trim();
+    }
+    if (!name) name = nameText;
+
+    const teamRaw = cells[2].textContent.trim();
+    const team = cleanTeam(teamRaw);
+    const gp = parseInt(cells[3].textContent.trim()) || 0;
+    const goals = parseInt(cells[4].textContent.trim()) || 0;
+
+    players.push({ uuid, name, team, teamRaw, rawGrade, age, gp, goals });
+  });
+
+  return { players, age, rawGrade, count: players.length };
+}
+
+function cleanTeam(name) {
+  // Strip age group suffix and normalise spacing
+  let n = name.replace(/\s+U\d+\s*/g, ' ').replace(/\s+$/, '').trim();
+  // Strip trailing colour words: "Norwood Purple" → "Norwood"
+  const colours = ['Purple','Gold','Blue','Red','Green','White','Black','Silver','Navy','Yellow','Orange','Teal'];
+  colours.forEach(c => { n = n.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim(); });
+  return n;
+}
+
+// ═══════════════════════════════════════
+// CREST LOADER — matches fixture card generator logic exactly
+// ═══════════════════════════════════════
+const COLOUR_WORDS = ['PURPLE','GOLD','BLUE','RED','GREEN','WHITE','BLACK','SILVER','NAVY','YELLOW','ORANGE','TEAL'];
+
+const CREST_ALIASES = {
+  'NTH RINGWOOD':           'NORTH RINGWOOD',
+  'NORTH RINGWOOD':         'NORTH RINGWOOD',
+  'STH CROYDON':            'SOUTH CROYDON',
+  'SOUTH CROYDON':          'SOUTH CROYDON',
+  'STH BELGRAVE':           'SOUTH BELGRAVE',
+  'SOUTH BELGRAVE':         'SOUTH BELGRAVE',
+  'UPPER FTG':              'UPPER FERNTREE GULLY',
+  'UPPER FERNTREE GULLY':   'UPPER FERNTREE GULLY',
+  'WANTIRNA STH':           'WANTIRNA SOUTH',
+  'WANTIRNA SOUTH':         'WANTIRNA SOUTH',
+  'CROYDON NORTH':          'CROYDON NORTH',
+  'CROYDON NTH':            'CROYDON NORTH',
+  'CROYDON NORTH MLOC':     'CROYDON NORTH',
+  'E RINGWOOD':             'EAST RINGWOOD',
+  'E BURWOOD':              'EAST BURWOOD',
+  'UPWEY TECOMA':           'UPWEY TECOMA',
+  'UPWEY/TECOMA':           'UPWEY TECOMA',
+  'GLEN WAVERLEY ROVERS':   'GLEN WAVERLEY ROVERS',
+  'MT EVELYN':              'MT EVELYN',
+  'MOUNT EVELYN':           'MT EVELYN',
+  'FLEMINGTON JUNIORS':     'FLEMINGTON',
+  'FLEMINGTON':             'FLEMINGTON',
+  'HCFC':                   'HOPPERS CROSSING',
+  'WILLIAMSTOWN JUNIORS':   'WILLIAMSTOWN',
+};
+
+const crestCache = {};
+
+function resolveCrestKey(teamName) {
+  // Uppercase and strip age group
+  let cleaned = teamName.replace(/\s+U\d+.*$/i, '').trim().toUpperCase();
+  // Normalise slash spacing
+  cleaned = cleaned.replace(/\s*\/\s*/g, ' / ');
+  // Joint team: "NORWOOD GOLD / HEATHMONT" → use first part only
+  if (cleaned.includes(' / ')) cleaned = cleaned.split(' / ')[0].trim();
+  // Strip Juniors suffix
+  cleaned = cleaned.replace(/\s+JUNIORS?\s*$/i, '').trim();
+  // Strip club suffixes
+  cleaned = cleaned.replace(/\s+(FOOTBALL\s+CLUB|JUNIOR\s+FOOTBALL\s+CLUB|FC|JFC|SPORTS\s+CLUB|SC)\s*$/i, '').trim();
+  // Strip colour words: "NORWOOD PURPLE" → "NORWOOD"
+  COLOUR_WORDS.forEach(c => { cleaned = cleaned.replace(new RegExp('\\s+' + c + '\\s*$'), '').trim(); });
+  // Resolve alias
+  return CREST_ALIASES[cleaned] || cleaned;
+}
+
+function getCrestImg(teamName) {
+  const key = resolveCrestKey(teamName);
+  if (key in crestCache) return crestCache[key];
+  crestCache[key] = null;
+  const img = new Image();
+  img.onload = () => { crestCache[key] = img; render(); };
+  img.onerror = () => { crestCache[key] = null; };
+  img.src = `assets/clubs/${key.toLowerCase().replace(/\s+/g,'_')}/crest.png`;
+  return null;
+}
+
+function crestHTML(teamName, size=18, cls='tlogo') {
+  const img = getCrestImg(teamName);
+  if (img) return `<img src="${img.src}" class="${cls}" width="${size}" height="${size}" onerror="this.style.display='none'">`;
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:var(--s3);border-radius:50%;display:inline-block;flex-shrink:0"></span>`;
+}
+
+// ═══════════════════════════════════════
+// MERGE LOGIC
+// ═══════════════════════════════════════
+function mergeMatches(existing, incoming) {
+  const map = new Map(existing.map(m => [m.id, m]));
+  let added = 0, updated = 0;
+  incoming.forEach(m => {
+    if (map.has(m.id)) {
+      const ex = map.get(m.id);
+      if (ex.hScore !== m.hScore || ex.aScore !== m.aScore) updated++;
+      map.set(m.id, { ...ex, ...m, hLogo: m.hLogo||ex.hLogo, aLogo: m.aLogo||ex.aLogo });
+    } else { map.set(m.id, m); added++; }
+  });
+  return { merged: [...map.values()], added, updated };
+}
+
+function mergePlayers(existing, incoming) {
+  // Dedup by UUID (across grades) — accumulate goals if player appears in multiple grade sheets
+  const map = new Map(existing.map(p => [p.uuid, p]));
+  let added = 0, updated = 0;
+  incoming.forEach(p => {
+    if (!p.uuid) return; // skip private
+    if (map.has(p.uuid)) {
+      const ex = map.get(p.uuid);
+      // If same grade+page re-upload: replace. If new grade: add goals
+      const sameGrade = ex.rawGrade === p.rawGrade;
+      if (sameGrade) {
+        if (ex.goals !== p.goals || ex.gp !== p.gp) updated++;
+        map.set(p.uuid, { ...ex, goals: p.goals, gp: p.gp });
+      } else {
+        // Player appears in multiple grades — sum goals, take max gp
+        map.set(p.uuid, { ...ex, goals: ex.goals + p.goals, gp: Math.max(ex.gp, p.gp),
+          rawGrade: ex.rawGrade + '+' + p.rawGrade }); // flag as multi-grade
+        updated++;
+      }
+    } else { map.set(p.uuid, p); added++; }
+  });
+  return { merged: [...map.values()], added, updated };
+}
+
+// ═══════════════════════════════════════
+// ROSTER & GRADE RESOLUTION
+// ═══════════════════════════════════════
+// Returns the current grade for a team name from the roster,
+// falling back to the grade from match data if not in roster.
+function currentGrade(teamName, rawGrade) {
+  return (S.roster[teamName] || {}).grade || rawGrade;
+}
+
+// A match counts for ladder/team stats if both teams are in the same current grade
+function matchIsValid(m) {
+  const hGrade = currentGrade(m.home, m.rawGrade);
+  const aGrade = currentGrade(m.away, m.rawGrade);
+  return hGrade && aGrade && hGrade === aGrade;
+}
+
+// The grade a match counts towards (from the roster)
+function matchGrade(m) {
+  return currentGrade(m.home, m.rawGrade);
+}
+
+// ═══════════════════════════════════════
+// COMPUTED — LADDER
+// ═══════════════════════════════════════
+function computeLadder(age, grade, maxRound) {
+  const matches = S.matches.filter(m =>
+    m.age === age &&
+    matchIsValid(m) &&
+    matchGrade(m) === grade &&
+    (maxRound === '' || m.round <= parseInt(maxRound))
+  );
+
+  const teams = {};
+  const ensure = name => {
+    if (!teams[name]) teams[name] = {
+      name, pts:0, w:0, d:0, l:0, f:0, a:0, form:[],
+      hw:0, hl:0, hd:0,  // home record
+      aw:0, al:0, ad:0,  // away record
+    };
+  };
+
+  // Build head-to-head map: h2h[A][B] = {w,l,d,f,a}
+  const h2h = {};
+  const ensureH2H = (a, b) => {
+    if (!h2h[a]) h2h[a] = {};
+    if (!h2h[a][b]) h2h[a][b] = {w:0,l:0,d:0,f:0,a:0};
+  };
+
+  matches.forEach(m => {
+    ensure(m.home); ensure(m.away);
+    ensureH2H(m.home, m.away); ensureH2H(m.away, m.home);
+    const h = teams[m.home], a = teams[m.away];
+    h.f += m.hScore; h.a += m.aScore;
+    a.f += m.aScore; a.a += m.hScore;
+    h2h[m.home][m.away].f += m.hScore; h2h[m.home][m.away].a += m.aScore;
+    h2h[m.away][m.home].f += m.aScore; h2h[m.away][m.home].a += m.hScore;
+    if (m.hScore > m.aScore) {
+      h.w++; h.hw++; h.pts += 4; a.l++; a.al++;
+      h.form.push({r:m.round,res:'W'}); a.form.push({r:m.round,res:'L'});
+      h2h[m.home][m.away].w++; h2h[m.away][m.home].l++;
+    } else if (m.aScore > m.hScore) {
+      a.w++; a.aw++; a.pts += 4; h.l++; h.hl++;
+      a.form.push({r:m.round,res:'W'}); h.form.push({r:m.round,res:'L'});
+      h2h[m.away][m.home].w++; h2h[m.home][m.away].l++;
+    } else {
+      h.d++; h.hd++; h.pts += 2; a.d++; a.ad++; a.pts += 2;
+      h.form.push({r:m.round,res:'D'}); a.form.push({r:m.round,res:'D'});
+      h2h[m.home][m.away].d++; h2h[m.away][m.home].d++;
+    }
+  });
+
+  // Compute match ratio for each team
+  Object.values(teams).forEach(t => {
+    const played = t.w + t.d + t.l;
+    t.played = played;
+    t.mr = played ? t.w / played : 0;
+  });
+
+  // Sort: 1) MR% desc, 2) H2H (between tied teams), 3) points scored desc, 4) percentage desc
+  const sorted = Object.values(teams).sort((a, b) => {
+    if (Math.abs(b.mr - a.mr) > 0.0001) return b.mr - a.mr;
+    // H2H tiebreaker — only valid if they've played each other
+    const aVsB = (h2h[a.name]?.[b.name] || {});
+    const bVsA = (h2h[b.name]?.[a.name] || {});
+    const aH2HMR = (aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0) > 0
+      ? (aVsB.w||0) / ((aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0)) : -1;
+    const bH2HMR = (bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0) > 0
+      ? (bVsA.w||0) / ((bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0)) : -1;
+    if (aH2HMR >= 0 && bH2HMR >= 0 && Math.abs(bH2HMR - aH2HMR) > 0.0001) return bH2HMR - aH2HMR;
+    // Points scored
+    if (b.f !== a.f) return b.f - a.f;
+    // Percentage
+    const pa = a.a ? a.f/a.a : 0, pb = b.a ? b.f/b.a : 0;
+    return pb - pa;
+  });
+
+  return sorted;
+}
+
+function lastForm(formArr, n=5) {
+  const s = [...formArr].sort((a,b)=>b.r-a.r).slice(0,n).reverse();
+  while (s.length < n) s.unshift({res:'B'});
+  return s;
+}
+
+function pct(f,a) { return a ? (f/a*100).toFixed(1) : '0.0'; }
+
+// ═══════════════════════════════════════
+// COMPUTED — GOTW
+// ═══════════════════════════════════════
+function marginPct(m) {
+  // Margin as a fraction of total points scored — lower = closer game
+  const total = m.hScore + m.aScore;
+  if (!total) return 1; // 0-0 not a contest
+  return Math.abs(m.hScore - m.aScore) / total;
+}
+
+function getGOTWMatch(age) {
+  const grades = activGrades(age);
+  const validMatches = S.matches.filter(m =>
+    m.age === age && matchIsValid(m) && grades.has(matchGrade(m))
+  );
+  if (!validMatches.length) return null;
+
+  const maxRound = S.selRound ? parseInt(S.selRound) : Math.max(...validMatches.map(m=>m.round));
+  const roundMatches = validMatches.filter(m => m.round === maxRound);
+
+  // Check for admin GOTW flag for this round
+  const flagKey = `${age}|${maxRound}`;
+  const flaggedId = S.gotwFlags[flagKey];
+  if (flaggedId) {
+    const flagged = roundMatches.find(m => m.id === flaggedId);
+    if (flagged) {
+      // Nominees: closest game per other grade
+      const nominees = getNominees(roundMatches.filter(m=>m.id!==flaggedId));
+      return { match: flagged, nominees, round: maxRound };
+    }
+  }
+
+  // Auto: closest margin by percentage of total points across ALL grades
+  const sorted = [...roundMatches].sort((a,b) => marginPct(a) - marginPct(b));
+  const winner = sorted[0];
+  // Nominees: closest game in each OTHER grade (not the winner's grade)
+  const nominees = getNominees(sorted.slice(1).filter(m => matchGrade(m) !== matchGrade(winner)));
+  return winner ? { match: winner, nominees, round: maxRound } : null;
+}
+
+function getNominees(matches) {
+  // Return the closest game (by margin%) per grade, sorted by grade order
+  const byGrade = {};
+  matches.forEach(m => {
+    const g = matchGrade(m);
+    if (!byGrade[g] || marginPct(m) < marginPct(byGrade[g])) byGrade[g] = m;
+  });
+  return Object.values(byGrade).sort((a,b) =>
+    GRADE_ORDER.indexOf(matchGrade(a)) - GRADE_ORDER.indexOf(matchGrade(b))
+  );
+}
+
+// ═══════════════════════════════════════
+// COMPUTED — TOP SCORERS
+// ═══════════════════════════════════════
+function getTopScorers(age, n=12) {
+  // Individual player goals always count regardless of team grade movement
+  // But we filter by currently-selected grades based on where the player's team is now
+  const grades = activGrades(age);
+
+  return S.players
+    .filter(p => {
+      if (!p.goals) return false;
+      // Check if player's team is in a grade we're currently showing
+      const teamGrade = currentGrade(p.team, p.rawGrade);
+      return !grades.size || grades.has(teamGrade);
+    })
+    .sort((a,b) => b.goals - a.goals || a.gp - b.gp)
+    .slice(0, n);
+}
+
+// ═══════════════════════════════════════
+// VIEW HELPERS
+// ═══════════════════════════════════════
+function getAges() { return [...new Set(S.matches.map(m=>m.age))].sort(); }
+
+function gradesForAge(age) {
+  const gs = new Set();
+  S.matches.filter(m=>m.age===age&&matchIsValid(m)).forEach(m=>gs.add(matchGrade(m)));
+  return [...gs].sort((a,b)=>GRADE_ORDER.indexOf(a)-GRADE_ORDER.indexOf(b));
+}
+
+function activGrades(age) {
+  if (S.selGrades.size) return S.selGrades;
+  return new Set(gradesForAge(age));
+}
+
+function allTeamsForAge(age) {
+  const ts = new Set();
+  S.matches.filter(m=>m.age===age).forEach(m=>{ts.add(m.home);ts.add(m.away);});
+  return [...ts].sort();
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render() {
+  const hasData = S.matches.length > 0;
+  document.getElementById('no-data').style.display = hasData ? 'none' : 'block';
+  document.getElementById('dash').style.display = hasData ? 'block' : 'none';
+  renderAgeTabs();
+  if (!hasData || !S.selectedAge) return;
+  const age = S.selectedAge;
+  renderSidebarFilters(age);
+  renderLadder(age);
+  renderGOTW(age);
+  renderScorers(age);
+  renderResults(age);
+  renderStats();
+}
+
+function renderAgeTabs() {
+  const ages = getAges();
+  if (!S.selectedAge && ages.length) S.selectedAge = ages[0];
+  document.getElementById('age-filters').innerHTML = ages.map(a =>
+    `<button class="fchip${a===S.selectedAge?' on':''}" onclick="selectAge('${a}')">
+      <span class="gdot" style="background:var(--tx3)"></span>${a}
+    </button>`
+  ).join('');
+  // Keep age-tabs in header empty (element may not exist after our HTML change)
+  const hdrTabs = document.getElementById('age-tabs');
+  if (hdrTabs) hdrTabs.innerHTML = '';
+}
+
+function renderSidebarFilters(age) {
+  const grades = gradesForAge(age);
+  document.getElementById('grade-filters').innerHTML = grades.map(g =>
+    `<button class="fchip${S.selGrades.has(g)?' on':''}" onclick="toggleGrade('${g}')">
+      <span class="gdot" style="background:${GRADE_COL[g]||'#888'}"></span>Grade ${g}
+    </button>`
+  ).join('');
+
+  const rounds = [...new Set(S.matches.filter(m=>m.age===age).map(m=>m.round))].sort((a,b)=>a-b);
+  const rs = document.getElementById('round-sel');
+  rs.innerHTML = '<option value="">All rounds</option>' +
+    rounds.map(r=>`<option value="${r}"${r==S.selRound?' selected':''}>Round ${r}</option>`).join('');
+
+  const teams = allTeamsForAge(age);
+  const ts = document.getElementById('team-sel');
+  ts.innerHTML = '<option value="">All teams</option>' +
+    teams.map(t=>`<option value="${t}"${t===S.selTeam?` selected`:''}>${t}</option>`).join('');
+}
+
+function renderLadder(age) {
+  const grades = gradesForAge(age).filter(g => !S.selGrades.size || S.selGrades.has(g));
+  if (!grades.length) { document.getElementById('ldr-tabs').innerHTML=''; document.getElementById('ldr-bodies').innerHTML='<div class="empty">No valid matches yet</div>'; return; }
+  if (!S.selLdrGrade || !grades.includes(S.selLdrGrade)) S.selLdrGrade = grades[0];
+
+  const maxRound = S.selRound || '';
+  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchIsValid(m)).map(m=>m.round),0);
+  document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
+
+  document.getElementById('ldr-tabs').innerHTML = grades.map(g =>
+    `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||'#fff'}`:''}"
+      onclick="selLdrGrade('${g}')">Grade ${g}</button>`
+  ).join('');
+
+  document.getElementById('ldr-bodies').innerHTML = grades.map(g => {
+    const ladder = computeLadder(age, g, maxRound);
+    return `<div class="ldr-pane${g===S.selLdrGrade?' on':''}" id="lp-${g}">
+      <table class="ldr-tbl"><thead><tr>
+        <th>#</th><th style="text-align:left">Team</th>
+        <th title="Games played">P</th>
+        <th title="Wins">W</th><th title="Draws">D</th><th title="Losses">L</th>
+        <th title="Home W-L">H</th><th title="Away W-L">A</th>
+        <th title="Points for">For</th><th title="Points against">Agst</th>
+        <th title="Percentage (for/against × 100)">%</th>
+        <th title="Match ratio (wins ÷ games played)" style="color:var(--gold)">MR%</th>
+        <th title="Last 5">Form</th>
+      </tr></thead><tbody>
+      ${ladder.map((t,i)=>{
+        const p = pct(t.f, t.a);
+        const mr = t.played ? (t.mr*100).toFixed(1) : '–';
+        const form = lastForm(t.form, 5);
+        return `<tr>
+          <td style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:10px">${i+1}</td>
+          <td>
+            <div class="tname" style="cursor:pointer" onclick="openTeamDrilldown('${t.name.replace(/'/g,"\\'")}','${g}')">
+              ${crestHTML(t.name, 18, 'tlogo')}
+              <span class="tnm" style="text-decoration:underline;text-decoration-color:rgba(255,255,255,0.2);text-underline-offset:2px">${t.name}</span>
+            </div>
+          </td>
+          <td>${t.played}</td>
+          <td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.hw}-${t.hl}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.aw}-${t.al}</td>
+          <td>${t.f}</td><td>${t.a}</td>
+          <td class="pct-col">${p}%</td>
+          <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--gold)">${mr}%</td>
+          <td><div class="form-wrap">${form.map(f=>`<span class="fb ${f.res}">${f.res}</span>`).join('')}</div></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+  }).join('');
+}
+
+function renderGOTW(age) {
+  const gotwData = getGOTWMatch(age);
+  const bodyEl = document.getElementById('gotw-body');
+  const metaEl = document.getElementById('gotw-meta');
+  if (!gotwData) {
+    bodyEl.innerHTML = '<div class="empty"><p>No completed matches yet</p></div>';
+    metaEl.textContent = '';
+    return;
+  }
+  const m = gotwData.match;
+  metaEl.textContent = `R${gotwData.round}`;
+  const hWon = m.hScore > m.aScore, aWon = m.aScore > m.hScore;
+  const margin = Math.abs(m.hScore - m.aScore);
+  const grade = matchGrade(m);
+
+  bodyEl.innerHTML = `<div class="gotw-wrap">
+    <div class="gotw-teams">
+      <div class="gotw-team" style="cursor:pointer" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\\'")}','${grade}')">
+        ${crestHTML(m.home, 40, 'gotw-logo')}
+        <span class="gotw-name" style="${hWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.home}</span>
+      </div>
+      <div class="gotw-score">
+        <div class="gotw-num">
+          <span style="color:${hWon?'var(--gold)':'var(--tx2)'}">${m.hScore}</span>
+          <span class="gotw-sep">–</span>
+          <span style="color:${aWon?'var(--gold)':'var(--tx2)'}">${m.aScore}</span>
+        </div>
+        <div class="gotw-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</div>
+        <div style="font-size:9px;color:var(--tx3);margin-top:2px">margin ${margin}</div>
+      </div>
+      <div class="gotw-team" style="cursor:pointer" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${grade}')">
+        ${crestHTML(m.away, 40, 'gotw-logo')}
+        <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
+      </div>
+    </div>
+    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">Grade ${grade}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
+    ${gotwData.nominees.length ? `<div class="gotw-nominees">
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
+      ${gotwData.nominees.map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span class="gtag gtag-${ng.replace(/[^A-Z0-9]/g,'')}" style="font-size:8px">${ng}</span>
+          <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
+        </div>
+        <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
+      </div>`;}).join('')}
+    </div>` : ''}
+  </div>`;
+}
+
+function renderScorers(age) {
+  const scorers = getTopScorers(age, 12);
+  const el = document.getElementById('scorers-body');
+  const meta = document.getElementById('scorers-meta');
+  const gradeStr = S.selGrades.size ? [...S.selGrades].join(', ') : 'All grades';
+  meta.textContent = gradeStr;
+  if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
+  el.innerHTML = scorers.map((p,i)=>{
+    const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
+    const teamGrade = currentGrade(p.team, p.rawGrade);
+    const gc = `gtag-${teamGrade.replace(/[^A-Z0-9]/g,'')}`;
+    return `<div class="scorer-row">
+      <span class="s-rank">${i+1}</span>
+      <div class="s-info">
+        <div class="s-name">${p.name}</div>
+        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${p.team.replace(/'/g,"\\'")}','${teamGrade}')">${p.team}</div>
+      </div>
+      <span class="gtag ${gc}">${teamGrade}</span>
+      <div>
+        <div class="s-g">${p.goals}</div>
+        <div class="s-gpg">${gpg}/g</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderResults(age) {
+  const grades = activGrades(age);
+  let matches = S.matches.filter(m => {
+    if (m.age !== age) return false;
+    // Show all games — use rawGrade for filtering when grade filter is active
+    const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
+    if (grades.size && !grades.has(g)) return false;
+    if (S.selRound && m.round != S.selRound) return false;
+    if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
+    return true;
+  }).sort((a,b)=>b.round-a.round||(GRADE_ORDER.indexOf(matchGrade(a))-GRADE_ORDER.indexOf(matchGrade(b))));
+
+  const el = document.getElementById('results-body');
+  document.getElementById('results-meta').textContent = `${matches.length} match${matches.length!==1?'es':''}`;
+  if (!matches.length) { el.innerHTML='<div class="empty">No results match current filters</div>'; return; }
+
+  // Group by round
+  const byRound = {};
+  matches.forEach(m=>{(byRound[m.round]=byRound[m.round]||[]).push(m);});
+  const rounds = Object.keys(byRound).map(Number).sort((a,b)=>b-a);
+
+  el.innerHTML = rounds.map(r=>{
+    const rms = byRound[r];
+    const rows = rms.map(m=>{
+      const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
+      const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
+      const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
+      const valid = matchIsValid(m);
+      const gotwKey = `${age}|${m.round}`;
+      const isGotw = S.gotwFlags[gotwKey] === m.id;
+      return `<div class="match-row" style="${valid?'':'opacity:.5'}">
+        <div class="mr-grade">
+          <span class="gtag gtag-${g.replace(/[^A-Z0-9]/g,'')}">${g}</span>
+          ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
+          ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
+        </div>
+        <div class="mr-left">
+          ${crestHTML(m.home, 16, 'mr-logo')}
+          <span class="mr-name" style="color:${hWon?'var(--tx)':'var(--tx2)'};font-weight:${hWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\\'")}','${g}')">${m.home}</span>
+        </div>
+        <div class="mr-score">
+          <span style="color:${hWon?'var(--gold)':aWon?'var(--tx3)':'var(--tx)'}">${m.hScore}</span>
+          <span style="color:var(--tx3)"> – </span>
+          <span style="color:${aWon?'var(--gold)':hWon?'var(--tx3)':'var(--tx)'}">${m.aScore}</span>
+          <span class="mr-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</span>
+        </div>
+        <div class="mr-right">
+          <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
+          ${crestHTML(m.away, 16, 'mr-logo')}
+        </div>
+        <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
+  }).join('');
+}
+
+function renderStats() {
+  const age = S.selectedAge;
+  const allAges = getAges();
+  const ms = age ? S.matches.filter(m=>m.age===age&&matchIsValid(m)) : S.matches.filter(m=>matchIsValid(m));
+  const ts = new Set([...ms.map(m=>m.home),...ms.map(m=>m.away)]);
+  const rs = new Set(ms.map(m=>m.round));
+
+  // Count total unique grades across all age groups
+  const allGrades = new Set();
+  S.matches.filter(m=>matchIsValid(m)).forEach(m => allGrades.add(`${m.age}|${matchGrade(m)}`));
+
+  document.getElementById('st-ages').textContent = allAges.length;
+  document.getElementById('st-grades').textContent = allGrades.size;
+  document.getElementById('st-m').textContent = ms.length;
+  document.getElementById('st-t').textContent = ts.size;
+  document.getElementById('st-s').textContent = S.players.length;
+  document.getElementById('st-r').textContent = rs.size;
+}
+
+// ═══════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════
+function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
+function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); render(); }
+function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; render(); }
+function selLdrGrade(g) {
+  S.selLdrGrade=g;
+  document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||'#fff'):'';});
+  document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
+}
+
+function openTeamDrilldown(teamName, grade) {
+  const age = S.selectedAge;
+  // All matches involving this team — including ones that don't count towards ladder
+  const matches = S.matches.filter(m =>
+    m.age === age &&
+    (m.rawGrade === grade || matchGrade(m) === grade) &&
+    (m.home === teamName || m.away === teamName)
+  ).sort((a,b) => a.round - b.round);
+
+  // Compute season stats from VALID matches only
+  let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
+  matches.filter(m=>matchIsValid(m)).forEach(m => {
+    const isHome = m.home === teamName;
+    const tf = isHome ? m.hScore : m.aScore;
+    const ta = isHome ? m.aScore : m.hScore;
+    f += tf; a += ta;
+    if (tf > ta) { w++; isHome ? hw++ : aw++; }
+    else if (ta > tf) { l++; isHome ? hl++ : al++; }
+    else { d++; isHome ? hd++ : ad++; }
+    if (isHome) { hf += tf; ha += ta; } else { af += tf; aa += ta; }
+  });
+  const played = w+d+l;
+  const mr = played ? (w/played*100).toFixed(1) : '–';
+  const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
+
+  // Render modal
+  document.getElementById('tm-title').textContent = `${teamName} — Grade ${grade}`;
+  document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
+
+  document.getElementById('tm-stats').innerHTML = [
+    {v: played, l:'Played'}, {v: w, l:'Won'}, {v: d, l:'Drawn'}, {v: l, l:'Lost'},
+    {v: mr+'%', l:'MR%'}, {v: pctVal+'%', l:'Pct'},
+  ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+
+  document.getElementById('tm-ha').innerHTML = `
+    <div class="team-ha-cell">
+      <div class="team-ha-lbl">🏠 Home</div>
+      <div class="team-ha-val">${hw}W ${hd}D ${hl}L &nbsp; &middot; &nbsp; ${hf}–${ha}</div>
+    </div>
+    <div class="team-ha-cell">
+      <div class="team-ha-lbl">✈ Away</div>
+      <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp; &middot; &nbsp; ${af}–${aa}</div>
+    </div>`;
+
+  // Results list — all matches, valid ones full opacity, invalid dimmed
+  document.getElementById('tm-body').innerHTML = matches.length ? matches.map(m => {
+    const isHome = m.home === teamName;
+    const opp = isHome ? m.away : m.home;
+    const tf = isHome ? m.hScore : m.aScore;
+    const ta = isHome ? m.aScore : m.hScore;
+    const tg = isHome ? m.hG : m.aG;
+    const tb = isHome ? m.hB : m.aB;
+    const og = isHome ? m.aG : m.hG;
+    const ob = isHome ? m.aB : m.hB;
+    const won = tf > ta, lost = ta > tf;
+    const res = won ? 'W' : lost ? 'L' : 'D';
+    const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
+    const valid = matchIsValid(m);
+    const g = valid ? matchGrade(m) : m.rawGrade;
+    const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
+    const haLabel = isHome ? '🏠' : '✈';
+    const haText = isHome ? 'Home' : 'Away';
+    const gotwKey = `${age}|${m.round}`;
+    const isGotw = S.gotwFlags[gotwKey] === m.id;
+    return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
+      <span class="gtag ${gc}" style="font-size:8px;text-align:center">${g}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
+      <span style="font-size:10px;color:var(--tx3);text-align:center">${isHome?'🏠':'✈'}</span>
+      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
+      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+        ${crestHTML(opp, 16, 'mr-logo')}
+        <span style="color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${opp}</span>
+        ${isGotw?`<span style="font-size:8px;color:var(--gold);background:var(--gold2);border:1px solid var(--gold3);border-radius:3px;padding:1px 4px;flex-shrink:0">GOTW</span>`:''}
+        ${!valid?`<span style="font-size:8px;color:var(--tx3);flex-shrink:0">not counted</span>`:''}
+      </div>
+      <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
+      <span style="font-size:9px;color:var(--tx3);text-align:left;white-space:nowrap">${tg}.${tb} – ${og}.${ob}</span>
+      <span style="font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${venueLink(m.venue, m.venueUrl)}</span>
+    </div>`;
+  }).join('') : '<div class="empty"><p>No matches found</p></div>';
+
+  document.getElementById('team-modal').style.display = 'flex';
+}
+
+function closeTeamModal() {
+  document.getElementById('team-modal').style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// ADMIN UI
+// ═══════════════════════════════════════
+// ── SHA-256 via Web Crypto API ──
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Hardcoded password hash — set this to SHA-256 of your password ──
+// Generate your hash: Admin → Manage → "Generate hash" tool, then paste it here and re-upload.
+// Default hash below is SHA-256 of "changeme" — replace before going live.
+const ADMIN_HASH = '39da8d47df2707cd66afd2afe7ee9a631096c18025eaa418414ae80aacbf73d7';
+
+function openAdmin() {
+  document.getElementById('admin-modal').style.display='flex';
+  if (!S.adminOpen) {
+    if (DEV_MODE) { unlockAdmin(); return; }
+    showLoginMode();
+  }
+}
+function closeAdmin() { document.getElementById('admin-modal').style.display='none'; S.pendingMatches=[]; S.pendingPlayers=[]; clearFb(); }
+
+function showLoginMode() {
+  document.getElementById('auth-gate').style.display='block';
+  document.getElementById('admin-panels').style.display='none';
+  document.getElementById('auth-gate').innerHTML = `
+    <div class="ml">Password</div>
+    <input type="password" class="mi" id="admin-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAuth()">
+    <div id="auth-err" style="display:none;margin-top:8px" class="alert alert-err"></div>
+    <div class="mactions" style="margin-top:4px">
+      <button class="btn-g" onclick="closeAdmin()">Cancel</button>
+      <button class="btn-p" onclick="doAuth()">Unlock</button>
+    </div>`;
+  setTimeout(()=>document.getElementById('admin-pw')?.focus(),100);
+}
+
+async function doAuth() {
+  const input = document.getElementById('admin-pw');
+  if (!input) return;
+  const hash = await sha256(input.value);
+  if (hash === ADMIN_HASH) {
+    unlockAdmin();
+  } else {
+    const err = document.getElementById('auth-err');
+    err.style.display='block'; err.textContent='Incorrect password.';
+    input.value='';
+  }
+}
+
+function unlockAdmin() {
+  S.adminOpen=true;
+  document.getElementById('auth-gate').style.display='none';
+  document.getElementById('admin-panels').style.display='block';
+  populateRosterTable(); populateGotwSelectors();
+}
+
+function switchTab(tab, btn) {
+  S.currentTab=tab;
+  document.querySelectorAll('#admin-panels .utab').forEach((b,i,arr)=>{if(arr.length>2&&arr[0].closest('.utabs')===btn.closest('.utabs'))b.classList.toggle('on',b===btn);});
+  btn.closest('.utabs').querySelectorAll('.utab').forEach(b=>b.classList.toggle('on',b===btn));
+  ['upload','roster','gotw-tab','manage'].forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.style.display=t===tab?'block':'none';});
+  if(tab==='roster') populateRosterTable();
+  if(tab==='gotw-tab') populateGotwSelectors();
+}
+
+function switchUpload(tab, btn) {
+  S.currentUploadTab=tab;
+  btn.closest('.utabs').querySelectorAll('.utab').forEach(b=>b.classList.toggle('on',b===btn));
+  document.getElementById('up-results').style.display=tab==='results'?'block':'none';
+  document.getElementById('up-stats').style.display=tab==='stats'?'block':'none';
+}
+
+function clearFb() {
+  ['results-preview','results-fb','stats-preview','stats-fb','upload-fb'].forEach(id=>{const el=document.getElementById(id);if(el){el.style.display='none';el.innerHTML='';}});
+}
+
+// ── Preview uploaded files ──
+async function previewResults(input) {
+  clearFb();
+  S.pendingMatches = [];
+  const files = [...input.files];
+  if (!files.length) return;
+  const preview = document.getElementById('results-preview');
+  preview.style.display = 'block';
+  preview.innerHTML = '<div class="alert alert-info">Parsing files…</div>';
+
+  const items = [];
+  for (const f of files) {
+    const text = await f.text();
+    const r = parseResultsHTML(text, f.name);
+    items.push(r);
+    S.pendingMatches.push(...r.matches);
+  }
+  preview.innerHTML = `<div class="upload-list">${items.map(r=>`
+    <div class="upload-item">
+      <span>${r.age} Grade ${r.rawGrade||'?'}</span>
+      <span class="${r.count?'ui-ok':'ui-err'}">${r.count} match${r.count!==1?'es':''}</span>
+    </div>`).join('')}</div>
+  <div class="alert alert-info" style="margin-top:6px">${S.pendingMatches.length} total matches ready to save.</div>`;
+}
+
+async function previewStats(input) {
+  clearFb();
+  S.pendingPlayers = [];
+  const files = [...input.files];
+  if (!files.length) return;
+  const preview = document.getElementById('stats-preview');
+  preview.style.display = 'block';
+  preview.innerHTML = '<div class="alert alert-info">Parsing files…</div>';
+
+  const items = [];
+  for (const f of files) {
+    const text = await f.text();
+    const r = parseStatsHTML(text, f.name);
+    items.push(r);
+    S.pendingPlayers.push(...r.players);
+  }
+  preview.innerHTML = `<div class="upload-list">${items.map(r=>`
+    <div class="upload-item">
+      <span>${r.age} Grade ${r.rawGrade||'?'}</span>
+      <span class="${r.count?'ui-ok':'ui-err'}">${r.count} player${r.count!==1?'s':''}</span>
+    </div>`).join('')}</div>
+  <div class="alert alert-info" style="margin-top:6px">${S.pendingPlayers.length} player records ready to save. Private players excluded.</div>`;
+}
+
+async function commitUpload() {
+  const fb = document.getElementById('upload-fb');
+  fb.style.display = 'none';
+  let saved = false;
+
+  if (S.pendingMatches.length) {
+    const {merged,added,updated} = mergeMatches(S.matches, S.pendingMatches);
+    S.matches = merged;
+    await sSet(SK.matches, merged);
+    fb.style.display='block'; fb.className='alert alert-ok';
+    fb.textContent = `Matches: ${added} added, ${updated} updated. Total: ${merged.length}.`;
+    S.pendingMatches = [];
+    saved = true;
+  }
+  if (S.pendingPlayers.length) {
+    const {merged,added,updated} = mergePlayers(S.players, S.pendingPlayers);
+    S.players = merged;
+    await sSet(SK.players, merged);
+    const existing = fb.style.display==='block' ? fb.textContent+' ' : '';
+    fb.style.display='block'; fb.className='alert alert-ok';
+    fb.textContent = existing+`Players: ${added} added, ${updated} updated. Total: ${merged.length}.`;
+    S.pendingPlayers = [];
+    saved = true;
+
+    // Auto-populate roster with any new teams
+    autoPopulateRoster();
+    await sSet(SK.roster, S.roster);
+  }
+
+  if (!saved) { fb.style.display='block'; fb.className='alert alert-err'; fb.textContent='No files selected.'; return; }
+  render();
+}
+
+// ── Roster ──
+function autoPopulateRoster() {
+  const teams = new Set();
+  S.matches.forEach(m=>{teams.add({name:m.home,grade:m.rawGrade,age:m.age});teams.add({name:m.away,grade:m.rawGrade,age:m.age});});
+  teams.forEach(t=>{ if(!S.roster[t.name]) S.roster[t.name]={grade:t.grade,age:t.age}; });
+}
+
+function populateRosterTable() {
+  autoPopulateRoster();
+  const wrap = document.getElementById('roster-table-wrap');
+  const teamNames = Object.keys(S.roster).sort();
+  if (!teamNames.length) { wrap.innerHTML='<div class="empty"><p>No teams found. Upload results pages first.</p></div>'; return; }
+  const grades = ['A','B','C','D1','D2','D3','D4'];
+  const ages = getAges().length ? getAges() : ['U11','U12','U13','U14','U15','U16'];
+  wrap.innerHTML = `<div style="max-height:320px;overflow-y:auto">
+    <table class="roster-tbl"><thead><tr><th>Team</th><th>Age</th><th>Current grade</th></tr></thead>
+    <tbody>${teamNames.map(t=>{
+      const r=S.roster[t]||{};
+      return `<tr>
+        <td>${t}</td>
+        <td><select data-team="${t}" data-field="age">
+          ${ages.map(a=>`<option value="${a}"${(r.age||'U12')===a?' selected':''}>${a}</option>`).join('')}
+        </select></td>
+        <td><select data-team="${t}" data-field="grade">
+          ${grades.map(g=>`<option value="${g}"${(r.grade||'')===g?' selected':''}>${g}</option>`).join('')}
+        </select></td>
+      </tr>`;
+    }).join('')}</tbody></table>
+  </div>`;
+}
+
+async function saveRoster() {
+  document.querySelectorAll('[data-team][data-field]').forEach(el=>{
+    const team=el.dataset.team, field=el.dataset.field;
+    if(!S.roster[team]) S.roster[team]={};
+    S.roster[team][field]=el.value;
+  });
+  await sSet(SK.roster, S.roster);
+  render();
+  const fb = document.getElementById('manage-fb');
+  fb.style.display='block'; fb.className='alert alert-ok'; fb.textContent='Roster saved.';
+  setTimeout(()=>fb.style.display='none', 2500);
+}
+
+// ── GOTW picker ──
+function populateGotwSelectors() {
+  const ages = getAges();
+  const ageSel = document.getElementById('gotw-age-sel');
+  ageSel.innerHTML = ages.map(a=>`<option value="${a}">${a}</option>`).join('');
+  if (ages.length) { ageSel.value = S.selectedAge || ages[0]; }
+  renderGotwRounds();
+  renderGotwPicker();
+}
+
+function renderGotwRounds() {
+  const age = document.getElementById('gotw-age-sel').value;
+  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchIsValid(m)).map(m=>m.round))].sort((a,b)=>b-a);
+  document.getElementById('gotw-round-sel').innerHTML = rounds.map(r=>`<option value="${r}">Round ${r}</option>`).join('');
+  renderGotwPicker();
+}
+
+function renderGotwPicker() {
+  const age = document.getElementById('gotw-age-sel').value;
+  const round = parseInt(document.getElementById('gotw-round-sel').value);
+  if (!age || !round) return;
+  const matches = S.matches.filter(m=>m.age===age&&m.round===round&&matchIsValid(m));
+  const flagKey = `${age}|${round}`;
+  const flaggedId = S.gotwFlags[flagKey] || '';
+
+  document.getElementById('gotw-picker-list').innerHTML = matches.length
+    ? matches.map(m=>{
+        const margin=Math.abs(m.hScore-m.aScore);
+        const g=matchGrade(m);
+        return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
+          <input type="radio" name="gotw-pick" value="${m.id}" ${m.id===flaggedId?'checked':''}>
+          <span style="flex:1">${m.home} ${m.hScore}–${m.aScore} ${m.away}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Grade ${g}  &middot;  margin ${margin}</span>
+        </label>`;
+      }).join('') + `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
+        <input type="radio" name="gotw-pick" value="" ${!flaggedId?'checked':''}> Auto (closest margin)
+      </label>`
+    : '<div class="empty"><p>No valid matches this round</p></div>';
+}
+
+async function saveGotwFlags() {
+  const age = document.getElementById('gotw-age-sel').value;
+  const round = document.getElementById('gotw-round-sel').value;
+  const picked = document.querySelector('input[name="gotw-pick"]:checked');
+  if (!picked) return;
+  const flagKey = `${age}|${round}`;
+  if (picked.value) S.gotwFlags[flagKey] = picked.value;
+  else delete S.gotwFlags[flagKey];
+  await sSet(SK.gotw, S.gotwFlags);
+  render();
+}
+
+// ── Manage ──
+async function clearData(what) {
+  if (!confirm(`Clear ${what==='all'?'ALL DATA':what}? Cannot be undone.`)) return;
+  if (what==='matches'||what==='all') { S.matches=[]; await sDel(SK.matches); }
+  if (what==='players'||what==='all') { S.players=[]; await sDel(SK.players); }
+  if (what==='all') { S.roster={}; S.gotwFlags={}; await sDel(SK.roster); await sDel(SK.gotw); }
+  const fb=document.getElementById('manage-fb');
+  fb.style.display='block'; fb.className='alert alert-ok'; fb.textContent='Cleared.';
+  render();
+}
+
+function exportData() {
+  const payload = {
+    matches: S.matches,
+    players: S.players,
+    roster: S.roster,
+    gotwFlags: S.gotwFlags,
+    exportedAt: new Date().toISOString(),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'data.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function generateHash() {
+  const v = document.getElementById('hash-pw-input').value.trim();
+  if (!v || v.length < 6) {
+    const el = document.getElementById('hash-output');
+    el.style.display='block'; el.className='alert alert-err'; el.textContent='Password must be at least 6 characters.';
+    return;
+  }
+  const hash = await sha256(v);
+  const el = document.getElementById('hash-output');
+  el.style.display='block'; el.className='alert alert-info';
+  el.innerHTML = `Hash generated. Copy this value and paste it as <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px">ADMIN_HASH</code> in index.html, then re-upload to GitHub:<br><br>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <code id="hash-val" style="font-family:'DM Mono',monospace;font-size:11px;word-break:break-all;flex:1;background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:4px;user-select:all">${hash}</code>
+      <button class="btn-g" style="flex-shrink:0;padding:5px 10px;font-size:11px" onclick="navigator.clipboard.writeText('${hash}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>`;
+  document.getElementById('hash-pw-input').value='';
+}
+
+document.getElementById('gotw-age-sel').addEventListener('change', renderGotwRounds);
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+async function init() {
+  // Always load from storage first
+  const [matches,players,roster,gotwFlags] = await Promise.all([
+    sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
+  ]);
+  if (matches) S.matches=matches;
+  if (players) S.players=players;
+  if (roster)  S.roster=roster;
+  if (gotwFlags) S.gotwFlags=gotwFlags;
+
+  // If running on a server (GitHub Pages), also try data.json and prefer it
+  if (location.protocol !== 'file:') {
+    try {
+      const r = await fetch('data.json');
+      if (r.ok) {
+        const d = await r.json();
+        if (d.matches?.length) S.matches = d.matches;
+        if (d.players?.length) S.players = d.players;
+        if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
+        if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
+      }
+    } catch(e) {}
+  }
+
+  if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
+  const ages = getAges();
+  if (ages.length) S.selectedAge = ages[0];
+  render();
+  document.getElementById('ldr-overlay').classList.add('gone');
+}
+init();
+</script>
+</body>
+</html>
