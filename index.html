@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.7</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.8</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -382,7 +382,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.7</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.8</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1036,9 +1036,9 @@ function renderGOTW(age) {
 
   bodyEl.innerHTML = `<div class="gotw-wrap">
     <div class="gotw-teams">
-      <div class="gotw-team">
+      <div class="gotw-team" style="cursor:pointer" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\\'")}','${grade}')">
         ${crestHTML(m.home, 40, 'gotw-logo')}
-        <span class="gotw-name" style="${hWon?'color:var(--tx);font-weight:600':''}">${m.home}</span>
+        <span class="gotw-name" style="${hWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.home}</span>
       </div>
       <div class="gotw-score">
         <div class="gotw-num">
@@ -1049,18 +1049,18 @@ function renderGOTW(age) {
         <div class="gotw-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</div>
         <div style="font-size:9px;color:var(--tx3);margin-top:2px">margin ${margin}</div>
       </div>
-      <div class="gotw-team">
+      <div class="gotw-team" style="cursor:pointer" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${grade}')">
         ${crestHTML(m.away, 40, 'gotw-logo')}
-        <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''}">${m.away}</span>
+        <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
     <div class="gotw-meta">Grade ${grade}${m.venue?' · '+m.venue:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">OTHER CLOSE GAMES</div>
-      ${gotwData.nominees.slice(0,3).map(n=>`<div class="gotw-nom">
-        <span>${n.home} vs ${n.away}</span>
+      ${gotwData.nominees.slice(0,3).map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
+        <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
         <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
-      </div>`).join('')}
+      </div>`;}).join('')}
     </div>` : ''}
   </div>`;
 }
@@ -1080,7 +1080,7 @@ function renderScorers(age) {
       <span class="s-rank">${i+1}</span>
       <div class="s-info">
         <div class="s-name">${p.name}</div>
-        <div class="s-team">${p.team}</div>
+        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${p.team.replace(/'/g,"\\'")}','${teamGrade}')">${p.team}</div>
       </div>
       <span class="gtag ${gc}">${teamGrade}</span>
       <div>
@@ -1121,22 +1121,16 @@ function renderResults(age) {
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
-      // W/L/D from home team perspective
-      const homeRes = hWon ? 'W' : aWon ? 'L' : 'D';
-      const homeResCol = hWon ? 'var(--green)' : aWon ? 'var(--red)' : 'var(--orange)';
       return `<div class="match-row" style="${valid?'':'opacity:.55'}">
         <div class="mr-info">
-          <div class="mr-rnd" style="display:flex;align-items:center;gap:4px">
-            <span class="gtag ${gc}">${g}</span>
-            <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;color:${homeResCol}">${homeRes}</span>
-          </div>
+          <div class="mr-rnd"><span class="gtag ${gc}">${g}</span></div>
           ${isGotw?`<svg title="Game of the Week" width="12" height="12" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
           ${!valid?`<div style="font-size:8px;color:var(--tx3);margin-top:1px">not counted</div>`:''}
           ${m.venue?`<div class="mr-venue">${m.venue}</div>`:''}
         </div>
         <div class="mr-left">
           ${crestHTML(m.home, 16, 'mr-logo')}
-          <span class="mr-name" style="color:${hWon?'var(--tx)':'var(--tx2)'};font-weight:${hWon?600:400}">${m.home}</span>
+          <span class="mr-name" style="color:${hWon?'var(--tx)':'var(--tx2)'};font-weight:${hWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\\'")}','${g}')">${m.home}</span>
         </div>
         <div class="mr-score">
           <span style="color:${hWon?'var(--gold)':aWon?'var(--tx3)':'var(--tx)'}">${m.hScore}</span>
@@ -1145,7 +1139,7 @@ function renderResults(age) {
           <span class="mr-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</span>
         </div>
         <div class="mr-right">
-          <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400}">${m.away}</span>
+          <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
       </div>`;
