@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.6</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.7</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -382,7 +382,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.6</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.7</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1095,7 +1095,8 @@ function renderResults(age) {
   const grades = activGrades(age);
   let matches = S.matches.filter(m => {
     if (m.age !== age) return false;
-    const g = matchGrade(m);
+    // Show all games — use rawGrade for filtering when grade filter is active
+    const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
     if (grades.size && !grades.has(g)) return false;
     if (S.selRound && m.round != S.selRound) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
@@ -1115,16 +1116,22 @@ function renderResults(age) {
     const rms = byRound[r];
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
-      const g = matchGrade(m);
+      const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
       const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
+      // W/L/D from home team perspective
+      const homeRes = hWon ? 'W' : aWon ? 'L' : 'D';
+      const homeResCol = hWon ? 'var(--green)' : aWon ? 'var(--red)' : 'var(--orange)';
       return `<div class="match-row" style="${valid?'':'opacity:.55'}">
         <div class="mr-info">
-          <div class="mr-rnd"><span class="gtag ${gc}">${g}</span></div>
+          <div class="mr-rnd" style="display:flex;align-items:center;gap:4px">
+            <span class="gtag ${gc}">${g}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;color:${homeResCol}">${homeRes}</span>
+          </div>
           ${isGotw?`<svg title="Game of the Week" width="12" height="12" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
-          ${!valid?`<div style="font-size:8px;color:var(--tx3);margin-top:2px">grade mismatch</div>`:''}
+          ${!valid?`<div style="font-size:8px;color:var(--tx3);margin-top:1px">not counted</div>`:''}
           ${m.venue?`<div class="mr-venue">${m.venue}</div>`:''}
         </div>
         <div class="mr-left">
@@ -1172,15 +1179,16 @@ function selLdrGrade(g) {
 
 function openTeamDrilldown(teamName, grade) {
   const age = S.selectedAge;
-  // All matches involving this team across the whole season (valid grade matches only)
+  // All matches involving this team — including ones that don't count towards ladder
   const matches = S.matches.filter(m =>
-    m.age === age && matchIsValid(m) && matchGrade(m) === grade &&
+    m.age === age &&
+    (m.rawGrade === grade || matchGrade(m) === grade) &&
     (m.home === teamName || m.away === teamName)
   ).sort((a,b) => a.round - b.round);
 
-  // Compute season stats
+  // Compute season stats from VALID matches only
   let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
-  matches.forEach(m => {
+  matches.filter(m=>matchIsValid(m)).forEach(m => {
     const isHome = m.home === teamName;
     const tf = isHome ? m.hScore : m.aScore;
     const ta = isHome ? m.aScore : m.hScore;
@@ -1213,7 +1221,7 @@ function openTeamDrilldown(teamName, grade) {
       <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp;·&nbsp; ${af}–${aa}</div>
     </div>`;
 
-  // Results list
+  // Results list — all matches, valid ones full opacity, invalid dimmed
   document.getElementById('tm-body').innerHTML = matches.length ? matches.map(m => {
     const isHome = m.home === teamName;
     const opp = isHome ? m.away : m.home;
@@ -1226,18 +1234,30 @@ function openTeamDrilldown(teamName, grade) {
     const won = tf > ta, lost = ta > tf;
     const res = won ? 'W' : lost ? 'L' : 'D';
     const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
+    const valid = matchIsValid(m);
+    const g = valid ? matchGrade(m) : m.rawGrade;
+    const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
+    const haLabel = isHome ? '🏠' : '✈';
+    const haText = isHome ? 'Home' : 'Away';
     const gotwKey = `${age}|${m.round}`;
     const isGotw = S.gotwFlags[gotwKey] === m.id;
-    return `<div style="display:grid;grid-template-columns:40px 20px 1fr 80px 90px;align-items:center;padding:7px 16px;border-top:1px solid var(--b1);gap:8px;font-size:12px">
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
-      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:13px">${res}</span>
+    return `<div style="display:grid;grid-template-columns:40px 1fr 80px 90px;align-items:center;padding:7px 16px;border-top:1px solid var(--b1);gap:8px;font-size:12px;opacity:${valid?1:0.5}">
+      <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start">
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
+        <div style="display:flex;align-items:center;gap:3px">
+          <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
+          <span class="gtag ${gc}" style="font-size:8px">${g}</span>
+        </div>
+        <span style="font-size:8px;color:var(--tx3)">${haLabel} ${haText}</span>
+      </div>
       <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
         <div style="display:flex;align-items:center;gap:6px">
           ${crestHTML(opp, 16, 'mr-logo')}
           <span style="color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${opp}</span>
           ${isGotw?`<span style="font-size:8px;color:var(--gold);background:var(--gold2);border:1px solid var(--gold3);border-radius:3px;padding:1px 4px;flex-shrink:0">GOTW</span>`:''}
+          ${!valid?`<span style="font-size:8px;color:var(--tx3);flex-shrink:0">not counted</span>`:''}
         </div>
-        ${m.venue?`<span style="font-size:9px;color:var(--tx3);padding-left:22px">${isHome?'🏠 ':'✈ '}${m.venue}</span>`:''}
+        ${m.venue?`<span style="font-size:9px;color:var(--tx3);padding-left:22px">${m.venue}</span>`:''}
       </div>
       <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
       <span style="font-size:9px;color:var(--tx3);text-align:center">${tg}.${tb} – ${og}.${ob}</span>
