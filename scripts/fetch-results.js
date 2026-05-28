@@ -40,6 +40,17 @@ query gradeListDiscoverSeason($id: String!) {
   discoverSeason(seasonID: $id) {
     id
     name
+    competition {
+      organisation {
+        name
+        logo {
+          sizes {
+            url
+            dimensions { width height }
+          }
+        }
+      }
+    }
     grades {
       id
       name
@@ -125,7 +136,7 @@ function gqlPost(query, variables) {
         'tenant':         'afl',
         'origin':         'https://www.playhq.com',
       },
-      timeout: 20000,
+      timeout: 45000,
     }, res => {
       let data = '';
       res.setEncoding('utf8');
@@ -199,14 +210,33 @@ async function discoverGrades(competitions) {
       continue;
     }
 
-    const grades = res?.data?.discoverSeason?.grades || [];
-    console.log(`  Found ${grades.length} grade(s) from PlayHQ`);
+    const allGradesRaw = res?.data?.discoverSeason?.grades || [];
+    console.log(`  Found ${allGradesRaw.length} grade(s) from PlayHQ`);
+
+    // Filter grades using excludeGrades list from config only.
+    // Each entry is matched as a case-insensitive substring against the grade name.
+    const excludeList = (comp.excludeGrades || []).map(e => e.toLowerCase());
+
+    const grades = excludeList.length ? allGradesRaw.filter(g => {
+      if (excludeList.some(ex => g.name.toLowerCase().includes(ex))) {
+        console.log(`  ~ EXCLUDED (config): ${g.name}`);
+        return false;
+      }
+      return true;
+    }) : allGradesRaw;
+    console.log(`  ${grades.length} grade(s) after filtering`);
 
     // Diff against cache
     const liveIds = new Set(grades.map(g => g.id));
     const cachedIds = new Set([...cachedById.keys()].filter(id =>
       cached.find(g => g.id === id)?.seasonID === comp.seasonID
     ));
+
+    // Extract competition logo (largest available size)
+    const orgLogo = res?.data?.discoverSeason?.competition?.organisation?.logo?.sizes || [];
+    const compLogoUrl = orgLogo.length
+      ? (orgLogo.find(s => s.dimensions?.width === 128) || orgLogo[orgLogo.length - 1]).url
+      : '';
 
     grades.forEach(g => {
       const prev = cachedById.get(g.id);
@@ -217,7 +247,7 @@ async function discoverGrades(competitions) {
         console.log(`  ~ RENAMED: "${prev.name}" → "${g.name}" (${g.id})`);
         gradeChanges = true;
       }
-      allGrades.push({ id: g.id, name: g.name, seasonID: comp.seasonID, compName: comp.name });
+      allGrades.push({ id: g.id, name: g.name, seasonID: comp.seasonID, compName: comp.name, compLogoUrl });
     });
 
     // Log removals
@@ -278,8 +308,14 @@ async function fetchGrade(grade, knownRounds) {
       continue;
     }
 
-    // Skip rounds whose earliest provisional date is still in the future
-    const dates = provisionalDates || [];
+    // Skip rounds whose earliest provisional date is still in the future.
+    // provisionalDates may arrive as ISO strings or localised — normalise to
+    // YYYY-MM-DD by parsing through Date() before string-comparing.
+    if (provisionalDates?.length) console.log(`      provisionalDates raw: ${JSON.stringify(provisionalDates)}`);
+    const dates = (provisionalDates || []).map(d => {
+      const dt = new Date(d);
+      return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
+    });
     const earliest = dates.length ? dates.slice().sort()[0] : null;
     if (earliest && earliest > today) {
       console.log(`    R${number} ... future (${earliest}) — stopping`);
@@ -289,13 +325,24 @@ async function fetchGrade(grade, knownRounds) {
     process.stdout.write(`    R${number}${isFinalsRound ? ' [Finals]' : ''} ... `);
 
     let fixtureRes;
-    try {
-      fixtureRes = await gqlPost(Q_FIXTURE, { roundID });
-      await sleep(FETCH_DELAY);
-    } catch (e) {
-      console.log(`API error: ${e.message}`);
-      break;
+    let fetchAttempts = 0;
+    while (fetchAttempts < 2) {
+      try {
+        fixtureRes = await gqlPost(Q_FIXTURE, { roundID });
+        await sleep(FETCH_DELAY);
+        break;
+      } catch (e) {
+        fetchAttempts++;
+        if (fetchAttempts >= 2) {
+          console.log(`API error after ${fetchAttempts} attempts: ${e.message} — skipping round`);
+          fixtureRes = null;
+        } else {
+          console.log(`API error (attempt ${fetchAttempts}): ${e.message} — retrying in 5s`);
+          await sleep(5000);
+        }
+      }
     }
+    if (!fixtureRes) continue; // skip this round, don't break — try next round
 
     const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
     const finalGames = games.filter(g => g.status?.value === 'FINAL');
@@ -468,10 +515,28 @@ async function main() {
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
 
   // 7. Write data.json — preserve gotwFlags and players, replace matches and roster
+  // Build lastRound map: "age|rawGrade" → highest round in data
+  const lastRound = {};
+  // Build teamLogos map: cleanTeamName → logo URL (from most recent match appearance)
+  const teamLogos = { ...(existing.teamLogos || {}) };
+  allMatches.forEach(m => {
+    const key = `${m.age}|${m.rawGrade}`;
+    if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
+    if (m.hLogo) teamLogos[m.home] = m.hLogo;
+    if (m.aLogo) teamLogos[m.away] = m.aLogo;
+  });
+
+  // Build compLogos map: compName → logo URL
+  const compLogos = {};
+  allGrades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
+
   const merged = {
     ...existing,
     matches: allMatches,
     roster,
+    lastRound,
+    teamLogos,
+    compLogos,
     lastUpdated: new Date().toISOString(),
   };
 
