@@ -30069,6 +30069,8 @@
     "U11|B": 6,
     "U11|C": 6,
     "U11|D1": 6,
+    "U12|A": 6,
+    "U12|B": 6,
     "U12|C": 6,
     "U12|D": 6,
     "U12 Girls|Grading": 4,
@@ -30102,8 +30104,6 @@
     "U12 Girls|B": 6,
     "U12 Girls|C": 6,
     "U12 Girls|D": 6,
-    "U12|A": 6,
-    "U12|B": 6,
     "U13|D2": 6,
     "U14 Girls|A": 6,
     "U14 Girls|B": 6,
@@ -30389,5 +30389,5 @@
   "compLogos": {
     "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-05-28T13:00:12.209Z"
+  "lastUpdated": "2026-05-28T13:13:54.978Z"
 }
