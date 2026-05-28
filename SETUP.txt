@@ -1,0 +1,53 @@
+EFNL DASHBOARD — QUICK SETUP
+=============================
+
+1. CREATE REPO ON GITHUB
+   - Go to github.com → New repository
+   - Name: efnl-dashboard  (or whatever you prefer)
+   - Public ✓  (required for free GitHub Pages)
+   - Don't initialise with README (you already have one)
+   - Click Create repository
+
+2. PUSH THIS FOLDER
+   Open Terminal in this folder and run:
+
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin https://github.com/YOUR-USERNAME/efnl-dashboard.git
+   git push -u origin main
+
+   Replace YOUR-USERNAME with your GitHub username.
+
+3. ENABLE GITHUB PAGES
+   - Go to your repo on GitHub
+   - Settings → Pages
+   - Source: Deploy from a branch
+   - Branch: main  /  (root)
+   - Save
+   - Your site will be live at: https://YOUR-USERNAME.github.io/efnl-dashboard
+
+4. FIRST LOGIN
+   - Visit your live URL
+   - Click ⚙ Admin
+   - You'll be prompted to set a password (first time only)
+   - Upload your first results files
+
+5. WEEKLY UPDATE WORKFLOW
+   - Download round's results HTML files from PlayHQ (File → Save Page As)
+   - Admin → Upload data → Results pages → select files → Save
+   - Admin → Manage → ⬇ data.json
+   - Commit data.json:
+       git add data.json
+       git commit -m "Round X results"
+       git push
+   - Live site updates within ~30 seconds
+
+6. ADD CLUB CRESTS
+   - Put each club's crest.png in assets/clubs/{slug}/
+   - Club name slugs: lowercase, spaces→underscores
+     e.g. "South Croydon" → assets/clubs/south_croydon/crest.png
+   - Commit and push — crests appear automatically
+
+THAT'S IT.
