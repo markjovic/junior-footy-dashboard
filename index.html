@@ -101,6 +101,7 @@ body{overflow-x:hidden}
 .s-g{font-family:'DM Mono',monospace;font-weight:500;color:var(--gold);font-size:13px;text-align:right}
 .s-gpg{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);text-align:right}
 .gtag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;flex-shrink:0}
+.gtag-neutral{background:rgba(255,255,255,0.07);color:var(--tx3)}
 .gtag-A{background:rgba(96,165,250,.15);color:#60a5fa}
 .gtag-B{background:rgba(34,197,94,.15);color:#22c55e}
 .gtag-C{background:rgba(249,115,22,.15);color:#f97316}
@@ -111,17 +112,16 @@ body{overflow-x:hidden}
 /* ── Results ── */
 .rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
 .rnd-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
-.match-row{display:grid;grid-template-columns:64px 1fr 70px 1fr;align-items:center;padding:6px 14px;gap:6px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
+.match-row{display:grid;grid-template-columns:28px 1fr 70px 1fr 110px;align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
 .match-row:hover{background:var(--s2)}
 .mr-left{display:flex;align-items:center;gap:6px}
 .mr-right{display:flex;align-items:center;gap:6px;flex-direction:row-reverse}
 .mr-logo{width:16px;height:16px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0}
-.mr-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px}
+.mr-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
 .mr-score{text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:13px}
 .mr-det{font-size:8px;color:var(--tx3);display:block;line-height:1.2;text-align:center}
-.mr-info{display:flex;flex-direction:column;gap:1px}
-.mr-rnd{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
-.mr-venue{font-size:9px;color:var(--tx3);white-space:normal;line-height:1.3;margin-top:2px}
+.mr-grade{display:flex;flex-direction:column;align-items:center;gap:3px}
+.mr-venue{font-size:9px;color:var(--tx3);white-space:normal;line-height:1.4;text-align:right}
 
 /* ── Empty / util ── */
 .empty{padding:28px 14px;text-align:center;color:var(--tx3);font-size:12px}
@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.8</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.9</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -218,10 +218,13 @@ body{overflow-x:hidden}
     </div>
     <div class="fgroup" style="margin-top:auto">
       <div class="flabel">Stats</div>
+      <div class="stat-row"><span>Age groups</span><span id="st-ages">0</span></div>
+      <div class="stat-row"><span>Grades</span><span id="st-grades">0</span></div>
       <div class="stat-row"><span>Matches</span><span id="st-m">0</span></div>
       <div class="stat-row"><span>Teams</span><span id="st-t">0</span></div>
       <div class="stat-row"><span>Scorers</span><span id="st-s">0</span></div>
       <div class="stat-row"><span>Rounds</span><span id="st-r">0</span></div>
+      <div id="st-breakdown" style="margin-top:4px;display:flex;flex-direction:column;gap:2px"></div>
     </div>
   </aside>
 
@@ -382,7 +385,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.8</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.9</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1121,12 +1124,11 @@ function renderResults(age) {
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
-      return `<div class="match-row" style="${valid?'':'opacity:.55'}">
-        <div class="mr-info">
-          <div class="mr-rnd"><span class="gtag ${gc}">${g}</span></div>
-          ${isGotw?`<svg title="Game of the Week" width="12" height="12" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
-          ${!valid?`<div style="font-size:8px;color:var(--tx3);margin-top:1px">not counted</div>`:''}
-          ${m.venue?`<div class="mr-venue">${m.venue}</div>`:''}
+      return `<div class="match-row" style="${valid?'':'opacity:.5'}">
+        <div class="mr-grade">
+          <span class="gtag gtag-neutral">${g}</span>
+          ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
+          ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
         </div>
         <div class="mr-left">
           ${crestHTML(m.home, 16, 'mr-logo')}
@@ -1142,6 +1144,7 @@ function renderResults(age) {
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
+        <div class="mr-venue">${m.venue||''}</div>
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
@@ -1150,13 +1153,35 @@ function renderResults(age) {
 
 function renderStats() {
   const age = S.selectedAge;
-  const ms = age ? S.matches.filter(m=>m.age===age&&matchIsValid(m)) : S.matches;
+  const allAges = getAges();
+  const ms = age ? S.matches.filter(m=>m.age===age&&matchIsValid(m)) : S.matches.filter(m=>matchIsValid(m));
   const ts = new Set([...ms.map(m=>m.home),...ms.map(m=>m.away)]);
   const rs = new Set(ms.map(m=>m.round));
+
+  // Count grades per age group
+  const gradesByAge = {};
+  S.matches.filter(m=>matchIsValid(m)).forEach(m => {
+    if (!gradesByAge[m.age]) gradesByAge[m.age] = new Set();
+    gradesByAge[m.age].add(matchGrade(m));
+  });
+  const totalGrades = Object.values(gradesByAge).reduce((acc,gs)=>acc+gs.size, 0);
+
+  document.getElementById('st-ages').textContent = allAges.length;
+  document.getElementById('st-grades').textContent = totalGrades;
   document.getElementById('st-m').textContent = ms.length;
   document.getElementById('st-t').textContent = ts.size;
   document.getElementById('st-s').textContent = S.players.length;
   document.getElementById('st-r').textContent = rs.size;
+
+  // Per-age breakdown
+  const breakdown = document.getElementById('st-breakdown');
+  breakdown.innerHTML = allAges.map(a => {
+    const gs = gradesByAge[a] ? [...gradesByAge[a]].sort((x,y)=>GRADE_ORDER.indexOf(x)-GRADE_ORDER.indexOf(y)) : [];
+    return `<div style="font-size:9px;color:var(--tx3);padding:1px 0;display:flex;justify-content:space-between;gap:4px">
+      <span>${a}</span>
+      <span style="color:var(--tx2)">${gs.length} grade${gs.length!==1?'s':''}: ${gs.join(', ')}</span>
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════
