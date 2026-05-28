@@ -605,7 +605,7 @@ async function main() {
 
   const merged = {
     ...existing,
-    matches: allMatches,
+    matches: allWithByes,
     roster,
     lastRound,
     teamLogos,
