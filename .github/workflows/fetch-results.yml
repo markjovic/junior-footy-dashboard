@@ -47,7 +47,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       # ── 3. Install jsdom ──────────────────────────────────────────────────
       # No npm dependencies — the script uses only Node.js built-ins.
