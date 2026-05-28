@@ -50,10 +50,9 @@ jobs:
           node-version: '20'
 
       # ── 3. Install jsdom ──────────────────────────────────────────────────
-      # jsdom is the only runtime dependency — it provides a DOM
-      # implementation for parsing PlayHQ HTML server-side.
-      - name: Install dependencies
-        run: npm install jsdom
+      # No npm dependencies — the script uses only Node.js built-ins.
+      - name: Check Node version
+        run: node --version
 
       # ── 4. Run the fetch script ───────────────────────────────────────────
       - name: Fetch PlayHQ results
@@ -78,8 +77,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stage data.json only (never commit grades.json changes from the script)
-          git add data.json
+          # Stage both — grades.json may have been updated by grade discovery
+          git add data.json grades.json
 
           # If nothing is staged, data.json was unchanged — skip commit
           if git diff --cached --quiet; then
