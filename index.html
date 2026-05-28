@@ -528,6 +528,7 @@ let S = {
   selRound: '',
   selTeam: '',
   selLdrGrade: null,
+  lastRound: {},       // { 'age|rawGrade': roundNumber } — highest fetched round per grade
   adminOpen: false,
   pendingMatches: [],
   pendingPlayers: [],
@@ -1059,10 +1060,13 @@ function renderLadder(age) {
   const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchIsValid(m)).map(m=>m.round),0);
   document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
 
-  document.getElementById('ldr-tabs').innerHTML = grades.map(g =>
-    `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||'#fff'}`:''}"
-      onclick="selLdrGrade('${g}')">Grade ${g}</button>`
-  ).join('');
+  document.getElementById('ldr-tabs').innerHTML = grades.map(g => {
+    const key = `${age}|${g}`;
+    const lr = S.lastRound[key];
+    const roundLabel = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
+    return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||'#fff'}`:''}"
+      onclick="selLdrGrade('${g}')">Grade ${g}${roundLabel}</button>`;
+  }).join('');
 
   document.getElementById('ldr-bodies').innerHTML = grades.map(g => {
     const ladder = computeLadder(age, g, maxRound);
@@ -1689,6 +1693,7 @@ async function init() {
         if (d.players?.length) S.players = d.players;
         if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
+        if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.lastUpdated) {
           const el = document.getElementById('last-updated');
           if (el) {
