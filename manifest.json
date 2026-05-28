@@ -1,0 +1,27 @@
+{
+  "name": "Local Footy Dashboard",
+  "short_name": "LFD",
+  "description": "Results, ladder, and stats for local football",
+  "start_url": "/junior-footy-dashboard/",
+  "scope": "/junior-footy-dashboard/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090e",
+  "theme_color": "#09090e",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["sports"],
+  "lang": "en-AU"
+}
