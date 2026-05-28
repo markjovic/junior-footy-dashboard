@@ -89,6 +89,7 @@ jobs:
           # Build a commit message that says which day and run number
           RUN_DATE=$(TZ='Australia/Melbourne' date '+%A %-d %B %Y')
           git commit -m "results: auto-fetch ${RUN_DATE} (run #${{ github.run_number }})"
+          git pull --rebase origin main
           git push
 
       # ── 6. Fail loudly on a hard error ───────────────────────────────────
