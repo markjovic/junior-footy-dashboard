@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.25</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.29</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.25</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.29</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -496,12 +496,24 @@ body{overflow-x:hidden}
 // ═══════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════
-const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw' };
+const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw', filters:'efnl_v2_filters' };
 
 async function sGet(k){
   try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
   try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; }
 }
+function saveFilters() {
+  try {
+    localStorage.setItem(SK.filters, JSON.stringify({
+      selComp:  S.selComp,
+      selectedAge: S.selectedAge,
+      selGrades: [...S.selGrades],
+      selRound:  S.selRound,
+      selTeam:   S.selTeam,
+    }));
+  } catch(e) {}
+}
+
 async function sSet(k,v){
   const s=JSON.stringify(v);
   try{ if(window.storage){ await window.storage.set(k,s); return; } }catch(e){}
@@ -710,10 +722,24 @@ function cleanTeam(name) {
 // CREST LOADER — uses PlayHQ Cloudinary URLs from teamLogos in data.json
 // ═══════════════════════════════════════
 const crestCache = {};
+const LOGO_COLOUR_WORDS = ['Purple','Gold','Blue','Red','Green','White','Black','Silver','Navy','Yellow','Orange','Teal'];
+
+function logoKey(teamName) {
+  // teamLogos is keyed by full name including colour (e.g. "Norwood Purple").
+  // Try exact match first, then fall back to colour-stripped name since all
+  // colour variants of a club share the same Cloudinary logo.
+  if (S.teamLogos[teamName]) return teamName;
+  let stripped = teamName;
+  LOGO_COLOUR_WORDS.forEach(c => {
+    stripped = stripped.replace(new RegExp('\s+' + c + '\s*$', 'i'), '').trim();
+  });
+  return stripped;
+}
 
 function getCrestImg(teamName) {
   if (teamName in crestCache) return crestCache[teamName];
-  const url = S.teamLogos[teamName];
+  const key = logoKey(teamName);
+  const url = S.teamLogos[key];
   if (!url) { crestCache[teamName] = null; return null; }
   crestCache[teamName] = null;
   const img = new Image();
@@ -774,20 +800,22 @@ function mergePlayers(existing, incoming) {
 // ═══════════════════════════════════════
 // Returns the current grade for a team name from the roster,
 // falling back to the grade from match data if not in roster.
-function currentGrade(teamName, rawGrade) {
-  return (S.roster[teamName] || {}).grade || rawGrade;
+function currentGrade(teamName, age, rawGrade) {
+  // Roster is keyed by "teamName|age" to support clubs with teams in multiple age groups
+  const entry = S.roster[`${teamName}|${age}`] || S.roster[teamName];
+  return (entry || {}).grade || rawGrade;
 }
 
 // A match counts for ladder/team stats if both teams are in the same current grade
 function matchIsValid(m) {
-  const hGrade = currentGrade(m.home, m.rawGrade);
-  const aGrade = currentGrade(m.away, m.rawGrade);
+  const hGrade = currentGrade(m.home, m.age, m.rawGrade);
+  const aGrade = currentGrade(m.away, m.age, m.rawGrade);
   return hGrade && aGrade && hGrade === aGrade;
 }
 
 // The grade a match counts towards (from the roster)
 function matchGrade(m) {
-  return currentGrade(m.home, m.rawGrade);
+  return currentGrade(m.home, m.age, m.rawGrade);
 }
 
 // ═══════════════════════════════════════
@@ -942,7 +970,7 @@ function getTopScorers(age, n=12) {
     .filter(p => {
       if (!p.goals) return false;
       // Check if player's team is in a grade we're currently showing
-      const teamGrade = currentGrade(p.team, p.rawGrade);
+      const teamGrade = currentGrade(p.team, p.age || '', p.rawGrade);
       return !grades.size || grades.has(teamGrade);
     })
     .sort((a,b) => b.goals - a.goals || a.gp - b.gp)
@@ -1163,7 +1191,7 @@ function renderScorers(age) {
   if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
   el.innerHTML = scorers.map((p,i)=>{
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
-    const teamGrade = currentGrade(p.team, p.rawGrade);
+    const teamGrade = currentGrade(p.team, p.age || '', p.rawGrade);
     const gc = `gtag-${teamGrade.replace(/[^A-Z0-9]/g,'')}`;
     return `<div class="scorer-row">
       <span class="s-rank">${i+1}</span>
@@ -1259,10 +1287,10 @@ function renderStats() {
 // ═══════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════
-function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
-function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
-function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); render(); }
-function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); render(); }
+function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
+function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
+function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); saveFilters(); render(); }
+function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); saveFilters(); render(); }
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('sidebar-overlay');
@@ -1530,13 +1558,13 @@ async function commitUpload() {
 function autoPopulateRoster() {
   const teams = new Set();
   S.matches.forEach(m=>{teams.add({name:m.home,grade:m.rawGrade,age:m.age});teams.add({name:m.away,grade:m.rawGrade,age:m.age});});
-  teams.forEach(t=>{ if(!S.roster[t.name]) S.roster[t.name]={grade:t.grade,age:t.age}; });
+  teams.forEach(t=>{ const k=`${t.name}|${t.age}`; if(!S.roster[k]) S.roster[k]={grade:t.grade,age:t.age}; });
 }
 
 function populateRosterTable() {
   autoPopulateRoster();
   const wrap = document.getElementById('roster-table-wrap');
-  const teamNames = Object.keys(S.roster).sort();
+  const teamNames = Object.keys(S.roster).sort((a,b) => a.localeCompare(b));
   if (!teamNames.length) { wrap.innerHTML='<div class="empty"><p>No teams found. Upload results pages first.</p></div>'; return; }
   const grades = ['A','B','C','D1','D2','D3','D4'];
   const ages = getAges().length ? getAges() : ['U11','U12','U13','U14','U15','U16'];
@@ -1561,7 +1589,7 @@ async function saveRoster() {
   document.querySelectorAll('[data-team][data-field]').forEach(el=>{
     const team=el.dataset.team, field=el.dataset.field;
     if(!S.roster[team]) S.roster[team]={};
-    S.roster[team][field]=el.value;
+    S.roster[team][field] = el.value;
   });
   await sSet(SK.roster, S.roster);
   render();
@@ -1714,8 +1742,49 @@ async function init() {
   }
 
   if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
+
+  // Restore last-used filters from localStorage
+  try {
+    const saved = localStorage.getItem(SK.filters);
+    if (saved) {
+      const f = JSON.parse(saved);
+      const comps = getComps();
+      const ages  = getAges();
+
+      // Restore competition — validate it still exists
+      if (f.selComp && comps.includes(f.selComp)) S.selComp = f.selComp;
+
+      // Restore age — validate it still exists under the restored comp
+      if (f.selectedAge && ages.includes(f.selectedAge)) S.selectedAge = f.selectedAge;
+
+      // Restore grades — only keep ones that still exist for this age
+      if (Array.isArray(f.selGrades) && S.selectedAge) {
+        const validGrades = new Set(gradesForAge(S.selectedAge));
+        const restoredGrades = f.selGrades.filter(g => validGrades.has(g));
+        if (restoredGrades.length) S.selGrades = new Set(restoredGrades);
+        // If no saved grades are valid, leave selGrades empty (show all)
+      }
+
+      // Restore round — validate it still exists for this age
+      if (f.selRound && S.selectedAge) {
+        const validRounds = new Set(S.matches
+          .filter(m => m.age === S.selectedAge && matchesComp(m))
+          .map(m => String(m.round)));
+        if (validRounds.has(String(f.selRound))) S.selRound = f.selRound;
+        // else: round gone (new season?) — fall back to all rounds
+      }
+
+      // Restore team — validate it still exists for this age
+      if (f.selTeam && S.selectedAge) {
+        const validTeams = new Set(allTeamsForAge(S.selectedAge));
+        if (validTeams.has(f.selTeam)) S.selTeam = f.selTeam;
+        // else: team gone — fall back to all teams
+      }
+    }
+  } catch(e) {}
+
   const ages = getAges();
-  if (ages.length) S.selectedAge = ages[0];
+  if (!S.selectedAge || !ages.includes(S.selectedAge)) S.selectedAge = ages[0] || null;
   render();
   document.getElementById('ldr-overlay').classList.add('gone');
 }
