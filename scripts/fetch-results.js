@@ -168,12 +168,40 @@ function parseGradeName(name) {
   n = n.replace(/^.+?-\s*(?=U\d)/i, '');
   // Replace remaining " - " separators with spaces
   n = n.replace(/\s+-\s+/g, ' ').trim();
-  // Strip "(Grading)" suffix
-  if (/\(Grading\)/i.test(n)) return { age: n.replace(/\s*\(Grading\)/i, '').trim(), rawGrade: 'Grading' };
-  // Match junior grades: "U12 B", "U12 Girls B", "U17.5 C", "U13 D1", "U18 Girls A/B"
-  const m = n.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*(?:\/[A-D]\d*)?)$/i);
-  if (m) return { age: m[1].trim(), rawGrade: m[2].toUpperCase() };
-  // Senior/Women/Veterans — preserve full name as age, no grade
+
+  // Grading rounds
+  if (/\(Grading\)/i.test(n))
+    return { age: n.replace(/\s*\(Grading\)/i, '').trim(), rawGrade: 'Grading' };
+
+  // Junior grades: "U12 B", "U12 Girls B", "U17.5 C", "U13 D1", "U18 Girls A/B"
+  const junior = n.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*(?:\/[A-D]\d*)?)$/i);
+  if (junior) return { age: junior[1].trim(), rawGrade: junior[2].toUpperCase() };
+
+  // Senior Men: "Premier Eastland Senior Men", "Division 1 Eastland Senior Men"
+  const seniorMen = n.match(/^(Premier|Division \d+)\s+(?:Eastland\s+)?Senior Men$/i);
+  if (seniorMen) return { age: 'Senior Men', rawGrade: seniorMen[1] };
+
+  // Reserve Men: "Premier Reserve Men", "Division 1 Reserve Men"
+  const reserve = n.match(/^(Premier|Division \d+)\s+Reserve Men$/i);
+  if (reserve) return { age: 'Reserve Men', rawGrade: reserve[1] };
+
+  // U19.5: "Premier U19.5", "Division 1 U19.5"
+  const u195 = n.match(/^(Premier|Division \d+)\s+U19\.5$/i);
+  if (u195) return { age: 'U19.5', rawGrade: u195[1] };
+
+  // Senior Women: "Senior Women Premier Division"
+  if (/Senior Women Premier Division/i.test(n))
+    return { age: 'Senior Women', rawGrade: 'Premier' };
+
+  // Women divisions: "Women Division 1"
+  const women = n.match(/^Women Division (\d+)$/i);
+  if (women) return { age: 'Senior Women', rawGrade: 'Division ' + women[1] };
+
+  // Veterans
+  const vets = n.match(/^Veterans\s*[-–]?\s*(Mens?|Womens?)$/i);
+  if (vets) return { age: 'Veterans', rawGrade: vets[1].replace(/s$/i, '') };
+
+  // Fallback — preserve full name as age, no grade
   return { age: n, rawGrade: '' };
 }
 
