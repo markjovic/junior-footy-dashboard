@@ -96,8 +96,8 @@ body{overflow-x:hidden}
 .scorer-row{display:grid;grid-template-columns:24px 1fr 28px 36px;align-items:center;padding:5px 14px;gap:8px;border-top:1px solid var(--b1)}
 .s-rank{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right}
 .s-info{min-width:0}
-.s-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.s-team{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-name{font-size:12px;font-weight:500;white-space:normal;line-height:1.4;max-width:90px}
+.s-team{font-size:9px;color:var(--tx3);white-space:normal;line-height:1.4;max-width:90px}
 .s-g{font-family:'DM Mono',monospace;font-weight:500;color:var(--gold);font-size:13px;text-align:right}
 .s-gpg{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);text-align:right}
 .gtag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;flex-shrink:0}
@@ -111,7 +111,7 @@ body{overflow-x:hidden}
 /* ── Results ── */
 .rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
 .rnd-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
-.match-row{display:grid;grid-template-columns:54px 1fr 70px 1fr 50px;align-items:center;padding:6px 14px;gap:6px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
+.match-row{display:grid;grid-template-columns:54px 1fr 70px 1fr auto;align-items:start;padding:6px 14px;gap:6px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
 .match-row:hover{background:var(--s2)}
 .mr-left{display:flex;align-items:center;gap:6px}
 .mr-right{display:flex;align-items:center;gap:6px;flex-direction:row-reverse}
@@ -121,7 +121,7 @@ body{overflow-x:hidden}
 .mr-det{font-size:8px;color:var(--tx3);display:block;line-height:1.2;text-align:center}
 .mr-info{display:flex;flex-direction:column;gap:1px}
 .mr-rnd{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
-.mr-venue{font-size:9px;color:var(--tx3);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-venue{font-size:9px;color:var(--tx3);text-align:right;white-space:normal;line-height:1.4;max-width:90px}
 
 /* ── Empty / util ── */
 .empty{padding:28px 14px;text-align:center;color:var(--tx3);font-size:12px}
@@ -162,7 +162,21 @@ body{overflow-x:hidden}
 .roster-tbl select{background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--tx);font-size:11px;padding:2px 4px}
 .roster-tbl input{background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--tx);font-size:11px;padding:2px 6px;width:100%}
 
-/* ── Loading ── */
+/* ── Team drilldown modal ── */
+.team-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);z-index:400;display:flex;align-items:center;justify-content:center}
+.team-modal{background:var(--s1);border:1px solid var(--b2);border-radius:12px;width:640px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.team-modal-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--b1);flex-shrink:0}
+.team-modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;flex:1}
+.team-modal-body{overflow-y:auto;flex:1}
+.team-stat-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--b1);border-bottom:1px solid var(--b1)}
+.team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
+.team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
+.team-stat-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.team-ha-strip{display:grid;grid-template-columns:1fr 1px 1fr;gap:0;border-bottom:1px solid var(--b1)}
+.team-ha-cell{padding:10px 16px;text-align:center}
+.team-ha-cell+.team-ha-cell{border-left:1px solid var(--b1)}
+.team-ha-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.team-ha-val{font-family:'DM Mono',monospace;font-size:13px;color:var(--tx)}
 #ldr-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;transition:opacity .3s}
 #ldr-overlay.gone{opacity:0;pointer-events:none}
 .spinner{width:28px;height:28px;border:2px solid var(--b2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
@@ -398,6 +412,20 @@ body{overflow-x:hidden}
 
   </div>
 </div>
+</div>
+
+<!-- ── TEAM DRILLDOWN MODAL ── -->
+<div class="team-modal-overlay" id="team-modal" style="display:none" onclick="if(event.target===this)closeTeamModal()">
+  <div class="team-modal">
+    <div class="team-modal-hdr">
+      <div id="tm-crest"></div>
+      <div class="team-modal-title" id="tm-title"></div>
+      <button class="btn-g" onclick="closeTeamModal()" style="padding:5px 10px;font-size:12px">✕</button>
+    </div>
+    <div class="team-stat-strip" id="tm-stats"></div>
+    <div class="team-ha-strip" id="tm-ha"></div>
+    <div class="team-modal-body" id="tm-body"></div>
+  </div>
 </div>
 
 <script>
@@ -742,32 +770,70 @@ function computeLadder(age, grade, maxRound) {
   );
 
   const teams = {};
-  const ensure = (name, logo) => {
-    if (!teams[name]) teams[name] = {name,logo,pts:0,w:0,d:0,l:0,f:0,a:0,form:[]};
+  const ensure = name => {
+    if (!teams[name]) teams[name] = {
+      name, pts:0, w:0, d:0, l:0, f:0, a:0, form:[],
+      hw:0, hl:0, hd:0,  // home record
+      aw:0, al:0, ad:0,  // away record
+    };
+  };
+
+  // Build head-to-head map: h2h[A][B] = {w,l,d,f,a}
+  const h2h = {};
+  const ensureH2H = (a, b) => {
+    if (!h2h[a]) h2h[a] = {};
+    if (!h2h[a][b]) h2h[a][b] = {w:0,l:0,d:0,f:0,a:0};
   };
 
   matches.forEach(m => {
-    ensure(m.home, m.hLogo); ensure(m.away, m.aLogo);
+    ensure(m.home); ensure(m.away);
+    ensureH2H(m.home, m.away); ensureH2H(m.away, m.home);
     const h = teams[m.home], a = teams[m.away];
     h.f += m.hScore; h.a += m.aScore;
     a.f += m.aScore; a.a += m.hScore;
+    h2h[m.home][m.away].f += m.hScore; h2h[m.home][m.away].a += m.aScore;
+    h2h[m.away][m.home].f += m.aScore; h2h[m.away][m.home].a += m.hScore;
     if (m.hScore > m.aScore) {
-      h.w++; h.pts += 4; a.l++;
+      h.w++; h.hw++; h.pts += 4; a.l++; a.al++;
       h.form.push({r:m.round,res:'W'}); a.form.push({r:m.round,res:'L'});
+      h2h[m.home][m.away].w++; h2h[m.away][m.home].l++;
     } else if (m.aScore > m.hScore) {
-      a.w++; a.pts += 4; h.l++;
+      a.w++; a.aw++; a.pts += 4; h.l++; h.hl++;
       a.form.push({r:m.round,res:'W'}); h.form.push({r:m.round,res:'L'});
+      h2h[m.away][m.home].w++; h2h[m.home][m.away].l++;
     } else {
-      h.d++; h.pts += 2; a.d++; a.pts += 2;
+      h.d++; h.hd++; h.pts += 2; a.d++; a.ad++; a.pts += 2;
       h.form.push({r:m.round,res:'D'}); a.form.push({r:m.round,res:'D'});
+      h2h[m.home][m.away].d++; h2h[m.away][m.home].d++;
     }
   });
 
-  return Object.values(teams).sort((a,b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
+  // Compute match ratio for each team
+  Object.values(teams).forEach(t => {
+    const played = t.w + t.d + t.l;
+    t.played = played;
+    t.mr = played ? t.w / played : 0;
+  });
+
+  // Sort: 1) MR% desc, 2) H2H (between tied teams), 3) points scored desc, 4) percentage desc
+  const sorted = Object.values(teams).sort((a, b) => {
+    if (Math.abs(b.mr - a.mr) > 0.0001) return b.mr - a.mr;
+    // H2H tiebreaker — only valid if they've played each other
+    const aVsB = (h2h[a.name]?.[b.name] || {});
+    const bVsA = (h2h[b.name]?.[a.name] || {});
+    const aH2HMR = (aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0) > 0
+      ? (aVsB.w||0) / ((aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0)) : -1;
+    const bH2HMR = (bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0) > 0
+      ? (bVsA.w||0) / ((bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0)) : -1;
+    if (aH2HMR >= 0 && bH2HMR >= 0 && Math.abs(bH2HMR - aH2HMR) > 0.0001) return bH2HMR - aH2HMR;
+    // Points scored
+    if (b.f !== a.f) return b.f - a.f;
+    // Percentage
     const pa = a.a ? a.f/a.a : 0, pb = b.a ? b.f/b.a : 0;
     return pb - pa;
   });
+
+  return sorted;
 }
 
 function lastForm(formArr, n=5) {
@@ -912,23 +978,34 @@ function renderLadder(age) {
     const ladder = computeLadder(age, g, maxRound);
     return `<div class="ldr-pane${g===S.selLdrGrade?' on':''}" id="lp-${g}">
       <table class="ldr-tbl"><thead><tr>
-        <th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th>
-        <th>For</th><th>Agst</th><th>%</th><th>Pts</th><th>Form</th>
+        <th>#</th><th style="text-align:left">Team</th>
+        <th title="Games played">P</th>
+        <th title="Wins">W</th><th title="Draws">D</th><th title="Losses">L</th>
+        <th title="Home W-L">H</th><th title="Away W-L">A</th>
+        <th title="Points for">For</th><th title="Points against">Agst</th>
+        <th title="Percentage (for/against × 100)">%</th>
+        <th title="Match ratio (wins ÷ games played)" style="color:var(--gold)">MR%</th>
+        <th title="Last 5">Form</th>
       </tr></thead><tbody>
       ${ladder.map((t,i)=>{
-        const played=t.w+t.d+t.l;
-        const p = pct(t.f,t.a);
-        const form=lastForm(t.form,5);
+        const p = pct(t.f, t.a);
+        const mr = t.played ? (t.mr*100).toFixed(1) : '–';
+        const form = lastForm(t.form, 5);
         return `<tr>
-          <td>${i+1}</td>
-          <td><div class="tname">
-            ${crestHTML(t.name, 18, 'tlogo')}
-            <span class="tnm">${t.name}</span>
-          </div></td>
-          <td>${played}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+          <td style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:10px">${i+1}</td>
+          <td>
+            <div class="tname" style="cursor:pointer" onclick="openTeamDrilldown('${t.name.replace(/'/g,"\\'")}','${g}')">
+              ${crestHTML(t.name, 18, 'tlogo')}
+              <span class="tnm" style="text-decoration:underline;text-decoration-color:rgba(255,255,255,0.2);text-underline-offset:2px">${t.name}</span>
+            </div>
+          </td>
+          <td>${t.played}</td>
+          <td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.hw}-${t.hl}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.aw}-${t.al}</td>
           <td>${t.f}</td><td>${t.a}</td>
           <td class="pct-col">${p}%</td>
-          <td class="pts">${t.pts}</td>
+          <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--gold)">${mr}%</td>
           <td><div class="form-wrap">${form.map(f=>`<span class="fb ${f.res}">${f.res}</span>`).join('')}</div></td>
         </tr>`;
       }).join('')}
@@ -1086,6 +1163,85 @@ function selLdrGrade(g) {
   S.selLdrGrade=g;
   document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||'#fff'):'';});
   document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
+}
+
+function openTeamDrilldown(teamName, grade) {
+  const age = S.selectedAge;
+  // All matches involving this team across the whole season (valid grade matches only)
+  const matches = S.matches.filter(m =>
+    m.age === age && matchIsValid(m) && matchGrade(m) === grade &&
+    (m.home === teamName || m.away === teamName)
+  ).sort((a,b) => a.round - b.round);
+
+  // Compute season stats
+  let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
+  matches.forEach(m => {
+    const isHome = m.home === teamName;
+    const tf = isHome ? m.hScore : m.aScore;
+    const ta = isHome ? m.aScore : m.hScore;
+    f += tf; a += ta;
+    if (tf > ta) { w++; isHome ? hw++ : aw++; }
+    else if (ta > tf) { l++; isHome ? hl++ : al++; }
+    else { d++; isHome ? hd++ : ad++; }
+    if (isHome) { hf += tf; ha += ta; } else { af += tf; aa += ta; }
+  });
+  const played = w+d+l;
+  const mr = played ? (w/played*100).toFixed(1) : '–';
+  const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
+
+  // Render modal
+  document.getElementById('tm-title').textContent = `${teamName} — Grade ${grade}`;
+  document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
+
+  document.getElementById('tm-stats').innerHTML = [
+    {v: played, l:'Played'}, {v: w, l:'Won'}, {v: d, l:'Drawn'}, {v: l, l:'Lost'},
+    {v: mr+'%', l:'MR%'}, {v: pctVal+'%', l:'Pct'},
+  ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+
+  document.getElementById('tm-ha').innerHTML = `
+    <div class="team-ha-cell">
+      <div class="team-ha-lbl">🏠 Home</div>
+      <div class="team-ha-val">${hw}W ${hd}D ${hl}L &nbsp;·&nbsp; ${hf}–${ha}</div>
+    </div>
+    <div class="team-ha-cell">
+      <div class="team-ha-lbl">✈ Away</div>
+      <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp;·&nbsp; ${af}–${aa}</div>
+    </div>`;
+
+  // Results list
+  document.getElementById('tm-body').innerHTML = matches.length ? matches.map(m => {
+    const isHome = m.home === teamName;
+    const opp = isHome ? m.away : m.home;
+    const tf = isHome ? m.hScore : m.aScore;
+    const ta = isHome ? m.aScore : m.hScore;
+    const tg = isHome ? m.hG : m.aG;
+    const tb = isHome ? m.hB : m.aB;
+    const og = isHome ? m.aG : m.hG;
+    const ob = isHome ? m.aB : m.hB;
+    const won = tf > ta, lost = ta > tf;
+    const res = won ? 'W' : lost ? 'L' : 'D';
+    const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
+    const gotwKey = `${age}|${m.round}`;
+    const isGotw = S.gotwFlags[gotwKey] === m.id;
+    return `<div style="display:grid;grid-template-columns:40px 20px 1fr 80px 90px 80px;align-items:center;padding:7px 16px;border-top:1px solid var(--b1);gap:8px;font-size:12px">
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
+      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:13px">${res}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${crestHTML(opp, 16, 'mr-logo')}
+        <span style="color:var(--tx2)">${opp}</span>
+        ${isGotw?`<span style="font-size:8px;color:var(--gold);background:var(--gold2);border:1px solid var(--gold3);border-radius:3px;padding:1px 4px">GOTW</span>`:''}
+      </div>
+      <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
+      <span style="font-size:9px;color:var(--tx3);text-align:center">${tg}.${tb} – ${og}.${ob}</span>
+      <span style="font-size:9px;color:var(--tx3);text-align:right;white-space:normal;line-height:1.3">${isHome?'🏠':''} ${m.venue||''}</span>
+    </div>`;
+  }).join('') : '<div class="empty"><p>No matches found</p></div>';
+
+  document.getElementById('team-modal').style.display = 'flex';
+}
+
+function closeTeamModal() {
+  document.getElementById('team-modal').style.display = 'none';
 }
 
 // ═══════════════════════════════════════
