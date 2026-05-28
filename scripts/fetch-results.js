@@ -122,6 +122,8 @@ function gqlPost(query, variables) {
         'Content-Length': Buffer.byteLength(body),
         'User-Agent':     USER_AGENT,
         'Accept':         'application/json',
+        'tenant':         'afl',
+        'origin':         'https://www.playhq.com',
       },
       timeout: 20000,
     }, res => {
