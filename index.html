@@ -466,13 +466,13 @@ function parseResultsHTML(html, filename) {
   const gradeFromURL = html.match(/\/u\d+[-–]?([a-z]\d?)\//i);
   if (!rawGrade && gradeFromURL) rawGrade = gradeFromURL[1].toUpperCase();
 
-  // Each game is an <a data-testid="fixture-button-{uuid}"> element
-  const gameBlocks = doc.querySelectorAll('[data-testid^="fixture-button-"]');
+  // Each game is a div[role="listitem"] — exactly one per game
+  const gameBlocks = doc.querySelectorAll('[role="listitem"]');
 
   gameBlocks.forEach(block => {
     // Only process completed games
     if (!/Final/.test(block.textContent)) return;
-    const links = block.querySelectorAll('a[href*="/teams/"]');
+
     // Team names from logo data-testids e.g. data-testid="Mitcham U12-team-logo"
     const logoEls = block.querySelectorAll('[data-testid$="-team-logo"]');
     if (logoEls.length < 2) return;
