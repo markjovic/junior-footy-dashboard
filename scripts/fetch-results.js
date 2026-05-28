@@ -60,6 +60,7 @@ function fetchUrl(url) {
         return fetchUrl(res.headers.location).then(resolve).catch(reject);
       }
       if (res.statusCode !== 200) {
+        console.log(`        [HTTP ${res.statusCode}] ${url}`);
         res.resume();
         return resolve(null);
       }
