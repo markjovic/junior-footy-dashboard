@@ -2,7 +2,12 @@
   "competitions": [
     {
       "name": "EFNL 2026",
-      "seasonID": "2dcbf383"
+      "seasonID": "2dcbf383",
+      "excludeGrades": [
+        "U8",
+        "U9",
+        "U10"
+      ]
     }
   ]
 }
