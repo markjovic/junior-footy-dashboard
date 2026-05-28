@@ -91,5 +91,10 @@ jobs:
       - name: Check for script errors
         if: steps.fetch.outcome == 'failure' && github.event.inputs.run_migration != 'yes'
         run: |
+          # Exit code 2 = no changes (not an error)
+          if [ "${{ steps.fetch.outputs.exit_code }}" = "2" ]; then
+            echo "No changes — skipping commit"
+            exit 0
+          fi
           echo "::error::fetch-results.js exited with an error. Check the logs above."
           exit 1
