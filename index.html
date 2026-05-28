@@ -234,7 +234,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.20</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.23</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -246,6 +246,10 @@ body{overflow-x:hidden}
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <button id="sidebar-close" onclick="toggleSidebar()">✕ Close</button>
+    <div class="fgroup" id="comp-filter-group">
+      <div class="flabel">Competition</div>
+      <div id="comp-filters"></div>
+    </div>
     <div class="fgroup">
       <div class="flabel">Age group</div>
       <div id="age-filters"></div>
@@ -431,7 +435,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.20</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.23</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -524,6 +528,9 @@ let S = {
   gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
   pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
+  selComp: null,         // currently selected competition name
+  compLogos: {},         // { compName: logoUrl }
+  teamLogos: {},         // { teamName: logoUrl } from PlayHQ
   selGrades: new Set(),
   selRound: '',
   selTeam: '',
@@ -694,64 +701,19 @@ function cleanTeam(name) {
 }
 
 // ═══════════════════════════════════════
-// CREST LOADER — matches fixture card generator logic exactly
+// CREST LOADER — uses PlayHQ Cloudinary URLs from teamLogos in data.json
 // ═══════════════════════════════════════
-const COLOUR_WORDS = ['PURPLE','GOLD','BLUE','RED','GREEN','WHITE','BLACK','SILVER','NAVY','YELLOW','ORANGE','TEAL'];
-
-const CREST_ALIASES = {
-  'NTH RINGWOOD':           'NORTH RINGWOOD',
-  'NORTH RINGWOOD':         'NORTH RINGWOOD',
-  'STH CROYDON':            'SOUTH CROYDON',
-  'SOUTH CROYDON':          'SOUTH CROYDON',
-  'STH BELGRAVE':           'SOUTH BELGRAVE',
-  'SOUTH BELGRAVE':         'SOUTH BELGRAVE',
-  'UPPER FTG':              'UPPER FERNTREE GULLY',
-  'UPPER FERNTREE GULLY':   'UPPER FERNTREE GULLY',
-  'WANTIRNA STH':           'WANTIRNA SOUTH',
-  'WANTIRNA SOUTH':         'WANTIRNA SOUTH',
-  'CROYDON NORTH':          'CROYDON NORTH',
-  'CROYDON NTH':            'CROYDON NORTH',
-  'CROYDON NORTH MLOC':     'CROYDON NORTH',
-  'E RINGWOOD':             'EAST RINGWOOD',
-  'E BURWOOD':              'EAST BURWOOD',
-  'UPWEY TECOMA':           'UPWEY TECOMA',
-  'UPWEY/TECOMA':           'UPWEY TECOMA',
-  'GLEN WAVERLEY ROVERS':   'GLEN WAVERLEY ROVERS',
-  'MT EVELYN':              'MT EVELYN',
-  'MOUNT EVELYN':           'MT EVELYN',
-  'FLEMINGTON JUNIORS':     'FLEMINGTON',
-  'FLEMINGTON':             'FLEMINGTON',
-  'HCFC':                   'HOPPERS CROSSING',
-  'WILLIAMSTOWN JUNIORS':   'WILLIAMSTOWN',
-};
-
 const crestCache = {};
 
-function resolveCrestKey(teamName) {
-  // Uppercase and strip age group
-  let cleaned = teamName.replace(/\s+U\d+.*$/i, '').trim().toUpperCase();
-  // Normalise slash spacing
-  cleaned = cleaned.replace(/\s*\/\s*/g, ' / ');
-  // Joint team: "NORWOOD GOLD / HEATHMONT" → use first part only
-  if (cleaned.includes(' / ')) cleaned = cleaned.split(' / ')[0].trim();
-  // Strip Juniors suffix
-  cleaned = cleaned.replace(/\s+JUNIORS?\s*$/i, '').trim();
-  // Strip club suffixes
-  cleaned = cleaned.replace(/\s+(FOOTBALL\s+CLUB|JUNIOR\s+FOOTBALL\s+CLUB|FC|JFC|SPORTS\s+CLUB|SC)\s*$/i, '').trim();
-  // Strip colour words: "NORWOOD PURPLE" → "NORWOOD"
-  COLOUR_WORDS.forEach(c => { cleaned = cleaned.replace(new RegExp('\\s+' + c + '\\s*$'), '').trim(); });
-  // Resolve alias
-  return CREST_ALIASES[cleaned] || cleaned;
-}
-
 function getCrestImg(teamName) {
-  const key = resolveCrestKey(teamName);
-  if (key in crestCache) return crestCache[key];
-  crestCache[key] = null;
+  if (teamName in crestCache) return crestCache[teamName];
+  const url = S.teamLogos[teamName];
+  if (!url) { crestCache[teamName] = null; return null; }
+  crestCache[teamName] = null;
   const img = new Image();
-  img.onload = () => { crestCache[key] = img; render(); };
-  img.onerror = () => { crestCache[key] = null; };
-  img.src = `assets/clubs/${key.toLowerCase().replace(/\s+/g,'_')}/crest.png`;
+  img.onload = () => { crestCache[teamName] = img; render(); };
+  img.onerror = () => { crestCache[teamName] = null; };
+  img.src = url;
   return null;
 }
 
@@ -828,6 +790,7 @@ function matchGrade(m) {
 function computeLadder(age, grade, maxRound) {
   const matches = S.matches.filter(m =>
     m.age === age &&
+    matchesComp(m) &&
     matchIsValid(m) &&
     matchGrade(m) === grade &&
     (maxRound === '' || m.round <= parseInt(maxRound))
@@ -921,6 +884,7 @@ function marginPct(m) {
 function getGOTWMatch(age) {
   const grades = activGrades(age);
   const validMatches = S.matches.filter(m =>
+    matchesComp(m) &&
     m.age === age && matchIsValid(m) && grades.has(matchGrade(m))
   );
   if (!validMatches.length) return null;
@@ -982,11 +946,21 @@ function getTopScorers(age, n=12) {
 // ═══════════════════════════════════════
 // VIEW HELPERS
 // ═══════════════════════════════════════
-function getAges() { return [...new Set(S.matches.map(m=>m.age))].sort(); }
+function getComps() {
+  return [...new Set(S.matches.map(m => m.compName).filter(Boolean))].sort();
+}
+function matchesComp(m) {
+  const comps = getComps();
+  // Only one competition — no filtering needed
+  if (comps.length <= 1) return true;
+  // Always one selected — filter to it
+  return m.compName === S.selComp;
+}
+function getAges() { return [...new Set(S.matches.filter(matchesComp).map(m=>m.age))].sort(); }
 
 function gradesForAge(age) {
   const gs = new Set();
-  S.matches.filter(m=>m.age===age&&matchIsValid(m)).forEach(m=>gs.add(matchGrade(m)));
+  S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>gs.add(matchGrade(m)));
   return [...gs].sort((a,b)=>GRADE_ORDER.indexOf(a)-GRADE_ORDER.indexOf(b));
 }
 
@@ -997,7 +971,7 @@ function activGrades(age) {
 
 function allTeamsForAge(age) {
   const ts = new Set();
-  S.matches.filter(m=>m.age===age).forEach(m=>{ts.add(m.home);ts.add(m.away);});
+  S.matches.filter(m=>m.age===age&&matchesComp(m)).forEach(m=>{ts.add(m.home);ts.add(m.away);});
   return [...ts].sort();
 }
 
@@ -1020,8 +994,25 @@ function render() {
 }
 
 function renderAgeTabs() {
+  // Competition filter — only show if more than one competition
+  const comps = getComps();
+  const compGroup = document.getElementById('comp-filter-group');
+  if (compGroup) compGroup.style.display = comps.length > 1 ? '' : 'none';
+  if (comps.length > 1) {
+    if (!S.selComp) S.selComp = null; // null = all competitions
+    document.getElementById('comp-filters').innerHTML =
+      [`<button class="fchip${!S.selComp?' on':''}" onclick="selectComp(null)">
+        <span class="gdot" style="background:var(--tx3)"></span>All
+       </button>`]
+      .concat(comps.map(c =>
+        `<button class="fchip${c===S.selComp?' on':''}" onclick="selectComp('${c.replace(/'/g,"\'")}')">
+          <span class="gdot" style="background:var(--tx3)"></span>${c}
+        </button>`
+      )).join('');
+  }
+
   const ages = getAges();
-  if (!S.selectedAge && ages.length) S.selectedAge = ages[0];
+  if (!S.selectedAge || !ages.includes(S.selectedAge)) S.selectedAge = ages[0] || null;
   document.getElementById('age-filters').innerHTML = ages.map(a =>
     `<button class="fchip${a===S.selectedAge?' on':''}" onclick="selectAge('${a}')">
       <span class="gdot" style="background:var(--tx3)"></span>${a}
@@ -1040,7 +1031,7 @@ function renderSidebarFilters(age) {
     </button>`
   ).join('');
 
-  const rounds = [...new Set(S.matches.filter(m=>m.age===age).map(m=>m.round))].sort((a,b)=>a-b);
+  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchesComp(m)).map(m=>m.round))].sort((a,b)=>a-b);
   const rs = document.getElementById('round-sel');
   rs.innerHTML = '<option value="">All rounds</option>' +
     rounds.map(r=>`<option value="${r}"${r==S.selRound?' selected':''}>Round ${r}</option>`).join('');
@@ -1057,7 +1048,7 @@ function renderLadder(age) {
   if (!S.selLdrGrade || !grades.includes(S.selLdrGrade)) S.selLdrGrade = grades[0];
 
   const maxRound = S.selRound || '';
-  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchIsValid(m)).map(m=>m.round),0);
+  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).map(m=>m.round),0);
   document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
 
   document.getElementById('ldr-tabs').innerHTML = grades.map(g => {
@@ -1185,7 +1176,7 @@ function renderScorers(age) {
 
 function renderResults(age) {
   const grades = activGrades(age);
-  let matches = S.matches.filter(m => {
+  let matches = S.matches.filter(m => { if (!matchesComp(m)) return false;
     if (m.age !== age) return false;
     // Show all games — use rawGrade for filtering when grade filter is active
     const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
@@ -1243,13 +1234,13 @@ function renderResults(age) {
 function renderStats() {
   const age = S.selectedAge;
   const allAges = getAges();
-  const ms = age ? S.matches.filter(m=>m.age===age&&matchIsValid(m)) : S.matches.filter(m=>matchIsValid(m));
+  const ms = age ? S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)) : S.matches.filter(m=>matchesComp(m)&&matchIsValid(m));
   const ts = new Set([...ms.map(m=>m.home),...ms.map(m=>m.away)]);
   const rs = new Set(ms.map(m=>m.round));
 
   // Count total unique grades across all age groups
   const allGrades = new Set();
-  S.matches.filter(m=>matchIsValid(m)).forEach(m => allGrades.add(`${m.age}|${matchGrade(m)}`));
+  S.matches.filter(m=>matchesComp(m)&&matchIsValid(m)).forEach(m => allGrades.add(`${m.age}|${matchGrade(m)}`));
 
   document.getElementById('st-ages').textContent = allAges.length;
   document.getElementById('st-grades').textContent = allGrades.size;
@@ -1262,6 +1253,7 @@ function renderStats() {
 // ═══════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════
+function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
 function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
 function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); render(); }
 function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); render(); }
@@ -1285,6 +1277,7 @@ function openTeamDrilldown(teamName, grade) {
   // All matches involving this team — including ones that don't count towards ladder
   const matches = S.matches.filter(m =>
     m.age === age &&
+    matchesComp(m) &&
     (m.rawGrade === grade || matchGrade(m) === grade) &&
     (m.home === teamName || m.away === teamName)
   ).sort((a,b) => a.round - b.round);
@@ -1583,7 +1576,7 @@ function populateGotwSelectors() {
 
 function renderGotwRounds() {
   const age = document.getElementById('gotw-age-sel').value;
-  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchIsValid(m)).map(m=>m.round))].sort((a,b)=>b-a);
+  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).map(m=>m.round))].sort((a,b)=>b-a);
   document.getElementById('gotw-round-sel').innerHTML = rounds.map(r=>`<option value="${r}">Round ${r}</option>`).join('');
   renderGotwPicker();
 }
@@ -1592,7 +1585,7 @@ function renderGotwPicker() {
   const age = document.getElementById('gotw-age-sel').value;
   const round = parseInt(document.getElementById('gotw-round-sel').value);
   if (!age || !round) return;
-  const matches = S.matches.filter(m=>m.age===age&&m.round===round&&matchIsValid(m));
+  const matches = S.matches.filter(m=>m.age===age&&matchesComp(m)&&m.round===round&&matchIsValid(m));
   const flagKey = `${age}|${round}`;
   const flaggedId = S.gotwFlags[flagKey] || '';
 
@@ -1694,6 +1687,8 @@ async function init() {
         if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
         if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
+        if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
+        if (d.teamLogos && Object.keys(d.teamLogos).length) S.teamLogos = d.teamLogos;
         if (d.lastUpdated) {
           const el = document.getElementById('last-updated');
           if (el) {
