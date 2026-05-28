@@ -177,12 +177,10 @@ function parseGradeName(name) {
 
 // Strip age suffix and trailing colour word from team names e.g. "Norwood U12" → "Norwood"
 function cleanTeam(name) {
-  let n = name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
-  ['Purple','Gold','Blue','Red','Green','White','Black','Silver',
-   'Navy','Yellow','Orange','Teal'].forEach(c => {
-    n = n.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim();
-  });
-  return n;
+  // Strip age group suffix only — preserve colour words (Purple, Gold etc.)
+  // so that "Norwood Purple" and "Norwood Gold" remain distinct team identities.
+  // Colour stripping only happens in getCrestImg for logo lookup purposes.
+  return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
 }
 
 function getStat(stats, type) {
@@ -425,7 +423,9 @@ async function fetchGrade(grade, knownRounds) {
 // and a warning is logged.
 
 function rebuildRoster(matches) {
-  // teamKey → { grade, age, round }
+  // Key by "teamName|age" so clubs with multiple teams in different age groups
+  // don't overwrite each other. e.g. "Norwood|U12" and "Norwood|U14" are separate.
+  // latest: "teamName|age" → { grade, age, round }
   const latest = new Map();
 
   matches.forEach(m => {
@@ -433,22 +433,24 @@ function rebuildRoster(matches) {
       { name: m.home, grade: m.rawGrade, age: m.age, round: m.round },
       { name: m.away, grade: m.rawGrade, age: m.age, round: m.round },
     ].forEach(({ name, grade, age, round }) => {
-      const prev = latest.get(name);
+      const key = `${name}|${age}`;
+      const prev = latest.get(key);
       if (!prev || round > prev.round) {
-        latest.set(name, { grade, age, round });
+        latest.set(key, { grade, age, round });
       } else if (round === prev.round && grade !== prev.grade) {
-        // Same round, different grades — take the higher grade (A > B > C > D)
-        const winner = [prev.grade, grade].sort()[0]; // alphabetical sort: A < B < C < D
-        console.warn(`  WARNING: ${name} in both grade ${prev.grade} and ${grade} in R${round} — keeping ${winner}`);
-        latest.set(name, { ...prev, grade: winner });
+        // Same team, same age, same round, different grades — take higher grade
+        const winner = [prev.grade, grade].sort()[0];
+        console.warn(`  WARNING: ${name} (${age}) in both grade ${prev.grade} and ${grade} in R${round} — keeping ${winner}`);
+        latest.set(key, { ...prev, grade: winner });
       }
     });
   });
 
-  // Return in the shape the dashboard expects: { [teamName]: { grade, age } }
+  // Return roster keyed by "teamName|age": { grade, age }
+  // Dashboard currentGrade() must look up by this same key
   const roster = {};
-  latest.forEach(({ grade, age }, name) => {
-    roster[name] = { grade, age };
+  latest.forEach(({ grade, age }, key) => {
+    roster[key] = { grade, age };
   });
   return roster;
 }
@@ -545,7 +547,7 @@ async function main() {
 
   // Build compLogos map: compName → logo URL
   const compLogos = {};
-  allGrades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
+  grades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
 
   const merged = {
     ...existing,
