@@ -159,9 +159,20 @@ function gqlPost(query, variables) {
 
 // Derive { age, rawGrade } from a PlayHQ grade name e.g. "U12 Girls B"
 function parseGradeName(name) {
-  const m = name.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*)$/i);
+  // Strip leading asterisk e.g. "* Premier - ..."
+  let n = name.replace(/^\*\s*/, '').trim();
+  // Strip sponsor prefix only when followed by a U-age group
+  // e.g. "Deakin Uni - U16 Girls - A" → "U16 Girls - A"
+  n = n.replace(/^.+?-\s*(?=U\d)/i, '');
+  // Replace remaining " - " separators with spaces
+  n = n.replace(/\s+-\s+/g, ' ').trim();
+  // Strip "(Grading)" suffix
+  if (/\(Grading\)/i.test(n)) return { age: n.replace(/\s*\(Grading\)/i, '').trim(), rawGrade: 'Grading' };
+  // Match junior grades: "U12 B", "U12 Girls B", "U17.5 C", "U13 D1", "U18 Girls A/B"
+  const m = n.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*(?:\/[A-D]\d*)?)$/i);
   if (m) return { age: m[1].trim(), rawGrade: m[2].toUpperCase() };
-  return { age: name, rawGrade: '' };
+  // Senior/Women/Veterans — preserve full name as age, no grade
+  return { age: n, rawGrade: '' };
 }
 
 // Strip age suffix and trailing colour word from team names e.g. "Norwood U12" → "Norwood"
