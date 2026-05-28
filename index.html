@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.2</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.3</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -298,7 +298,7 @@ body{overflow-x:hidden}
 <div class="modal">
   <div class="modal-title">Admin</div>
 
-  <!-- Auth gate — populated dynamically by showLoginMode() or showSetupMode() -->
+  <!-- Auth gate — populated dynamically by showLoginMode() -->
   <div id="auth-gate"></div>
 
   <!-- Admin panels -->
@@ -382,7 +382,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.2</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.3</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -396,12 +396,13 @@ body{overflow-x:hidden}
           <span style="color:var(--tx2)">Clear all player stats</span>
           <button class="btn-d" onclick="clearData('players')">Clear stats</button>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
-          <span style="color:var(--tx2)">Change admin password</span>
-          <div style="display:flex;gap:6px">
-            <input type="password" class="mi" id="new-pw" placeholder="New password" style="width:140px;padding:5px 8px;font-size:12px">
-            <button class="btn-g" onclick="changePw()" style="white-space:nowrap">Update</button>
+        <div style="border-top:1px solid var(--b1);padding-top:10px">
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:8px;line-height:1.5">To change your password: generate a hash below, copy it, paste it into <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">ADMIN_HASH</code> in <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">index.html</code>, then re-upload the file to GitHub.</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="password" class="mi" id="hash-pw-input" placeholder="Type new password" style="flex:1;padding:7px 10px;font-size:12px">
+            <button class="btn-g" onclick="generateHash()" style="white-space:nowrap;flex-shrink:0">Generate hash</button>
           </div>
+          <div id="hash-output" style="display:none;margin-top:8px"></div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Reset everything</span>
@@ -436,7 +437,7 @@ body{overflow-x:hidden}
 // ═══════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════
-const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw', pw:'efnl_v2_pw' };
+const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw' };
 
 async function sGet(k){
   try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
@@ -466,7 +467,7 @@ let S = {
   players: [],   // {uuid,name,team,teamRaw,rawGrade,age,gp,goals}
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
   gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
-  pwHash: null,
+  pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
   selGrades: new Set(),
   selRound: '',
@@ -1257,16 +1258,14 @@ async function sha256(str) {
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// ── Hardcoded password hash — set this to SHA-256 of your password ──
+// Generate your hash: Admin → Manage → "Generate hash" tool, then paste it here and re-upload.
+// Default hash below is SHA-256 of "changeme" — replace before going live.
+const ADMIN_HASH = 'ef92b778bafe771207b97f8ad2e34dd2f0ba5c0dd386ce4b9d5a7d0c8e5f2b9';
+
 function openAdmin() {
   document.getElementById('admin-modal').style.display='flex';
-  if (!S.adminOpen) {
-    // No password hash stored yet → first-time setup mode
-    if (!S.pwHash) {
-      showSetupMode();
-    } else {
-      showLoginMode();
-    }
-  }
+  if (!S.adminOpen) showLoginMode();
 }
 function closeAdmin() { document.getElementById('admin-modal').style.display='none'; S.pendingMatches=[]; S.pendingPlayers=[]; clearFb(); }
 
@@ -1284,41 +1283,11 @@ function showLoginMode() {
   setTimeout(()=>document.getElementById('admin-pw')?.focus(),100);
 }
 
-function showSetupMode() {
-  document.getElementById('auth-gate').style.display='block';
-  document.getElementById('admin-panels').style.display='none';
-  document.getElementById('auth-gate').innerHTML = `
-    <div class="alert alert-info" style="margin-bottom:10px">First time setup — set an admin password. This is hashed with SHA-256 and never stored in plain text.</div>
-    <div class="ml">New password</div>
-    <input type="password" class="mi" id="setup-pw1" placeholder="Choose a password" style="margin-bottom:8px">
-    <div class="ml">Confirm password</div>
-    <input type="password" class="mi" id="setup-pw2" placeholder="Confirm password" onkeydown="if(event.key==='Enter')doSetup()">
-    <div id="auth-err" style="display:none;margin-top:8px" class="alert alert-err"></div>
-    <div class="mactions" style="margin-top:4px">
-      <button class="btn-g" onclick="closeAdmin()">Cancel</button>
-      <button class="btn-p" onclick="doSetup()">Set password &amp; unlock</button>
-    </div>`;
-  setTimeout(()=>document.getElementById('setup-pw1')?.focus(),100);
-}
-
-async function doSetup() {
-  const p1 = document.getElementById('setup-pw1').value;
-  const p2 = document.getElementById('setup-pw2').value;
-  const err = document.getElementById('auth-err');
-  if (!p1) { err.style.display='block'; err.textContent='Password cannot be empty.'; return; }
-  if (p1 !== p2) { err.style.display='block'; err.textContent='Passwords do not match.'; return; }
-  if (p1.length < 6) { err.style.display='block'; err.textContent='Password must be at least 6 characters.'; return; }
-  S.pwHash = await sha256(p1);
-  await sSet(SK.pw, S.pwHash);
-  unlockAdmin();
-}
-
 async function doAuth() {
   const input = document.getElementById('admin-pw');
   if (!input) return;
-  const v = input.value;
-  const hash = await sha256(v);
-  if (hash === S.pwHash) {
+  const hash = await sha256(input.value);
+  if (hash === ADMIN_HASH) {
     unlockAdmin();
   } else {
     const err = document.getElementById('auth-err');
@@ -1559,19 +1528,22 @@ function exportData() {
   URL.revokeObjectURL(a.href);
 }
 
-async function changePw() {
-  const v=document.getElementById('new-pw').value.trim();
+async function generateHash() {
+  const v = document.getElementById('hash-pw-input').value.trim();
   if (!v || v.length < 6) {
-    const fb=document.getElementById('manage-fb');
-    fb.style.display='block'; fb.className='alert alert-err'; fb.textContent='Password must be at least 6 characters.';
+    const el = document.getElementById('hash-output');
+    el.style.display='block'; el.className='alert alert-err'; el.textContent='Password must be at least 6 characters.';
     return;
   }
   const hash = await sha256(v);
-  S.pwHash = hash;
-  await sSet(SK.pw, hash);
-  const fb=document.getElementById('manage-fb');
-  fb.style.display='block'; fb.className='alert alert-ok'; fb.textContent='Password updated. Hash stored — plain text never saved.';
-  document.getElementById('new-pw').value='';
+  const el = document.getElementById('hash-output');
+  el.style.display='block'; el.className='alert alert-info';
+  el.innerHTML = `Hash generated. Copy this value and paste it as <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px">ADMIN_HASH</code> in index.html, then re-upload to GitHub:<br><br>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+      <code id="hash-val" style="font-family:'DM Mono',monospace;font-size:11px;word-break:break-all;flex:1;background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:4px;user-select:all">${hash}</code>
+      <button class="btn-g" style="flex-shrink:0;padding:5px 10px;font-size:11px" onclick="navigator.clipboard.writeText('${hash}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>`;
+  document.getElementById('hash-pw-input').value='';
 }
 
 document.getElementById('gotw-age-sel').addEventListener('change', renderGotwRounds);
@@ -1591,19 +1563,14 @@ async function init() {
       if (d.gotwFlags) S.gotwFlags = d.gotwFlags;
     }
   } catch(e) {
-    // No data.json — load from storage instead
-    const [matches,players,roster,gotwFlags,pwHash] = await Promise.all([
-      sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw), sGet(SK.pw)
+    const [matches,players,roster,gotwFlags] = await Promise.all([
+      sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
     ]);
     if (matches) S.matches=matches;
     if (players) S.players=players;
     if (roster)  S.roster=roster;
     if (gotwFlags) S.gotwFlags=gotwFlags;
-    if (pwHash)  S.pwHash=pwHash;
   }
-  // Always load password hash from storage (not exported to data.json)
-  const pwHash = await sGet(SK.pw);
-  if (pwHash) S.pwHash = pwHash;
 
   const ages=getAges();
   if (ages.length) S.selectedAge=ages[0];
