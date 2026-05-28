@@ -1,0 +1,322 @@
+[
+  {
+    "id": "6f964e7b",
+    "name": "Premier Eastland Senior Men",
+    "slug": "premier-eastland-senior-men"
+  },
+  {
+    "id": "81980381",
+    "name": "Premier Reserve Men",
+    "slug": "premier-reserve-men"
+  },
+  {
+    "id": "4812bdd1",
+    "name": "Premier U19.5",
+    "slug": "premier-u195"
+  },
+  {
+    "id": "a9fb1c1d",
+    "name": "Division 1 Eastland Senior Men",
+    "slug": "division-1-eastland-senior-men"
+  },
+  {
+    "id": "283b27af",
+    "name": "Division 1 Reserve Men",
+    "slug": "division-1-reserve-men"
+  },
+  {
+    "id": "321e3b40",
+    "name": "Division 1 U19.5",
+    "slug": "division-1-u195"
+  },
+  {
+    "id": "57c5e2ed",
+    "name": "Division 2 Eastland Senior Men",
+    "slug": "division-2-eastland-senior-men"
+  },
+  {
+    "id": "f695d3b1",
+    "name": "Division 2 Reserve Men",
+    "slug": "division-2-reserve-men"
+  },
+  {
+    "id": "b0216849",
+    "name": "Division 2 U19.5",
+    "slug": "division-2-u195"
+  },
+  {
+    "id": "0c7c57cd",
+    "name": "Division 3 Eastland Senior Men",
+    "slug": "division-3-eastland-senior-men"
+  },
+  {
+    "id": "55eefeb4",
+    "name": "Division 3 Reserve Men",
+    "slug": "division-3-reserve-men"
+  },
+  {
+    "id": "c6be0933",
+    "name": "Division 3 U19.5",
+    "slug": "division-3-u195"
+  },
+  {
+    "id": "e2637abc",
+    "name": "Division 4 Eastland Senior Men",
+    "slug": "division-4-eastland-senior-men"
+  },
+  {
+    "id": "54b0742a",
+    "name": "Division 4 Reserve Men",
+    "slug": "division-4-reserve-men"
+  },
+  {
+    "id": "3770593d",
+    "name": "Division 4 U19.5",
+    "slug": "division-4-u195"
+  },
+  {
+    "id": "4d1752ac",
+    "name": "Senior Women Premier Division",
+    "slug": "deakin-uni-senior-women-premier-division"
+  },
+  {
+    "id": "a4fb5680",
+    "name": "Women Division 1",
+    "slug": "deakin-uni-women-division-1"
+  },
+  {
+    "id": "0c8681d2",
+    "name": "Women Division 2",
+    "slug": "deakin-uni-women-division-2"
+  },
+  {
+    "id": "0aa9de39",
+    "name": "Women Division 3",
+    "slug": "deakin-uni-women-division-3"
+  },
+  {
+    "id": "9afec39a",
+    "name": "Women Division 4",
+    "slug": "deakin-uni-women-division-4"
+  },
+  {
+    "id": "2d5847cb",
+    "name": "Women Division 5",
+    "slug": "deakin-uni-women-division-5"
+  },
+  {
+    "id": "e2eca367",
+    "name": "U11 A",
+    "slug": "u11-a"
+  },
+  {
+    "id": "677e8405",
+    "name": "U11 B",
+    "slug": "u11-b"
+  },
+  {
+    "id": "5d83a0a7",
+    "name": "U11 C",
+    "slug": "u11-c"
+  },
+  {
+    "id": "76f0b381",
+    "name": "U11 D1",
+    "slug": "u11-d1"
+  },
+  {
+    "id": "5b616949",
+    "name": "U11 D2",
+    "slug": "u11-d2"
+  },
+  {
+    "id": "cf3a6b3e",
+    "name": "U12 Girls A",
+    "slug": "u12-girls-a"
+  },
+  {
+    "id": "d63d8e20",
+    "name": "U12 Girls B",
+    "slug": "u12-girls-b"
+  },
+  {
+    "id": "3e71f3be",
+    "name": "U12 Girls C",
+    "slug": "u12-girls-c"
+  },
+  {
+    "id": "48c16853",
+    "name": "U12 Girls D",
+    "slug": "u12-girls-d"
+  },
+  {
+    "id": "49b58774",
+    "name": "U12 A",
+    "slug": "u12-a"
+  },
+  {
+    "id": "0fd9befd",
+    "name": "U12 B",
+    "slug": "u12-b"
+  },
+  {
+    "id": "f82f4520",
+    "name": "U12 C",
+    "slug": "u12-c"
+  },
+  {
+    "id": "da3d89eb",
+    "name": "U12 D",
+    "slug": "u12-d"
+  },
+  {
+    "id": "93103304",
+    "name": "U13 A",
+    "slug": "u13-a"
+  },
+  {
+    "id": "4870f5ca",
+    "name": "U13 B",
+    "slug": "u13-b"
+  },
+  {
+    "id": "7b48e462",
+    "name": "U13 C",
+    "slug": "u13-c"
+  },
+  {
+    "id": "6a1525e7",
+    "name": "U13 D1",
+    "slug": "u13-d1"
+  },
+  {
+    "id": "fda4a8fb",
+    "name": "U13 D2",
+    "slug": "u13-d2"
+  },
+  {
+    "id": "df754144",
+    "name": "U14 Girls A",
+    "slug": "u14-girls-a"
+  },
+  {
+    "id": "8f58bbe1",
+    "name": "U14 Girls B",
+    "slug": "u14-girls-b"
+  },
+  {
+    "id": "08e277df",
+    "name": "U14 Girls C",
+    "slug": "u14-girls-c"
+  },
+  {
+    "id": "f40d348f",
+    "name": "U14 Girls D",
+    "slug": "u14-girls-d"
+  },
+  {
+    "id": "22e99124",
+    "name": "U14 A",
+    "slug": "u14-a"
+  },
+  {
+    "id": "e91acd51",
+    "name": "U14 B",
+    "slug": "u14-b"
+  },
+  {
+    "id": "340423e6",
+    "name": "U14 C",
+    "slug": "u14-c"
+  },
+  {
+    "id": "e0661c29",
+    "name": "U14 D",
+    "slug": "u14-d"
+  },
+  {
+    "id": "7b3dd013",
+    "name": "U15 A",
+    "slug": "u15-a"
+  },
+  {
+    "id": "2c572b91",
+    "name": "U15 B",
+    "slug": "u15-b"
+  },
+  {
+    "id": "37ac89b2",
+    "name": "U15 C",
+    "slug": "u15-c"
+  },
+  {
+    "id": "cd7a7967",
+    "name": "U15 D",
+    "slug": "u15-d"
+  },
+  {
+    "id": "2da11fec",
+    "name": "U16 A",
+    "slug": "u16-a"
+  },
+  {
+    "id": "492b9fba",
+    "name": "U16 B",
+    "slug": "u16-b"
+  },
+  {
+    "id": "728bdd9c",
+    "name": "U16 C",
+    "slug": "u16-c"
+  },
+  {
+    "id": "531942e0",
+    "name": "U16 Girls A",
+    "slug": "deakin-uni-u16-girls-a"
+  },
+  {
+    "id": "32a8ecb2",
+    "name": "U16 Girls B",
+    "slug": "deakin-uni-u16-girls-b"
+  },
+  {
+    "id": "5105c3fb",
+    "name": "U16 Girls C",
+    "slug": "deakin-uni-u16-girls-c"
+  },
+  {
+    "id": "a1d9e1f4",
+    "name": "U16 Girls D",
+    "slug": "deakin-uni-u16-girls-d"
+  },
+  {
+    "id": "4a0b5150",
+    "name": "U17.5 A",
+    "slug": "u175-a"
+  },
+  {
+    "id": "2279d612",
+    "name": "U17.5 B",
+    "slug": "u175-b"
+  },
+  {
+    "id": "49d53a59",
+    "name": "U17.5 C",
+    "slug": "u175-c"
+  },
+  {
+    "id": "19e5ac9f",
+    "name": "U17.5 D",
+    "slug": "u175-d"
+  },
+  {
+    "id": "0b22c9cb",
+    "name": "U18 Girls AB",
+    "slug": "deakin-uni-u18-girls-ab"
+  },
+  {
+    "id": "a796f6d8",
+    "name": "U18 Girls C",
+    "slug": "deakin-uni-u18-girls-c"
+  }
+]
