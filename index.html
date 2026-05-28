@@ -121,7 +121,7 @@ body{overflow-x:hidden}
 .match-row{display:grid;grid-template-columns:28px 1fr 80px 1fr minmax(160px,1fr);align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
 .match-row:hover{background:var(--s2)}
 .mr-left{display:flex;align-items:center;gap:6px;min-width:0}
-.mr-right{display:flex;align-items:center;gap:6px;flex-direction:row-reverse;min-width:0}
+.mr-right{display:flex;align-items:center;gap:6px;min-width:0}
 .mr-logo{width:16px;height:16px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0}
 .mr-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mr-score{text-align:center;font-family:'DM Mono',monospace;font-weight:500;font-size:13px}
@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.29</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.30</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.29</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.30</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -533,7 +533,7 @@ function venueLink(venue, venueUrl, style='') {
   if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;text-decoration-color:rgba(96,165,250,0.4);text-underline-offset:2px;${style}">${venue} ↗</a>`;
   return `<span style="${style}">${venue}</span>`;
 }
-const GRADE_ORDER = ['A','B','C','D1','D2','D3','D4'];
+const GRADE_ORDER = ['A','B','C','D','D1','D2','D3','D4','Grading'];
 const GRADE_COL = {A:'#60a5fa',B:'#22c55e',C:'#f97316',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9'};
 
 // ═══════════════════════════════════════
@@ -801,9 +801,26 @@ function mergePlayers(existing, incoming) {
 // Returns the current grade for a team name from the roster,
 // falling back to the grade from match data if not in roster.
 function currentGrade(teamName, age, rawGrade) {
-  // Roster is keyed by "teamName|age" to support clubs with teams in multiple age groups
-  const entry = S.roster[`${teamName}|${age}`] || S.roster[teamName];
-  return (entry || {}).grade || rawGrade;
+  // Roster is keyed by "teamName|age".
+  // Try exact name first, then colour-stripped name as fallback
+  // (handles "Chirnside Park Blue" and "Chirnside Park" being the same team)
+  const exactKey = `${teamName}|${age}`;
+  if (S.roster[exactKey]) return S.roster[exactKey].grade || rawGrade;
+
+  // Strip trailing colour word and retry
+  let stripped = teamName;
+  LOGO_COLOUR_WORDS.forEach(c => {
+    stripped = stripped.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim();
+  });
+  if (stripped !== teamName) {
+    const strippedKey = `${stripped}|${age}`;
+    if (S.roster[strippedKey]) return S.roster[strippedKey].grade || rawGrade;
+  }
+
+  // Legacy fallback: unkeyed roster entry
+  if (S.roster[teamName]) return S.roster[teamName].grade || rawGrade;
+
+  return rawGrade;
 }
 
 // A match counts for ladder/team stats if both teams are in the same current grade
