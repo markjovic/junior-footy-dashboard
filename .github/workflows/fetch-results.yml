@@ -2,8 +2,6 @@ name: Fetch PlayHQ Results
 
 on:
   # Run every hour on Sundays between 10am and 9pm AEST (UTC+10)
-  # UTC equivalents: 00:00–11:00 UTC on Sundays
-  # cron: minute hour day-of-month month day-of-week
   schedule:
     - cron: '0 0 * * 0'   # 10:00 AEST
     - cron: '0 1 * * 0'   # 11:00 AEST
@@ -18,17 +16,19 @@ on:
     - cron: '0 10 * * 0'  # 20:00 AEST
     - cron: '0 11 * * 0'  # 21:00 AEST
 
-  # Also allow manual runs from the Actions tab (useful for ad-hoc re-fetches
-  # mid-week, testing, or re-running after a grades.json update)
   workflow_dispatch:
     inputs:
       max_round:
         description: 'Maximum round number to fetch (leave blank for default 22)'
         required: false
         default: ''
+      run_migration:
+        description: 'Run grade migration script (yes/no) — use once after deploying updated fetch-results.js'
+        required: false
+        default: 'no'
 
 permissions:
-  contents: write   # needed to commit data.json back to the repo
+  contents: write
 
 jobs:
   fetch-and-commit:
@@ -36,65 +36,60 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Fetch the full history so the commit has the right parent
           fetch-depth: 1
 
-      # ── 2. Set up Node.js ─────────────────────────────────────────────────
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      # ── 3. Install jsdom ──────────────────────────────────────────────────
-      # No npm dependencies — the script uses only Node.js built-ins.
       - name: Check Node version
         run: node --version
 
-      # ── 4. Run the fetch script ───────────────────────────────────────────
+      # ── Migration (one-off, only when run_migration=yes) ─────────────────────
+      - name: Run grade migration
+        if: github.event.inputs.run_migration == 'yes'
+        run: node scripts/migrate-grades.js
+
+      # ── Fetch results ─────────────────────────────────────────────────────────
       - name: Fetch PlayHQ results
         id: fetch
         env:
-          # Pass optional max_round override from manual trigger input
           MAX_ROUND: ${{ github.event.inputs.max_round }}
-          # Polite delay between HTTP requests (ms). Increase if rate-limited.
-          FETCH_DELAY_MS: '1200'
+          FETCH_DELAY_MS: '150'
         run: |
           node scripts/fetch-results.js
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-        # Exit code 2 means "no changes" — treat as success
         continue-on-error: true
 
-      # ── 5. Commit if data changed ─────────────────────────────────────────
-      # The script exits 0 when matches were added/updated, 2 when nothing
-      # changed, and 1 on a hard error. Only commit on exit 0.
+      # ── Commit ────────────────────────────────────────────────────────────────
       - name: Commit updated data.json
-        if: steps.fetch.outcome == 'success'
+        if: steps.fetch.outcome == 'success' || github.event.inputs.run_migration == 'yes'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stage both — grades.json may have been updated by grade discovery
           git add data.json grades.json
 
-          # If nothing is staged, data.json was unchanged — skip commit
           if git diff --cached --quiet; then
-            echo "data.json unchanged — nothing to commit"
+            echo "No changes to commit"
             exit 0
           fi
 
-          # Build a commit message that says which day and run number
           RUN_DATE=$(TZ='Australia/Melbourne' date '+%A %-d %B %Y')
-          git commit -m "results: auto-fetch ${RUN_DATE} (run #${{ github.run_number }})"
+          if [ "${{ github.event.inputs.run_migration }}" = "yes" ]; then
+            git commit -m "migrate: grade remapping ${RUN_DATE}"
+          else
+            git commit -m "results: auto-fetch ${RUN_DATE} (run #${{ github.run_number }})"
+          fi
           git pull --rebase origin main
           git push
 
-      # ── 6. Fail loudly on a hard error ───────────────────────────────────
       - name: Check for script errors
-        if: steps.fetch.outcome == 'failure'
+        if: steps.fetch.outcome == 'failure' && github.event.inputs.run_migration != 'yes'
         run: |
           echo "::error::fetch-results.js exited with an error. Check the logs above."
           exit 1
