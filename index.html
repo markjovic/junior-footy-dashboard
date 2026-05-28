@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 1.0</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.10</span>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
 </header>
 
@@ -387,7 +387,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 1.0</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.10</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -859,8 +859,14 @@ function pct(f,a) { return a ? (f/a*100).toFixed(1) : '0.0'; }
 // ═══════════════════════════════════════
 // COMPUTED — GOTW
 // ═══════════════════════════════════════
+function marginPct(m) {
+  // Margin as a fraction of total points scored — lower = closer game
+  const total = m.hScore + m.aScore;
+  if (!total) return 1; // 0-0 not a contest
+  return Math.abs(m.hScore - m.aScore) / total;
+}
+
 function getGOTWMatch(age) {
-  // Find most recent round with any valid matches for displayed grades
   const grades = activGrades(age);
   const validMatches = S.matches.filter(m =>
     m.age === age && matchIsValid(m) && grades.has(matchGrade(m))
@@ -875,15 +881,31 @@ function getGOTWMatch(age) {
   const flaggedId = S.gotwFlags[flagKey];
   if (flaggedId) {
     const flagged = roundMatches.find(m => m.id === flaggedId);
-    if (flagged) return { match: flagged, nominees: roundMatches.filter(m=>m.id!==flaggedId), round: maxRound };
+    if (flagged) {
+      // Nominees: closest game per other grade
+      const nominees = getNominees(roundMatches.filter(m=>m.id!==flaggedId));
+      return { match: flagged, nominees, round: maxRound };
+    }
   }
 
-  // Auto: closest margin
-  const sorted = [...roundMatches].sort((a,b) => {
-    const mA = Math.abs(a.hScore-a.aScore), mB = Math.abs(b.hScore-b.aScore);
-    return mA - mB;
+  // Auto: closest margin by percentage of total points across ALL grades
+  const sorted = [...roundMatches].sort((a,b) => marginPct(a) - marginPct(b));
+  const winner = sorted[0];
+  // Nominees: closest game in each OTHER grade (not the winner's grade)
+  const nominees = getNominees(sorted.slice(1));
+  return winner ? { match: winner, nominees, round: maxRound } : null;
+}
+
+function getNominees(matches) {
+  // Return the closest game (by margin%) per grade, sorted by grade order
+  const byGrade = {};
+  matches.forEach(m => {
+    const g = matchGrade(m);
+    if (!byGrade[g] || marginPct(m) < marginPct(byGrade[g])) byGrade[g] = m;
   });
-  return sorted.length ? { match: sorted[0], nominees: sorted.slice(1), round: maxRound } : null;
+  return Object.values(byGrade).sort((a,b) =>
+    GRADE_ORDER.indexOf(matchGrade(a)) - GRADE_ORDER.indexOf(matchGrade(b))
+  );
 }
 
 // ═══════════════════════════════════════
@@ -1059,7 +1081,7 @@ function renderGOTW(age) {
           <span style="color:${aWon?'var(--gold)':'var(--tx2)'}">${m.aScore}</span>
         </div>
         <div class="gotw-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</div>
-        <div style="font-size:9px;color:var(--tx3);margin-top:2px">margin ${margin}</div>
+        <div style="font-size:9px;color:var(--tx3);margin-top:2px">margin ${margin} · ${(marginPct(m)*100).toFixed(1)}%</div>
       </div>
       <div class="gotw-team" style="cursor:pointer" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${grade}')">
         ${crestHTML(m.away, 40, 'gotw-logo')}
@@ -1068,10 +1090,16 @@ function renderGOTW(age) {
     </div>
     <div class="gotw-meta">Grade ${grade}${m.venue?' · '+m.venue:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
-      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">OTHER CLOSE GAMES</div>
-      ${gotwData.nominees.slice(0,3).map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
-        <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
-        <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
+      <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
+      ${gotwData.nominees.map(n=>{const ng=matchGrade(n);const pct=(marginPct(n)*100).toFixed(1);return`<div class="gotw-nom">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span class="gtag gtag-${ng.replace(/[^A-Z0-9]/g,'')}" style="font-size:8px">${ng}</span>
+          <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)">${pct}%</span>
+        </div>
       </div>`;}).join('')}
     </div>` : ''}
   </div>`;
@@ -1133,6 +1161,7 @@ function renderResults(age) {
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
+      const venueHtml = m.venue ? `<div class="mr-venue-line">${m.venue}</div>` : '';
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
           <span class="gtag gtag-neutral">${g}</span>
@@ -1153,7 +1182,7 @@ function renderResults(age) {
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
-        <div class="mr-venue">${m.venue||''}</div>
+        ${venueHtml}
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
