@@ -60,12 +60,18 @@ jobs:
           MAX_ROUND: ${{ github.event.inputs.max_round }}
           FETCH_DELAY_MS: '150'
         run: |
+          # Disable set -e so we can capture the exit code manually
+          set +e
           node scripts/fetch-results.js
           CODE=$?
+          set -e
           echo "exit_code=${CODE}" >> "$GITHUB_OUTPUT"
-          # 0 = changes written, 2 = no changes — both are fine
+          # 0 = changes written, 2 = no changes — both succeed
           # 1 = real error — fail the step
-          if [ $CODE -eq 1 ]; then exit 1; fi
+          if [ $CODE -eq 1 ]; then
+            echo "::error::fetch-results.js exited with an error"
+            exit 1
+          fi
           exit 0
 
       # ── Commit ────────────────────────────────────────────────────────────────
