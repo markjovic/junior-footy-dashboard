@@ -364,15 +364,13 @@ async function fetchGrade(grade, knownRounds) {
     const finalGames = games.filter(g => g.status?.value === 'FINAL');
 
     if (games.length === 0) {
-      // No games — bye round. Record a sentinel so knownRounds advances past it.
+      // No games — bye round. Push a sentinel so knownRounds advances past it.
       console.log(`bye — continuing`);
-      const byeId = `${age}|${rawGrade}|${number}|__bye__`;
-      if (!byId.has(byeId)) {
-        byId.set(byeId, { id: byeId, age, rawGrade, round: number,
-          home: '__bye__', away: '__bye__',
-          hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
-          venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
-      }
+      allMatches.push({ id: `${age}|${rawGrade}|${number}|__bye__`,
+        age, rawGrade, round: number,
+        home: '__bye__', away: '__bye__',
+        hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
+        venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
       continue;
     }
 
