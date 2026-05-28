@@ -247,24 +247,37 @@ async function fetchGrade(grade, knownRounds) {
 
     await sleep(FETCH_DELAY);
 
+    // Verbose diagnostics — shows exactly what the script is receiving
+    if (html === null) {
+      console.log('HTTP non-200 — no content');
+    } else {
+      const listitems = (html.match(/role="listitem"/g) || []).length;
+      const finals    = (html.match(/Final/gi) || []).length;
+      const scripts   = (html.match(/<script/gi) || []).length;
+      console.log(`HTTP 200  ${html.length} bytes  listitems=${listitems}  finals=${finals}  scripts=${scripts}`);
+      // Snippet around first listitem to confirm real content vs JS shell
+      const liIdx = html.indexOf('role="listitem"');
+      const snipAt = liIdx > -1 ? Math.max(0, liIdx - 80) : Math.max(0, html.indexOf('<body'));
+      console.log(`    snippet[${snipAt}]: ${html.slice(snipAt, snipAt + 400).replace(/\s+/g, ' ')}`);
+    }
+
     const { status, matches } = analyseRoundPage(html, age, rawGrade);
 
     if (status === ROUND_STATUS.COMPLETED) {
-      console.log(`${matches.length} result(s)`);
+      console.log(`    => COMPLETED: ${matches.length} result(s)`);
       allMatches.push(...matches);
-      emptyStreak = 0; // reset — we found real data
+      emptyStreak = 0;
 
     } else if (status === ROUND_STATUS.NO_PAGE) {
       emptyStreak++;
-      console.log(`no games (bye or not yet scheduled) [${emptyStreak}/${MAX_EMPTY_SKIP}]`);
+      console.log(`    => NO_PAGE [${emptyStreak}/${MAX_EMPTY_SKIP}]`);
       if (emptyStreak >= MAX_EMPTY_SKIP) {
-        console.log(`    ${MAX_EMPTY_SKIP} consecutive empty rounds — assuming season complete`);
+        console.log(`    ${MAX_EMPTY_SKIP} consecutive empty rounds — stopping`);
         break;
       }
-      // Continue to next round — may be a bye
 
     } else { // FUTURE
-      console.log('scheduled but not yet played — stopping');
+      console.log('    => FUTURE: scheduled but not yet played — stopping');
       break;
     }
   }
