@@ -197,7 +197,8 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.12</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.14</span>
+  <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
 </header>
 
@@ -259,13 +260,22 @@ body{overflow-x:hidden}
     <div id="dash" style="display:none">
       <div class="dgrid">
 
-        <div class="card">
-          <div class="card-hdr">
-            <span class="card-title">Ladder</span>
-            <span class="card-meta" id="ldr-meta"></span>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Ladder</span>
+              <span class="card-meta" id="ldr-meta"></span>
+            </div>
+            <div class="ldr-tabs" id="ldr-tabs"></div>
+            <div id="ldr-bodies"></div>
           </div>
-          <div class="ldr-tabs" id="ldr-tabs"></div>
-          <div id="ldr-bodies"></div>
+          <div class="card">
+            <div class="card-hdr">
+              <span class="card-title">Results</span>
+              <span class="card-meta" id="results-meta"></span>
+            </div>
+            <div id="results-body"></div>
+          </div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:14px">
@@ -283,14 +293,6 @@ body{overflow-x:hidden}
             </div>
             <div id="scorers-body"></div>
           </div>
-        </div>
-
-        <div class="card full">
-          <div class="card-hdr">
-            <span class="card-title">Results</span>
-            <span class="card-meta" id="results-meta"></span>
-          </div>
-          <div id="results-body"></div>
         </div>
 
       </div>
@@ -387,7 +389,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.12</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.14</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -458,9 +460,15 @@ async function sDel(k){
   try{ localStorage.removeItem(k); }catch(e){}
 }
 
-// ═══════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════
+// ── DEV MODE — set true to bypass password during testing, false for production ──
+const DEV_MODE = true;
+
+// ── Venue link helper ──
+function venueLink(venue, venueUrl, style='') {
+  if (!venue) return '';
+  if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.2);text-underline-offset:2px;${style}">${venue}</a>`;
+  return `<span style="${style}">${venue}</span>`;
+}
 const GRADE_ORDER = ['A','B','C','D1','D2','D3','D4'];
 const GRADE_COL = {A:'#60a5fa',B:'#22c55e',C:'#f97316',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9'};
 
@@ -549,6 +557,7 @@ function parseResultsHTML(html, filename) {
     // Venue
     const vLink = block.querySelector('a[href*="maps.google"]');
     const venue = vLink ? vLink.textContent.trim().split('/')[0].trim() : '';
+    const venueUrl = vLink ? vLink.href : '';
 
     // Logos — the img tags are inside the logo elements
     const hLogoImg = logoEls[0].querySelector('img') || logoEls[0];
@@ -558,7 +567,7 @@ function parseResultsHTML(html, filename) {
 
     const id = `${age}|${rawGrade}|${round}|${[homeName,awayName].sort().join('|')}`;
     results.push({ id, age, rawGrade, round, home:homeName, away:awayName,
-      hScore, hG, hB, aScore, aG, aB, venue, hLogo, aLogo });
+      hScore, hG, hB, aScore, aG, aB, venue, venueUrl, hLogo, aLogo });
   });
 
   return { matches: results, age, rawGrade, count: results.length };
@@ -1088,7 +1097,7 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta">Grade ${grade}${m.venue?' · '+m.venue:''}</div>
+    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">Grade ${grade}</span>${m.venue?` · ${venueLink(m.venue, m.venueUrl)}`:'​'}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
@@ -1160,7 +1169,7 @@ function renderResults(age) {
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
-          <span class="gtag gtag-neutral">${g}</span>
+          <span class="gtag gtag-${g.replace(/[^A-Z0-9]/g,'')}">${g}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
           ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
         </div>
@@ -1178,7 +1187,7 @@ function renderResults(age) {
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
-        <div class="mr-venue">${m.venue||''}</div>
+        <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
@@ -1280,20 +1289,20 @@ function openTeamDrilldown(teamName, grade) {
     const haText = isHome ? 'Home' : 'Away';
     const gotwKey = `${age}|${m.round}`;
     const isGotw = S.gotwFlags[gotwKey] === m.id;
-    return `<div style="display:grid;grid-template-columns:32px 18px 26px 20px 1fr minmax(120px,0.7fr) 70px 80px;align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
-      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
+    return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
       <span class="gtag ${gc}" style="font-size:8px;text-align:center">${g}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
       <span style="font-size:10px;color:var(--tx3);text-align:center">${isHome?'🏠':'✈'}</span>
+      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
       <div style="display:flex;align-items:center;gap:6px;min-width:0">
         ${crestHTML(opp, 16, 'mr-logo')}
         <span style="color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${opp}</span>
         ${isGotw?`<span style="font-size:8px;color:var(--gold);background:var(--gold2);border:1px solid var(--gold3);border-radius:3px;padding:1px 4px;flex-shrink:0">GOTW</span>`:''}
         ${!valid?`<span style="font-size:8px;color:var(--tx3);flex-shrink:0">not counted</span>`:''}
       </div>
-      <span style="font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.venue||''}</span>
       <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
       <span style="font-size:9px;color:var(--tx3);text-align:right">${tg}.${tb} – ${og}.${ob}</span>
+      <span style="font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${venueLink(m.venue, m.venueUrl)}</span>
     </div>`;
   }).join('') : '<div class="empty"><p>No matches found</p></div>';
 
@@ -1320,7 +1329,10 @@ const ADMIN_HASH = '39da8d47df2707cd66afd2afe7ee9a631096c18025eaa418414ae80aacbf
 
 function openAdmin() {
   document.getElementById('admin-modal').style.display='flex';
-  if (!S.adminOpen) showLoginMode();
+  if (!S.adminOpen) {
+    if (DEV_MODE) { unlockAdmin(); return; }
+    showLoginMode();
+  }
 }
 function closeAdmin() { document.getElementById('admin-modal').style.display='none'; S.pendingMatches=[]; S.pendingPlayers=[]; clearFb(); }
 
@@ -1627,7 +1639,7 @@ async function init() {
     if (gotwFlags) S.gotwFlags=gotwFlags;
   }
 
-  const ages=getAges();
+  if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
   if (ages.length) S.selectedAge=ages[0];
   render();
   document.getElementById('ldr-overlay').classList.add('gone');
