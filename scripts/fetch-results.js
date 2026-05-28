@@ -319,16 +319,23 @@ async function fetchGrade(grade, knownRounds) {
     }
 
     // Skip rounds whose earliest provisional date is still in the future.
-    // provisionalDates may arrive as ISO strings or localised — normalise to
-    // YYYY-MM-DD by parsing through Date() before string-comparing.
+    // IMPORTANT: provisionalDates from PlayHQ can have data entry errors
+    // (e.g. day/month swapped: 2026-09-05 meaning May 9, not September 5).
+    // To avoid being fooled, we only trust provisionalDates when the date
+    // is more than 60 days in the future — genuine future rounds are clearly
+    // weeks or months away, not a day or two.
     const dates = (provisionalDates || []).map(d => {
       const dt = new Date(d);
       return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
     });
     const earliest = dates.length ? dates.slice().sort()[0] : null;
-    if (earliest && earliest > today) {
-      console.log(`    R${number} ... future (${earliest}) — stopping`);
-      break;
+    if (earliest) {
+      const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
+      if (daysAhead > 60) {
+        console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
+        break;
+      }
+      // If within 60 days, fetch anyway — the date might be a PlayHQ entry error
     }
 
     process.stdout.write(`    R${number}${isFinalsRound ? ' [Finals]' : ''} ... `);
