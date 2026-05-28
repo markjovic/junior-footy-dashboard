@@ -22,7 +22,7 @@ const DATA_PATH    = path.join(ROOT, 'data.json');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '500', 10);
+const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '150', 10);
 const API_URL     = 'https://api.playhq.com/graphql';
 const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
 
@@ -282,7 +282,7 @@ async function discoverGrades(competitions) {
 
 // ─── Per-grade results fetcher ────────────────────────────────────────────────
 
-async function fetchGrade(grade, knownRounds) {
+async function fetchGrade(grade, knownRounds, byId) {
   const { id, name } = grade;
   const { age, rawGrade } = parseGradeName(name);
   const today = todayAEST();
@@ -336,6 +336,14 @@ async function fetchGrade(grade, knownRounds) {
         break;
       }
       // If within 60 days, fetch anyway — the date might be a PlayHQ entry error
+    }
+
+    // Skip fixture fetch if this round is already stored as a bye sentinel
+    const byeKey = `${age}|${rawGrade}|${number}|__bye__`;
+    if (byId.has(byeKey)) {
+      // Already know it's a bye — push sentinel and continue without API call
+      allMatches.push(byId.get(byeKey));
+      continue;
     }
 
     process.stdout.write(`    R${number}${isFinalsRound ? ' [Finals]' : ''} ... `);
@@ -534,7 +542,7 @@ async function main() {
   let fetchError = null;
 
   for (const grade of grades) {
-    const matches = await fetchGrade(grade, knownRounds);
+    const matches = await fetchGrade(grade, knownRounds, byId);
 
     for (const m of matches) {
       if (byId.has(m.id)) {
