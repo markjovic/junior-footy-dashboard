@@ -35,7 +35,8 @@ const REMAPS = {
 };
 
 // Old age strings to completely remove (duplicates of newly-named records)
-const OLD_AGE_STRINGS = new Set(Object.keys(REMAPS));
+// U17 is included here but not in REMAPS — U17.5 versions already exist
+const OLD_AGE_STRINGS = new Set([...Object.keys(REMAPS), 'U17']);
 
 // First pass: collect all correctly-named matches (non-old-style)
 const byId = new Map();
