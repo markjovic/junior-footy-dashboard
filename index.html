@@ -189,6 +189,43 @@ body{overflow-x:hidden}
 .upload-item .ui-grade{font-family:'DM Mono',monospace;font-size:10px}
 .upload-item .ui-ok{color:var(--green)}
 .upload-item .ui-err{color:var(--red)}
+
+/* ── Mobile sidebar close button (hidden on desktop) ── */
+#sidebar-close{display:none;align-self:flex-end;background:none;border:1px solid var(--b2);border-radius:var(--r);color:var(--tx3);cursor:pointer;font-size:12px;padding:4px 10px;margin-bottom:4px;flex-shrink:0}
+
+/* ── Mobile responsive ── */
+@media(max-width:768px){
+  .hdr{padding:0 14px;gap:8px}
+  .logo{font-size:15px}
+  #filter-toggle{display:flex!important}
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:fixed;top:52px;left:0;bottom:0;width:240px;z-index:160;transform:translateX(-100%);transition:transform .25s ease;background:var(--s1);border-right:1px solid var(--b2);overflow-y:auto}
+  .sidebar.open{transform:translateX(0)}
+  #sidebar-close{display:flex!important}
+  .main{padding:12px}
+  .dgrid{grid-template-columns:1fr}
+  .ldr-tbl th:nth-child(5),.ldr-tbl td:nth-child(5),
+  .ldr-tbl th:nth-child(6),.ldr-tbl td:nth-child(6),
+  .ldr-tbl th:nth-child(7),.ldr-tbl td:nth-child(7),
+  .ldr-tbl th:nth-child(8),.ldr-tbl td:nth-child(8),
+  .ldr-tbl th:nth-child(9),.ldr-tbl td:nth-child(9),
+  .ldr-tbl th:nth-child(10),.ldr-tbl td:nth-child(10){display:none}
+  .tnm{max-width:100px}
+  .match-row{grid-template-columns:24px 1fr 64px 1fr;padding:5px 10px;gap:5px}
+  .mr-venue{display:none}
+  .mr-det{display:none}
+  .team-modal{width:100vw;max-width:100vw;max-height:100dvh;border-radius:0;margin:0;height:100dvh}
+  .team-modal-overlay{align-items:flex-end}
+  .gotw-name{font-size:9px}
+  .gotw-logo{width:32px;height:32px}
+  .gotw-num{font-size:24px}
+}
+@media(max-width:480px){
+  .ldr-tbl th:nth-child(4),.ldr-tbl td:nth-child(4),
+  .ldr-tbl th:nth-child(11),.ldr-tbl td:nth-child(11){display:none}
+  .match-row{grid-template-columns:24px 1fr 56px 1fr;gap:4px;padding:5px 8px}
+  .mr-name{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -197,13 +234,17 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.17</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.18</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
+  <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
 </header>
 
+<div id="sidebar-overlay" onclick="toggleSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;backdrop-filter:blur(2px)"></div>
+
 <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
+    <button id="sidebar-close" onclick="toggleSidebar()">✕ Close</button>
     <div class="fgroup">
       <div class="flabel">Age group</div>
       <div id="age-filters"></div>
@@ -389,7 +430,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.17</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.18</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1218,7 +1259,16 @@ function renderStats() {
 // ═══════════════════════════════════════
 function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; render(); }
 function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); render(); }
-function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; render(); }
+function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); render(); }
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  const btn = document.getElementById('filter-toggle');
+  const open = sb.classList.toggle('open');
+  ov.style.display = open ? 'block' : 'none';
+  if (btn) btn.textContent = open ? '✕ Filters' : '⊟ Filters';
+}
+
 function selLdrGrade(g) {
   S.selLdrGrade=g;
   document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||'#fff'):'';});
