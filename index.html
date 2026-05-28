@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.35</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.36</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.35</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.36</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -496,7 +496,7 @@ body{overflow-x:hidden}
 // ═══════════════════════════════════════
 // STORAGE
 // ═══════════════════════════════════════
-const SK = { matches:'efnl_v2_matches', players:'efnl_v2_players', roster:'efnl_v2_roster', gotw:'efnl_v2_gotw', filters:'efnl_v2_filters' };
+const SK = { matches:'efnl_v3_matches', players:'efnl_v3_players', roster:'efnl_v3_roster', gotw:'efnl_v3_gotw', filters:'efnl_v3_filters' };
 
 async function sGet(k){
   try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
