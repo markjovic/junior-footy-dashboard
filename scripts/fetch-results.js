@@ -310,7 +310,7 @@ async function fetchGrade(grade, knownRounds, byId) {
   const allMatches = [];
 
   for (const round of roundList) {
-    const { id: roundID, number, provisionalDates, isFinalsRound } = round;
+    const { id: roundID, number, provisionalDates, isFinalsRound, current } = round;
 
     // Skip already-stored rounds
     if (number <= highestKnown) {
@@ -318,24 +318,34 @@ async function fetchGrade(grade, knownRounds, byId) {
       continue;
     }
 
-    // Skip rounds whose earliest provisional date is still in the future.
-    // IMPORTANT: provisionalDates from PlayHQ can have data entry errors
-    // (e.g. day/month swapped: 2026-09-05 meaning May 9, not September 5).
-    // To avoid being fooled, we only trust provisionalDates when the date
-    // is more than 60 days in the future — genuine future rounds are clearly
-    // weeks or months away, not a day or two.
-    const dates = (provisionalDates || []).map(d => {
-      const dt = new Date(d);
-      return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
-    });
-    const earliest = dates.length ? dates.slice().sort()[0] : null;
-    if (earliest) {
-      const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
-      if (daysAhead > 60) {
-        console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
-        break;
+    // Primary future-round detection: use PlayHQ's own `current` flag.
+    // If a round is marked current, it's either in progress or the next to be played.
+    // Rounds AFTER the current round haven't been played — skip them.
+    // We still fetch the current round itself since it may have finals.
+    //
+    // Fallback: if no round is marked current (e.g. season not started),
+    // use provisionalDates but only trust dates > 90 days away to avoid
+    // PlayHQ data entry errors (wrong dates on regular rounds).
+    const roundIndex = roundList.indexOf(round);
+    const currentRoundIndex = roundList.findIndex(r => r.current);
+    if (currentRoundIndex !== -1 && roundIndex > currentRoundIndex) {
+      console.log(`    R${number} ... beyond current round — stopping`);
+      break;
+    }
+    if (currentRoundIndex === -1) {
+      // No current round flagged — fall back to provisional dates
+      const dates = (provisionalDates || []).map(d => {
+        const dt = new Date(d);
+        return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
+      });
+      const earliest = dates.length ? dates.slice().sort()[0] : null;
+      if (earliest) {
+        const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
+        if (daysAhead > 90) {
+          console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
+          break;
+        }
       }
-      // If within 60 days, fetch anyway — the date might be a PlayHQ entry error
     }
 
     // Skip fixture fetch if this round is already stored as a bye sentinel
