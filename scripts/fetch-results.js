@@ -136,7 +136,7 @@ function gqlPost(query, variables) {
         'tenant':         'afl',
         'origin':         'https://www.playhq.com',
       },
-      timeout: 45000,
+      timeout: 60000,
     }, res => {
       let data = '';
       res.setEncoding('utf8');
@@ -291,6 +291,7 @@ async function fetchGrade(grade, knownRounds) {
   const highestKnown = knownRounds.get(`${age}|${rawGrade}`) || 0;
 
   console.log(`\n  [${name}] — known up to R${highestKnown}`);
+  try {
 
   // Get round list for this grade
   let roundList;
@@ -322,7 +323,6 @@ async function fetchGrade(grade, knownRounds) {
     // Skip rounds whose earliest provisional date is still in the future.
     // provisionalDates may arrive as ISO strings or localised — normalise to
     // YYYY-MM-DD by parsing through Date() before string-comparing.
-    if (provisionalDates?.length) console.log(`      provisionalDates raw: ${JSON.stringify(provisionalDates)}`);
     const dates = (provisionalDates || []).map(d => {
       const dt = new Date(d);
       return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
@@ -411,6 +411,10 @@ async function fetchGrade(grade, knownRounds) {
   }
 
   return allMatches;
+  } catch (e) {
+    console.error(`  FATAL ERROR in [${name}]: ${e.message}`);
+    return allMatches;
+  }
 }
 
 // ─── Roster rebuild ───────────────────────────────────────────────────────────
@@ -497,6 +501,7 @@ async function main() {
   // 5. Fetch new results for each grade
   let newCount = 0;
   let updatedCount = 0;
+  let fetchError = null;
 
   for (const grade of grades) {
     const matches = await fetchGrade(grade, knownRounds);
@@ -514,6 +519,7 @@ async function main() {
     }
   }
 
+  if (fetchError) console.error(`\nFetch loop error: ${fetchError.message}`);
   console.log(`\nMatches: ${newCount} new, ${updatedCount} updated, ${byId.size} total`);
 
   // 6. Rebuild roster from all match history
