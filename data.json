@@ -30807,10 +30807,6 @@
       "grade": "",
       "age": "Deakin Uni Women Division 4"
     },
-    "Bayswater Senior Women|Deakin Uni Women Division 4": {
-      "grade": "",
-      "age": "Deakin Uni Women Division 4"
-    },
     "North Ringwood Senior Women Black|Deakin Uni Women Division 5": {
       "grade": "",
       "age": "Deakin Uni Women Division 5"
@@ -31035,10 +31031,6 @@
       "grade": "",
       "age": "Division 3 Eastland Senior Men"
     },
-    "The Basin Seniors|Division 3 Eastland Senior Men": {
-      "grade": "",
-      "age": "Division 3 Eastland Senior Men"
-    },
     "Donvale Reserves|Division 3 Reserve Men": {
       "grade": "",
       "age": "Division 3 Reserve Men"
@@ -31068,10 +31060,6 @@
       "age": "Division 3 Reserve Men"
     },
     "Upper Ferntree Gully Reserves|Division 3 Reserve Men": {
-      "grade": "",
-      "age": "Division 3 Reserve Men"
-    },
-    "The Basin Reserves|Division 3 Reserve Men": {
       "grade": "",
       "age": "Division 3 Reserve Men"
     },
@@ -31106,46 +31094,6 @@
     "Kilsyth Seniors|Division 4 Eastland Senior Men": {
       "grade": "",
       "age": "Division 4 Eastland Senior Men"
-    },
-    "Warrandyte Seniors|Division 4 Eastland Senior Men": {
-      "grade": "",
-      "age": "Division 4 Eastland Senior Men"
-    },
-    "Berwick Nunawading Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Surrey Park Zebras Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Bulleen Templestowe Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Croydon North MLOC Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Doncaster Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Kilsyth Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Fairpark Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Chirnside Park Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
-    },
-    "Warrandyte Reserves|Division 4 Reserve Men": {
-      "grade": "",
-      "age": "Division 4 Reserve Men"
     },
     "Balwyn Seniors|Premier Eastland Senior Men": {
       "grade": "",
@@ -31186,46 +31134,6 @@
     "Vermont Seniors|Premier Eastland Senior Men": {
       "grade": "",
       "age": "Premier Eastland Senior Men"
-    },
-    "Balwyn Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Blackburn Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "South Croydon Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "East Ringwood Men - Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Noble Park Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Rowville Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Berwick Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "South Belgrave Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Doncaster East Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
-    },
-    "Vermont Reserves|Premier Reserve Men": {
-      "grade": "",
-      "age": "Premier Reserve Men"
     },
     "Beaconsfield Gold|U11": {
       "grade": "A",
@@ -31331,10 +31239,6 @@
       "grade": "D1",
       "age": "U11"
     },
-    "Rowville|U11": {
-      "grade": "D1",
-      "age": "U11"
-    },
     "Ferntree Gully White|U11": {
       "grade": "D2",
       "age": "U11"
@@ -31431,12 +31335,12 @@
       "grade": "B",
       "age": "U12"
     },
-    "Chirnside Park|U12": {
-      "grade": "B",
-      "age": "U12"
-    },
     "Boronia|U12": {
       "grade": "C",
+      "age": "U12"
+    },
+    "Chirnside Park|U12": {
+      "grade": "B",
       "age": "U12"
     },
     "Ferntree Gully|U12": {
@@ -31453,10 +31357,6 @@
     },
     "Lysterfield Grey|U12": {
       "grade": "D",
-      "age": "U12"
-    },
-    "Wantirna South|U12": {
-      "grade": "C",
       "age": "U12"
     },
     "Beaconsfield Blue|U12": {
@@ -31491,8 +31391,92 @@
       "grade": "D",
       "age": "U12"
     },
+    "Beaconsfield Girls|U12 Girls": {
+      "grade": "B",
+      "age": "U12 Girls"
+    },
+    "Montrose Girls|U12 Girls": {
+      "grade": "A",
+      "age": "U12 Girls"
+    },
+    "Blackburn Girls Black|U12 Girls": {
+      "grade": "A",
+      "age": "U12 Girls"
+    },
     "Wantirna South Girls Green|U12 Girls": {
       "grade": "A",
+      "age": "U12 Girls"
+    },
+    "Kilsyth Girls|U12 Girls": {
+      "grade": "C",
+      "age": "U12 Girls"
+    },
+    "Mooroolbark Girls|U12 Girls": {
+      "grade": "D",
+      "age": "U12 Girls"
+    },
+    "Knox/Bayswater Girls|U12 Girls": {
+      "grade": "B",
+      "age": "U12 Girls"
+    },
+    "East Burwood Girls|U12 Girls": {
+      "grade": "Grading",
+      "age": "U12 Girls"
+    },
+    "Lysterfield Girls|U12 Girls": {
+      "grade": "A",
+      "age": "U12 Girls"
+    },
+    "East Ringwood Girls|U12 Girls": {
+      "grade": "B",
+      "age": "U12 Girls"
+    },
+    "Norwood Girls Gold|U12 Girls": {
+      "grade": "B",
+      "age": "U12 Girls"
+    },
+    "Blackburn Girls Red|U12 Girls": {
+      "grade": "D",
+      "age": "U12 Girls"
+    },
+    "Norwood Girls Purple|U12 Girls": {
+      "grade": "A",
+      "age": "U12 Girls"
+    },
+    "The Basin Girls Red|U12 Girls": {
+      "grade": "A",
+      "age": "U12 Girls"
+    },
+    "Chirnside Park Girls|U12 Girls": {
+      "grade": "C",
+      "age": "U12 Girls"
+    },
+    "Lilydale Girls|U12 Girls": {
+      "grade": "D",
+      "age": "U12 Girls"
+    },
+    "North Ringwood Girls|U12 Girls": {
+      "grade": "B",
+      "age": "U12 Girls"
+    },
+    "Heathmont Girls|U12 Girls": {
+      "grade": "C",
+      "age": "U12 Girls"
+    },
+    "Rowville Knights Girls|U12 Girls": {
+      "grade": "D",
+      "age": "U12 Girls"
+    },
+    "Mitcham Girls Black|U12 Girls": {
+      "grade": "C",
+      "age": "U12 Girls"
+    },
+    "Rowville Girls|U12 Girls": {
+      "grade": "D",
+      "age": "U12 Girls"
+    },
+    "Boronia Girls|U12 Girls": {
+      "grade": "C",
       "age": "U12 Girls"
     },
     "South Belgrave Girls|U12 Girls": {
@@ -31503,63 +31487,7 @@
       "grade": "A",
       "age": "U12 Girls"
     },
-    "The Basin Girls Red|U12 Girls": {
-      "grade": "A",
-      "age": "U12 Girls"
-    },
-    "Lysterfield Girls|U12 Girls": {
-      "grade": "A",
-      "age": "U12 Girls"
-    },
-    "Montrose Girls|U12 Girls": {
-      "grade": "A",
-      "age": "U12 Girls"
-    },
-    "Norwood Girls Purple|U12 Girls": {
-      "grade": "A",
-      "age": "U12 Girls"
-    },
-    "Blackburn Girls Black|U12 Girls": {
-      "grade": "A",
-      "age": "U12 Girls"
-    },
-    "Beaconsfield Girls|U12 Girls": {
-      "grade": "B",
-      "age": "U12 Girls"
-    },
-    "East Ringwood Girls|U12 Girls": {
-      "grade": "B",
-      "age": "U12 Girls"
-    },
-    "Knox/Bayswater Girls|U12 Girls": {
-      "grade": "B",
-      "age": "U12 Girls"
-    },
-    "North Ringwood Girls|U12 Girls": {
-      "grade": "B",
-      "age": "U12 Girls"
-    },
-    "Norwood Girls Gold|U12 Girls": {
-      "grade": "B",
-      "age": "U12 Girls"
-    },
-    "Chirnside Park Girls|U12 Girls": {
-      "grade": "C",
-      "age": "U12 Girls"
-    },
-    "Kilsyth Girls|U12 Girls": {
-      "grade": "C",
-      "age": "U12 Girls"
-    },
-    "Boronia Girls|U12 Girls": {
-      "grade": "C",
-      "age": "U12 Girls"
-    },
     "South Croydon Girls|U12 Girls": {
-      "grade": "C",
-      "age": "U12 Girls"
-    },
-    "Heathmont Girls|U12 Girls": {
       "grade": "C",
       "age": "U12 Girls"
     },
@@ -31567,40 +31495,12 @@
       "grade": "C",
       "age": "U12 Girls"
     },
-    "Mitcham Girls Black|U12 Girls": {
-      "grade": "C",
-      "age": "U12 Girls"
-    },
-    "Lilydale Girls|U12 Girls": {
-      "grade": "D",
-      "age": "U12 Girls"
-    },
     "The Basin Girls Green|U12 Girls": {
-      "grade": "D",
-      "age": "U12 Girls"
-    },
-    "Rowville Knights Girls|U12 Girls": {
-      "grade": "D",
-      "age": "U12 Girls"
-    },
-    "Blackburn Girls Red|U12 Girls": {
-      "grade": "D",
-      "age": "U12 Girls"
-    },
-    "Mooroolbark Girls|U12 Girls": {
       "grade": "D",
       "age": "U12 Girls"
     },
     "Wantirna South Girls White|U12 Girls": {
       "grade": "D",
-      "age": "U12 Girls"
-    },
-    "Rowville Girls|U12 Girls": {
-      "grade": "D",
-      "age": "U12 Girls"
-    },
-    "East Burwood Girls|U12 Girls": {
-      "grade": "Grading",
       "age": "U12 Girls"
     },
     "Blackburn Black|U13": {
@@ -31851,56 +31751,16 @@
       "grade": "D",
       "age": "U14"
     },
-    "Blackburn Red|U14": {
-      "grade": "D",
-      "age": "U14"
-    },
-    "East Ringwood Girls|U14 Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Wantirna South Girls Green|U14 Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "North Ringwood Girls Red|U14 Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
     "Blackburn Girls Black|U14 Girls": {
       "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Norwood Girls Purple|U14 Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Lysterfield Girls|U14 Girls": {
-      "grade": "A",
-      "age": "U14 Girls"
-    },
-    "Montrose Girls|U14 Girls": {
-      "grade": "B",
-      "age": "U14 Girls"
-    },
-    "South Belgrave Girls|U14 Girls": {
-      "grade": "B",
       "age": "U14 Girls"
     },
     "Beaconsfield Girls|U14 Girls": {
       "grade": "B",
       "age": "U14 Girls"
     },
-    "Knox Girls|U14 Girls": {
-      "grade": "B",
-      "age": "U14 Girls"
-    },
-    "Chirnside Park Girls|U14 Girls": {
-      "grade": "B",
-      "age": "U14 Girls"
-    },
-    "Vermont Girls|U14 Girls": {
-      "grade": "B",
+    "Lysterfield Girls|U14 Girls": {
+      "grade": "A",
       "age": "U14 Girls"
     },
     "The Basin Girls Red|U14 Girls": {
@@ -31911,19 +31771,47 @@
       "grade": "B",
       "age": "U14 Girls"
     },
-    "Kilsyth Girls|U14 Girls": {
+    "Rowville Knights Girls|U14 Girls": {
       "grade": "C",
       "age": "U14 Girls"
     },
-    "South Croydon Girls|U14 Girls": {
+    "East Burwood Girls|U14 Girls": {
+      "grade": "D",
+      "age": "U14 Girls"
+    },
+    "Mitcham Girls|U14 Girls": {
       "grade": "C",
+      "age": "U14 Girls"
+    },
+    "East Ringwood Girls|U14 Girls": {
+      "grade": "A",
+      "age": "U14 Girls"
+    },
+    "Norwood Girls Purple|U14 Girls": {
+      "grade": "A",
       "age": "U14 Girls"
     },
     "Ferntree Gully Girls|U14 Girls": {
       "grade": "C",
       "age": "U14 Girls"
     },
-    "Rowville/Boronia Girls|U14 Girls": {
+    "South Belgrave Girls|U14 Girls": {
+      "grade": "B",
+      "age": "U14 Girls"
+    },
+    "Kilsyth Girls|U14 Girls": {
+      "grade": "C",
+      "age": "U14 Girls"
+    },
+    "Chirnside Park Girls|U14 Girls": {
+      "grade": "B",
+      "age": "U14 Girls"
+    },
+    "Knox Girls|U14 Girls": {
+      "grade": "B",
+      "age": "U14 Girls"
+    },
+    "South Croydon Girls|U14 Girls": {
       "grade": "C",
       "age": "U14 Girls"
     },
@@ -31931,31 +31819,27 @@
       "grade": "C",
       "age": "U14 Girls"
     },
-    "Lilydale Girls|U14 Girls": {
-      "grade": "C",
-      "age": "U14 Girls"
-    },
-    "Rowville Knights Girls|U14 Girls": {
-      "grade": "C",
-      "age": "U14 Girls"
-    },
-    "Mitcham Girls|U14 Girls": {
-      "grade": "C",
-      "age": "U14 Girls"
-    },
-    "North Ringwood Girls Black|U14 Girls": {
+    "Blackburn Girls Red|U14 Girls": {
       "grade": "D",
+      "age": "U14 Girls"
+    },
+    "Vermont Girls|U14 Girls": {
+      "grade": "B",
+      "age": "U14 Girls"
+    },
+    "Montrose Girls|U14 Girls": {
+      "grade": "B",
+      "age": "U14 Girls"
+    },
+    "Wantirna South Girls Green|U14 Girls": {
+      "grade": "A",
+      "age": "U14 Girls"
+    },
+    "North Ringwood Girls Red|U14 Girls": {
+      "grade": "A",
       "age": "U14 Girls"
     },
     "Bayswater Girls|U14 Girls": {
-      "grade": "D",
-      "age": "U14 Girls"
-    },
-    "Wantirna South Girls White|U14 Girls": {
-      "grade": "D",
-      "age": "U14 Girls"
-    },
-    "East Burwood Girls|U14 Girls": {
       "grade": "D",
       "age": "U14 Girls"
     },
@@ -31963,7 +31847,19 @@
       "grade": "D",
       "age": "U14 Girls"
     },
-    "Blackburn Girls Red|U14 Girls": {
+    "Lilydale Girls|U14 Girls": {
+      "grade": "C",
+      "age": "U14 Girls"
+    },
+    "Rowville/Boronia Girls|U14 Girls": {
+      "grade": "C",
+      "age": "U14 Girls"
+    },
+    "North Ringwood Girls Black|U14 Girls": {
+      "grade": "D",
+      "age": "U14 Girls"
+    },
+    "Wantirna South Girls White|U14 Girls": {
       "grade": "D",
       "age": "U14 Girls"
     },
@@ -32020,10 +31916,6 @@
       "age": "U15"
     },
     "Rowville Knights|U15": {
-      "grade": "B",
-      "age": "U15"
-    },
-    "Chirnside Park|U15": {
       "grade": "B",
       "age": "U15"
     },
@@ -32139,14 +32031,6 @@
       "grade": "B",
       "age": "U16"
     },
-    "Montrose Blue|U16": {
-      "grade": "B",
-      "age": "U16"
-    },
-    "Upper Ferntree Gully|U16": {
-      "grade": "B",
-      "age": "U16"
-    },
     "Mitcham Yellow|U16": {
       "grade": "C",
       "age": "U16"
@@ -32171,16 +32055,44 @@
       "grade": "C",
       "age": "U16"
     },
+    "Upper Ferntree Gully|U16": {
+      "grade": "B",
+      "age": "U16"
+    },
     "Templestowe|U16": {
       "grade": "C",
       "age": "U16"
     },
-    "Beaconsfield Girls Gold|U16 Girls": {
-      "grade": "A",
+    "Boronia Girls|U16 Girls": {
+      "grade": "D",
+      "age": "U16 Girls"
+    },
+    "Waverley Blues Girls|U16 Girls": {
+      "grade": "B",
+      "age": "U16 Girls"
+    },
+    "Beaconsfield Girls Blue|U16 Girls": {
+      "grade": "D",
+      "age": "U16 Girls"
+    },
+    "Blackburn Girls Red|U16 Girls": {
+      "grade": "D",
       "age": "U16 Girls"
     },
     "Blackburn Girls Black|U16 Girls": {
       "grade": "A",
+      "age": "U16 Girls"
+    },
+    "South Belgrave Girls|U16 Girls": {
+      "grade": "C",
+      "age": "U16 Girls"
+    },
+    "East Burwood Girls|U16 Girls": {
+      "grade": "C",
+      "age": "U16 Girls"
+    },
+    "The Basin Girls|U16 Girls": {
+      "grade": "B",
       "age": "U16 Girls"
     },
     "East Ringwood Girls Blue|U16 Girls": {
@@ -32191,18 +32103,6 @@
       "grade": "A",
       "age": "U16 Girls"
     },
-    "Wantirna South Girls Green|U16 Girls": {
-      "grade": "A",
-      "age": "U16 Girls"
-    },
-    "Mitcham Girls|U16 Girls": {
-      "grade": "B",
-      "age": "U16 Girls"
-    },
-    "The Basin Girls|U16 Girls": {
-      "grade": "B",
-      "age": "U16 Girls"
-    },
     "Ferntree Gully Girls|U16 Girls": {
       "grade": "B",
       "age": "U16 Girls"
@@ -32211,51 +32111,19 @@
       "grade": "B",
       "age": "U16 Girls"
     },
-    "Waverley Blues Girls|U16 Girls": {
-      "grade": "B",
-      "age": "U16 Girls"
-    },
     "Norwood Girls|U16 Girls": {
       "grade": "B",
       "age": "U16 Girls"
     },
-    "Montrose Girls|U16 Girls": {
-      "grade": "C",
-      "age": "U16 Girls"
-    },
-    "East Burwood Girls|U16 Girls": {
-      "grade": "C",
-      "age": "U16 Girls"
-    },
-    "Chirnside Park Girls|U16 Girls": {
-      "grade": "C",
+    "Mitcham Girls|U16 Girls": {
+      "grade": "B",
       "age": "U16 Girls"
     },
     "Rowville Girls|U16 Girls": {
       "grade": "C",
       "age": "U16 Girls"
     },
-    "South Belgrave Girls|U16 Girls": {
-      "grade": "C",
-      "age": "U16 Girls"
-    },
-    "Blackburn Girls Red|U16 Girls": {
-      "grade": "D",
-      "age": "U16 Girls"
-    },
     "Bayswater Girls|U16 Girls": {
-      "grade": "D",
-      "age": "U16 Girls"
-    },
-    "Boronia Girls|U16 Girls": {
-      "grade": "D",
-      "age": "U16 Girls"
-    },
-    "Rowville Knights Girls|U16 Girls": {
-      "grade": "D",
-      "age": "U16 Girls"
-    },
-    "East Ringwood Girls White|U16 Girls": {
       "grade": "D",
       "age": "U16 Girls"
     },
@@ -32263,11 +32131,31 @@
       "grade": "D",
       "age": "U16 Girls"
     },
-    "Beaconsfield Girls Blue|U16 Girls": {
+    "North Ringwood Girls Black|U16 Girls": {
       "grade": "D",
       "age": "U16 Girls"
     },
-    "North Ringwood Girls Black|U16 Girls": {
+    "Beaconsfield Girls Gold|U16 Girls": {
+      "grade": "A",
+      "age": "U16 Girls"
+    },
+    "Wantirna South Girls Green|U16 Girls": {
+      "grade": "A",
+      "age": "U16 Girls"
+    },
+    "Chirnside Park Girls|U16 Girls": {
+      "grade": "C",
+      "age": "U16 Girls"
+    },
+    "Montrose Girls|U16 Girls": {
+      "grade": "C",
+      "age": "U16 Girls"
+    },
+    "Rowville Knights Girls|U16 Girls": {
+      "grade": "D",
+      "age": "U16 Girls"
+    },
+    "East Ringwood Girls White|U16 Girls": {
       "grade": "D",
       "age": "U16 Girls"
     },
@@ -32343,12 +32231,12 @@
       "grade": "D",
       "age": "U17.5"
     },
-    "Chirnside Park|U17.5": {
-      "grade": "B",
-      "age": "U17.5"
-    },
     "Bayswater|U17.5": {
       "grade": "C",
+      "age": "U17.5"
+    },
+    "Chirnside Park|U17.5": {
+      "grade": "B",
       "age": "U17.5"
     },
     "Ferntree Gully|U17.5": {
@@ -32364,10 +32252,6 @@
       "age": "U17.5"
     },
     "Ringwood|U17.5": {
-      "grade": "C",
-      "age": "U17.5"
-    },
-    "Vermont Gold|U17.5": {
       "grade": "C",
       "age": "U17.5"
     },
@@ -32395,15 +32279,11 @@
       "grade": "D",
       "age": "U17.5"
     },
-    "Belgrave Girls|U18 Girls": {
-      "grade": "A/B",
+    "Mooroolbark Girls|U18 Girls": {
+      "grade": "C",
       "age": "U18 Girls"
     },
-    "Rowville/Lysterfield Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Blackburn Girls Black|U18 Girls": {
+    "Mitcham Girls|U18 Girls": {
       "grade": "A/B",
       "age": "U18 Girls"
     },
@@ -32411,47 +32291,7 @@
       "grade": "A/B",
       "age": "U18 Girls"
     },
-    "East Ringwood Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "South Croydon Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Heathmont Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Vermont Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Knox Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Wantirna South Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Mitcham Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Mt Evelyn Girls|U18 Girls": {
-      "grade": "A/B",
-      "age": "U18 Girls"
-    },
-    "Kilsyth Girls|U18 Girls": {
-      "grade": "C",
-      "age": "U18 Girls"
-    },
-    "Mooroolbark Girls|U18 Girls": {
-      "grade": "C",
-      "age": "U18 Girls"
-    },
-    "Montrose/North Ringwood Girls|U18 Girls": {
+    "Boronia Girls|U18 Girls": {
       "grade": "C",
       "age": "U18 Girls"
     },
@@ -32459,12 +32299,56 @@
       "grade": "C",
       "age": "U18 Girls"
     },
+    "Kilsyth Girls|U18 Girls": {
+      "grade": "C",
+      "age": "U18 Girls"
+    },
+    "Heathmont Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Belgrave Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Knox Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Rowville/Lysterfield Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Montrose/North Ringwood Girls|U18 Girls": {
+      "grade": "C",
+      "age": "U18 Girls"
+    },
+    "Vermont Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "East Ringwood Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Mt Evelyn Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
     "Templestowe Girls|U18 Girls": {
       "grade": "C",
       "age": "U18 Girls"
     },
-    "Boronia Girls|U18 Girls": {
-      "grade": "C",
+    "South Croydon Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Wantirna South Girls|U18 Girls": {
+      "grade": "A/B",
+      "age": "U18 Girls"
+    },
+    "Blackburn Girls Black|U18 Girls": {
+      "grade": "A/B",
       "age": "U18 Girls"
     },
     "Beaconsfield|U19.5": {
@@ -32587,14 +32471,6 @@
       "grade": "",
       "age": "U19.5"
     },
-    "Templestowe|U19.5": {
-      "grade": "",
-      "age": "U19.5"
-    },
-    "Warrandyte|U19.5": {
-      "grade": "",
-      "age": "U19.5"
-    },
     "North Ringwood Veterans Men|Veterans Mens": {
       "grade": "",
       "age": "Veterans Mens"
@@ -32659,9 +32535,133 @@
       "grade": "",
       "age": "Veterans Women"
     },
+    "Balwyn Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Blackburn Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "South Croydon Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "East Ringwood Men - Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Noble Park Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Rowville Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Berwick Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "South Belgrave Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Doncaster East Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Vermont Reserves|Premier Reserve Men": {
+      "grade": "",
+      "age": "Premier Reserve Men"
+    },
+    "Berwick Nunawading Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Surrey Park Zebras Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Bulleen Templestowe Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Croydon North MLOC Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Doncaster Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Kilsyth Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Fairpark Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Chirnside Park Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
+    },
+    "Bayswater Senior Women|Deakin Uni Women Division 4": {
+      "grade": "",
+      "age": "Deakin Uni Women Division 4"
+    },
+    "The Basin Seniors|Division 3 Eastland Senior Men": {
+      "grade": "",
+      "age": "Division 3 Eastland Senior Men"
+    },
+    "The Basin Reserves|Division 3 Reserve Men": {
+      "grade": "",
+      "age": "Division 3 Reserve Men"
+    },
+    "Warrandyte Seniors|Division 4 Eastland Senior Men": {
+      "grade": "",
+      "age": "Division 4 Eastland Senior Men"
+    },
+    "Rowville|U11": {
+      "grade": "D1",
+      "age": "U11"
+    },
+    "Wantirna South|U12": {
+      "grade": "C",
+      "age": "U12"
+    },
+    "Blackburn Red|U14": {
+      "grade": "D",
+      "age": "U14"
+    },
+    "Chirnside Park|U15": {
+      "grade": "B",
+      "age": "U15"
+    },
+    "Montrose Blue|U16": {
+      "grade": "B",
+      "age": "U16"
+    },
+    "Vermont Gold|U17.5": {
+      "grade": "C",
+      "age": "U17.5"
+    },
+    "Templestowe|U19.5": {
+      "grade": "",
+      "age": "U19.5"
+    },
+    "Warrandyte|U19.5": {
+      "grade": "",
+      "age": "U19.5"
+    },
     "The Basin Veterans Women|Veterans Women": {
       "grade": "",
       "age": "Veterans Women"
+    },
+    "Warrandyte Reserves|Division 4 Reserve Men": {
+      "grade": "",
+      "age": "Division 4 Reserve Men"
     }
   },
   "gotwFlags": {},
@@ -33026,5 +33026,5 @@
   "compLogos": {
     "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-05-28T13:44:37.635Z"
+  "lastUpdated": "2026-05-28T14:06:46.495Z"
 }
