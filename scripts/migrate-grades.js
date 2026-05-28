@@ -32,8 +32,6 @@ const REMAPS = {
   'Division 3 U19.5':                        { age: 'U19.5',        rawGrade: 'Division 3' },
   'Division 4 U19.5':                        { age: 'U19.5',        rawGrade: 'Division 4' },
   'Premier U19.5':                           { age: 'U19.5',        rawGrade: 'Premier'    },
-  // U17 → U17.5 (PlayHQ age field returns U17 but grade name has U17.5)
-  'U17':                                     { age: 'U17.5',        rawGrade: null         }, // null = keep existing rawGrade
 };
 
 // Old age strings to completely remove (duplicates of newly-named records)
