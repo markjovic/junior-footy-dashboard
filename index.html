@@ -197,7 +197,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">EFNL <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.3</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.4</span>
   <div class="age-tabs" id="age-tabs"></div>
   <button class="hdr-btn" onclick="openAdmin()">⚙ Admin</button>
 </header>
@@ -382,7 +382,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.3</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.4</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1261,7 +1261,7 @@ async function sha256(str) {
 // ── Hardcoded password hash — set this to SHA-256 of your password ──
 // Generate your hash: Admin → Manage → "Generate hash" tool, then paste it here and re-upload.
 // Default hash below is SHA-256 of "changeme" — replace before going live.
-const ADMIN_HASH = 'ef92b778bafe771207b97f8ad2e34dd2f0ba5c0dd386ce4b9d5a7d0c8e5f2b9';
+const ADMIN_HASH = '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86';
 
 function openAdmin() {
   document.getElementById('admin-modal').style.display='flex';
