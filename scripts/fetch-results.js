@@ -63,10 +63,12 @@ query gradeRounds($gradeID: ID!) {
   discoverGrade(gradeID: $gradeID) {
     id
     name
+    dates
     rounds {
       id
       name
       number
+      current
       isFinalsRound
       provisionalDates
     }
@@ -295,7 +297,9 @@ async function fetchGrade(grade, knownRounds, byId) {
   let roundList;
   try {
     const res = await gqlPost(Q_GRADE_ROUNDS, { gradeID: id });
-    roundList = res?.data?.discoverGrade?.rounds;
+    const gradeData = res?.data?.discoverGrade;
+    roundList = gradeData?.rounds;
+    const gradeDates = gradeData?.dates || []; // e.g. ["2026-04","2026-05","2026-08"]
     await sleep(FETCH_DELAY);
   } catch (e) {
     console.log(`    gradeRounds error: ${e.message}`);
@@ -305,6 +309,17 @@ async function fetchGrade(grade, knownRounds, byId) {
   if (!roundList?.length) {
     console.log(`    no rounds returned`);
     return [];
+  }
+
+  // If grade-level dates are available and all are in the past,
+  // the season is over — skip entirely
+  if (gradeDates.length) {
+    const latestMonth = gradeDates.slice().sort().pop(); // e.g. "2026-08"
+    const latestDate = latestMonth + '-31'; // end of that month
+    if (latestDate < today) {
+      console.log(`    season ended (last month: ${latestMonth}) — skipping`);
+      return [];
+    }
   }
 
   const allMatches = [];
@@ -318,32 +333,45 @@ async function fetchGrade(grade, knownRounds, byId) {
       continue;
     }
 
-    // Primary future-round detection: use PlayHQ's own `current` flag.
-    // If a round is marked current, it's either in progress or the next to be played.
-    // Rounds AFTER the current round haven't been played — skip them.
-    // We still fetch the current round itself since it may have finals.
-    //
-    // Fallback: if no round is marked current (e.g. season not started),
-    // use provisionalDates but only trust dates > 90 days away to avoid
-    // PlayHQ data entry errors (wrong dates on regular rounds).
-    const roundIndex = roundList.indexOf(round);
+    // Future-round detection strategy:
+    // 1. If ANY round in this grade is marked current, trust that entirely.
+    //    Rounds after current haven't been played. Rounds before current have.
+    //    provisionalDates is ignored — it contains data entry errors in PlayHQ
+    //    (e.g. Premier Reserve Men R1 shows 2026-11-04 instead of 2026-04-11).
+    // 2. If NO round is marked current (season not started or finished),
+    //    fall back to provisionalDates but only stop if > 90 days away.
     const currentRoundIndex = roundList.findIndex(r => r.current);
-    if (currentRoundIndex !== -1 && roundIndex > currentRoundIndex) {
-      console.log(`    R${number} ... beyond current round — stopping`);
-      break;
-    }
-    if (currentRoundIndex === -1) {
-      // No current round flagged — fall back to provisional dates
-      const dates = (provisionalDates || []).map(d => {
-        const dt = new Date(d);
-        return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
-      });
-      const earliest = dates.length ? dates.slice().sort()[0] : null;
-      if (earliest) {
-        const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
-        if (daysAhead > 90) {
-          console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
+    if (currentRoundIndex !== -1) {
+      // A current round exists — use it as the cutoff
+      const roundIndex = roundList.indexOf(round);
+      if (roundIndex > currentRoundIndex) {
+        console.log(`    R${number} ... beyond current round — stopping`);
+        break;
+      }
+      // Rounds up to and including current are fetched (may have finals)
+    } else {
+      // No current round flagged — use grade-level dates to check if season has started.
+      // provisionalDates on individual rounds is unreliable (data entry errors in PlayHQ).
+      // If the grade's first active month is still in the future, stop here.
+      if (gradeDates.length) {
+        const earliestMonth = gradeDates.slice().sort()[0]; // e.g. "2026-04"
+        if (earliestMonth > today.slice(0, 7)) {
+          console.log(`    R${number} ... season not started yet (starts ${earliestMonth}) — stopping`);
           break;
+        }
+      } else {
+        // No grade dates — last resort: provisionalDates > 90 days
+        const dates = (provisionalDates || []).map(d => {
+          const dt = new Date(d);
+          return isNaN(dt) ? d : dt.toISOString().slice(0, 10);
+        });
+        const earliest = dates.length ? dates.slice().sort()[0] : null;
+        if (earliest) {
+          const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
+          if (daysAhead > 90) {
+            console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
+            break;
+          }
         }
       }
     }
