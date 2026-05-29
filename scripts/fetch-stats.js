@@ -129,15 +129,26 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
   do {
     let res;
     try {
-      res = await gqlPost(Q_GRADE_STATS, { gradeID: grade.id, filter: { page } });
+      res = await gqlPost(
+        Q_GRADE_STATS,
+        { gradeID: grade.id, filter: { page } },
+        'publicGradeStatistics'
+      );
       await sleep(120);
     } catch (e) {
-      console.warn(`  Stats: ${grade.name} page ${page} failed: ${e.message}`);
+      console.warn(`  FAIL ${grade.name} p${page}: ${e.message}`);
       break;
     }
 
     const gps = res?.data?.gradePlayerStatistics;
-    if (!gps) break;
+    if (!gps) {
+      if (res?.errors?.length) {
+        console.warn(`  ERROR ${grade.name} p${page}: ${res.errors.map(e=>e.message).join('; ')}`);
+      } else {
+        console.warn(`  EMPTY ${grade.name} p${page} — no gradePlayerStatistics in response`);
+      }
+      break;
+    }
     totalPages = gps.meta.totalPages;
 
     for (const r of gps.results) {
@@ -175,7 +186,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
 async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
   let res;
   try {
-    res = await gqlPost(Q_PROFILE_STATS, { id: uuid });
+    res = await gqlPost(Q_PROFILE_STATS, { id: uuid }, 'publicProfileStatistics');
     await sleep(150);
   } catch (e) {
     console.warn(`  Profile: ${uuid} failed: ${e.message}`);
@@ -245,6 +256,7 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
   // Phase 1: grade stats — all pages, all grades
   const allAppearances = [];
   for (const grade of grades) {
+    console.log(`  ${grade.compName} — ${grade.name}`);
     const rows = await fetchGradeStats(grade, gqlPost, sleep);
     allAppearances.push(...rows);
   }
@@ -319,3 +331,82 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
 }
 
 module.exports = { fetchAllStats };
+
+// ── Standalone entry point (called directly by the workflow) ─────────────────
+// When run as `node scripts/fetch-stats.js`, loads grades.json and data.json,
+// runs the full stats fetch, writes lastStatsFetch, and saves data.json back.
+
+if (require.main === module) {
+  'use strict';
+  const fs   = require('fs');
+  const path = require('path');
+  const https = require('https');
+
+  const ROOT        = path.resolve(__dirname, '..');
+  const GRADES_PATH = path.join(ROOT, 'grades.json');
+  const DATA_PATH   = path.join(ROOT, 'data.json');
+  const API_URL     = 'https://api.playhq.com/graphql';
+  const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
+  const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '150', 10);
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function gqlPost(query, variables, operationName) {
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify(operationName
+        ? { operationName, query, variables }
+        : { query, variables });
+      const req = https.request(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'User-Agent':     USER_AGENT,
+          'Accept':         'application/json',
+          'tenant':         'afl',
+          'origin':         'https://www.playhq.com',
+        },
+        timeout: 60000,
+      }, res => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', c => { data += c; });
+        res.on('end', () => {
+          if (res.statusCode !== 200)
+            return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+      req.write(body);
+      req.end();
+    });
+  }
+
+  async function main() {
+    if (!fs.existsSync(GRADES_PATH)) {
+      console.error('grades.json not found — run fetch-results.js first');
+      process.exit(1);
+    }
+    const grades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
+
+    let data = { matches: [], players: [], roster: {}, gotwFlags: {} };
+    if (fs.existsSync(DATA_PATH)) {
+      try { data = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); }
+      catch (e) { console.warn('Could not parse data.json — starting fresh'); }
+    }
+
+    const seasonIDs = new Set(grades.map(g => g.seasonID).filter(Boolean));
+    await fetchAllStats(grades, data, seasonIDs, gqlPost, sleep);
+
+    data.lastStatsFetch = new Date().toISOString();
+
+    fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
+    console.log('Wrote data.json');
+    process.exit(0);
+  }
+
+  main().catch(e => { console.error('Fatal:', e); process.exit(1); });
+}
