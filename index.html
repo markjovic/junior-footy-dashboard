@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.36</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.37</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.36</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.37</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -800,11 +800,11 @@ function mergePlayers(existing, incoming) {
 // ═══════════════════════════════════════
 // Returns the current grade for a team name from the roster,
 // falling back to the grade from match data if not in roster.
-function currentGrade(teamName, age, rawGrade) {
-  // Roster is keyed by "teamName|age".
-  // Try exact name first, then colour-stripped name as fallback
-  // (handles "Chirnside Park Blue" and "Chirnside Park" being the same team)
-  const exactKey = `${teamName}|${age}`;
+function currentGrade(teamName, age, rawGrade, compName) {
+  // Roster is keyed by "compName|teamName|age".
+  // Try exact name first, then colour-stripped name as fallback.
+  const compPrefix = compName || '';
+  const exactKey = `${compPrefix}|${teamName}|${age}`;
   if (S.roster[exactKey]) return S.roster[exactKey].grade || rawGrade;
 
   // Strip trailing colour word and retry
@@ -813,20 +813,20 @@ function currentGrade(teamName, age, rawGrade) {
     stripped = stripped.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim();
   });
   if (stripped !== teamName) {
-    const strippedKey = `${stripped}|${age}`;
+    const strippedKey = `${compPrefix}|${stripped}|${age}`;
     if (S.roster[strippedKey]) return S.roster[strippedKey].grade || rawGrade;
   }
 
-  // Legacy fallback: unkeyed roster entry
-  if (S.roster[teamName]) return S.roster[teamName].grade || rawGrade;
+  // Legacy fallback: old-style unkeyed roster entry
+  if (S.roster[`${teamName}|${age}`]) return S.roster[`${teamName}|${age}`].grade || rawGrade;
 
   return rawGrade;
 }
 
 // A match counts for ladder/team stats if both teams are in the same current grade
 function matchIsValid(m) {
-  const hGrade = currentGrade(m.home, m.age, m.rawGrade);
-  const aGrade = currentGrade(m.away, m.age, m.rawGrade);
+  const hGrade = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+  const aGrade = currentGrade(m.away, m.age, m.rawGrade, m.compName);
   // Both grades must match — for senior/women/veterans grades rawGrade is ""
   // which is valid as long as both teams resolve to the same (empty) grade
   return hGrade === aGrade && hGrade !== null && hGrade !== undefined;
@@ -834,7 +834,7 @@ function matchIsValid(m) {
 
 // The grade a match counts towards (from the roster)
 function matchGrade(m) {
-  return currentGrade(m.home, m.age, m.rawGrade);
+  return currentGrade(m.home, m.age, m.rawGrade, m.compName);
 }
 
 // ═══════════════════════════════════════
