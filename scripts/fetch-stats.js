@@ -156,21 +156,34 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
 
   do {
     let res;
-    try {
-      res = await gqlPost(
-        Q_GRADE_STATS,
-        {
-          gradeID: grade.id,
-          filter: {
-            sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }],
-            pagination: { page, limit: 50 },
+    const MAX_RETRIES = 4;
+    let lastError;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        res = await gqlPost(
+          Q_GRADE_STATS,
+          {
+            gradeID: grade.id,
+            filter: {
+              sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }],
+              pagination: { page, limit: 50 },
+            },
           },
-        },
-        'publicGradeStatistics'
-      );
-      await sleep(120);
-    } catch (e) {
-      console.warn(`  FAIL ${grade.name} p${page}: ${e.message}`);
+          'publicGradeStatistics'
+        );
+        await sleep(120);
+        lastError = null;
+        break; // success
+      } catch (e) {
+        lastError = e;
+        if (attempt < MAX_RETRIES) {
+          console.warn(`  RETRY ${grade.name} p${page} (attempt ${attempt}): ${e.message}`);
+          await sleep(2000 * attempt); // 2s, 4s, 6s backoff
+        }
+      }
+    }
+    if (lastError) {
+      console.warn(`  FAIL ${grade.name} p${page} after ${MAX_RETRIES} attempts: ${lastError.message}`);
       break;
     }
 
