@@ -4,7 +4,7 @@
 //   - data.json: network-first, fall back to cache so offline still works
 //   - Everything else (Cloudinary logos, Google Fonts): network-first, cache on success
 
-const CACHE_NAME = 'efnl-v1';
+const CACHE_NAME = 'efnl-v2';
 
 // Files that make up the app shell — cached on install
 const SHELL_URLS = [
