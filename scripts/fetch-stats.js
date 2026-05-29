@@ -470,7 +470,18 @@ if (require.main === module) {
       console.error('grades.json not found — run fetch-results.js first');
       process.exit(1);
     }
-    const grades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
+    const allGrades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
+    // VIP_ONLY: filter grades to VIP competitions only
+    const vipOnly = process.env.VIP_ONLY === 'true';
+    let vipComps = new Set();
+    if (vipOnly && fs.existsSync(path.join(ROOT, 'config.json'))) {
+      const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+      vipComps = new Set((cfg.competitions||[]).filter(c=>c.vip).map(c=>c.name));
+    }
+    const grades = vipOnly
+      ? allGrades.filter(g => vipComps.has(g.compName))
+      : allGrades;
+    console.log(`Fetching stats for ${vipOnly ? 'VIP' : 'ALL'} comps: ${[...new Set(grades.map(g=>g.compName))].join(', ')} (${grades.length} grades)`);
 
     let data = { matches: [], players: [], roster: {}, gotwFlags: {} };
     if (fs.existsSync(DATA_PATH)) {
