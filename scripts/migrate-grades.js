@@ -96,9 +96,45 @@ Array.from(byId.values()).forEach(m => {
   if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
 });
 
-data.matches = Array.from(byId.values());
-data.roster  = roster;
-data.lastRound = lastRound;
+// Add compName to match IDs and records that are missing it
+// Matches stored before compName was added to the ID have IDs like "age|rawGrade|round|..."
+// New format is "compName|age|rawGrade|round|..."
+const byIdFinal = new Map();
+Array.from(byId.values()).forEach(m => {
+  if (!m.compName) {
+    // Old EFNL match without compName — add it
+    m.compName = 'EFNL 2026';
+    const teams = [m.home, m.away].sort().join('|');
+    m.id = `EFNL 2026|${m.age}|${m.rawGrade}|${m.round}|${teams}`;
+  }
+  byIdFinal.set(m.id, m);
+});
+console.log(`Total after compName migration: ${Array.from(byIdFinal.values()).filter(m=>!m.isBye).length} real matches`);
+
+// Rebuild roster with compName key
+const latestFinal = new Map();
+Array.from(byIdFinal.values()).filter(m => !m.isBye).forEach(m => {
+  for (const name of [m.home, m.away]) {
+    const k = `${m.compName}|${name}|${m.age}`;
+    const prev = latestFinal.get(k);
+    if (!prev || m.round > prev.round) {
+      latestFinal.set(k, { grade: m.rawGrade, age: m.age, compName: m.compName, round: m.round });
+    }
+  }
+});
+const rosterFinal = {};
+latestFinal.forEach(({ grade, age, compName }, key) => { rosterFinal[key] = { grade, age, compName }; });
+
+// Rebuild lastRound
+const lastRoundFinal = {};
+Array.from(byIdFinal.values()).forEach(m => {
+  const key = `${m.compName}|${m.age}|${m.rawGrade}`;
+  if (!lastRoundFinal[key] || m.round > lastRoundFinal[key]) lastRoundFinal[key] = m.round;
+});
+
+data.matches = Array.from(byIdFinal.values());
+data.roster  = rosterFinal;
+data.lastRound = lastRoundFinal;
 data.lastUpdated = new Date().toISOString();
 
 fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
