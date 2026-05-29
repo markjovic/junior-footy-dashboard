@@ -104,7 +104,7 @@ body{overflow-x:hidden}
 .gotw-nom-score{font-family:'DM Mono',monospace;color:var(--tx)}
 
 /* ── Scorers ── */
-.scorer-row{display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px;align-items:center;padding:5px 14px;gap:6px;border-top:1px solid var(--b1)}
+.scorer-row{display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px 32px;align-items:center;padding:5px 14px;gap:6px;border-top:1px solid var(--b1)}
 .s-rank{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right}
 .s-crest{display:flex;align-items:center;justify-content:center}
 .s-info{min-width:0;overflow:hidden}
@@ -265,7 +265,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.54</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.57</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -376,7 +376,7 @@ body{overflow-x:hidden}
               <span class="card-title">Top scorers</span>
               <span class="card-meta" id="scorers-meta"></span>
             </div>
-            <div id="scorers-body"></div>
+            <div id="scorers-body" style="max-height:600px;overflow-y:auto"></div>
           </div>
         </div>
 
@@ -427,7 +427,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.54</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.57</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -747,6 +747,11 @@ function getCrestImg(teamName) {
   return null;
 }
 
+function abbrevGrade(str) {
+  if (!str) return str;
+  return str.replace(/\bDivision\b/g, 'Div');
+}
+
 function toProperCase(str) {
   if (!str) return str;
   // If the name already has mixed case, trust it — don't mangle DuPlessis, O'Brien etc.
@@ -995,7 +1000,7 @@ function getNominees(matches) {
 // ═══════════════════════════════════════
 // COMPUTED — TOP SCORERS
 // ═══════════════════════════════════════
-function getTopScorers(age, n=12) {
+function getTopScorers(age, n=9999) {
   // Individual player goals always count regardless of team grade movement
   // But we filter by currently-selected grades based on where the player's team is now
   const grades = activGrades(age);
@@ -1118,7 +1123,7 @@ function renderSidebarFilters(age) {
   const grades = gradesForAge(age);
   document.getElementById('grade-filters').innerHTML = grades.map(g =>
     `<button class="fchip${S.selGrades.has(g)?' on':''}" onclick="toggleGrade('${g}')">
-      <span class="gdot" style="background:${GRADE_COL[g]||'#888'}"></span>Grade ${g}
+      <span class="gdot" style="background:${GRADE_COL[g]||'#888'}"></span>${abbrevGrade(g)}
     </button>`
   ).join('');
 
@@ -1225,7 +1230,7 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">Grade ${grade}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
+    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(grade)}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
@@ -1240,17 +1245,18 @@ function renderGOTW(age) {
 }
 
 function renderScorers(age) {
-  const scorers = getTopScorers(age, 12);
+  const scorers = getTopScorers(age);
   const el = document.getElementById('scorers-body');
   const meta = document.getElementById('scorers-meta');
   const gradeStr = S.selGrades.size ? [...S.selGrades].join(', ') : 'All grades';
   meta.textContent = gradeStr;
   if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
-  el.innerHTML = `<div style="display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px;padding:3px 14px 5px;gap:6px;border-bottom:1px solid var(--b1)">
+  el.innerHTML = `<div style="display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px 32px;padding:3px 14px 5px;gap:6px;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:1">
     <span></span><span></span><span></span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">GRD</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">GP</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">G/G</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
   </div>` + scorers.map((p,i)=>{
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
@@ -1275,10 +1281,8 @@ function renderScorers(age) {
       </div>
       <span class="gtag ${gc}">${teamGrade}</span>
       <div class="s-gp">${p.gp}</div>
-      <div>
-        <div class="s-g">${p.goals}</div>
-        <div class="s-gpg">${gpg}/g</div>
-      </div>
+      <div class="s-g">${p.goals}</div>
+      <div class="s-gpg" style="text-align:right">${gpg}</div>
       <div class="s-bp">${bp || '–'}</div>
     </div>`;
   }).join('');
@@ -1429,7 +1433,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
 
   // Render modal
-  document.getElementById('tm-title').textContent = `${teamName} — Grade ${grade}`;
+  document.getElementById('tm-title').textContent = `${teamName} — ${abbrevGrade(grade)}`;
   document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
 
   document.getElementById('tm-stats').innerHTML = [
@@ -1723,7 +1727,7 @@ async function previewResults(input) {
   }
   preview.innerHTML = `<div class="upload-list">${items.map(r=>`
     <div class="upload-item">
-      <span>${r.age} Grade ${r.rawGrade||'?'}</span>
+      <span>${r.age} ${abbrevGrade(r.rawGrade||'?')}</span>
       <span class="${r.count?'ui-ok':'ui-err'}">${r.count} match${r.count!==1?'es':''}</span>
     </div>`).join('')}</div>
   <div class="alert alert-info" style="margin-top:6px">${S.pendingMatches.length} total matches ready to save.</div>`;
@@ -1747,7 +1751,7 @@ async function previewStats(input) {
   }
   preview.innerHTML = `<div class="upload-list">${items.map(r=>`
     <div class="upload-item">
-      <span>${r.age} Grade ${r.rawGrade||'?'}</span>
+      <span>${r.age} ${abbrevGrade(r.rawGrade||'?')}</span>
       <span class="${r.count?'ui-ok':'ui-err'}">${r.count} player${r.count!==1?'s':''}</span>
     </div>`).join('')}</div>
   <div class="alert alert-info" style="margin-top:6px">${S.pendingPlayers.length} player records ready to save. Private players excluded.</div>`;
@@ -1862,7 +1866,7 @@ function renderGotwPicker() {
         return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
           <input type="radio" name="gotw-pick" value="${m.id}" ${m.id===flaggedId?'checked':''}>
           <span style="flex:1">${m.home} ${m.hScore}–${m.aScore} ${m.away}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Grade ${g}  &middot;  margin ${margin}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${abbrevGrade(g)}  &middot;  margin ${margin}</span>
         </label>`;
       }).join('') + `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
         <input type="radio" name="gotw-pick" value="" ${!flaggedId?'checked':''}> Auto (closest margin)
