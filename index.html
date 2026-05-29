@@ -292,7 +292,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.72</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.75</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -501,13 +501,16 @@ body{overflow-x:hidden}
         </div>
         <div>
           <div class="ml" style="margin-bottom:4px">GitHub Personal Access Token</div>
+          <input type="text" name="username" autocomplete="username"
+            style="display:none" value="markjovic-dashboard" aria-hidden="true">
           <input type="password" class="mi" id="gh-pat-input"
+            name="password"
             placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
             autocomplete="current-password"
             style="width:100%;padding:7px 10px;font-size:12px;font-family:'DM Mono',monospace;letter-spacing:1px"
             oninput="savePAT(this.value)">
           <div style="font-size:10px;color:var(--tx3);margin-top:4px">
-            Generate at github.com/settings/tokens — needs <code style="background:var(--s3);padding:1px 4px;border-radius:3px">workflow</code> scope only.
+            Generate at github.com/settings/tokens — use a <strong>classic</strong> token with <code style="background:var(--s3);padding:1px 4px;border-radius:3px">workflow</code> scope.
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -559,7 +562,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.72</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.75</span>
         </div>
 
 
@@ -2133,8 +2136,10 @@ async function triggerFetch(what) {
       showFetchStatus(`✓ Workflow triggered (${what}). Check GitHub Actions for progress.`, 'ok');
     } else if (res.status === 401) {
       showFetchStatus('❌ Invalid PAT — check token and try again.', 'err');
+    } else if (res.status === 401) {
+      showFetchStatus('❌ Invalid or expired token — generate a new classic PAT with workflow scope.', 'err');
     } else if (res.status === 403) {
-      showFetchStatus('❌ PAT lacks workflow scope. Generate a new token with workflow access.', 'err');
+      showFetchStatus('❌ Token lacks workflow scope — use a classic PAT (not fine-grained) with workflow ticked.', 'err');
     } else {
       const body = await res.text();
       showFetchStatus(`❌ GitHub error ${res.status}: ${body.slice(0,120)}`, 'err');
@@ -2166,7 +2171,7 @@ function showLoginMode() {
   document.getElementById('auth-gate').style.display = 'block';
   document.getElementById('admin-panels').style.display = 'none';
   const pw = document.getElementById('admin-pw');
-  if (pw) pw.value = '';
+  if (pw) pw.value = localStorage.getItem('admin_pw') || '';
   const err = document.getElementById('auth-err');
   if (err) err.style.display = 'none';
   setTimeout(() => pw?.focus(), 100);
@@ -2177,6 +2182,7 @@ async function doAuth() {
   if (!input) return;
   const hash = await sha256(input.value);
   if (hash === ADMIN_HASH) {
+    localStorage.setItem('admin_pw', input.value);
     unlockAdmin();
   } else {
     const err = document.getElementById('auth-err');
@@ -2191,7 +2197,13 @@ function unlockAdmin() {
   document.getElementById('auth-gate').style.display='none';
   document.getElementById('admin-panels').style.display='block';
   loadPAT();
-  populateRosterTable(); populateGotwSelectors();
+  // Ensure default tab (gotw-tab) is visible before populating selectors
+  ['upload','roster','gotw-tab','fetch-tab','manage'].forEach(t=>{
+    const el=document.getElementById('tab-'+t);
+    if(el) el.style.display=t==='gotw-tab'?'block':'none';
+  });
+  // Defer to next frame so elements are rendered before we read/write them
+  requestAnimationFrame(() => { populateGotwSelectors(); });
 }
 
 function switchTab(tab, btn) {
