@@ -181,8 +181,9 @@ body{overflow-x:hidden}
 .team-modal{background:var(--s1);border:1px solid var(--b2);border-radius:12px;width:640px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
 .team-modal-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--b1);flex-shrink:0}
 .team-modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;flex:1}
-.team-modal-body{overflow-y:auto;flex:1}
-.roster-section{border-top:1px solid var(--b1);margin-top:4px}
+.team-modal-scroll{overflow-y:auto;flex:1;display:flex;flex-direction:column}
+.team-modal-body{flex-shrink:0}
+.roster-section{border-top:1px solid var(--b1);margin-top:0}
 .roster-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)}
 .roster-toggle:hover{color:var(--tx2)}
 .roster-toggle-arrow{font-size:10px;transition:transform .2s}
@@ -244,7 +245,7 @@ body{overflow-x:hidden}
   .match-row{grid-template-columns:24px 1fr 64px 1fr;padding:5px 10px;gap:5px}
   .mr-venue{display:none}
   .mr-det{display:none}
-  .team-modal{width:100vw;max-width:100vw;max-height:100dvh;border-radius:0;margin:0;height:100dvh}
+  .team-modal{width:100vw;max-width:100vw;max-height:100dvh;border-radius:0;margin:0;height:100dvh} .team-modal-scroll{flex:1;overflow-y:auto}
   .team-modal-overlay{align-items:flex-end}
   .gotw-name{font-size:9px}
   .gotw-logo{width:32px;height:32px}
@@ -264,7 +265,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.53</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.54</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -426,7 +427,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.53</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.54</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -468,21 +469,23 @@ body{overflow-x:hidden}
       <div class="team-modal-title" id="tm-title"></div>
       <button class="btn-g" onclick="closeTeamModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
-    <div class="team-stat-strip" id="tm-stats"></div>
-    <div class="team-ha-strip" id="tm-ha"></div>
-    <div class="roster-section" id="tm-results-section">
-      <div class="roster-toggle" onclick="toggleResults()">
-        <span>Results <span id="tm-results-count" style="color:var(--tx3);font-weight:400"></span></span>
-        <span class="roster-toggle-arrow open" id="tm-results-arrow">▼</span>
+    <div class="team-stat-strip" id="tm-stats" style="flex-shrink:0"></div>
+    <div class="team-ha-strip" id="tm-ha" style="flex-shrink:0"></div>
+    <div class="team-modal-scroll">
+      <div class="roster-section" id="tm-results-section">
+        <div class="roster-toggle" onclick="toggleResults()">
+          <span>Results <span id="tm-results-count" style="color:var(--tx3);font-weight:400"></span></span>
+          <span class="roster-toggle-arrow open" id="tm-results-arrow">▼</span>
+        </div>
+        <div class="team-modal-body" id="tm-body"></div>
       </div>
-      <div class="team-modal-body" id="tm-body"></div>
-    </div>
-    <div class="roster-section" id="tm-roster" style="display:none">
-      <div class="roster-toggle" id="tm-roster-toggle" onclick="toggleRoster()">
-        <span>Season Roster <span id="tm-roster-count" style="color:var(--tx3);font-weight:400"></span></span>
-        <span class="roster-toggle-arrow" id="tm-roster-arrow">▼</span>
+      <div class="roster-section" id="tm-roster" style="display:none">
+        <div class="roster-toggle" id="tm-roster-toggle" onclick="toggleRoster()">
+          <span>Season Roster <span id="tm-roster-count" style="color:var(--tx3);font-weight:400"></span></span>
+          <span class="roster-toggle-arrow" id="tm-roster-arrow">▼</span>
+        </div>
+        <div class="roster-body" id="tm-roster-body" style="display:none"></div>
       </div>
-      <div class="roster-body" id="tm-roster-body" style="display:none"></div>
     </div>
   </div>
 </div>
