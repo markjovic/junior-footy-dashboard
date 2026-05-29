@@ -179,6 +179,20 @@ body{overflow-x:hidden}
 .team-modal-hdr{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--b1);flex-shrink:0}
 .team-modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;flex:1}
 .team-modal-body{overflow-y:auto;flex:1}
+.roster-section{border-top:1px solid var(--b1);margin-top:4px}
+.roster-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)}
+.roster-toggle:hover{color:var(--tx2)}
+.roster-toggle-arrow{font-size:10px;transition:transform .2s}
+.roster-toggle-arrow.open{transform:rotate(180deg)}
+.roster-body{padding:0 16px 12px}
+.roster-hdr{display:grid;grid-template-columns:1fr 36px 36px 44px;gap:4px;padding:4px 0 6px;border-bottom:1px solid var(--b1);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)}
+.roster-row{display:grid;grid-template-columns:1fr 36px 36px 44px;gap:4px;padding:5px 0;border-top:1px solid var(--b1);align-items:center;font-size:11px}
+.roster-name{color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.roster-name a{color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15)}
+.roster-name a:hover{color:var(--tx);border-bottom-color:var(--gold)}
+.roster-stat{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx2);text-align:right}
+.roster-stat.goals{color:var(--gold)}
+.roster-xfer{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 3px;border-radius:3px;background:rgba(240,192,64,0.15);color:var(--gold);margin-left:4px;flex-shrink:0}
 .team-stat-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--b1);border-bottom:1px solid var(--b1)}
 .team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
 .team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
@@ -247,7 +261,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.44</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.45</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -452,7 +466,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.44</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.45</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -500,6 +514,13 @@ body{overflow-x:hidden}
     <div class="team-stat-strip" id="tm-stats"></div>
     <div class="team-ha-strip" id="tm-ha"></div>
     <div class="team-modal-body" id="tm-body"></div>
+    <div class="roster-section" id="tm-roster" style="display:none">
+      <div class="roster-toggle" id="tm-roster-toggle" onclick="toggleRoster()">
+        <span>Season Roster <span id="tm-roster-count" style="color:var(--tx3);font-weight:400"></span></span>
+        <span class="roster-toggle-arrow" id="tm-roster-arrow">▼</span>
+      </div>
+      <div class="roster-body" id="tm-roster-body" style="display:none"></div>
+    </div>
   </div>
 </div>
 
@@ -1256,7 +1277,7 @@ function renderScorers(age) {
     return `<div class="scorer-row">
       <span class="s-rank">${i+1}</span>
       <div class="s-info">
-        <div class="s-name">${p.name}${transferBadge}</div>
+        <div class="s-name"><a href="https://www.playhq.com/public/profile/${p.uuid}/statistics?tenant=afl" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${p.name}</a>${transferBadge}</div>
         <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${lookupTeam.replace(/'/g,"\\'")}','${teamGrade}')">${displayTeam}</div>
       </div>
       <span class="gtag ${gc}">${teamGrade}</span>
@@ -1448,7 +1469,107 @@ function openTeamDrilldown(teamName, grade) {
     </div>`;
   }).join('') : '<div class="empty"><p>No matches found</p></div>';
 
+  // ── Roster ──────────────────────────────────────────────────────
+  // Build roster: players whose canonical team matches this team name
+  // For each player, show only the GP/goals for THIS specific team
+  // (not total across all grades), but only if their canonical team
+  // is this team — meaning their stats are attributed here.
+  const rosterSection = document.getElementById('tm-roster');
+  const rosterBody    = document.getElementById('tm-roster-body');
+  const rosterCount   = document.getElementById('tm-roster-count');
+  const rosterArrow   = document.getElementById('tm-roster-arrow');
+
+  // Match players to this team — canonical teamRaw must match
+  // Players who transferred to this team: use their per-team appearance entry
+  // Players who are same-club multi-grade: sum appearances for this teamRaw only
+  const rosterPlayers = [];
+
+  for (const p of S.players) {
+    if (p.age !== age) continue;
+    if (S.selComp && p.compName !== S.selComp) continue;
+
+    // Check if this player's canonical team matches
+    if (p.teamRaw !== teamName && p.team !== teamName) continue;
+
+    // Find the GP/goals for this specific teamRaw from appearances array
+    // Sum across all appearances entries that share the same teamRaw
+    // (handles grading→competitive grade moves for same team)
+    let teamGP = 0, teamGoals = 0;
+
+    if (p.appearances && p.appearances.length > 0) {
+      for (const app of p.appearances) {
+        if (app.teamRaw === teamName || app.team === teamName) {
+          teamGP    += app.gp;
+          teamGoals += app.goals;
+        }
+      }
+    }
+
+    // Fallback: if appearances not populated, use canonical totals
+    if (teamGP === 0 && p.gp > 0) {
+      teamGP    = p.gp;
+      teamGoals = p.goals;
+    }
+
+    rosterPlayers.push({
+      uuid:        p.uuid,
+      name:        p.name,
+      gp:          teamGP,
+      goals:       teamGoals,
+      transferred: p.transferred,
+      clubs:       p.clubs,
+    });
+  }
+
+  // Sort: goals desc, then GP desc, then name asc
+  rosterPlayers.sort((a, b) =>
+    b.goals - a.goals || b.gp - a.gp || a.name.localeCompare(b.name)
+  );
+
+  if (rosterPlayers.length) {
+    rosterCount.textContent = `(${rosterPlayers.length})`;
+
+    rosterBody.innerHTML = `
+      <div class="roster-hdr">
+        <span>Player</span>
+        <span style="text-align:right">GP</span>
+        <span style="text-align:right">G</span>
+        <span style="text-align:right">G/G</span>
+      </div>` +
+      rosterPlayers.map(p => {
+        const gpg = p.gp ? (p.goals / p.gp).toFixed(1) : '–';
+        const profileUrl = `https://www.playhq.com/public/profile/${p.uuid}/statistics?tenant=afl`;
+        const xfer = p.transferred
+          ? `<span class="roster-xfer">XFER</span>`
+          : '';
+        return `<div class="roster-row">
+          <div class="roster-name">
+            <a href="${profileUrl}" target="_blank" rel="noopener">${p.name}</a>${xfer}
+          </div>
+          <div class="roster-stat">${p.gp}</div>
+          <div class="roster-stat goals">${p.goals || '–'}</div>
+          <div class="roster-stat">${gpg}</div>
+        </div>`;
+      }).join('');
+
+    // Show expanded on desktop (≥640px modal width), collapsed on mobile
+    const expanded = window.innerWidth >= 640;
+    rosterBody.style.display  = expanded ? '' : 'none';
+    rosterArrow.className     = `roster-toggle-arrow${expanded ? ' open' : ''}`;
+    rosterSection.style.display = '';
+  } else {
+    rosterSection.style.display = 'none';
+  }
+
   document.getElementById('team-modal').style.display = 'flex';
+}
+
+function toggleRoster() {
+  const body  = document.getElementById('tm-roster-body');
+  const arrow = document.getElementById('tm-roster-arrow');
+  const open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.className = `roster-toggle-arrow${open ? '' : ' open'}`;
 }
 
 function closeTeamModal() {
