@@ -287,10 +287,13 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.62</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.63</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
+  <button class="hdr-btn" id="share-btn" onclick="shareApp()" style="display:none" title="Share">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+  </button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
 </header>
 
@@ -464,7 +467,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.62</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.63</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1445,6 +1448,21 @@ function toggleSidebar() {
   const open = sb.classList.toggle('open');
   ov.style.display = open ? 'block' : 'none';
   if (btn) btn.textContent = open ? '✕ Close' : '⊟ Filters';
+}
+
+function shareApp() {
+  if (!navigator.share) return;
+  navigator.share({
+    title: 'Local Footy Dashboard',
+    text: 'Live ladder, results and stats for local footy',
+    url: window.location.href,
+  }).catch(() => {}); // user cancelled — ignore
+}
+
+// Show share button only if Web Share API is supported
+if (navigator.share) {
+  const sb = document.getElementById('share-btn');
+  if (sb) sb.style.display = '';
 }
 
 function openSidebarIfMobile() {
