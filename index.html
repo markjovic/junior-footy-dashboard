@@ -533,13 +533,6 @@ function venueLink(venue, venueUrl, style='') {
   if (venueUrl) return `<a href="${venueUrl}" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:underline;text-decoration-color:rgba(96,165,250,0.4);text-underline-offset:2px;${style}">${venue} ↗</a>`;
   return `<span style="${style}">${venue}</span>`;
 }
-// Computed result cache — invalidated when data or competition changes
-const _cache = {};
-function invalidateCache() {
-  _cache.validMatchIds = null;
-  _cache.gradesByAge = null;
-}
-
 const GRADE_ORDER = ['Premier','Division 1','Division 2','Division 3','Division 4','Division 5','A','B','C','D','D1','D2','D3','D4','Men','Women','Grading'];
 const GRADE_COL = {Premier:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6',Men:'#60a5fa',Women:'#f472b6'};
 
@@ -832,23 +825,16 @@ function currentGrade(teamName, age, rawGrade, compName) {
 
 // A match counts for ladder/team stats if both teams are in the same current grade
 function matchIsValid(m) {
-  // Use cached valid match IDs to avoid recomputing on every call
-  if (!_cache.validMatchIds) {
-    _cache.validMatchIds = new Set();
-    S.matches.forEach(x => {
-      const hGrade = currentGrade(x.home, x.age, x.rawGrade, x.compName);
-      const aGrade = currentGrade(x.away, x.age, x.rawGrade, x.compName);
-      if (hGrade === aGrade && hGrade !== null && hGrade !== undefined) {
-        _cache.validMatchIds.add(x.id);
-      }
-    });
-  }
-  return _cache.validMatchIds.has(m.id);
+  // Use pre-computed value if available (set when data loads)
+  if (m._valid !== undefined) return m._valid;
+  const hGrade = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+  const aGrade = currentGrade(m.away, m.age, m.rawGrade, m.compName);
+  return hGrade === aGrade && hGrade !== null && hGrade !== undefined;
 }
 
 // The grade a match counts towards (from the roster)
 function matchGrade(m) {
-  return currentGrade(m.home, m.age, m.rawGrade, m.compName);
+  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.rawGrade, m.compName);
 }
 
 // ═══════════════════════════════════════
@@ -1041,13 +1027,9 @@ function getAges() {
 }
 
 function gradesForAge(age) {
-  if (!_cache.gradesByAge) _cache.gradesByAge = new Map();
-  if (_cache.gradesByAge.has(age)) return _cache.gradesByAge.get(age);
   const gs = new Set();
   S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>gs.add(matchGrade(m)));
-  const result = [...gs].sort((a,b)=>GRADE_ORDER.indexOf(a)-GRADE_ORDER.indexOf(b));
-  _cache.gradesByAge.set(age, result);
-  return result;
+  return [...gs].sort((a,b)=>GRADE_ORDER.indexOf(a)-GRADE_ORDER.indexOf(b));
 }
 
 function activGrades(age) {
@@ -1341,7 +1323,7 @@ function renderStats() {
 // ═══════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════
-function selectComp(c) { if (S.selComp===c) return; S.selComp=c; invalidateCache(); S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
+function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
 function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
 function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); saveFilters(); render(); }
 function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); saveFilters(); render(); }
@@ -1759,7 +1741,15 @@ async function init() {
   const [matches,players,roster,gotwFlags] = await Promise.all([
     sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
   ]);
-  if (matches) S.matches=matches.filter(m => !m.isBye);
+  if (matches) {
+    S.matches=matches.filter(m => !m.isBye);
+    S.matches.forEach(m => {
+      const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+      const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
+      m._valid = (hg === ag && hg !== null && hg !== undefined);
+      m._grade = hg || m.rawGrade;
+    });
+  }
   if (players) S.players=players;
   if (roster)  S.roster=roster;
   if (gotwFlags) S.gotwFlags=gotwFlags;
@@ -1770,7 +1760,16 @@ async function init() {
       const r = await fetch('data.json');
       if (r.ok) {
         const d = await r.json();
-        if (d.matches?.length) { S.matches = d.matches.filter(m => !m.isBye); invalidateCache(); }
+        if (d.matches?.length) {
+          S.matches = d.matches.filter(m => !m.isBye);
+          // Pre-compute validity on all matches once
+          S.matches.forEach(m => {
+            const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+            const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
+            m._valid = (hg === ag && hg !== null && hg !== undefined);
+            m._grade = hg || m.rawGrade;
+          });
+        }
         if (d.players?.length) S.players = d.players;
         if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
