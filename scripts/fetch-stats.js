@@ -78,12 +78,13 @@ function toClubName(teamName) {
 
 // Extract GP and goals from a statistics array (order not guaranteed by API)
 function parseStats(statistics) {
-  let gp = 0, goals = 0;
+  let gp = 0, goals = 0, bestPlayer = 0;
   for (const s of (statistics || [])) {
-    if (s.details.value === 'APPEARANCE')  gp    = s.count;
-    if (s.details.value === 'GOAL_COUNT')  goals = s.count;
+    if (s.details.value === 'APPEARANCE')  gp         = s.count;
+    if (s.details.value === 'GOAL_COUNT')  goals      = s.count;
+    if (s.details.value === 'BEST_PLAYER') bestPlayer = s.count;
   }
-  return { gp, goals };
+  return { gp, goals, bestPlayer };
 }
 
 // Parse rawGrade from a grade name string e.g. "U12 - B" → "B"
@@ -175,6 +176,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
         age:        toAge(grade.ageName, grade.genderName, grade.name),
         gp,
         goals,
+        bestPlayer,
       });
     }
 
@@ -204,6 +206,15 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
 
   // seasonStatistics is ordered newest season first.
   // Within each season, statistics (registrations) are ordered most-recent club first.
+  // Log first season block for debugging
+  if (seasons.length > 0) {
+    const first = seasons[0];
+    const regs = first.statistics || [];
+    console.log(`    Profile seasons: ${seasons.map(s=>s.name).join(', ')}`);
+    console.log(`    Current season regs: ${regs.length}, seasonIDs: ${[...seasonIDs].join(',')}`);
+    if (regs.length > 0) console.log(`    First reg season.id: ${regs[0].season?.id}, club: ${regs[0].club?.name}`);
+  }
+
   for (const seasonBlock of seasons) {
     const ours = (seasonBlock.statistics || []).filter(r => seasonIDs.has(r.season?.id));
     if (!ours.length) continue;
@@ -212,6 +223,9 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
     // Strip org suffix: "East Ringwood (Eastern Football Netball League)" → "East Ringwood"
     return clubFullName.replace(/\s*\([^)]+\)\s*$/, '').trim();
   }
+
+  // No matching season found — log all available seasons for diagnosis
+  console.warn(`    No matching season found. Available: ${seasons.map(s => s.name + ':' + (s.statistics||[]).map(r=>r.season?.id).join(',')).join(' | ')}`);
 
   return null;
 }
@@ -252,7 +266,7 @@ function resolveAppearances(appearances, currentClubName) {
     return GRADE_ORDER.indexOf(a.rawGrade) - GRADE_ORDER.indexOf(b.rawGrade);
   })[0];
 
-  return { primary, totalGoals, totalGP, transferred, clubs };
+  return { primary, totalGoals, totalGP, transferred, clubs, canonicalEntries };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -298,8 +312,9 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
   const players = [];
   for (const [, appearances] of Object.entries(buckets)) {
     const uuid = appearances[0].uuid;
-    const { primary, totalGoals, totalGP, transferred, clubs } =
+    const { primary, totalGoals, totalGP, transferred, clubs, canonicalEntries } =
       resolveAppearances(appearances, currentClubMap[uuid] || null);
+    const totalBP = canonicalEntries.reduce((s, e) => s + (e.bestPlayer || 0), 0);
 
     players.push({
       uuid,
@@ -315,6 +330,7 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
       gradeName:  primary.gradeName,
       gp:         totalGP,
       goals:      totalGoals,
+      bestPlayer: totalBP,
       transferred,
       clubs,
       // Per-grade breakdown — for team roster and transfer history features
@@ -324,8 +340,9 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
         rawGrade:  a.rawGrade,
         teamRaw:   a.teamRaw,
         team:      toClubName(a.teamRaw),
-        gp:        a.gp,
-        goals:     a.goals,
+        gp:         a.gp,
+        goals:      a.goals,
+        bestPlayer: a.bestPlayer || 0,
       })),
     });
   }
