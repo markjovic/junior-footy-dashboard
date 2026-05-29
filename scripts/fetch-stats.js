@@ -158,6 +158,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
     totalPages = gps.meta.totalPages;
 
     for (const r of gps.results) {
+      if (!r.profile) continue;  // private profile — no UUID available, skip
       const { gp, goals } = parseStats(r.statistics);
       appearances.push({
         uuid:       r.profile.id,
