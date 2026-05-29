@@ -287,7 +287,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.63</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.65</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -430,18 +430,66 @@ body{overflow-x:hidden}
 <div class="modal">
   <div class="modal-title">Admin</div>
 
-  <!-- Auth gate — populated dynamically by showLoginMode() -->
-  <div id="auth-gate"></div>
+  <!-- Auth gate — static form so browsers offer to save password -->
+  <div id="auth-gate">
+    <form id="admin-login-form" onsubmit="doAuth();return false;" autocomplete="on">
+      <div class="ml" style="margin-bottom:4px">Password</div>
+      <input type="password" class="mi" id="admin-pw"
+        name="password"
+        autocomplete="current-password"
+        placeholder="Enter password"
+        style="width:100%">
+      <div id="auth-err" style="display:none;margin-top:8px" class="alert alert-err"></div>
+      <div class="mactions" style="margin-top:8px">
+        <button type="button" class="btn-g" onclick="closeAdmin()">Cancel</button>
+        <button type="submit" class="btn-p">Unlock</button>
+      </div>
+    </form>
+  </div>
 
   <!-- Admin panels -->
   <div id="admin-panels" style="display:none">
 
     <div class="utabs">
       <button class="utab on" onclick="switchTab('gotw-tab',this)">Game of week</button>
+      <button class="utab" onclick="switchTab('fetch-tab',this)">Fetch</button>
       <button class="utab" onclick="switchTab('manage',this)">Manage</button>
     </div>
 
     <!-- UPLOAD TAB -->
+    <!-- FETCH TAB -->
+    <div id="tab-fetch-tab" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:11px;color:var(--tx3);line-height:1.5">
+          Trigger a GitHub Actions workflow run directly. Enter your GitHub PAT once — the browser will remember it.
+        </div>
+        <div>
+          <div class="ml" style="margin-bottom:4px">GitHub Personal Access Token</div>
+          <input type="password" class="mi" id="gh-pat-input"
+            placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+            autocomplete="current-password"
+            style="width:100%;padding:7px 10px;font-size:12px;font-family:'DM Mono',monospace;letter-spacing:1px"
+            oninput="savePAT(this.value)">
+          <div style="font-size:10px;color:var(--tx3);margin-top:4px">
+            Generate at github.com/settings/tokens — needs <code style="background:var(--s3);padding:1px 4px;border-radius:3px">workflow</code> scope only.
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="gh-migrate" style="accent-color:var(--gold)">
+          <label for="gh-migrate" style="font-size:12px;color:var(--tx2);cursor:pointer">Run grade migration first</label>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn-p" onclick="triggerFetch('results')" style="width:100%">⬇ Fetch Results</button>
+          <button class="btn-p" onclick="triggerFetch('stats')" style="width:100%">📊 Fetch Stats</button>
+          <button class="btn-p" onclick="triggerFetch('both')" style="width:100%;background:var(--gold);color:#000;border-color:var(--gold)">⚡ Fetch Both</button>
+        </div>
+        <div id="fetch-status" style="display:none;font-size:11px;padding:8px 10px;border-radius:var(--r);border:1px solid var(--b2)"></div>
+      </div>
+      <div class="mactions" style="margin-top:8px">
+        <button class="btn-g" onclick="closeAdmin()">Close</button>
+      </div>
+    </div>
+
     <!-- GOTW TAB -->
     <div id="tab-gotw-tab">
       <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">
@@ -467,7 +515,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.63</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.65</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1733,6 +1781,73 @@ async function sha256(str) {
 // Default hash below is SHA-256 of "changeme" — replace before going live.
 const ADMIN_HASH = '39da8d47df2707cd66afd2afe7ee9a631096c18025eaa418414ae80aacbf73d7';
 
+const GH_OWNER = 'markjovic';
+const GH_REPO  = 'junior-footy-dashboard';
+const GH_WORKFLOW = 'fetch-results.yml';
+const PAT_KEY = 'gh_pat';
+
+function savePAT(val) {
+  if (val) localStorage.setItem(PAT_KEY, val);
+  else localStorage.removeItem(PAT_KEY);
+}
+
+function loadPAT() {
+  const pat = localStorage.getItem(PAT_KEY) || '';
+  const el = document.getElementById('gh-pat-input');
+  if (el && pat) el.value = pat;
+}
+
+async function triggerFetch(what) {
+  const pat = (document.getElementById('gh-pat-input')?.value || '').trim();
+  if (!pat) {
+    showFetchStatus('Enter your GitHub PAT first.', 'err');
+    return;
+  }
+  const migrate = document.getElementById('gh-migrate')?.checked ? 'yes' : 'no';
+  showFetchStatus('Triggering workflow…', 'info');
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: { fetch: what, run_migration: migrate },
+        }),
+      }
+    );
+    if (res.status === 204) {
+      savePAT(pat); // confirm save on success
+      showFetchStatus(`✓ Workflow triggered (${what}). Check GitHub Actions for progress.`, 'ok');
+    } else if (res.status === 401) {
+      showFetchStatus('❌ Invalid PAT — check token and try again.', 'err');
+    } else if (res.status === 403) {
+      showFetchStatus('❌ PAT lacks workflow scope. Generate a new token with workflow access.', 'err');
+    } else {
+      const body = await res.text();
+      showFetchStatus(`❌ GitHub error ${res.status}: ${body.slice(0,120)}`, 'err');
+    }
+  } catch (e) {
+    showFetchStatus(`❌ Network error: ${e.message}`, 'err');
+  }
+}
+
+function showFetchStatus(msg, type) {
+  const el = document.getElementById('fetch-status');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.color = type === 'err' ? 'var(--red)' : type === 'ok' ? 'var(--green)' : 'var(--tx2)';
+  el.style.borderColor = type === 'err' ? 'rgba(239,68,68,.3)' : type === 'ok' ? 'rgba(34,197,94,.3)' : 'var(--b2)';
+  el.textContent = msg;
+}
+
 function openAdmin() {
   document.getElementById('admin-modal').style.display='flex';
   if (!S.adminOpen) {
@@ -1743,17 +1858,13 @@ function openAdmin() {
 function closeAdmin() { document.getElementById('admin-modal').style.display='none'; S.pendingMatches=[]; S.pendingPlayers=[]; clearFb(); }
 
 function showLoginMode() {
-  document.getElementById('auth-gate').style.display='block';
-  document.getElementById('admin-panels').style.display='none';
-  document.getElementById('auth-gate').innerHTML = `
-    <div class="ml">Password</div>
-    <input type="password" class="mi" id="admin-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')doAuth()">
-    <div id="auth-err" style="display:none;margin-top:8px" class="alert alert-err"></div>
-    <div class="mactions" style="margin-top:4px">
-      <button class="btn-g" onclick="closeAdmin()">Cancel</button>
-      <button class="btn-p" onclick="doAuth()">Unlock</button>
-    </div>`;
-  setTimeout(()=>document.getElementById('admin-pw')?.focus(),100);
+  document.getElementById('auth-gate').style.display = 'block';
+  document.getElementById('admin-panels').style.display = 'none';
+  const pw = document.getElementById('admin-pw');
+  if (pw) pw.value = '';
+  const err = document.getElementById('auth-err');
+  if (err) err.style.display = 'none';
+  setTimeout(() => pw?.focus(), 100);
 }
 
 async function doAuth() {
@@ -1764,8 +1875,9 @@ async function doAuth() {
     unlockAdmin();
   } else {
     const err = document.getElementById('auth-err');
-    err.style.display='block'; err.textContent='Incorrect password.';
+    if (err) { err.style.display='block'; err.textContent='Incorrect password.'; }
     input.value='';
+    input.focus();
   }
 }
 
@@ -1773,6 +1885,7 @@ function unlockAdmin() {
   S.adminOpen=true;
   document.getElementById('auth-gate').style.display='none';
   document.getElementById('admin-panels').style.display='block';
+  loadPAT();
   populateRosterTable(); populateGotwSelectors();
 }
 
