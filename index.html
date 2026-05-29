@@ -66,7 +66,7 @@ body{overflow-x:hidden}
 
 /* ── Ladder ── */
 .ldr-tabs{display:flex;gap:1px;padding:8px 10px 0;flex-wrap:wrap}
-.ldr-tab{font-size:10px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.5px;padding:4px 10px;border-radius:4px 4px 0 0;cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--tx3);background:none;transition:all .12s}
+.ldr-tab{font-size:10px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.5px;padding:4px 10px;border-radius:4px 4px 0 0;cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--tx3);background:none;transition:all .12s;white-space:nowrap}
 .ldr-tab.on{border-color:var(--b2);background:var(--s2);color:var(--tx)}
 .ldr-pane{display:none}
 .ldr-pane.on{display:block}
@@ -265,7 +265,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.58</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.59</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -427,7 +427,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.58</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.59</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -749,7 +749,10 @@ function getCrestImg(teamName) {
 
 function abbrevGrade(str) {
   if (!str) return str;
-  return str.replace(/\bDivision\b/g, 'Div').replace(/\bPremier\b/g, 'Prem');
+  return str
+    .replace(/\bDivision\s+(\d+)/g, 'D$1')   // Division 1 → D1
+    .replace(/\bDivision\b/g, 'Div')            // remaining Division → Div
+    .replace(/\bPremier\b/g, 'Prem');
 }
 
 function toProperCase(str) {
