@@ -369,6 +369,9 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
       resolveAppearances(appearances, currentClubMap[uuid] || null);
     const totalBP = canonicalEntries.reduce((s, e) => s + (e.bestPlayer || 0), 0);
 
+    if (transferred) {
+      console.log(`  XFER ${primary.firstName} ${primary.lastName}: GP=${totalGP} G=${totalGoals} clubs=[${clubs.join(',')}] canonical=${toClubName(primary.teamRaw)}`);
+    }
     players.push({
       uuid,
       name:       `${primary.firstName} ${primary.lastName}`.trim(),
