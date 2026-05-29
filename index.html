@@ -292,7 +292,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.68</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.69</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -551,7 +551,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.68</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.69</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1857,7 +1857,9 @@ async function openPlayerPanel(uuid) {
   // Set header from local data immediately
   const displayName = p ? toProperCase(p.name) : 'Player';
   const teamDisplay = p ? (p.teamRaw||p.team).replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').trim() : '';
-  const grade = p ? abbrevGrade(p.rawGrade || '') : '';
+  const stripAge = n => n ? n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim() : n;
+  const lookupTeam = stripAge(p?.teamRaw || p?.team || '');
+  const grade = p ? abbrevGrade(currentGrade(lookupTeam, p.age, p.rawGrade, p.compName)) : '';
   const gc = `gtag-${(grade||'').replace(/[^A-Z0-9]/g,'')}`;
 
   document.getElementById('pm-name').innerHTML =
@@ -1907,7 +1909,11 @@ async function openPlayerPanel(uuid) {
     const data = await res.json();
     renderPlayerGames(data, p);
   } catch(e) {
-    body.innerHTML = `<div class="empty"><p>Could not load game stats: ${e.message}</p></div>`;
+    console.error('Player panel fetch error:', e);
+    body.innerHTML = `<div style="padding:20px 16px;color:var(--red);font-size:12px">
+      ⚠ Could not load game stats<br>
+      <span style="color:var(--tx3);font-size:10px">${e.message}</span>
+    </div>`;
   }
 }
 
