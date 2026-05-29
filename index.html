@@ -122,6 +122,9 @@ body{overflow-x:hidden}
 .gtag-D1{background:rgba(167,139,250,.15);color:#a78bfa}
 .gtag-D2{background:rgba(244,114,182,.15);color:#f472b6}
 .gtag-D3{background:rgba(251,146,60,.15);color:#fb923c}
+.gtag-D4{background:rgba(232,121,249,.15);color:#e879f9}
+.gtag-D5{background:rgba(148,163,184,.15);color:#94a3b8}
+.gtag-Prem{background:rgba(240,192,64,.15);color:#f0c040}
 
 /* ── Results ── */
 .rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
@@ -265,7 +268,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.59</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.60</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -427,7 +430,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.59</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.60</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -532,7 +535,7 @@ function venueLink(venue, venueUrl, style='') {
   return `<span style="${style}">${venue}</span>`;
 }
 const GRADE_ORDER = ['Premier','Division 1','Division 2','Division 3','Division 4','Division 5','A','B','C','D','D1','D2','D3','D4','Men','Women','Grading'];
-const GRADE_COL = {Premier:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6',Men:'#60a5fa',Women:'#f472b6'};
+const GRADE_COL = {Premier:'#f0c040',Prem:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9',D5:'#94a3b8','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6',Men:'#60a5fa',Women:'#f472b6'};
 
 // ═══════════════════════════════════════
 // APP STATE
@@ -734,6 +737,13 @@ function logoKey(teamName) {
   return stripped;
 }
 
+let _crestRenderTimer = null;
+function _scheduleCrestRender() {
+  // Debounce: batch all crest loads into one render after 80ms of quiet
+  clearTimeout(_crestRenderTimer);
+  _crestRenderTimer = setTimeout(render, 80);
+}
+
 function getCrestImg(teamName) {
   if (teamName in crestCache) return crestCache[teamName];
   const key = logoKey(teamName);
@@ -741,7 +751,7 @@ function getCrestImg(teamName) {
   if (!url) { crestCache[teamName] = null; return null; }
   crestCache[teamName] = null;
   const img = new Image();
-  img.onload = () => { crestCache[teamName] = img; render(); };
+  img.onload = () => { crestCache[teamName] = img; _scheduleCrestRender(); };
   img.onerror = () => { crestCache[teamName] = null; };
   img.src = url;
   return null;
@@ -1126,7 +1136,7 @@ function renderSidebarFilters(age) {
   const grades = gradesForAge(age);
   document.getElementById('grade-filters').innerHTML = grades.map(g =>
     `<button class="fchip${S.selGrades.has(g)?' on':''}" onclick="toggleGrade('${g}')">
-      <span class="gdot" style="background:${GRADE_COL[g]||'#888'}"></span>${abbrevGrade(g)}
+      <span class="gdot" style="background:${GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#888'}"></span>${abbrevGrade(g)}
     </button>`
   ).join('');
 
@@ -1154,7 +1164,7 @@ function renderLadder(age) {
     const key = `${S.selComp||''}|${age}|${g}`;
     const lr = S.lastRound[key];
     const roundLabel = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
-    return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||'#fff'}`:''}"
+    return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#fff'}`:''}"
       onclick="selLdrGrade('${g}')">${abbrevGrade(g||'Premier')}${roundLabel}</button>`;
   }).join('');
 
@@ -1405,7 +1415,7 @@ function toggleSidebar() {
 
 function selLdrGrade(g) {
   S.selLdrGrade=g;
-  document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||'#fff'):'';});
+  document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#fff'):'';});
   document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
 }
 
