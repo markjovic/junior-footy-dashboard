@@ -226,12 +226,18 @@ body{overflow-x:hidden}
 #sidebar-close{display:none;align-self:flex-end;background:none;border:1px solid var(--b2);border-radius:var(--r);color:var(--tx3);cursor:pointer;font-size:12px;padding:4px 10px;margin-bottom:4px;flex-shrink:0}
 
 /* ── Mobile responsive ── */
+/* ── Mobile section tabs ── */
+.mob-tabs{display:none;gap:1px;background:var(--b1);border-bottom:1px solid var(--b1)}
+.mob-tab{flex:1;padding:9px 4px;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--tx3);background:var(--s1);border:none;transition:all .12s;font-family:'DM Mono',monospace}
+.mob-tab.on{color:var(--tx);background:var(--s2)}
+.mob-section{display:block}
+
 @media(max-width:768px){
   .hdr{padding:0 12px;gap:6px}
   .logo{font-size:15px}
   .hdr-meta{display:none!important}
-  #filter-toggle{display:flex!important}
-  #admin-btn{margin-left:auto}
+  #filter-toggle{display:flex!important;background:rgba(240,192,64,0.12)!important;border-color:rgba(240,192,64,0.5)!important;color:var(--gold)!important;font-weight:600!important}
+  #admin-btn{margin-left:0}
   .layout{grid-template-columns:1fr}
   .sidebar{position:fixed;top:52px;left:0;bottom:0;width:240px;z-index:160;transform:translateX(-100%);transition:transform .25s ease;background:var(--s1);border-right:1px solid var(--b2);overflow-y:auto}
   .sidebar.open{transform:translateX(0)}
@@ -253,7 +259,20 @@ body{overflow-x:hidden}
   .gotw-name{font-size:9px}
   .gotw-logo{width:32px;height:32px}
   .gotw-num{font-size:24px}
+  .mob-tabs{display:flex}
+  .mob-section{display:none}
+  .mob-section.on{display:block}
+  .dgrid{display:contents}
 }
+@media(max-width:768px) and (orientation:landscape){
+  .mob-tabs{display:none}
+  .mob-section{display:block!important}
+  .layout{grid-template-columns:180px 1fr}
+  .sidebar{position:static;transform:none;width:auto;border-right:1px solid var(--b1)}
+  #filter-toggle{display:none!important}
+  .dgrid{display:grid;grid-template-columns:1fr 1fr}
+}
+
 @media(max-width:480px){
   .ldr-tbl th:nth-child(4),.ldr-tbl td:nth-child(4),
   .ldr-tbl th:nth-child(11),.ldr-tbl td:nth-child(11){display:none}
@@ -268,9 +287,10 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.60</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.62</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
-  <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
+  <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
+  <div style="flex:1"></div>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
 </header>
 
@@ -346,9 +366,16 @@ body{overflow-x:hidden}
       <p>Click <strong>⚙ Admin</strong> to upload fixture results and stats pages.</p>
     </div>
     <div id="dash" style="display:none">
+      <div class="mob-tabs" id="mob-tabs">
+        <button class="mob-tab on" onclick="switchMobSection('ladder',this)">Ladder</button>
+        <button class="mob-tab" onclick="switchMobSection('results',this)">Results</button>
+        <button class="mob-tab" onclick="switchMobSection('gotw',this)">GOTW</button>
+        <button class="mob-tab" onclick="switchMobSection('scorers',this)">Scorers</button>
+      </div>
       <div class="dgrid">
 
         <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="mob-section on" id="mob-ladder">
           <div class="card">
             <div class="card-hdr">
               <span class="card-title">Ladder</span>
@@ -357,6 +384,8 @@ body{overflow-x:hidden}
             <div class="ldr-tabs" id="ldr-tabs"></div>
             <div id="ldr-bodies"></div>
           </div>
+          </div>
+          <div class="mob-section" id="mob-results">
           <div class="card">
             <div class="card-hdr">
               <span class="card-title">Results</span>
@@ -364,9 +393,11 @@ body{overflow-x:hidden}
             </div>
             <div id="results-body"></div>
           </div>
+          </div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:14px">
+          <div class="mob-section" id="mob-gotw">
           <div class="card">
             <div class="card-hdr">
               <span class="card-title">🔥 Game of the week</span>
@@ -374,12 +405,15 @@ body{overflow-x:hidden}
             </div>
             <div id="gotw-body"></div>
           </div>
+          </div>
+          <div class="mob-section" id="mob-scorers">
           <div class="card">
             <div class="card-hdr">
               <span class="card-title">Top scorers</span>
               <span class="card-meta" id="scorers-meta"></span>
             </div>
             <div id="scorers-body" style="max-height:600px;overflow-y:auto"></div>
+          </div>
           </div>
         </div>
 
@@ -430,7 +464,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.60</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.62</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1410,7 +1444,20 @@ function toggleSidebar() {
   const btn = document.getElementById('filter-toggle');
   const open = sb.classList.toggle('open');
   ov.style.display = open ? 'block' : 'none';
-  if (btn) btn.textContent = open ? '✕ Filters' : '⊟ Filters';
+  if (btn) btn.textContent = open ? '✕ Close' : '⊟ Filters';
+}
+
+function openSidebarIfMobile() {
+  if (window.innerWidth <= 768 && window.matchMedia('(orientation: portrait)').matches) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    const btn = document.getElementById('filter-toggle');
+    if (sb && !sb.classList.contains('open')) {
+      sb.classList.add('open');
+      if (ov) ov.style.display = 'block';
+      if (btn) btn.textContent = '✕ Close';
+    }
+  }
 }
 
 function selLdrGrade(g) {
@@ -1622,6 +1669,16 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   resultsArrow.className    = 'roster-toggle-arrow open';
 
   document.getElementById('team-modal').style.display = 'flex';
+}
+
+function switchMobSection(id, btn) {
+  document.querySelectorAll('.mob-section').forEach(s => s.classList.remove('on'));
+  document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('on'));
+  const el = document.getElementById('mob-' + id);
+  if (el) el.classList.add('on');
+  if (btn) btn.classList.add('on');
+  // Scroll to top of content when switching
+  window.scrollTo(0, 0);
 }
 
 function toggleResults() {
@@ -2059,6 +2116,7 @@ async function init() {
   if (!S.selectedAge || !ages.includes(S.selectedAge)) S.selectedAge = ages[0] || null;
   render();
   document.getElementById('ldr-overlay').classList.add('gone');
+  openSidebarIfMobile();
 }
 init();
 
