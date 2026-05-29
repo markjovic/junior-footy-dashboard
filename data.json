@@ -242465,7 +242465,7 @@
       "gradeName": "Veterans - Women",
       "gp": 4,
       "goals": 1,
-      "bestPlayer": 3,
+      "bestPlayer": 4,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -242479,7 +242479,7 @@
           "team": "Boronia Veterans Women",
           "gp": 4,
           "goals": 1,
-          "bestPlayer": 3
+          "bestPlayer": 4
         }
       ]
     },
@@ -243105,7 +243105,7 @@
       "gradeName": "Veterans - Women",
       "gp": 4,
       "goals": 0,
-      "bestPlayer": 0,
+      "bestPlayer": 1,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -243119,7 +243119,7 @@
           "team": "Boronia Veterans Women",
           "gp": 4,
           "goals": 0,
-          "bestPlayer": 0
+          "bestPlayer": 1
         }
       ]
     },
@@ -243393,7 +243393,7 @@
       "gradeName": "Veterans - Women",
       "gp": 4,
       "goals": 0,
-      "bestPlayer": 1,
+      "bestPlayer": 2,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -243407,7 +243407,7 @@
           "team": "Boronia Veterans Women",
           "gp": 4,
           "goals": 0,
-          "bestPlayer": 1
+          "bestPlayer": 2
         }
       ]
     },
@@ -243508,38 +243508,6 @@
       ]
     },
     {
-      "uuid": "434c351d-683c-4c9e-805f-2faa8d61e473",
-      "name": "Kayla Betts",
-      "firstName": "Kayla",
-      "lastName": "Betts",
-      "team": "Boronia Veterans Women",
-      "teamRaw": "Boronia Veterans Women",
-      "rawGrade": "Women",
-      "age": "Veterans",
-      "compName": "EFNL 2026",
-      "gradeID": "addbad36",
-      "gradeName": "Veterans - Women",
-      "gp": 4,
-      "goals": 0,
-      "bestPlayer": 2,
-      "transferred": false,
-      "clubs": [
-        "Boronia Veterans Women"
-      ],
-      "appearances": [
-        {
-          "gradeID": "addbad36",
-          "gradeName": "Veterans - Women",
-          "rawGrade": "Women",
-          "teamRaw": "Boronia Veterans Women",
-          "team": "Boronia Veterans Women",
-          "gp": 4,
-          "goals": 0,
-          "bestPlayer": 2
-        }
-      ]
-    },
-    {
       "uuid": "1b896ec9-f0ce-4efb-92a3-89cd728c6e16",
       "name": "emma trinick",
       "firstName": "emma",
@@ -243617,7 +243585,7 @@
       "gradeName": "Veterans - Women",
       "gp": 4,
       "goals": 0,
-      "bestPlayer": 0,
+      "bestPlayer": 1,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -243631,7 +243599,7 @@
           "team": "Boronia Veterans Women",
           "gp": 4,
           "goals": 0,
-          "bestPlayer": 0
+          "bestPlayer": 1
         }
       ]
     },
@@ -243681,7 +243649,7 @@
       "gradeName": "Veterans - Women",
       "gp": 4,
       "goals": 0,
-      "bestPlayer": 1,
+      "bestPlayer": 2,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -243695,7 +243663,7 @@
           "team": "Boronia Veterans Women",
           "gp": 4,
           "goals": 0,
-          "bestPlayer": 1
+          "bestPlayer": 2
         }
       ]
     },
@@ -244916,6 +244884,38 @@
       ]
     },
     {
+      "uuid": "434c351d-683c-4c9e-805f-2faa8d61e473",
+      "name": "Kayla Betts",
+      "firstName": "Kayla",
+      "lastName": "Betts",
+      "team": "Boronia Veterans Women",
+      "teamRaw": "Boronia Veterans Women",
+      "rawGrade": "Women",
+      "age": "Veterans",
+      "compName": "EFNL 2026",
+      "gradeID": "addbad36",
+      "gradeName": "Veterans - Women",
+      "gp": 3,
+      "goals": 0,
+      "bestPlayer": 2,
+      "transferred": false,
+      "clubs": [
+        "Boronia Veterans Women"
+      ],
+      "appearances": [
+        {
+          "gradeID": "addbad36",
+          "gradeName": "Veterans - Women",
+          "rawGrade": "Women",
+          "teamRaw": "Boronia Veterans Women",
+          "team": "Boronia Veterans Women",
+          "gp": 3,
+          "goals": 0,
+          "bestPlayer": 2
+        }
+      ]
+    },
+    {
       "uuid": "34199fe0-82f8-48a9-82a7-74df783de175",
       "name": "Yvonne Pleydell",
       "firstName": "Yvonne",
@@ -245313,7 +245313,7 @@
       "gradeName": "Veterans - Women",
       "gp": 3,
       "goals": 0,
-      "bestPlayer": 0,
+      "bestPlayer": 1,
       "transferred": false,
       "clubs": [
         "Boronia Veterans Women"
@@ -245327,7 +245327,7 @@
           "team": "Boronia Veterans Women",
           "gp": 3,
           "goals": 0,
-          "bestPlayer": 0
+          "bestPlayer": 1
         }
       ]
     },
@@ -479649,6 +479649,38 @@
       ]
     },
     {
+      "uuid": "4aa94e8a-fe2e-49df-8e9d-d8ea8ecfb02f",
+      "name": "William Jack",
+      "firstName": "William",
+      "lastName": "Jack",
+      "team": "Ringwood",
+      "teamRaw": "Ringwood U17.5",
+      "rawGrade": "C",
+      "age": "U17.5",
+      "compName": "EFNL 2026",
+      "gradeID": "49d53a59",
+      "gradeName": "U17.5 - C",
+      "gp": 6,
+      "goals": 9,
+      "bestPlayer": 0,
+      "transferred": false,
+      "clubs": [
+        "Ringwood"
+      ],
+      "appearances": [
+        {
+          "gradeID": "49d53a59",
+          "gradeName": "U17.5 - C",
+          "rawGrade": "C",
+          "teamRaw": "Ringwood U17.5",
+          "team": "Ringwood",
+          "gp": 6,
+          "goals": 9,
+          "bestPlayer": 0
+        }
+      ]
+    },
+    {
       "uuid": "c189efc9-6759-4c14-92dd-b88b06cc65fb",
       "name": "Ryder Ellis",
       "firstName": "Ryder",
@@ -479707,38 +479739,6 @@
           "teamRaw": "Bayswater U17.5",
           "team": "Bayswater",
           "gp": 7,
-          "goals": 8,
-          "bestPlayer": 0
-        }
-      ]
-    },
-    {
-      "uuid": "4aa94e8a-fe2e-49df-8e9d-d8ea8ecfb02f",
-      "name": "William Jack",
-      "firstName": "William",
-      "lastName": "Jack",
-      "team": "Ringwood",
-      "teamRaw": "Ringwood U17.5",
-      "rawGrade": "C",
-      "age": "U17.5",
-      "compName": "EFNL 2026",
-      "gradeID": "49d53a59",
-      "gradeName": "U17.5 - C",
-      "gp": 6,
-      "goals": 8,
-      "bestPlayer": 0,
-      "transferred": false,
-      "clubs": [
-        "Ringwood"
-      ],
-      "appearances": [
-        {
-          "gradeID": "49d53a59",
-          "gradeName": "U17.5 - C",
-          "rawGrade": "C",
-          "teamRaw": "Ringwood U17.5",
-          "team": "Ringwood",
-          "gp": 6,
           "goals": 8,
           "bestPlayer": 0
         }
@@ -522553,6 +522553,6 @@
     "SER 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
   },
   "lastUpdated": "2026-05-29T10:59:02.335Z",
-  "lastStatsFetch": "2026-05-29T12:23:10.521Z",
+  "lastStatsFetch": "2026-05-29T12:37:26.341Z",
   "lastResultsFetch": "2026-05-29T10:59:02.335Z"
 }
