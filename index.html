@@ -104,13 +104,16 @@ body{overflow-x:hidden}
 .gotw-nom-score{font-family:'DM Mono',monospace;color:var(--tx)}
 
 /* ── Scorers ── */
-.scorer-row{display:grid;grid-template-columns:24px 1fr 28px 36px;align-items:center;padding:5px 14px;gap:8px;border-top:1px solid var(--b1)}
+.scorer-row{display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px;align-items:center;padding:5px 14px;gap:6px;border-top:1px solid var(--b1)}
 .s-rank{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right}
-.s-info{min-width:0}
-.s-name{font-size:12px;font-weight:500;white-space:normal;line-height:1.4;max-width:90px}
-.s-team{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.s-crest{display:flex;align-items:center;justify-content:center}
+.s-info{min-width:0;overflow:hidden}
+.s-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-team{font-size:9px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .s-g{font-family:'DM Mono',monospace;font-weight:500;color:var(--gold);font-size:13px;text-align:right}
 .s-gpg{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);text-align:right}
+.s-gp{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx2);text-align:right}
+.s-bp{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx3);text-align:right}
 .gtag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;flex-shrink:0}
 .gtag-neutral{background:rgba(255,255,255,0.07);color:var(--tx3)}
 .gtag-A{background:rgba(96,165,250,.15);color:#60a5fa}
@@ -261,7 +264,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.49</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.50</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -393,60 +396,13 @@ body{overflow-x:hidden}
   <div id="admin-panels" style="display:none">
 
     <div class="utabs">
-      <button class="utab on" onclick="switchTab('upload',this)">Upload data</button>
-      <button class="utab" onclick="switchTab('roster',this)">Team roster</button>
-      <button class="utab" onclick="switchTab('gotw-tab',this)">Game of week</button>
+      <button class="utab on" onclick="switchTab('gotw-tab',this)">Game of week</button>
       <button class="utab" onclick="switchTab('manage',this)">Manage</button>
     </div>
 
     <!-- UPLOAD TAB -->
-    <div id="tab-upload">
-      <div class="utabs" style="margin-bottom:2px">
-        <button class="utab on" onclick="switchUpload('results',this)">Results pages</button>
-        <button class="utab" onclick="switchUpload('stats',this)">Stats pages</button>
-      </div>
-
-      <div id="up-results">
-        <p style="font-size:11px;color:var(--tx3);margin-bottom:8px">Save each grade's fixture/results page from PlayHQ (File → Save Page As). Upload one or more files. Grade is detected from the page.</p>
-        <div class="ml">Select .html files</div>
-        <input type="file" class="mi" id="results-files" accept=".html,.htm" multiple onchange="previewResults(this)">
-        <div id="results-preview" style="display:none;margin-top:8px"></div>
-        <div id="results-fb" style="display:none;margin-top:8px"></div>
-      </div>
-
-      <div id="up-stats" style="display:none">
-        <p style="font-size:11px;color:var(--tx3);margin-bottom:8px">Save each page of each grade's Statistics tab from PlayHQ. Upload all pages at once — grade and page number are detected automatically. Private players are excluded.</p>
-        <div class="ml">Select .html files</div>
-        <input type="file" class="mi" id="stats-files" accept=".html,.htm" multiple onchange="previewStats(this)">
-        <div id="stats-preview" style="display:none;margin-top:8px"></div>
-        <div id="stats-fb" style="display:none;margin-top:8px"></div>
-      </div>
-
-      <div id="upload-fb" style="display:none;margin-top:8px"></div>
-      <div class="mactions" style="margin-top:4px">
-        <button class="btn-g" onclick="closeAdmin()">Close</button>
-        <button class="btn-p" id="btn-save" onclick="commitUpload()">Save</button>
-      </div>
-    </div>
-
-    <!-- ROSTER TAB -->
-    <div id="tab-roster" style="display:none">
-      <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">
-        Set each team's current grade. Teams promoted/relegated mid-season: change their grade here.
-        Matches where both teams share the same grade count for ladder &amp; team stats.
-        Individual player goals always count regardless.
-      </p>
-      <div id="roster-table-wrap">
-        <div class="empty"><p>No teams found. Upload results pages first.</p></div>
-      </div>
-      <div class="mactions" style="margin-top:8px">
-        <button class="btn-g" onclick="closeAdmin()">Close</button>
-        <button class="btn-p" onclick="saveRoster()">Save roster</button>
-      </div>
-    </div>
-
     <!-- GOTW TAB -->
-    <div id="tab-gotw-tab" style="display:none">
+    <div id="tab-gotw-tab">
       <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">
         Flag the Game of the Week for each round. If none flagged, the closest-margin valid match is used automatically.
       </p>
@@ -470,12 +426,9 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.49</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.50</span>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
-          <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
-          <button class="btn-g" onclick="exportData()" style="white-space:nowrap">⬇ data.json</button>
-        </div>
+
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Clear all match results</span>
           <button class="btn-d" onclick="clearData('matches')">Clear matches</button>
@@ -567,7 +520,7 @@ async function sDel(k){
 }
 
 // ── DEV MODE — set true to bypass password during testing, false for production ──
-const DEV_MODE = true;
+const DEV_MODE = false;
 
 // ── Venue link helper ──
 function venueLink(venue, venueUrl, style='') {
@@ -1273,7 +1226,13 @@ function renderScorers(age) {
   const gradeStr = S.selGrades.size ? [...S.selGrades].join(', ') : 'All grades';
   meta.textContent = gradeStr;
   if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
-  el.innerHTML = scorers.map((p,i)=>{
+  el.innerHTML = `<div style="display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px;padding:3px 14px 5px;gap:6px;border-bottom:1px solid var(--b1)">
+    <span></span><span></span><span></span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">GRD</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">GP</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
+  </div>` + scorers.map((p,i)=>{
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
     // Use teamRaw for roster lookup (includes colour word, matches roster key)
     const lookupTeam = p.teamRaw || p.team;
@@ -1284,17 +1243,23 @@ function renderScorers(age) {
     const transferBadge = p.transferred
       ? `<span title="Transferred clubs this season" style="font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;background:rgba(240,192,64,0.15);color:var(--gold);margin-left:3px">XFER</span>`
       : '';
+    // Strip age suffix from team name for drilldown — match records don't have it
+    const drillTeam = lookupTeam.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
+    const bp = p.bestPlayer || 0;
     return `<div class="scorer-row">
       <span class="s-rank">${i+1}</span>
+      <div class="s-crest">${crestHTML(drillTeam,16,'tlogo')}</div>
       <div class="s-info">
         <div class="s-name"><a href="https://www.playhq.com/public/profile/${p.uuid}/statistics?tenant=afl" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${p.name}</a>${transferBadge}</div>
-        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${lookupTeam.replace(/'/g,"\\'")}','${teamGrade}','${p.age}')">${displayTeam}</div>
+        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\\'")}','${teamGrade}','${p.age}')">${displayTeam}</div>
       </div>
       <span class="gtag ${gc}">${teamGrade}</span>
+      <div class="s-gp">${p.gp}</div>
       <div>
         <div class="s-g">${p.goals}</div>
         <div class="s-gpg">${gpg}/g</div>
       </div>
+      <div class="s-bp">${bp || '–'}</div>
     </div>`;
   }).join('');
 }
