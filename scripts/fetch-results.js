@@ -592,11 +592,18 @@ async function main() {
     process.exit(1);
   }
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  const competitions = config.competitions || [];
-  if (!competitions.length) {
+  const allCompetitions = config.competitions || [];
+  if (!allCompetitions.length) {
     console.error('No competitions defined in config.json');
     process.exit(1);
   }
+  // VIP_ONLY env var: only fetch VIP competitions (set by workflow for most runs)
+  const vipOnly = process.env.VIP_ONLY === 'true';
+  const competitions = vipOnly
+    ? allCompetitions.filter(c => c.vip)
+    : allCompetitions;
+  console.log(`Fetching ${vipOnly ? 'VIP' : 'ALL'} competitions: ${competitions.map(c=>c.name).join(', ')}`);
+
 
   // 2. Load existing data.json
   let existing = { matches: [], players: [], gotwFlags: {} };
