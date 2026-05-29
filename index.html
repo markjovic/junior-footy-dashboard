@@ -261,7 +261,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.47</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.49</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -470,7 +470,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.47</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.49</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -517,7 +517,13 @@ body{overflow-x:hidden}
     </div>
     <div class="team-stat-strip" id="tm-stats"></div>
     <div class="team-ha-strip" id="tm-ha"></div>
-    <div class="team-modal-body" id="tm-body"></div>
+    <div class="roster-section" id="tm-results-section">
+      <div class="roster-toggle" onclick="toggleResults()">
+        <span>Results <span id="tm-results-count" style="color:var(--tx3);font-weight:400"></span></span>
+        <span class="roster-toggle-arrow open" id="tm-results-arrow">▼</span>
+      </div>
+      <div class="team-modal-body" id="tm-body"></div>
+    </div>
     <div class="roster-section" id="tm-roster" style="display:none">
       <div class="roster-toggle" id="tm-roster-toggle" onclick="toggleRoster()">
         <span>Season Roster <span id="tm-roster-count" style="color:var(--tx3);font-weight:400"></span></span>
@@ -1596,16 +1602,32 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
         </div>`;
       }).join('');
 
-    // Show expanded on desktop (≥640px modal width), collapsed on mobile
-    const expanded = window.innerWidth >= 640;
-    rosterBody.style.display  = expanded ? '' : 'none';
-    rosterArrow.className     = `roster-toggle-arrow${expanded ? ' open' : ''}`;
+    // Roster hidden by default — user expands if they want it
+    rosterBody.style.display = 'none';
+    rosterArrow.className    = 'roster-toggle-arrow';
     rosterSection.style.display = '';
   } else {
     rosterSection.style.display = 'none';
   }
 
+  // Results section: show count, collapse by default if roster has players
+  const resultsCount = matches.length;
+  document.getElementById('tm-results-count').textContent = `(${resultsCount})`;
+  const resultsBody  = document.getElementById('tm-body');
+  const resultsArrow = document.getElementById('tm-results-arrow');
+  // Results always open by default
+  resultsBody.style.display = '';
+  resultsArrow.className    = 'roster-toggle-arrow open';
+
   document.getElementById('team-modal').style.display = 'flex';
+}
+
+function toggleResults() {
+  const body  = document.getElementById('tm-body');
+  const arrow = document.getElementById('tm-results-arrow');
+  const open  = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.className = `roster-toggle-arrow${open ? '' : ' open'}`;
 }
 
 function toggleRoster() {
