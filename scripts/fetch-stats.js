@@ -271,17 +271,18 @@ function resolveAppearances(appearances, currentClubName) {
     // Normalise the profile club name and find matching bucket
     const normCurrent = normaliseClub(currentClubName);
     const normKeys = Object.keys(byClub);
-    // Try exact normalised match first, then prefix match
+    // Try exact match, prefix match, then word-token overlap (handles "Rowville Hawks" → "Rowville Men")
+    const profileWords = normCurrent.split(/\s+/).filter(w => w.length > 3);
     const matchKey = normKeys.find(k => k === normCurrent)
-                  || normKeys.find(k => k.startsWith(normCurrent) || normCurrent.startsWith(k));
+                  || normKeys.find(k => k.startsWith(normCurrent) || normCurrent.startsWith(k))
+                  || normKeys.find(k => profileWords.some(w => k.includes(w)));
     if (matchKey) {
       canonicalEntries = byClub[matchKey];
     } else {
-      // Normalised match failed — fall back to most GP
+      // No match (likely acronym club name e.g. YSE, HCFC) — fall back to most GP
       canonicalEntries = normKeys
         .map(k => ({ key: k, entries: byClub[k], gp: byClub[k].reduce((s,e) => s+e.gp, 0) }))
         .sort((a, b) => b.gp - a.gp)[0].entries;
-      console.warn(`  Club match failed for ${appearances[0].uuid}: profile="${normCurrent}" vs [${normKeys.join(', ')}]`);
     }
   } else {
     // No profile data — fall back to club with most GP
