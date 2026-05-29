@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.41</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.42</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.41</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.42</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1743,6 +1743,7 @@ async function init() {
   const [matches,players,roster,gotwFlags] = await Promise.all([
     sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
   ]);
+  if (roster)  S.roster=roster;
   if (matches) {
     S.matches=matches.filter(m => !m.isBye);
     S.matches.forEach(m => {
@@ -1753,7 +1754,6 @@ async function init() {
     });
   }
   if (players) S.players=players;
-  if (roster)  S.roster=roster;
   if (gotwFlags) S.gotwFlags=gotwFlags;
 
   // If running on a server (GitHub Pages), also try data.json and prefer it
@@ -1762,9 +1762,11 @@ async function init() {
       const r = await fetch('data.json');
       if (r.ok) {
         const d = await r.json();
+        // Load roster first — _valid/_grade pre-computation depends on it
+        if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.matches?.length) {
           S.matches = d.matches.filter(m => !m.isBye);
-          // Pre-compute validity on all matches once
+          // Pre-compute validity on all matches once (roster must be loaded first)
           S.matches.forEach(m => {
             const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
             const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
@@ -1773,7 +1775,6 @@ async function init() {
           });
         }
         if (d.players?.length) S.players = d.players;
-        if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
         if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
