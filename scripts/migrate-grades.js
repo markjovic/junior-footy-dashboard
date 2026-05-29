@@ -96,6 +96,26 @@ data.matches.forEach(m => {
   if (!OLD_AGE_STRINGS.has(m.age)) byId.set(m.id, m);
 });
 
+// Delete Senior Men and Reserve Men — these exist in both EFNL and WFNL
+// and cannot be reliably disambiguated by name alone. Deleting them forces
+// a clean re-fetch which will assign the correct compName from grades.json.
+const AMBIGUOUS_AGES = new Set(['Senior Men', 'Reserve Men']);
+let deleted = 0;
+Array.from(byId.keys()).forEach(id => {
+  const m = byId.get(id);
+  if (AMBIGUOUS_AGES.has(m.age)) { byId.delete(id); deleted++; }
+});
+console.log(`Deleted ${deleted} ambiguous Senior Men/Reserve Men matches for re-fetch`);
+
+// Also clear lastRound for these grades so the fetch re-fetches them
+if (data.lastRound) {
+  Object.keys(data.lastRound).forEach(k => {
+    if (k.includes('|Senior Men|') || k.includes('|Reserve Men|')) {
+      delete data.lastRound[k];
+    }
+  });
+}
+
 // Second pass: remap old-style matches
 let migrated = 0, skipped = 0;
 data.matches.forEach(m => {
