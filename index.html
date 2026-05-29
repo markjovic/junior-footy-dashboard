@@ -261,7 +261,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.46d</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.47</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
@@ -294,11 +294,15 @@ body{overflow-x:hidden}
     </div>
     <div class="fgroup" style="margin-top:auto">
       <div class="flabel">Stats</div>
+      <div class="flabel" style="margin-bottom:3px">System totals</div>
       <div class="stat-row"><span>Age groups</span><span id="st-ages">0</span></div>
       <div class="stat-row"><span>Grades</span><span id="st-grades">0</span></div>
+      <div class="stat-row"><span>Teams</span><span id="st-t-all">0</span></div>
+      <div class="stat-row"><span>Players tracked</span><span id="st-s">0</span></div>
+      <div class="flabel" style="margin-top:8px;margin-bottom:3px" id="st-filter-label">Current selection</div>
       <div class="stat-row"><span>Matches</span><span id="st-m">0</span></div>
       <div class="stat-row"><span>Teams</span><span id="st-t">0</span></div>
-      <div class="stat-row"><span>Scorers</span><span id="st-s">0</span></div>
+      <div class="stat-row"><span>Goals scored</span><span id="st-g">0</span></div>
       <div class="stat-row"><span>Rounds</span><span id="st-r">0</span></div>
     </div>
     <div class="freshness" id="freshness-section" style="display:none">
@@ -466,7 +470,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.46d</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.47</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1349,19 +1353,39 @@ function renderResults(age) {
 function renderStats() {
   const age = S.selectedAge;
   const allAges = getAges();
-  const ms = age ? S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)) : S.matches.filter(m=>matchesComp(m)&&matchIsValid(m));
-  const ts = new Set([...ms.map(m=>m.home),...ms.map(m=>m.away)]);
-  const rs = new Set(ms.map(m=>m.round));
 
-  // Count total unique grades across all age groups
+  // ── System totals (unfiltered) ──
+  const allValidMatches = S.matches.filter(m => matchIsValid(m));
   const allGrades = new Set();
-  S.matches.filter(m=>matchesComp(m)&&matchIsValid(m)).forEach(m => allGrades.add(`${m.age}|${matchGrade(m)}`));
-
-  document.getElementById('st-ages').textContent = allAges.length;
+  const allTeams = new Set();
+  allValidMatches.forEach(m => {
+    allGrades.add(`${m.age}|${matchGrade(m)}`);
+    allTeams.add(m.home);
+    allTeams.add(m.away);
+  });
+  document.getElementById('st-ages').textContent   = allAges.length;
   document.getElementById('st-grades').textContent = allGrades.size;
+  document.getElementById('st-t-all').textContent  = allTeams.size;
+  document.getElementById('st-s').textContent      = S.players.length;
+
+  // ── Current selection (filtered by comp + age) ──
+  const ms = S.matches.filter(m =>
+    matchesComp(m) && matchIsValid(m) &&
+    (!age || m.age === age)
+  );
+  const ts  = new Set([...ms.map(m=>m.home), ...ms.map(m=>m.away)]);
+  const rs  = new Set(ms.map(m=>m.round));
+  const goals = ms.reduce((s, m) => s + (m.hG||0) + (m.aG||0), 0);
+
+  // Label: show what's selected
+  const compLabel = S.selComp || 'All comps';
+  const ageLabel  = age || 'All ages';
+  const filterLabel = document.getElementById('st-filter-label');
+  if (filterLabel) filterLabel.textContent = `${compLabel}${age ? ' · ' + ageLabel : ''}`;
+
   document.getElementById('st-m').textContent = ms.length;
   document.getElementById('st-t').textContent = ts.size;
-  document.getElementById('st-s').textContent = S.players.length;
+  document.getElementById('st-g').textContent = goals;
   document.getElementById('st-r').textContent = rs.size;
 }
 
@@ -1484,16 +1508,18 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   // Players who are same-club multi-grade: sum appearances for this teamRaw only
   const rosterPlayers = [];
 
-  console.log(`[Roster] teamName="${teamName}" age="${age}" comp="${S.selComp}" total players=${S.players.length}`);
-  const sampleMatch = S.players.find(p => p.age === age);
-  if (sampleMatch) console.log(`[Roster] Sample player: teamRaw="${sampleMatch.teamRaw}" team="${sampleMatch.team}" age="${sampleMatch.age}"`);
+  // Match records store names without age suffix ("North Ringwood Red")
+  // Stats API stores names with age suffix ("North Ringwood U12 Red")
+  // Normalise by stripping age suffix for comparison
+  const stripAge = n => n.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+/g,' ').trim();
+  const normTeamName = stripAge(teamName);
 
   for (const p of S.players) {
     if (p.age !== age) continue;
     if (S.selComp && p.compName !== S.selComp) continue;
 
-    // Check if this player's canonical team matches
-    if (p.teamRaw !== teamName && p.team !== teamName) continue;
+    // Compare with age suffix stripped from both sides
+    if (stripAge(p.teamRaw) !== normTeamName && stripAge(p.team) !== normTeamName) continue;
 
     // Find the GP/goals for this specific teamRaw from appearances array
     // Sum across all appearances entries that share the same teamRaw
@@ -1502,7 +1528,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
 
     if (p.appearances && p.appearances.length > 0) {
       for (const app of p.appearances) {
-        if (app.teamRaw === teamName || app.team === teamName) {
+        if (stripAge(app.teamRaw) === normTeamName || stripAge(app.team) === normTeamName) {
           teamGP    += app.gp;
           teamGoals += app.goals;
         }
@@ -1515,11 +1541,21 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
       teamGoals = p.goals;
     }
 
+    // Sum bestPlayer for this team's appearances
+    let teamBP = 0;
+    if (p.appearances?.length) {
+      for (const app of p.appearances) {
+        if (stripAge(app.teamRaw) === normTeamName || stripAge(app.team) === normTeamName) {
+          teamBP += app.bestPlayer || 0;
+        }
+      }
+    }
     rosterPlayers.push({
       uuid:        p.uuid,
       name:        p.name,
       gp:          teamGP,
       goals:       teamGoals,
+      bestPlayer:  teamBP,
       transferred: p.transferred,
       clubs:       p.clubs,
     });
