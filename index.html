@@ -240,7 +240,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.42</span>
+  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.43</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
@@ -441,7 +441,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.42</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.43</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -988,8 +988,12 @@ function getTopScorers(age, n=12) {
   return S.players
     .filter(p => {
       if (!p.goals) return false;
-      // Check if player's team is in a grade we're currently showing
-      const teamGrade = currentGrade(p.team, p.age || '', p.rawGrade);
+      if (p.age !== age) return false;
+      // Filter by competition
+      if (S.selComp && p.compName !== S.selComp) return false;
+      // Use teamRaw (full name with colour) for roster lookup — matches roster key format
+      const lookupTeam = p.teamRaw || p.team;
+      const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
       return !grades.size || grades.has(teamGrade);
     })
     .sort((a,b) => b.goals - a.goals || a.gp - b.gp)
@@ -1229,13 +1233,20 @@ function renderScorers(age) {
   if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
   el.innerHTML = scorers.map((p,i)=>{
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
-    const teamGrade = currentGrade(p.team, p.age || '', p.rawGrade);
+    // Use teamRaw for roster lookup (includes colour word, matches roster key)
+    const lookupTeam = p.teamRaw || p.team;
+    const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
     const gc = `gtag-${teamGrade.replace(/[^A-Z0-9]/g,'')}`;
+    // Display name: use teamRaw stripped of age suffix for readability
+    const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
+    const transferBadge = p.transferred
+      ? `<span title="Transferred clubs this season" style="font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;background:rgba(240,192,64,0.15);color:var(--gold);margin-left:3px">XFER</span>`
+      : '';
     return `<div class="scorer-row">
       <span class="s-rank">${i+1}</span>
       <div class="s-info">
-        <div class="s-name">${p.name}</div>
-        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${p.team.replace(/'/g,"\\'")}','${teamGrade}')">${p.team}</div>
+        <div class="s-name">${p.name}${transferBadge}</div>
+        <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${lookupTeam.replace(/'/g,"\\'")}','${teamGrade}')">${displayTeam}</div>
       </div>
       <span class="gtag ${gc}">${teamGrade}</span>
       <div>
