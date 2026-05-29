@@ -4,35 +4,39 @@ on:
   schedule:
     # Results — Saturday 2pm, 5pm, 8pm, 11pm AEST; Monday 9am, 12pm AEST
     # AEST = UTC+10, so subtract 10h for cron UTC times
-    - cron: '0 4 * * 6'   # Sat 2pm AEST
-    - cron: '0 7 * * 6'   # Sat 5pm AEST
-    - cron: '0 10 * * 6'  # Sat 8pm AEST
-    - cron: '0 13 * * 6'  # Sat 11pm AEST
-    - cron: '0 23 * * 0'  # Mon 9am AEST  (Sun 23:00 UTC)
-    - cron: '0 2 * * 1'   # Mon 12pm AEST (Mon 02:00 UTC)
+    - cron: '0 4 * * 6'    # Sat 2pm AEST
+    - cron: '0 7 * * 6'    # Sat 5pm AEST
+    - cron: '0 10 * * 6'   # Sat 8pm AEST
+    - cron: '0 13 * * 6'   # Sat 11pm AEST
+    - cron: '0 23 * * 0'   # Mon 9am AEST  (Sun 23:00 UTC)
+    - cron: '0 2 * * 1'    # Mon 12pm AEST (Mon 02:00 UTC)
 
-    # Stats — Saturday 11pm, Sunday 5pm, Sunday 11pm, Monday 12pm AEST
-    - cron: '30 13 * * 6'  # Sat 11:30pm AEST (offset 30min so results run first)
+    # Stats — Saturday 11:30pm, Sunday 5pm, Sunday 11pm, Monday 12:30pm AEST
+    # Offset 30min on shared times so results always runs first
+    - cron: '30 13 * * 6'  # Sat 11:30pm AEST
     - cron: '0 7 * * 0'    # Sun 5pm AEST
     - cron: '0 13 * * 0'   # Sun 11pm AEST
-    - cron: '30 2 * * 1'   # Mon 12:30pm AEST (offset so results run first)
+    - cron: '30 2 * * 1'   # Mon 12:30pm AEST
 
   workflow_dispatch:
     inputs:
+      fetch:
+        description: 'What to fetch'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - results
+          - stats
       run_migration:
         description: 'Run grade migration before fetch? (yes/no)'
         required: false
         default: 'no'
-      fetch_stats:
-        description: 'Fetch player stats? (yes/no/auto)'
-        required: false
-        default: 'auto'
 
 jobs:
   fetch-results:
     runs-on: ubuntu-latest
-    # Run on all results-schedule triggers and manual triggers
-    # Stats-only schedules are handled in the fetch-stats job below
     steps:
       - uses: actions/checkout@v4
 
@@ -41,11 +45,11 @@ jobs:
           node-version: '20'
 
       - name: Run migration (if requested)
-        if: github.event.inputs.run_migration == 'yes'
+        if: github.event.inputs.run_migration == 'yes' && github.event.inputs.fetch != 'stats'
         run: node scripts/migrate-grades.js
 
       - name: Commit migration
-        if: github.event.inputs.run_migration == 'yes'
+        if: github.event.inputs.run_migration == 'yes' && github.event.inputs.fetch != 'stats'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -55,6 +59,7 @@ jobs:
 
       - name: Fetch results
         id: fetch
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.fetch != 'stats'
         run: |
           set +e
           node scripts/fetch-results.js
@@ -62,7 +67,9 @@ jobs:
           set -e
 
       - name: Commit results
-        if: steps.fetch.outputs.exit_code == '0'
+        if: >
+          steps.fetch.outputs.exit_code == '0' &&
+          (github.event_name != 'workflow_dispatch' || github.event.inputs.fetch != 'stats')
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -74,12 +81,9 @@ jobs:
   fetch-stats:
     runs-on: ubuntu-latest
     needs: fetch-results
-    # Run after results on stats-schedule triggers and manual triggers
-    # Determine whether to run based on which cron fired or manual input
     steps:
       - uses: actions/checkout@v4
         with:
-          # Pull latest so we get any data.json changes from fetch-results
           ref: main
 
       - uses: actions/setup-node@v4
@@ -89,29 +93,24 @@ jobs:
       - name: Determine if stats should run
         id: should_run
         run: |
-          # Manual trigger: respect fetch_stats input (default auto = yes)
+          # Manual trigger: use the fetch input directly
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            INPUT="${{ github.event.inputs.fetch_stats }}"
-            if [ "$INPUT" = "no" ]; then
+            INPUT="${{ github.event.inputs.fetch }}"
+            if [ "$INPUT" = "results" ]; then
               echo "run=false" >> $GITHUB_OUTPUT
             else
               echo "run=true" >> $GITHUB_OUTPUT
             fi
             exit 0
           fi
-          # Scheduled: check if this cron is a stats-schedule time
-          # Stats crons fire at :30 past the hour (Sat 11:30pm, Mon 12:30pm)
-          # or on Sunday (day 0)
-          MINUTE=$(date -u +%M)
+          # Scheduled: stats crons fire on Sunday (any hour) or at :30 past on Sat/Mon
           DOW=$(date -u +%u)   # 1=Mon ... 6=Sat ... 7=Sun
           HOUR=$(date -u +%H)
-          # Sunday runs are always stats
+          MINUTE=$(date -u +%M)
           if [ "$DOW" = "7" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
-          # Sat 13:30 UTC (11:30pm AEST) = stats
           elif [ "$DOW" = "6" ] && [ "$HOUR" = "13" ] && [ "$MINUTE" = "30" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
-          # Mon 02:30 UTC (12:30pm AEST) = stats
           elif [ "$DOW" = "1" ] && [ "$HOUR" = "2" ] && [ "$MINUTE" = "30" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
