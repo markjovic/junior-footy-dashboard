@@ -128,9 +128,11 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-function gqlPost(query, variables) {
+function gqlPost(query, variables, operationName) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ query, variables });
+    const body = JSON.stringify(operationName
+      ? { operationName, query, variables }
+      : { query, variables });
     const req = https.request(API_URL, {
       method: 'POST',
       headers: {
@@ -709,6 +711,9 @@ async function main() {
     teamLogos,
     compLogos,
     lastUpdated: new Date().toISOString(),
+    lastResultsFetch: new Date().toISOString(),
+    // Preserve lastStatsFetch from existing data — only fetch-stats.js updates it
+    lastStatsFetch: existing.lastStatsFetch || null,
   };
 
   // 7b. Fetch player statistics for all grades and resolve into canonical records
