@@ -49,6 +49,11 @@ body{overflow-x:hidden}
 .fsel:focus{border-color:var(--gold3)}
 .stat-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
 .stat-row span:last-child{color:var(--gold);font-family:'DM Mono',monospace}
+.player-result{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--b1);transition:background .1s}
+.player-result:last-child{border-bottom:none}
+.player-result:hover{background:var(--s3)}
+.player-result-name{font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.player-result-meta{font-size:9px;color:var(--tx3);white-space:nowrap}
 .freshness{display:flex;flex-direction:column;gap:3px;padding:8px 2px;border-top:1px solid var(--b1);margin-top:4px}
 .freshness-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--tx3)}
 .freshness-row span:last-child{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx2)}
@@ -287,7 +292,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.65</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.67</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -302,6 +307,15 @@ body{overflow-x:hidden}
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <button id="sidebar-close" onclick="toggleSidebar()">✕ Close</button>
+    <div class="fgroup" id="player-search-group">
+      <div class="flabel">Player search</div>
+      <input class="mi" id="player-search-input" type="search" placeholder="Name…"
+        autocomplete="off" spellcheck="false"
+        oninput="onPlayerSearch(this.value)"
+        style="font-size:12px;padding:6px 8px">
+      <div id="player-search-results" style="display:none;margin-top:4px;display:flex;flex-direction:column;gap:1px;max-height:240px;overflow-y:auto;border:1px solid var(--b2);border-radius:var(--r);background:var(--s2)"></div>
+    </div>
+
     <div class="fgroup" id="comp-filter-group">
       <div class="flabel">Competition</div>
       <div id="comp-filters"></div>
@@ -425,6 +439,28 @@ body{overflow-x:hidden}
   </main>
 </div>
 
+<!-- ── PLAYER PANEL MODAL ── -->
+<div class="team-modal-overlay" id="player-modal" style="display:none" onclick="if(event.target===this)closePlayerModal()">
+  <div class="team-modal">
+    <div class="team-modal-hdr">
+      <div id="pm-crest"></div>
+      <div style="flex:1;min-width:0">
+        <div class="team-modal-title" id="pm-name"></div>
+        <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
+      </div>
+      <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
+    </div>
+    <div class="team-stat-strip" id="pm-stats"></div>
+    <div class="team-modal-scroll">
+      <div class="team-modal-body" id="pm-body">
+        <div style="display:flex;align-items:center;justify-content:center;padding:32px;gap:10px;color:var(--tx3)">
+          <div class="spinner"></div><span style="font-size:12px">Loading stats…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── ADMIN MODAL ── -->
 <div class="overlay" id="admin-modal" style="display:none" onclick="if(event.target===this)closeAdmin()">
 <div class="modal">
@@ -515,7 +551,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.65</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.67</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1374,7 +1410,7 @@ function renderScorers(age) {
       <span class="s-rank">${i+1}</span>
       <div class="s-crest">${crestHTML(drillTeam,16,'tlogo')}</div>
       <div class="s-info">
-        <div class="s-name"><a href="https://www.playhq.com/public/profile/${p.uuid}/statistics?tenant=afl" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${toProperCase(p.name)}</a>${transferBadge}</div>
+        <div class="s-name"><span onclick="openPlayerPanel('${p.uuid}')" style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${toProperCase(p.name)}</span>${transferBadge}</div>
         <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\\'")}','${teamGrade}','${p.age}')">${displayTeam}</div>
       </div>
       <span class="gtag ${gc}">${abbrevGrade(teamGrade)}</span>
@@ -1708,7 +1744,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
         return `<div class="roster-row">
           <div class="roster-name" style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
             ${crestHTML(teamName, 14, 'tlogo')}
-            <a href="${profileUrl}" target="_blank" rel="noopener" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15)">${toProperCase(p.name)}</a>${xfer}
+            <span onclick="openPlayerPanel('${p.uuid}')" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${toProperCase(p.name)}</span>${xfer}
           </div>
           <div class="roster-stat">${p.gp}</div>
           <div class="roster-stat goals">${p.goals || '–'}</div>
@@ -1761,6 +1797,266 @@ function toggleRoster() {
   const open  = body.style.display !== 'none';
   body.style.display = open ? 'none' : '';
   arrow.className = `roster-toggle-arrow${open ? '' : ' open'}`;
+}
+
+// ═══════════════════════════════════════
+// PLAYER PANEL
+// ═══════════════════════════════════════
+
+const PLAYER_PROFILE_QUERY = `
+query publicProfileStatistics($profileID: ID!) {
+  publicProfileStatistics(profileID: $profileID) {
+    seasonStatistics {
+      name
+      statistics {
+        season { id name }
+        club { id name }
+        totalStatistics { count details { value } }
+        teamStatistics {
+          team { ... on DiscoverTeam { id name } }
+          gradeStatistics {
+            grade { id name }
+            totalStatistics { count details { value } }
+            gameStatistics {
+              game {
+                id
+                round { name }
+                date
+                home { ... on DiscoverTeam { id name } }
+                away { ... on DiscoverTeam { id name } }
+              }
+              statistics { count details { value } }
+            }
+          }
+        }
+      }
+    }
+  }
+  publicProfile(profileID: $profileID) { id firstName lastName }
+}`;
+
+function parseGameStats(stats) {
+  let gp=0, goals=0, bp=0;
+  for (const s of (stats||[])) {
+    if (s.details.value==='APPEARANCE')  gp    = s.count;
+    if (s.details.value==='GOAL_COUNT')  goals = s.count;
+    if (s.details.value==='BEST_PLAYER') bp    = s.count;
+  }
+  return {gp, goals, bp};
+}
+
+async function openPlayerPanel(uuid) {
+  if (!uuid) return;
+  const p = S.players.find(pl => pl.uuid === uuid);
+  const modal = document.getElementById('player-modal');
+  const body  = document.getElementById('pm-body');
+  const statsEl = document.getElementById('pm-stats');
+
+  // Set header from local data immediately
+  const displayName = p ? toProperCase(p.name) : 'Player';
+  const teamDisplay = p ? (p.teamRaw||p.team).replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').trim() : '';
+  const grade = p ? abbrevGrade(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName)) : '';
+  const gc = `gtag-${(grade||'').replace(/[^A-Z0-9]/g,'')}`;
+
+  document.getElementById('pm-name').innerHTML =
+    `<a href="https://www.playhq.com/public/profile/${uuid}/statistics?tenant=afl" target="_blank" rel="noopener"
+       style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.2)"
+       onmouseover="this.style.borderBottomColor='var(--gold)'"
+       onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.2)'">${displayName}</a>` +
+    (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
+
+  document.getElementById('pm-meta').innerHTML = p
+    ? `${crestHTML(teamDisplay,14,'tlogo')} <span style="margin-left:2px">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    : '';
+  document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
+
+  // Summary strip from local data
+  if (p) {
+    const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '–';
+    statsEl.innerHTML = [
+      {v: p.gp,          l: 'Played'},
+      {v: p.goals||'–',  l: 'Goals'},
+      {v: gpg,           l: 'G/Game'},
+      {v: p.bestPlayer||'–', l: 'Best Player'},
+    ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+  } else {
+    statsEl.innerHTML = '';
+  }
+
+  // Show loading state
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:32px;gap:10px;color:var(--tx3)">
+    <div class="spinner"></div><span style="font-size:12px">Loading game stats…</span></div>`;
+  modal.style.display = 'flex';
+
+  // Fetch profile stats from PlayHQ
+  try {
+    const res = await fetch('https://api.playhq.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'tenant': 'afl',
+        'origin': 'https://www.playhq.com',
+      },
+      body: JSON.stringify({
+        operationName: 'publicProfileStatistics',
+        query: PLAYER_PROFILE_QUERY,
+        variables: { profileID: uuid },
+      }),
+    });
+    const data = await res.json();
+    renderPlayerGames(data, p);
+  } catch(e) {
+    body.innerHTML = `<div class="empty"><p>Could not load game stats. Check connection.</p></div>`;
+  }
+}
+
+function renderPlayerGames(data, p) {
+  const body = document.getElementById('pm-body');
+  const seasons = data?.data?.publicProfileStatistics?.seasonStatistics || [];
+
+  // Find current season data
+  const currentSeasonIDs = new Set(
+    Object.values(S.lastRound || {}).length ? [] : []
+  );
+  // Use all 2026 seasons
+  const season2026 = seasons.find(s => s.name === '2026');
+  if (!season2026?.statistics?.length) {
+    body.innerHTML = '<div class="empty"><p>No 2026 season stats found.</p></div>';
+    return;
+  }
+
+  // Collect all game rows across all club registrations
+  const rows = [];
+  for (const reg of season2026.statistics) {
+    const clubName = reg.club?.name?.replace(/\s*\([^)]+\)\s*$/, '').trim() || '';
+    const isCurrentClub = !p?.transferred || (p.clubs||[]).some(c =>
+      clubName.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(clubName.toLowerCase())
+    );
+    for (const teamStat of (reg.teamStatistics || [])) {
+      const teamName = teamStat.team?.name || '';
+      for (const gradeStat of (teamStat.gradeStatistics || [])) {
+        const gradeName = abbrevGrade(gradeStat.grade?.name || '');
+        for (const gameStat of (gradeStat.gameStatistics || [])) {
+          const g = gameStat.game;
+          const {goals, bp} = parseGameStats(gameStat.statistics);
+          const home = g.home?.name || '';
+          const away = g.away?.name || '';
+          const isPlayerHome = home === teamName;
+          const compName = reg.season?.name
+            ? (data?.data?.publicProfileStatistics?.seasonStatistics||[])
+                .find(s=>s.statistics?.some(r=>r===reg))?.name || ''
+            : '';
+          rows.push({
+            round: g.round?.name || '',
+            date: g.date || '',
+            home, away, teamName, clubName,
+            gradeName,
+            gradeFullName: gradeStat.grade?.name || '',
+            compName: reg.season?.competition?.name || '',
+            goals, bp,
+            isCurrentClub,
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by date
+  rows.sort((a,b) => a.date.localeCompare(b.date));
+
+  if (!rows.length) {
+    body.innerHTML = '<div class="empty"><p>No game records found.</p></div>';
+    return;
+  }
+
+  const stripAge = n => n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
+
+  body.innerHTML = `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Round</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Home</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Away</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Grade</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
+  </div>` + rows.map(r => {
+    const homeDisplay = stripAge(r.home);
+    const awayDisplay = stripAge(r.away);
+    const isPlayerHome = stripAge(r.teamName) === homeDisplay;
+    const playerTeamStyle = 'font-weight:600;color:var(--tx)';
+    const oppStyle = 'color:var(--tx2)';
+    const dimmed = !r.isCurrentClub;
+
+    return `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${r.round}</div>
+        <div style="font-size:9px;color:var(--tx3)">${r.date ? new Date(r.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'}) : ''}</div>
+      </div>
+      <div style="${isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        ${isPlayerHome?crestHTML(homeDisplay,14,'tlogo'):''}${homeDisplay}
+      </div>
+      <div style="${!isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        ${!isPlayerHome?crestHTML(awayDisplay,14,'tlogo'):''}${awayDisplay}
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:8px;font-family:'DM Mono',monospace;color:var(--tx2);white-space:nowrap">${abbrevGrade(r.gradeFullName||r.gradeName)}</div>
+        ${r.compName&&r.compName.length>4?`<div style="font-size:7px;color:var(--tx3);white-space:nowrap">${r.compName.replace('Eastern Football Netball League','EFNL').replace('Western Football Netball League','WFNL').replace('South East Juniors','SEJ').replace('South East Regional','SER')}</div>`:''}
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
+    </div>`;
+  }).join('') +
+  // Totals row
+  `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;align-items:center;padding:7px 16px;gap:6px;font-size:11px;background:var(--s2);border-top:1px solid var(--b2)">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2)">TOTAL</div>
+    <div></div><div></div><div></div>
+    <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);text-align:right">${rows.reduce((s,r)=>s+r.goals,0)||'–'}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${rows.reduce((s,r)=>s+r.bp,0)||'–'}</div>
+  </div>`;
+}
+
+function closePlayerModal() {
+  document.getElementById('player-modal').style.display = 'none';
+}
+
+// ── Player search ──────────────────────────────────────────────────
+function onPlayerSearch(val) {
+  const res = document.getElementById('player-search-results');
+  if (!val || val.length < 2) { res.style.display='none'; return; }
+  const q = val.toLowerCase();
+  const matches = S.players
+    .filter(p => p.name.toLowerCase().includes(q) && p.uuid)
+    .sort((a,b) => {
+      // Exact prefix match first, then any match
+      const aStart = a.name.toLowerCase().startsWith(q);
+      const bStart = b.name.toLowerCase().startsWith(q);
+      if (aStart !== bStart) return aStart ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 12);
+
+  if (!matches.length) { res.style.display='none'; return; }
+
+  const stripAge = n => n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
+  res.style.display = 'flex';
+  res.innerHTML = matches.map(p => {
+    const teamDisplay = stripAge(p.teamRaw || p.team);
+    const grade = abbrevGrade(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName));
+    return `<div class="player-result" onclick="openPlayerPanel('${p.uuid}');clearSearch()">
+      ${crestHTML(teamDisplay, 16, 'tlogo')}
+      <div style="flex:1;min-width:0">
+        <div class="player-result-name">${toProperCase(p.name)}</div>
+        <div class="player-result-meta">${teamDisplay} &middot; ${p.age} &middot; ${grade}</div>
+      </div>
+      ${p.goals ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold)">${p.goals}G</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function clearSearch() {
+  const input = document.getElementById('player-search-input');
+  const res   = document.getElementById('player-search-results');
+  if (input) input.value = '';
+  if (res) res.style.display = 'none';
 }
 
 function closeTeamModal() {
