@@ -194,7 +194,7 @@ body{overflow-x:hidden}
 .roster-section{border-top:1px solid var(--b1);margin-top:0}
 .roster-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)}
 .roster-toggle:hover{color:var(--tx2)}
-.roster-toggle-arrow{font-size:10px;transition:transform .2s}
+.roster-toggle-arrow{font-size:12px;transition:transform .2s;color:var(--gold)}
 .roster-toggle-arrow.open{transform:rotate(180deg)}
 .roster-body{padding:0 16px 12px}
 .roster-hdr{display:grid;grid-template-columns:1fr 36px 36px 44px 32px;gap:4px;padding:4px 0 6px;border-bottom:1px solid var(--b1);font-size:9px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)}
@@ -292,7 +292,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.67</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.68</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -551,7 +551,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.67</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.68</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
@@ -1847,6 +1847,8 @@ function parseGameStats(stats) {
 
 async function openPlayerPanel(uuid) {
   if (!uuid) return;
+  // Close team modal if open (player clicked from roster)
+  document.getElementById('team-modal').style.display = 'none';
   const p = S.players.find(pl => pl.uuid === uuid);
   const modal = document.getElementById('player-modal');
   const body  = document.getElementById('pm-body');
@@ -1855,7 +1857,7 @@ async function openPlayerPanel(uuid) {
   // Set header from local data immediately
   const displayName = p ? toProperCase(p.name) : 'Player';
   const teamDisplay = p ? (p.teamRaw||p.team).replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').trim() : '';
-  const grade = p ? abbrevGrade(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName)) : '';
+  const grade = p ? abbrevGrade(p.rawGrade || '') : '';
   const gc = `gtag-${(grade||'').replace(/[^A-Z0-9]/g,'')}`;
 
   document.getElementById('pm-name').innerHTML =
@@ -1866,7 +1868,7 @@ async function openPlayerPanel(uuid) {
     (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
 
   document.getElementById('pm-meta').innerHTML = p
-    ? `${crestHTML(teamDisplay,14,'tlogo')} <span style="margin-left:2px">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    ? `<span>${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -1895,7 +1897,6 @@ async function openPlayerPanel(uuid) {
       headers: {
         'Content-Type': 'application/json',
         'tenant': 'afl',
-        'origin': 'https://www.playhq.com',
       },
       body: JSON.stringify({
         operationName: 'publicProfileStatistics',
@@ -1906,7 +1907,7 @@ async function openPlayerPanel(uuid) {
     const data = await res.json();
     renderPlayerGames(data, p);
   } catch(e) {
-    body.innerHTML = `<div class="empty"><p>Could not load game stats. Check connection.</p></div>`;
+    body.innerHTML = `<div class="empty"><p>Could not load game stats: ${e.message}</p></div>`;
   }
 }
 
