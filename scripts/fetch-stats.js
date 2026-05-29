@@ -160,7 +160,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
 
     for (const r of gps.results) {
       if (!r.profile) continue;  // private profile — no UUID available, skip
-      const { gp, goals } = parseStats(r.statistics);
+      const { gp, goals, bestPlayer } = parseStats(r.statistics);
       appearances.push({
         uuid:       r.profile.id,
         firstName:  r.profile.firstName,
