@@ -131,7 +131,13 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
     try {
       res = await gqlPost(
         Q_GRADE_STATS,
-        { gradeID: grade.id, filter: { page } },
+        {
+          gradeID: grade.id,
+          filter: {
+            sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }],
+            pagination: { page, limit: 50 },
+          },
+        },
         'publicGradeStatistics'
       );
       await sleep(120);
