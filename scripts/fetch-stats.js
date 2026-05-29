@@ -33,8 +33,8 @@ query publicGradeStatistics($gradeID: ID!, $filter: GradePlayerStatisticsFilter)
 }`;
 
 const Q_PROFILE_STATS = `
-query publicProfileStatistics($id: ID!) {
-  publicProfileStatistics(id: $id) {
+query publicProfileStatistics($profileID: ID!) {
+  publicProfileStatistics(profileID: $profileID) {
     seasonStatistics {
       name
       statistics {
@@ -45,7 +45,7 @@ query publicProfileStatistics($id: ID!) {
           details { value }
         }
         teamStatistics {
-          team { id name }
+          team { ... on DiscoverTeam { id name } }
           totalStatistics {
             count
             details { value }
@@ -54,7 +54,7 @@ query publicProfileStatistics($id: ID!) {
       }
     }
   }
-  publicProfile(id: $id) {
+  publicProfile(profileID: $profileID) {
     id
     firstName
     lastName
@@ -193,7 +193,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
 async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
   let res;
   try {
-    res = await gqlPost(Q_PROFILE_STATS, { id: uuid }, 'publicProfileStatistics');
+    res = await gqlPost(Q_PROFILE_STATS, { profileID: uuid }, 'publicProfileStatistics');
     await sleep(150);
   } catch (e) {
     console.warn(`  Profile: ${uuid} failed: ${e.message}`);
