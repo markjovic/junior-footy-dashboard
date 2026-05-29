@@ -898,5 +898,455 @@
     "seasonID": "2170ac5a",
     "compName": "WFNL 2026",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "b5e293b3",
+    "name": "Little Demons - U08 Mixed",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "73081d6b",
+    "name": "Little Demons - U09 Mixed",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "05440cbb",
+    "name": "U11 Mixed GRADING",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e28e2f02",
+    "name": "U11 Mixed Blue",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9cbeeaeb",
+    "name": "U11 Mixed Red",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "17b4c78b",
+    "name": "U12 Mixed GRADING",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d36b9bdf",
+    "name": "U12 Mixed Blue",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7a6d7b26",
+    "name": "U12 Mixed Red",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d34aa648",
+    "name": "U12 Girls",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d79c2627",
+    "name": "U13 Mixed Premier Division",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3d213758",
+    "name": "U13 Mixed Blue",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d3748dc2",
+    "name": "U13 Mixed Gold",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5de718d3",
+    "name": "U13 Mixed Navy",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ac5b4cb6",
+    "name": "U13 Mixed Orange",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2e8ff182",
+    "name": "U13 Mixed GRADING",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f1883496",
+    "name": "U14 Girls Premier Division",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e52d0e93",
+    "name": "U14 Girls Blue",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f4936357",
+    "name": "U14 Girls Gold",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "deb262ac",
+    "name": "U14 Girls Navy",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7291c128",
+    "name": "U14 Girls Orange",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "05d54df7",
+    "name": "U14 Girls GRADING",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "25c28118",
+    "name": "U14 Mixed Premier Division",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4d8d6c6a",
+    "name": "U14 Mixed Blue",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "b9ab5e5c",
+    "name": "U14 Mixed Gold",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1b974e35",
+    "name": "U14 Mixed Navy",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4828e2c5",
+    "name": "U14 Mixed GRADING",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9000ffa3",
+    "name": "U15 Boys Premier Division",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "00cbc97d",
+    "name": "U15 Boys Blue",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "8f46d7e0",
+    "name": "U15 Boys Gold",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f551c953",
+    "name": "U15 Boys Navy",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "dadd5367",
+    "name": "U15 Boys GRADING",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "efa3038d",
+    "name": "U16 Boys Premier Division",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "929af37b",
+    "name": "U16 Boys Blue",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "41963ca8",
+    "name": "U16 Boys Gold",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7bf19eb3",
+    "name": "U16 Boys Navy",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2f363131",
+    "name": "U16 Boys GRADING",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9e683d4f",
+    "name": "U16 Girls Premier Division",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "39660797",
+    "name": "U16 Girls Blue",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e7d6bc06",
+    "name": "U16 Girls Gold",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5a39be2b",
+    "name": "U16 Girls Navy",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5eafcda1",
+    "name": "U16 Girls GRADING",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "76e4df6e",
+    "name": "U17.5 Boys Premier Division",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9d34227d",
+    "name": "U17.5 Boys Blue",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4c1557ff",
+    "name": "U17.5 Boys Gold",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6e403e34",
+    "name": "U17.5 Boys Navy",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "58b475e8",
+    "name": "U17.5 Boys GRADING",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a8bd6121",
+    "name": "U18.5 Girls Premier Division",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6e3d9eec",
+    "name": "U14 Mixed Orange",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "8424d29b",
+    "name": "U18.5 Girls Blue",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "815dbd70",
+    "name": "U18.5 Girls GRADING",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "263ca13b",
+    "compName": "SER 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
   }
 ]
