@@ -12,6 +12,7 @@
 const fs   = require('fs');
 const path = require('path');
 const https = require('https');
+const { fetchAllStats } = require('./fetch-stats');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -709,6 +710,10 @@ async function main() {
     compLogos,
     lastUpdated: new Date().toISOString(),
   };
+
+  // 7b. Fetch player statistics for all grades and resolve into canonical records
+  const seasonIDs = new Set(competitions.map(c => c.seasonID));
+  await fetchAllStats(grades, merged, seasonIDs, gqlPost, sleep);
 
   fs.writeFileSync(DATA_PATH, JSON.stringify(merged, null, 2), 'utf8');
   console.log(`Wrote data.json`);
