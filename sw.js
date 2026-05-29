@@ -4,7 +4,7 @@
 //   - data.json: network-first, fall back to cache so offline still works
 //   - Everything else (Cloudinary logos, Google Fonts): network-first, cache on success
 
-const CACHE_NAME = 'efnl-v2';
+const CACHE_NAME = 'efnl-v3';
 
 // Files that make up the app shell — cached on install
 const SHELL_URLS = [
@@ -55,7 +55,7 @@ self.addEventListener('fetch', event => {
       caches.match(event.request).then(cached => {
         const networkFetch = fetch(event.request).then(res => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, res.clone()));
-          return res;
+          return res.clone();
         });
         return cached || networkFetch;
       })
@@ -68,7 +68,8 @@ self.addEventListener('fetch', event => {
     fetch(event.request)
       .then(res => {
         if (res.ok) {
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, res.clone()));
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return res;
       })
