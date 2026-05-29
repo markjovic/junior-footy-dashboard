@@ -308,9 +308,9 @@ function resolveAppearances(appearances, currentClubName) {
     console.warn(`  Fallback GP heuristic used for ${appearances[0].uuid}`);
   }
 
-  // Goals: only from canonical (current) club — per spec "record stats against newest club"
-  // GP: ALL appearances across all clubs — player played those games regardless of club
-  const totalGoals = canonicalEntries.reduce((s, e) => s + e.goals, 0);
+  // Both GP and goals sum across ALL clubs — all games and goals count for the leaderboard
+  // Only the team attribution (which team they show under) follows the newest club rule
+  const totalGoals = appearances.reduce((s, e) => s + e.goals, 0);
   const totalGP    = appearances.reduce((s, e) => s + e.gp, 0);
 
   // Primary entry = most GP in canonical club; tiebreak = highest grade
