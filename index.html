@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.78</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.79</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.78</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.79</span>
         </div>
 
 
@@ -863,9 +863,31 @@ function logoKey(teamName) {
 
 let _crestRenderTimer = null;
 function _scheduleCrestRender() {
-  // Debounce: batch all crest loads into one render after 80ms of quiet
   clearTimeout(_crestRenderTimer);
-  _crestRenderTimer = setTimeout(render, 80);
+  _crestRenderTimer = setTimeout(() => {
+    render();
+    // Refresh any placeholder crests in the player panel without re-fetching
+    const pm = document.getElementById('player-modal');
+    if (pm && pm.style.display !== 'none') {
+      pm.querySelectorAll('[data-team]').forEach(el => {
+        const team = el.dataset.team;
+        const size = parseInt(el.dataset.size) || 14;
+        const cls  = el.className;
+        const img  = getCrestImg(team);
+        if (img && el.tagName !== 'IMG') {
+          const newEl = document.createElement('img');
+          newEl.src = img.src;
+          newEl.className = cls;
+          newEl.dataset.team = team;
+          newEl.dataset.size = size;
+          newEl.width = size;
+          newEl.height = size;
+          newEl.onerror = () => newEl.style.display = 'none';
+          el.replaceWith(newEl);
+        }
+      });
+    }
+  }, 80);
 }
 
 function getCrestImg(teamName) {
@@ -908,8 +930,8 @@ function toProperCase(str) {
 
 function crestHTML(teamName, size=18, cls='tlogo') {
   const img = getCrestImg(teamName);
-  if (img) return `<img src="${img.src}" class="${cls}" width="${size}" height="${size}" onerror="this.style.display='none'">`;
-  return `<span class="${cls}" style="width:${size}px;height:${size}px;background:var(--s3);border-radius:50%;display:inline-block;flex-shrink:0"></span>`;
+  if (img) return `<img src="${img.src}" class="${cls}" data-team="${teamName}" data-size="${size}" width="${size}" height="${size}" onerror="this.style.display='none'">`;
+  return `<span class="${cls}" data-team="${teamName}" data-size="${size}" style="width:${size}px;height:${size}px;background:var(--s3);border-radius:50%;display:inline-block;flex-shrink:0"></span>`;
 }
 
 // ═══════════════════════════════════════
@@ -1848,10 +1870,13 @@ function parseGameStats(stats) {
   return {gp, goals, bp};
 }
 
+let _playerPanelSource = null;
+
 async function openPlayerPanel(uuid) {
   if (!uuid) return;
-  // Close team modal if open (player clicked from roster)
-  document.getElementById('team-modal').style.display = 'none';
+  const teamModal = document.getElementById('team-modal');
+  _playerPanelSource = (teamModal && teamModal.style.display !== 'none') ? 'team' : 'other';
+  teamModal.style.display = 'none';
   const p = S.players.find(pl => pl.uuid === uuid);
   const modal = document.getElementById('player-modal');
   const body  = document.getElementById('pm-body');
@@ -2000,11 +2025,11 @@ function renderPlayerGames(data, p) {
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${r.round}</div>
         <div style="font-size:9px;color:var(--tx3)">${r.date ? new Date(r.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'}) : ''}</div>
       </div>
-      <div style="${isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-        ${isPlayerHome?crestHTML(homeDisplay,14,'tlogo'):''}${homeDisplay}
+      <div style="${isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px">
+        ${crestHTML(homeDisplay,14,'tlogo')}${homeDisplay}
       </div>
-      <div style="${!isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-        ${!isPlayerHome?crestHTML(awayDisplay,14,'tlogo'):''}${awayDisplay}
+      <div style="${!isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px">
+        ${crestHTML(awayDisplay,14,'tlogo')}${awayDisplay}
       </div>
       <div style="text-align:center">
         <div style="font-size:8px;font-family:'DM Mono',monospace;color:var(--tx2);white-space:nowrap">${abbrevGrade(r.gradeFullName||r.gradeName)}</div>
@@ -2025,6 +2050,10 @@ function renderPlayerGames(data, p) {
 
 function closePlayerModal() {
   document.getElementById('player-modal').style.display = 'none';
+  if (_playerPanelSource === 'team') {
+    document.getElementById('team-modal').style.display = 'flex';
+  }
+  _playerPanelSource = null;
 }
 
 // ── Player search ──────────────────────────────────────────────────
