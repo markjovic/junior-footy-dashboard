@@ -22,7 +22,7 @@ body{overflow-x:hidden}
 ::-webkit-scrollbar-thumb{background:var(--b3);border-radius:2px}
 
 /* ── Header ── */
-.hdr{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:12px;padding:0 20px;height:52px;background:rgba(9,9,14,0.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--b1)}
+.hdr{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:8px;padding:0 16px;height:52px;background:rgba(9,9,14,0.93);backdrop-filter:blur(14px);border-bottom:1px solid var(--b1);overflow:hidden}
 .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.5px;color:var(--gold);white-space:nowrap}
 .logo span{color:var(--tx2);font-weight:400}
 /* age-tabs moved to sidebar */
@@ -31,6 +31,7 @@ body{overflow-x:hidden}
 .age-tab.on{color:var(--gold);background:var(--gold2);border-color:var(--gold3)}
 .hdr-btn{font-size:11px;font-weight:500;background:none;border:1px solid var(--b2);border-radius:var(--r);color:var(--tx3);cursor:pointer;padding:5px 11px;transition:all .15s;white-space:nowrap}
 .hdr-btn:hover{color:var(--tx2)}
+.hdr-meta{flex-shrink:0}
 
 /* ── Layout ── */
 .layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
@@ -48,6 +49,10 @@ body{overflow-x:hidden}
 .fsel:focus{border-color:var(--gold3)}
 .stat-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
 .stat-row span:last-child{color:var(--gold);font-family:'DM Mono',monospace}
+.freshness{display:flex;flex-direction:column;gap:3px;padding:8px 2px;border-top:1px solid var(--b1);margin-top:4px}
+.freshness-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--tx3)}
+.freshness-row span:last-child{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx2)}
+.freshness-label{letter-spacing:.5px;text-transform:uppercase}
 
 /* ── Cards ── */
 .card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;overflow:hidden}
@@ -201,9 +206,11 @@ body{overflow-x:hidden}
 
 /* ── Mobile responsive ── */
 @media(max-width:768px){
-  .hdr{padding:0 14px;gap:8px}
+  .hdr{padding:0 12px;gap:6px}
   .logo{font-size:15px}
+  .hdr-meta{display:none!important}
   #filter-toggle{display:flex!important}
+  #admin-btn{margin-left:auto}
   .layout{grid-template-columns:1fr}
   .sidebar{position:fixed;top:52px;left:0;bottom:0;width:240px;z-index:160;transform:translateX(-100%);transition:transform .25s ease;background:var(--s1);border-right:1px solid var(--b2);overflow-y:auto}
   .sidebar.open{transform:translateX(0)}
@@ -240,11 +247,10 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.43</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.44</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
-  <span id="last-updated" style="display:none;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);white-space:nowrap"></span>
-  <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
-  <button class="hdr-btn" style="margin-left:auto" onclick="openAdmin()">⚙ Admin</button>
+  <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none;margin-left:auto">⊟ Filters</button>
+  <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
 </header>
 
 <div id="sidebar-overlay" onclick="toggleSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;backdrop-filter:blur(2px)"></div>
@@ -280,6 +286,11 @@ body{overflow-x:hidden}
       <div class="stat-row"><span>Teams</span><span id="st-t">0</span></div>
       <div class="stat-row"><span>Scorers</span><span id="st-s">0</span></div>
       <div class="stat-row"><span>Rounds</span><span id="st-r">0</span></div>
+    </div>
+    <div class="freshness" id="freshness-section" style="display:none">
+      <div class="flabel" style="margin-bottom:2px">Data freshness</div>
+      <div class="freshness-row"><span class="freshness-label">Results</span><span id="fresh-results">—</span></div>
+      <div class="freshness-row"><span class="freshness-label">Stats</span><span id="fresh-stats">—</span></div>
     </div>
   </aside>
 
@@ -441,7 +452,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.43</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.44</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
           <span style="color:var(--tx2)">Export all data (for GitHub Pages hosting)</span>
@@ -1790,19 +1801,24 @@ async function init() {
         if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
         if (d.teamLogos && Object.keys(d.teamLogos).length) S.teamLogos = d.teamLogos;
-        if (d.lastUpdated) {
-          const el = document.getElementById('last-updated');
-          if (el) {
-            const dt = new Date(d.lastUpdated);
-            const fmt = dt.toLocaleString('en-AU', {
-              timeZone: 'Australia/Melbourne',
-              day: 'numeric', month: 'short',
-              hour: 'numeric', minute: '2-digit',
-              hour12: true
-            });
-            el.textContent = 'Updated ' + fmt;
-            el.style.display = 'inline';
-          }
+        // Freshness timestamps
+        const fmtTime = iso => {
+          if (!iso) return '—';
+          return new Date(iso).toLocaleString('en-AU', {
+            timeZone: 'Australia/Melbourne',
+            day: 'numeric', month: 'short',
+            hour: 'numeric', minute: '2-digit',
+            hour12: true
+          });
+        };
+        const showFresh = d.lastResultsFetch || d.lastStatsFetch;
+        if (showFresh) {
+          const sec = document.getElementById('freshness-section');
+          const rEl = document.getElementById('fresh-results');
+          const sEl = document.getElementById('fresh-stats');
+          if (sec) sec.style.display = '';
+          if (rEl) rEl.textContent = fmtTime(d.lastResultsFetch);
+          if (sEl) sEl.textContent = fmtTime(d.lastStatsFetch);
         }
       }
     } catch(e) {}
