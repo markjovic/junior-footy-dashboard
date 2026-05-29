@@ -112,8 +112,13 @@ function parseStats(statistics) {
 // Parse rawGrade from a grade name string e.g. "U12 - B" → "B"
 // Mirrors rawGrade extraction in parseGradeName() in fetch-results.js
 function toRawGrade(gradeName) {
+  // Standard EFNL format: "U12 - B" or "Division 1 - Senior Men"
   const m = gradeName.match(/[-–]\s*([A-Z0-9][A-Z0-9\s]*)$/i);
   if (m) return m[1].trim();
+  // WFNL sponsor-prefix format: "Western Bulldogs U12 Girls Division 1"
+  // Extract trailing "Division N" or single letter/number grade
+  const div = gradeName.match(/\b(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
+  if (div) return div[1].trim();
   return gradeName.trim();
 }
 
