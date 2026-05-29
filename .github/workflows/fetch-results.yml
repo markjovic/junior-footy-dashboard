@@ -53,6 +53,21 @@ jobs:
         if: github.event.inputs.run_migration == 'yes'
         run: node scripts/migrate-grades.js
 
+      - name: Commit migration output
+        if: github.event.inputs.run_migration == 'yes'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json grades.json
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit"
+          else
+            RUN_DATE=$(TZ='Australia/Melbourne' date '+%A %-d %B %Y')
+            git commit -m "migrate: grade remapping ${RUN_DATE}"
+            git pull --rebase origin main
+            git push
+          fi
+
       # ── Fetch results ─────────────────────────────────────────────────────────
       - name: Fetch PlayHQ results
         id: fetch
@@ -68,11 +83,11 @@ jobs:
           echo "exit_code=${CODE}" >> "$GITHUB_OUTPUT"
           # 0 = changes written, 2 = no changes — both succeed
           # 1 = real error — fail the step
-          if [ $CODE -eq 1 ]; then
-            echo "::error::fetch-results.js exited with an error"
-            exit 1
+          if [ $CODE -eq 0 ] || [ $CODE -eq 2 ]; then
+            exit 0
           fi
-          exit 0
+          echo "::error::fetch-results.js exited with unexpected code ${CODE}"
+          exit 1
 
       # ── Commit ────────────────────────────────────────────────────────────────
       - name: Commit updated data.json
