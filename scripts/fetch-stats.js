@@ -67,13 +67,35 @@ const COLOUR_WORDS = ['Purple','Gold','Blue','Red','Green','White','Black',
                       'Silver','Navy','Yellow','Orange','Teal'];
 
 // Strip age suffix and trailing colour words to get bare club name
-// Mirrors clubName logic used in the dashboard
 function toClubName(teamName) {
   let n = teamName.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/, '').trim();
   for (const c of COLOUR_WORDS) {
     n = n.replace(new RegExp(`\\s+${c}\\s*$`, 'i'), '').trim();
   }
   return n;
+}
+
+// Normalise a club name for fuzzy matching between profile API and grade stats API.
+// Profile returns "Berwick Football Club (EFNL)", grade stats returns "Berwick U18".
+// We strip org suffixes, common words, and lowercase for comparison.
+const CLUB_STRIP = /\s*\([^)]+\)\s*$|\s+(football\s+club|fc|juniors?|junior\s+fc|netball|afc|sc|ftc|fnc|fnl|afl|district|districts?|eagles?|hawks?|magpies?|tigers?|lions?|bears?|sharks?|demons?|saints?|power|centrals?|rovers?|united|city|athletic|association|inc\.?)\s*$/gi;
+
+function normaliseClub(name) {
+  if (!name) return '';
+  let n = name.replace(/\s*\([^)]+\)\s*$/, '').trim(); // strip org suffix
+  // Strip age suffix if present
+  n = n.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').trim();
+  // Strip colour words
+  for (const c of COLOUR_WORDS) {
+    n = n.replace(new RegExp(`\\s+${c}\\s*$`, 'i'), '').trim();
+  }
+  // Strip common club name suffixes iteratively
+  let prev;
+  do {
+    prev = n;
+    n = n.replace(/\s+(football\s+club|junior\s+football\s+club|junior\s+fc|football\s+netball\s+club|fc|juniors?|afc|inc\.?)\s*$/i, '').trim();
+  } while (n !== prev);
+  return n.toLowerCase().trim();
 }
 
 // Extract GP and goals from a statistics array (order not guaranteed by API)
@@ -206,15 +228,6 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
 
   // seasonStatistics is ordered newest season first.
   // Within each season, statistics (registrations) are ordered most-recent club first.
-  // Log first season block for debugging
-  if (seasons.length > 0) {
-    const first = seasons[0];
-    const regs = first.statistics || [];
-    console.log(`    Profile seasons: ${seasons.map(s=>s.name).join(', ')}`);
-    console.log(`    Current season regs: ${regs.length}, seasonIDs: ${[...seasonIDs].join(',')}`);
-    if (regs.length > 0) console.log(`    First reg season.id: ${regs[0].season?.id}, club: ${regs[0].club?.name}`);
-  }
-
   for (const seasonBlock of seasons) {
     const ours = (seasonBlock.statistics || []).filter(r => seasonIDs.has(r.season?.id));
     if (!ours.length) continue;
@@ -224,8 +237,7 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
     return clubFullName.replace(/\s*\([^)]+\)\s*$/, '').trim();
   }
 
-  // No matching season found — log all available seasons for diagnosis
-  console.warn(`    No matching season found. Available: ${seasons.map(s => s.name + ':' + (s.statistics||[]).map(r=>r.season?.id).join(',')).join(' | ')}`);
+  console.warn(`  Profile: no matching season for ${uuid}. Available: ${seasons.map(s=>s.name).join(',')}`);
 
   return null;
 }
@@ -234,25 +246,43 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
 
 function resolveAppearances(appearances, currentClubName) {
   // Group grade-page entries by bare club name
+  // Group by normalised club name for consistent matching
   const byClub = {};
+  const normToDisplay = {}; // normalised → display name
   for (const a of appearances) {
-    const club = toClubName(a.teamRaw);
-    if (!byClub[club]) byClub[club] = [];
-    byClub[club].push(a);
+    const norm = normaliseClub(a.teamRaw);
+    if (!byClub[norm]) byClub[norm] = [];
+    byClub[norm].push(a);
+    normToDisplay[norm] = toClubName(a.teamRaw);
   }
-  const clubs = Object.keys(byClub);
-  const transferred = clubs.length > 1;
+  const clubs = Object.keys(byClub).map(k => normToDisplay[k]); // display names
+  const transferred = Object.keys(byClub).length > 1;
 
   // Pick which club's entries to sum
   let canonicalEntries;
   if (!transferred) {
     canonicalEntries = appearances;
-  } else if (currentClubName && byClub[currentClubName]) {
-    canonicalEntries = byClub[currentClubName];
+  } else if (currentClubName) {
+    // Normalise the profile club name and find matching bucket
+    const normCurrent = normaliseClub(currentClubName);
+    const normKeys = Object.keys(byClub);
+    // Try exact normalised match first, then prefix match
+    const matchKey = normKeys.find(k => k === normCurrent)
+                  || normKeys.find(k => k.startsWith(normCurrent) || normCurrent.startsWith(k));
+    if (matchKey) {
+      canonicalEntries = byClub[matchKey];
+    } else {
+      // Normalised match failed — fall back to most GP
+      canonicalEntries = normKeys
+        .map(k => ({ key: k, entries: byClub[k], gp: byClub[k].reduce((s,e) => s+e.gp, 0) }))
+        .sort((a, b) => b.gp - a.gp)[0].entries;
+      console.warn(`  Club match failed for ${appearances[0].uuid}: profile="${normCurrent}" vs [${normKeys.join(', ')}]`);
+    }
   } else {
-    // Profile lookup failed — fall back to club with most GP
-    canonicalEntries = clubs
-      .map(c => ({ club: c, entries: byClub[c], gp: byClub[c].reduce((s,e) => s+e.gp, 0) }))
+    // No profile data — fall back to club with most GP
+    const normKeys = Object.keys(byClub);
+    canonicalEntries = normKeys
+      .map(k => ({ key: k, entries: byClub[k], gp: byClub[k].reduce((s,e) => s+e.gp, 0) }))
       .sort((a, b) => b.gp - a.gp)[0].entries;
     console.warn(`  Fallback GP heuristic used for ${appearances[0].uuid}`);
   }
