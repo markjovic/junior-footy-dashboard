@@ -119,7 +119,9 @@ function toRawGrade(gradeName) {
   // Extract trailing "Division N" or single letter/number grade
   const div = gradeName.match(/\b(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
   if (div) return div[1].trim();
-  return gradeName.trim();
+  // Single-division comps (e.g. "St Vincent's... Senior Women", "Thirds") — rawGrade is ""
+  // These match match records which also store rawGrade as "" for single-div
+  return '';
 }
 
 // Derive age string from PlayHQ structured fields
@@ -306,8 +308,10 @@ function resolveAppearances(appearances, currentClubName) {
     console.warn(`  Fallback GP heuristic used for ${appearances[0].uuid}`);
   }
 
+  // Goals: only from canonical (current) club — per spec "record stats against newest club"
+  // GP: ALL appearances across all clubs — player played those games regardless of club
   const totalGoals = canonicalEntries.reduce((s, e) => s + e.goals, 0);
-  const totalGP    = canonicalEntries.reduce((s, e) => s + e.gp,    0);
+  const totalGP    = appearances.reduce((s, e) => s + e.gp, 0);
 
   // Primary entry = most GP in canonical club; tiebreak = highest grade
   const primary = canonicalEntries.slice().sort((a, b) => {
