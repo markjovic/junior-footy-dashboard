@@ -1,0 +1,20 @@
+name: Fetch U10 2024 Results
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Fetch results
+        run: node scripts/fetch-u10-2024.js
+      - name: Upload CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: u10-2024-results
+          path: u10-2024-results.csv
