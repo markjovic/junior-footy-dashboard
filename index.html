@@ -123,23 +123,33 @@ body{overflow-x:hidden}
 .s-bp{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx3);text-align:right}
 .gtag{font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;flex-shrink:0}
 .gtag-neutral{background:rgba(255,255,255,0.07);color:var(--tx3)}
-.gtag-A,.gtag-1,.gtag-Division1,.gtag-Blue{background:rgba(96,165,250,.15);color:#60a5fa}
-.gtag-B,.gtag-2,.gtag-Division2,.gtag-Green{background:rgba(34,197,94,.15);color:#22c55e}
-.gtag-C,.gtag-3,.gtag-Division3,.gtag-Orange{background:rgba(249,115,22,.15);color:#f97316}
-.gtag-D,.gtag-4,.gtag-Division4,.gtag-Purple,.gtag-Navy{background:rgba(167,139,250,.15);color:#a78bfa}
+.gtag-A,.gtag-1,.gtag-Division1{background:rgba(96,165,250,.15);color:#60a5fa}
+.gtag-B,.gtag-2,.gtag-Division2{background:rgba(34,197,94,.15);color:#22c55e}
+.gtag-C,.gtag-3,.gtag-Division3{background:rgba(249,115,22,.15);color:#f97316}
+.gtag-D,.gtag-4,.gtag-Division4{background:rgba(167,139,250,.15);color:#a78bfa}
 .gtag-D1{background:rgba(167,139,250,.15);color:#a78bfa}
-.gtag-D2,.gtag-5,.gtag-Division5,.gtag-Pink,.gtag-Maroon{background:rgba(244,114,182,.15);color:#f472b6}
-.gtag-D3,.gtag-6,.gtag-Silver,.gtag-Grey,.gtag-Black{background:rgba(251,146,60,.15);color:#fb923c}
+.gtag-D2,.gtag-5,.gtag-Division5{background:rgba(244,114,182,.15);color:#f472b6}
+.gtag-D3,.gtag-6{background:rgba(251,146,60,.15);color:#fb923c}
 .gtag-D4,.gtag-7{background:rgba(232,121,249,.15);color:#e879f9}
 .gtag-D5,.gtag-8{background:rgba(148,163,184,.15);color:#94a3b8}
-.gtag-Prem,.gtag-Gold{background:rgba(240,192,64,.15);color:#f0c040}
-.gtag-9,.gtag-Red{background:rgba(248,113,113,.15);color:#f87171}
-.gtag-10,.gtag-Yellow{background:rgba(251,191,36,.15);color:#fbbf24}
-.gtag-Teal{background:rgba(45,212,191,.15);color:#2dd4bf}
-.gtag-White{background:rgba(226,232,240,.15);color:#e2e8f0}
+.gtag-9{background:rgba(248,113,113,.15);color:#f87171}
+.gtag-10{background:rgba(251,191,36,.15);color:#fbbf24}
+.gtag-Prem{background:rgba(240,192,64,.15);color:#f0c040}
 .gtag-Men{background:rgba(96,165,250,.15);color:#60a5fa}
 .gtag-Women{background:rgba(244,114,182,.15);color:#f472b6}
 .gtag-Grading{background:rgba(255,255,255,0.07);color:var(--tx3)}
+.gtag-Blue{background:rgba(96,165,250,.15);color:#60a5fa}
+.gtag-Red{background:rgba(248,113,113,.15);color:#f87171}
+.gtag-Green{background:rgba(74,222,128,.15);color:#4ade80}
+.gtag-Gold{background:rgba(240,192,64,.15);color:#f0c040}
+.gtag-Purple{background:rgba(192,132,252,.15);color:#c084fc}
+.gtag-Orange{background:rgba(251,146,60,.15);color:#fb923c}
+.gtag-Navy{background:rgba(99,102,241,.15);color:#6366f1}
+.gtag-Yellow{background:rgba(251,191,36,.15);color:#fbbf24}
+.gtag-Pink{background:rgba(244,114,182,.15);color:#f472b6}
+.gtag-Maroon{background:rgba(251,113,133,.15);color:#fb7185}
+.gtag-Teal{background:rgba(45,212,191,.15);color:#2dd4bf}
+.gtag-Black,.gtag-Grey,.gtag-Silver,.gtag-White{background:rgba(156,163,175,.15);color:#9ca3af}
 
 /* ── Results ── */
 .rnd-hdr{padding:6px 14px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);background:rgba(240,192,64,.04);border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px}
@@ -302,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.99</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.100</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -572,7 +582,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.99</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.100</span>
         </div>
 
 
@@ -667,7 +677,7 @@ function venueLink(venue, venueUrl, style='') {
   return `<span style="${style}">${venue}</span>`;
 }
 const GRADE_ORDER = ['Premier','Division 1','Division 2','Division 3','Division 4','Division 5','1','2','3','4','5','6','7','8','9','10','A','B','C','D','D1','D2','D3','D4','Men','Women','Blue','Red','Green','Gold','Black','White','Yellow','Purple','Orange','Navy','Silver','Grey','Maroon','Pink','Teal','Grading'];
-const GRADE_COL = {Premier:'#f0c040',Prem:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9',D5:'#94a3b8','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6','1':'#60a5fa','2':'#22c55e','3':'#f97316','4':'#a78bfa','5':'#f472b6','6':'#94a3b8','7':'#60a5fa','8':'#22c55e','9':'#f97316','10':'#a78bfa',Men:'#60a5fa',Women:'#f472b6',Blue:'#60a5fa',Red:'#f87171',Green:'#22c55e',Gold:'#f0c040',Black:'#94a3b8',White:'#e2e8f0',Yellow:'#fbbf24',Purple:'#a78bfa',Orange:'#f97316',Navy:'#818cf8',Silver:'#cbd5e1',Grey:'#94a3b8',Maroon:'#fb7185',Pink:'#f472b6',Teal:'#2dd4bf'};
+const GRADE_COL = {Premier:'#f0c040',Prem:'#f0c040',A:'#60a5fa',B:'#22c55e',C:'#f97316',D:'#a78bfa',D1:'#a78bfa',D2:'#f472b6',D3:'#fb923c',D4:'#e879f9',D5:'#94a3b8','Division 1':'#60a5fa','Division 2':'#22c55e','Division 3':'#f97316','Division 4':'#a78bfa','Division 5':'#f472b6','1':'#60a5fa','2':'#22c55e','3':'#f97316','4':'#a78bfa','5':'#f472b6','6':'#94a3b8','7':'#60a5fa','8':'#22c55e','9':'#f97316','10':'#a78bfa',Men:'#60a5fa',Women:'#f472b6',Blue:'#60a5fa',Red:'#f87171',Green:'#4ade80',Gold:'#f0c040',Black:'#94a3b8',White:'#f1f5f9',Yellow:'#fbbf24',Purple:'#c084fc',Orange:'#fb923c',Navy:'#6366f1',Silver:'#cbd5e1',Grey:'#9ca3af',Maroon:'#fb7185',Pink:'#f472b6',Teal:'#2dd4bf'};
 
 // ═══════════════════════════════════════
 // APP STATE
