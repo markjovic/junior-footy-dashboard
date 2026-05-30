@@ -194,9 +194,15 @@ function parseGradeName(name, ageName, genderName) {
   if (/\bGrading\b/i.test(n)) {
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
       ? ' ' + genderName : '';
-    const ageLabel = ageName?.match(/^U\d/i)
-      ? ageName + genderSuffix
-      : n.replace(/\s*\bGrading\b.*$/i, '').trim();
+    let ageLabel;
+    if (ageName?.match(/^U\d/i)) {
+      // Check name for .5 suffix (e.g. "U17.5 Boys GRADING" where ageName="U17")
+      const halfAgeMatch = n.match(/^U(\d+\.5)/i);
+      const resolvedAge = halfAgeMatch ? halfAgeMatch[0].toUpperCase() : ageName;
+      ageLabel = resolvedAge + genderSuffix;
+    } else {
+      ageLabel = n.replace(/\s*\bGrading\b.*$/i, '').trim();
+    }
     return { age: ageLabel, rawGrade: 'Grading' };
   }
 
