@@ -267,10 +267,20 @@ function parseGradeName(name, ageName, genderName) {
 }
 
 // Strip age suffix and trailing colour word from team names e.g. "Norwood U12" → "Norwood"
-function cleanTeam(name) {
-  // Strip age group suffix only — preserve colour words (Purple, Gold etc.)
-  // so that "Norwood Purple" and "Norwood Gold" remain distinct team identities.
-  // Colour stripping only happens in getCrestImg for logo lookup purposes.
+function cleanTeam(name, gradeAge) {
+  // Strip only the grade's own age suffix from the team name.
+  // PlayHQ appends the competition age to team names (e.g. "Officer JFC U14 Girls Blue")
+  // but we must only strip the matching age — "Officer JFC U13 Girls" playing in a
+  // U14 Girls grade should remain "Officer JFC U13 Girls" to stay distinct.
+  // If gradeAge is provided, strip only that specific age token.
+  // If not provided, strip any U-age suffix (legacy fallback).
+  if (gradeAge) {
+    // Extract just the U-number part e.g. "U14" from "U14 Girls" or "U17.5"
+    const ageNum = gradeAge.match(/^(U\d+(?:\.\d+)?)/i)?.[1];
+    if (ageNum) {
+      return name.replace(new RegExp('\\s+' + ageNum.replace('.','\\.')  + '\\b\\s*', 'gi'), ' ').replace(/\s+$/,'').trim();
+    }
+  }
   return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
 }
 
@@ -549,8 +559,8 @@ async function fetchGrade(grade, knownRounds, byId) {
 
     const matches = [];
     for (const game of finalGames) {
-      const homeName = cleanTeam(game.home?.name || '');
-      const awayName = cleanTeam(game.away?.name || '');
+      const homeName = cleanTeam(game.home?.name || '', age);
+      const awayName = cleanTeam(game.away?.name || '', age);
       if (!homeName || !awayName) continue;
 
       const hStats = game.result?.home?.statistics || [];
