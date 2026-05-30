@@ -185,6 +185,22 @@ Array.from(byIdFinal.values()).forEach(m => {
   if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
 });
 
+// ── YJFL purge: delete all YJFL 2026 matches and reset lastRound ────────────
+// fetch-results.js parseGradeName previously gave rawGrade:"" to all YJFL
+// divisions, causing them to share a knownRounds key and skip grading rounds.
+// Deleting and re-fetching is the clean fix — other comps are untouched.
+let yjflDeleted = 0;
+Array.from(byIdFinal.keys()).forEach(id => {
+  if (byIdFinal.get(id).compName === 'YJFL 2026') {
+    byIdFinal.delete(id);
+    yjflDeleted++;
+  }
+});
+Object.keys(lastRound).forEach(k => {
+  if (k.startsWith('YJFL 2026|')) delete lastRound[k];
+});
+console.log(`YJFL purge: deleted ${yjflDeleted} match(es), reset lastRound for YJFL 2026`);
+
 data.matches = Array.from(byIdFinal.values());
 data.roster  = roster;
 data.lastRound = lastRound;
