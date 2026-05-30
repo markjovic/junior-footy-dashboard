@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.87</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.89</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -452,7 +452,7 @@ body{overflow-x:hidden}
       </div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
-    <div class="team-stat-strip" id="pm-stats"></div>
+    <div class="team-stat-strip" id="pm-stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="team-modal-scroll">
       <div class="team-modal-body" id="pm-body">
         <div style="display:flex;align-items:center;justify-content:center;padding:32px;gap:10px;color:var(--tx3)">
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.87</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.89</span>
         </div>
 
 
@@ -1837,7 +1837,7 @@ query publicProfileStatistics($profileID: ID!) {
     seasonStatistics {
       name
       statistics {
-        season { id name competition { name } }
+        season { id name }
         club { id name }
         totalStatistics { count details { value } }
         teamStatistics {
@@ -1969,7 +1969,11 @@ function renderPlayerGames(data, p) {
   // Collect all game rows across all club registrations
   const rows = [];
   for (const reg of season2026.statistics) {
-    const clubName = reg.club?.name?.replace(/\s*\([^)]+\)\s*$/, '').trim() || '';
+    const clubRaw = reg.club?.name || '';
+    const clubName = clubRaw.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    // Org name is in the parenthetical: "East Ringwood (Eastern Football Netball League)" → "Eastern Football Netball League"
+    const orgMatch = clubRaw.match(/\(([^)]+)\)\s*$/);
+    const regCompName = orgMatch ? orgMatch[1].trim() : '';
     const isCurrentClub = !p?.transferred || (p.clubs||[]).some(c =>
       clubName.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(clubName.toLowerCase())
     );
@@ -1982,8 +1986,7 @@ function renderPlayerGames(data, p) {
           const home = g.home?.name || '';
           const away = g.away?.name || '';
           const isPlayerHome = home === teamName;
-          // competition.name added to query — use it directly
-          // (the old convoluted expression above this was broken and always returned '')
+
           // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
           // Strip leading asterisk/wildcard PlayHQ sometimes prepends
           const gradeRaw = (gradeStat.grade?.name || '').replace(/^[*\s]+/, '').trim();
@@ -2006,7 +2009,7 @@ function renderPlayerGames(data, p) {
             home, away, teamName, clubName,
             gradeName: gradeShort,
             gradeFullName: gradeRaw,
-            compName: reg.season?.competition?.name || '',
+            compName: regCompName,
             goals, bp,
             isCurrentClub,
           });
