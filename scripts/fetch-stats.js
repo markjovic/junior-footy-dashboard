@@ -257,7 +257,7 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
     return clubFullName.replace(/\s*\([^)]+\)\s*$/, '').trim();
   }
 
-  console.warn(`  Profile: no matching season for ${uuid}`);
+  console.warn(`  Profile: no matching season for ${uuid}. Available: ${seasons.map(s=>s.name).join(',')}`);
 
   return null;
 }
@@ -329,8 +329,10 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
 
   // Phase 1: grade stats — all pages, all grades
   const allAppearances = [];
+  let statsGradeIdx = 0;
   for (const grade of grades) {
-    console.log(`  ${grade.compName} — ${grade.name}`);
+    statsGradeIdx++;
+    console.log(`  [${statsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
     const rows = await fetchGradeStats(grade, gqlPost, sleep);
     allAppearances.push(...rows);
   }
@@ -356,6 +358,7 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
   // Phase 2: profile lookups — only for multi-club players
   const currentClubMap = {};  // uuid → stripped current club name
   for (const uuid of multiClubUUIDs) {
+    console.log(`  Profile lookup: ${uuid}`);
     const club = await fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep);
     if (club) currentClubMap[uuid] = club;
   }
@@ -368,6 +371,9 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
       resolveAppearances(appearances, currentClubMap[uuid] || null);
     const totalBP = canonicalEntries.reduce((s, e) => s + (e.bestPlayer || 0), 0);
 
+    if (transferred) {
+      console.log(`  XFER ${primary.firstName} ${primary.lastName}: GP=${totalGP} G=${totalGoals} clubs=[${clubs.join(',')}] canonical=${toClubName(primary.teamRaw)}`);
+    }
     players.push({
       uuid,
       name:       `${primary.firstName} ${primary.lastName}`.trim(),
@@ -403,17 +409,7 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
     `(${players.filter(p=>p.transferred).length} transferred, ` +
     `${players.filter(p=>p.goals>0).length} with goals)`);
 
-  // Merge into existing players by uuid|age|compName.
-  // New records overwrite matching existing ones; anything not fetched this run
-  // (other comps, partial timeouts) is left as-is with its previous data.
-  const existing = new Map(
-    (data.players || []).map(p => [`${p.uuid}|${p.age}|${p.compName}`, p])
-  );
-  for (const p of players) {
-    existing.set(`${p.uuid}|${p.age}|${p.compName}`, p);
-  }
-  data.players = [...existing.values()];
-  console.log(`  Players: ${players.length} updated/added. Total: ${data.players.length}`);
+  data.players = players;
 }
 
 module.exports = { fetchAllStats };
