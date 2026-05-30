@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.101</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.104</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -582,9 +582,14 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.101</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.104</span>
         </div>
 
+
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
+          <span style="color:var(--tx3)">Show young age groups (U8–U10)</span>
+          <button id="btn-show-all-ages" class="btn-g" style="font-size:11px;padding:4px 10px" onclick="S.showAllAges=!S.showAllAges;this.textContent=S.showAllAges?'On':'Off';this.style.background=S.showAllAges?'rgba(240,192,64,0.15)':'';this.style.color=S.showAllAges?'var(--gold)':'';render();">Off</button>
+        </div>
 
         <div style="border-top:1px solid var(--b1);padding-top:10px">
           <div style="font-size:11px;color:var(--tx3);margin-bottom:8px;line-height:1.5">To change your password: generate a hash below, copy it, paste it into <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">ADMIN_HASH</code> in <code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">index.html</code>, then re-upload the file to GitHub.</div>
@@ -689,6 +694,7 @@ let S = {
   gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
   pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
+  showAllAges: false,  // admin toggle — reset each visit
   selComp: null,         // currently selected competition name
   compLogos: {},         // { compName: logoUrl }
   teamLogos: {},         // { teamName: logoUrl } from PlayHQ
@@ -1196,7 +1202,8 @@ function getTopScorers(age, n=9999) {
       const lookupTeam = p.teamRaw || p.team;
       const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
       // If teamGrade is empty (single-division grade), include the player regardless of grade filter
-      return !grades.size || !teamGrade || grades.has(teamGrade);
+      // Also pass if teamGrade looks like a full grade name (e.g. "U08 Mixed") not a token
+      return !grades.size || !teamGrade || grades.has(teamGrade) || teamGrade.includes(' ');
     })
     .sort((a,b) => b.goals - a.goals || a.gp - b.gp)
     .slice(0, n);
@@ -1212,6 +1219,9 @@ function matchesComp(m) {
   if (!S.selComp) return true;
   return m.compName === S.selComp;
 }
+// Age groups hidden by default — shown only when admin enables "Show all ages"
+const DEFAULT_HIDDEN_AGES = new Set(['U8','U9','U10','U8 Girls','U9 Girls','U10 Girls']);
+
 function getAges() {
   // Custom sort: Senior Men, Senior Women, Reserve Men, Veterans, then juniors oldest→youngest
   const AGE_ORDER = [
@@ -1219,7 +1229,8 @@ function getAges() {
     'U19.5', 'U18 Girls', 'U17.5', 'U16', 'U16 Girls',
     'U15', 'U14', 'U14 Girls', 'U13', 'U12', 'U12 Girls', 'U11',
   ];
-  const ages = [...new Set(S.matches.filter(matchesComp).map(m => m.age))];
+  const ages = [...new Set(S.matches.filter(matchesComp).map(m => m.age))]
+    .filter(a => S.showAllAges || !DEFAULT_HIDDEN_AGES.has(a));
   return ages.sort((a, b) => {
     const ai = AGE_ORDER.indexOf(a);
     const bi = AGE_ORDER.indexOf(b);
@@ -1412,12 +1423,12 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(grade)}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
+    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(grade)}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
         <div style="display:flex;align-items:center;gap:5px">
-          <span class="gtag gtag-${ng.replace(/[^A-Z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(ng)}</span>
+          <span class="gtag gtag-${ng.replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(ng)}</span>
           <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
         </div>
         <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
@@ -1445,7 +1456,7 @@ function renderScorers(age) {
     // Use teamRaw for roster lookup (includes colour word, matches roster key)
     const lookupTeam = p.teamRaw || p.team;
     const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) || p.rawGrade || '';
-    const gc = `gtag-${teamGrade.replace(/[^A-Z0-9]/g,'')}`;
+    const gc = `gtag-${teamGrade.replace(/[^A-Za-z0-9]/g,'')}`;
     // Display name: use teamRaw stripped of age suffix for readability
     const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
     const transferBadge = p.transferred
@@ -1498,13 +1509,13 @@ function renderResults(age) {
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
       const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
-      const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
+      const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
-          <span class="gtag gtag-${g.replace(/[^A-Z0-9]/g,'')}">${abbrevGrade(g)}</span>
+          <span class="gtag gtag-${g.replace(/[^A-Za-z0-9]/g,'')}">${abbrevGrade(g)}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
           ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
         </div>
@@ -1679,7 +1690,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
     const valid = matchIsValid(m);
     const g = valid ? matchGrade(m) : m.rawGrade;
-    const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
+    const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
     const haText = isHome ? 'Home' : 'Away';
     const gotwKey = `${age}|${m.round}`;
@@ -1918,7 +1929,7 @@ async function openPlayerPanel(uuid) {
   const lookupTeam = stripAge(p?.teamRaw || p?.team || '');
   const rawGradeResolved = p ? currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) : '';
   const grade = abbrevGrade(rawGradeResolved);  // display only
-  const gc = `gtag-${(grade||'').replace(/[^A-Z0-9]/g,'')}`;
+  const gc = `gtag-${(grade||'').replace(/[^A-Za-z0-9]/g,'')}`;
 
   document.getElementById('pm-name').innerHTML =
     `<a href="https://www.playhq.com/public/profile/${uuid}/statistics?tenant=afl" target="_blank" rel="noopener"
