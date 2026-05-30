@@ -381,7 +381,7 @@ async function fetchGrade(grade, knownRounds, byId) {
   const today = todayAEST();
   const highestKnown = knownRounds.get(`${grade.compName}|${age}|${rawGrade}`) || 0;
 
-  console.log(`\n  [${name}] — known up to R${highestKnown}`);
+  console.log(`  known up to R${highestKnown}`);
   try {
 
   // Get round list for this grade
@@ -738,8 +738,11 @@ async function main() {
   let newCount = 0;
   let updatedCount = 0;
   let fetchError = null;
+  let resultsGradeIdx = 0;
 
   for (const grade of grades) {
+    resultsGradeIdx++;
+    console.log(`\n[${resultsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
     const matches = await fetchGrade(grade, knownRounds, byId);
 
     for (const m of matches) {
