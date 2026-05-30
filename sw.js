@@ -32,6 +32,9 @@ self.addEventListener('activate', event => {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
+  // Cache API only supports GET — skip everything else
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
   // data.json — network first, cache fallback
