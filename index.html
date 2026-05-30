@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.89</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.90</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.89</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.90</span>
         </div>
 
 
@@ -1974,6 +1974,7 @@ function renderPlayerGames(data, p) {
     // Org name is in the parenthetical: "East Ringwood (Eastern Football Netball League)" → "Eastern Football Netball League"
     const orgMatch = clubRaw.match(/\(([^)]+)\)\s*$/);
     const regCompName = orgMatch ? orgMatch[1].trim() : '';
+    if (regCompName) console.log('[CompDebug]', clubRaw, '→', regCompName);
     const isCurrentClub = !p?.transferred || (p.clubs||[]).some(c =>
       clubName.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(clubName.toLowerCase())
     );
