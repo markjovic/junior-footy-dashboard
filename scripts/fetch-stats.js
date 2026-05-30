@@ -403,7 +403,17 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
     `(${players.filter(p=>p.transferred).length} transferred, ` +
     `${players.filter(p=>p.goals>0).length} with goals)`);
 
-  data.players = players;
+  // Merge into existing players by uuid|age|compName.
+  // New records overwrite matching existing ones; anything not fetched this run
+  // (other comps, partial timeouts) is left as-is with its previous data.
+  const existing = new Map(
+    (data.players || []).map(p => [`${p.uuid}|${p.age}|${p.compName}`, p])
+  );
+  for (const p of players) {
+    existing.set(`${p.uuid}|${p.age}|${p.compName}`, p);
+  }
+  data.players = [...existing.values()];
+  console.log(`  Players: ${players.length} updated/added. Total: ${data.players.length}`);
 }
 
 module.exports = { fetchAllStats };
