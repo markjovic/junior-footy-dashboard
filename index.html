@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.100</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.101</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -582,7 +582,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.100</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.101</span>
         </div>
 
 
@@ -1390,7 +1390,7 @@ function renderGOTW(age) {
   metaEl.textContent = `R${gotwData.round}`;
   const hWon = m.hScore > m.aScore, aWon = m.aScore > m.hScore;
   const margin = Math.abs(m.hScore - m.aScore);
-  const grade = matchGrade(m);
+  const grade = matchGrade(m) || m.rawGrade || '';
 
   bodyEl.innerHTML = `<div class="gotw-wrap">
     <div class="gotw-teams">
@@ -1415,7 +1415,7 @@ function renderGOTW(age) {
     <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(grade)}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
-      ${gotwData.nominees.map(n=>{const ng=matchGrade(n);return`<div class="gotw-nom">
+      ${gotwData.nominees.map(n=>{const ng=matchGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
         <div style="display:flex;align-items:center;gap:5px">
           <span class="gtag gtag-${ng.replace(/[^A-Z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(ng)}</span>
           <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
@@ -1444,7 +1444,7 @@ function renderScorers(age) {
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
     // Use teamRaw for roster lookup (includes colour word, matches roster key)
     const lookupTeam = p.teamRaw || p.team;
-    const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
+    const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) || p.rawGrade || '';
     const gc = `gtag-${teamGrade.replace(/[^A-Z0-9]/g,'')}`;
     // Display name: use teamRaw stripped of age suffix for readability
     const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
@@ -1476,8 +1476,8 @@ function renderResults(age) {
     if (m.age !== age) return false;
     // Valid matches: filter by active grade. Invalid (greyed): always show regardless of grade filter.
     if (matchIsValid(m)) {
-      const g = matchGrade(m);
-      if (grades.size && !grades.has(g)) return false;
+      const g = matchGrade(m) || m.rawGrade || '';
+      if (grades.size && g && !grades.has(g)) return false;
     }
     if (S.selRound && m.round != S.selRound) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
@@ -1497,7 +1497,7 @@ function renderResults(age) {
     const rms = byRound[r];
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
-      const g = matchIsValid(m) ? matchGrade(m) : m.rawGrade;
+      const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
       const gc = `gtag-${g.replace(/[^A-Z0-9]/g,'')}`;
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${m.round}`;
