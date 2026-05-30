@@ -72,6 +72,21 @@ function toClubName(teamName) {
   for (const c of COLOUR_WORDS) {
     n = n.replace(new RegExp(`\\s+${c}\\s*$`, 'i'), '').trim();
   }
+  // Strip trailing team number (e.g. "Mixed 1", "Mixed 2", "Boys 1")
+  n = n.replace(/\s+\d+$/, '').trim();
+  // Strip trailing single word that looks like a surname/coach name (Title Case, no spaces)
+  // Only if the remaining name is still meaningful (2+ words)
+  // e.g. "St Bernards Mixed Davey" → "St Bernards Mixed"
+  // but NOT "Langwarrin" → "Langwarrin" (single word, don't strip)
+  const parts = n.split(/\s+/);
+  if (parts.length >= 3) {
+    const last = parts[parts.length - 1];
+    // Strip if last word is Title Case and not a known structural word
+    const structural = new Set(['Mixed','Boys','Girls','Men','Women','Juniors','Junior','FC','JFC','AFC']);
+    if (/^[A-Z][a-z]+$/.test(last) && !structural.has(last)) {
+      n = parts.slice(0, -1).join(' ').trim();
+    }
+  }
   return n;
 }
 
@@ -265,17 +280,18 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
 // ── Phase 3: resolve a bucket into one canonical player record ────────────────
 
 function resolveAppearances(appearances, currentClubName) {
-  // Group grade-page entries by bare club name
-  // Group by normalised club name for consistent matching
+  // Group by toClubName (strips age, colours, trailing numbers, coach surnames)
+  // so same-club multi-team players (e.g. "St Bernards Mixed Davey" + "St Bernards Mixed Hardwick")
+  // are NOT flagged as transfers. Use normaliseClub for profile-lookup matching only.
   const byClub = {};
-  const normToDisplay = {}; // normalised → display name
+  const normToDisplay = {}; // club name → display name
   for (const a of appearances) {
-    const norm = normaliseClub(a.teamRaw);
-    if (!byClub[norm]) byClub[norm] = [];
-    byClub[norm].push(a);
-    normToDisplay[norm] = toClubName(a.teamRaw);
+    const clubKey = toClubName(a.teamRaw);
+    if (!byClub[clubKey]) byClub[clubKey] = [];
+    byClub[clubKey].push(a);
+    normToDisplay[clubKey] = clubKey;
   }
-  const clubs = Object.keys(byClub).map(k => normToDisplay[k]); // display names
+  const clubs = Object.keys(byClub); // display names
   const transferred = Object.keys(byClub).length > 1;
 
   // Pick which club's entries to sum
@@ -286,11 +302,11 @@ function resolveAppearances(appearances, currentClubName) {
     // Normalise the profile club name and find matching bucket
     const normCurrent = normaliseClub(currentClubName);
     const normKeys = Object.keys(byClub);
-    // Try exact match, prefix match, then word-token overlap (handles "Rowville Hawks" → "Rowville Men")
+    // Try exact match on toClubName keys, then normalised prefix/word-token overlap
     const profileWords = normCurrent.split(/\s+/).filter(w => w.length > 3);
-    const matchKey = normKeys.find(k => k === normCurrent)
-                  || normKeys.find(k => k.startsWith(normCurrent) || normCurrent.startsWith(k))
-                  || normKeys.find(k => profileWords.some(w => k.includes(w)));
+    const matchKey = normKeys.find(k => normaliseClub(k) === normCurrent)
+                  || normKeys.find(k => normaliseClub(k).startsWith(normCurrent) || normCurrent.startsWith(normaliseClub(k)))
+                  || normKeys.find(k => profileWords.some(w => normaliseClub(k).includes(w)));
     if (matchKey) {
       canonicalEntries = byClub[matchKey];
     } else {
