@@ -165,21 +165,21 @@ Array.from(byIdFinal.values()).forEach(m => {
   if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
 });
 
-// ── YJFL purge: delete all YJFL 2026 matches and reset lastRound ────────────
-// fetch-results.js parseGradeName previously gave rawGrade:"" to all YJFL
-// divisions, causing them to share a knownRounds key and skip grading rounds.
-// Deleting and re-fetching is the clean fix — other comps are untouched.
-let yjflDeleted = 0;
+// ── SEJ purge: delete all SEJ 2026 matches and reset lastRound ──────────────
+// fetch-results.js parseGradeName now extracts colour words (Blue/Red) as
+// rawGrade for SEJ-style grades. Existing records have rawGrade:"" and must
+// be purged and re-fetched to get correct grade separation.
+let sejDeleted = 0;
 Array.from(byIdFinal.keys()).forEach(id => {
-  if (byIdFinal.get(id).compName === 'YJFL 2026') {
+  if (byIdFinal.get(id).compName === 'SEJ 2026') {
     byIdFinal.delete(id);
-    yjflDeleted++;
+    sejDeleted++;
   }
 });
 Object.keys(lastRound).forEach(k => {
-  if (k.startsWith('YJFL 2026|')) delete lastRound[k];
+  if (k.startsWith('SEJ 2026|')) delete lastRound[k];
 });
-console.log(`YJFL purge: deleted ${yjflDeleted} match(es), reset lastRound for YJFL 2026`);
+console.log(`SEJ purge: deleted ${sejDeleted} match(es), reset lastRound for SEJ 2026`);
 
 data.matches = Array.from(byIdFinal.values());
 data.roster  = roster;
