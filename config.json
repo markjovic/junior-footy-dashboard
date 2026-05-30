@@ -4,31 +4,31 @@
       "name": "EFNL 2026",
       "seasonID": "2dcbf383",
       "vip": true,
-      "excludeGrades": ["U8", "U9", "U10"]
+      "excludeGrades": []
     },
     {
       "name": "YJFL 2026",
       "seasonID": "cda2f0ec",
       "vip": false,
-      "excludeGrades": ["U8", "U9", "U10"]
+      "excludeGrades": []
     },
     {
       "name": "WFNL 2026",
       "seasonID": "2170ac5a",
       "vip": false,
-      "excludeGrades": ["U8", "U9", "U10"]
+      "excludeGrades": []
     },
     {
       "name": "SEJ 2026",
       "seasonID": "4dfaaab5",
       "vip": false,
-      "excludeGrades": ["U8", "U9", "U10"]
+      "excludeGrades": []
     },
     {
       "name": "SER 2026",
       "seasonID": "263ca13b",
       "vip": false,
-      "excludeGrades": ["U8", "U9", "U10"]
+      "excludeGrades": []
     }
   ]
 }
