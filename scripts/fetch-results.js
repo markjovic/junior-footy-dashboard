@@ -548,7 +548,20 @@ async function fetchGrade(grade, knownRounds, byId) {
       });
     }
 
-    console.log(`${matches.length} result(s)`);
+    const isPartial = finalGames.length < games.length;
+    if (isPartial) {
+      console.log(`${matches.length} result(s) (PARTIAL — ${games.length - finalGames.length} game(s) not yet final)`);
+      // Store a partial sentinel so this round is re-fetched next run
+      allMatches.push({
+        id: `${grade.compName}|${age}|${rawGrade}|${number}|__partial__`,
+        age, rawGrade, round: number, compName: grade.compName,
+        home: '__partial__', away: '__partial__',
+        hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
+        venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isPartial: true,
+      });
+    } else {
+      console.log(`${matches.length} result(s)`);
+    }
     allMatches.push(...matches);
   }
 
@@ -648,26 +661,28 @@ async function main() {
   const byId = new Map();
   const knownRounds = new Map(); // "age|rawGrade" → highest round in data.json
 
-  // Build a map of which rounds exist per grade
+  // Build a map of which rounds exist per grade, and which are partial
   const roundsByGrade = new Map();
+  const partialRounds = new Map(); // key → Set of partial round numbers
   (existing.matches || []).forEach(m => {
     byId.set(m.id, m);
     // Key by compName|age|rawGrade to keep competitions separate
     const key = `${m.compName || ''}|${m.age}|${m.rawGrade}`;
     if (!roundsByGrade.has(key)) roundsByGrade.set(key, new Set());
     roundsByGrade.get(key).add(m.round);
+    // Track partial rounds — these must be re-fetched even if within consecutive count
+    if (m.isPartial) {
+      if (!partialRounds.has(key)) partialRounds.set(key, new Set());
+      partialRounds.get(key).add(m.round);
+    }
   });
 
-  // knownRounds = highest *consecutive* round from R1 with no gaps.
-  // Always start counting from R1. If R1 is missing (e.g. 504 error on first run)
-  // but R2-R6 are stored, knownRounds stays 0 so R1 is retried next run.
-  // Exception: grades that genuinely start later (byes in R1-R4) will have
-  // minRound > 1. For those, we treat the gap as intentional (byes) only if
-  // the gap is covered by bye rounds — determined at fetch time, not here.
-  // Safest approach: always walk from R1, treating missing rounds as gaps.
+  // knownRounds = highest *consecutive* round from R1 with no gaps,
+  // excluding partial rounds (they need re-fetching).
   roundsByGrade.forEach((rounds, key) => {
+    const partial = partialRounds.get(key) || new Set();
     let consecutive = 0;
-    for (let r = 1; rounds.has(r); r++) consecutive = r;
+    for (let r = 1; rounds.has(r) && !partial.has(r); r++) consecutive = r;
     knownRounds.set(key, consecutive);
   });
 
@@ -680,6 +695,14 @@ async function main() {
     const matches = await fetchGrade(grade, knownRounds, byId);
 
     for (const m of matches) {
+      // Remove partial sentinel for this round when we have fresh results
+      if (m.isPartial) {
+        // This IS a new partial sentinel — store it (will overwrite old one by id)
+      } else {
+        // Remove any existing partial sentinel for this round/grade
+        const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${m.round}|__partial__`;
+        byId.delete(partialKey);
+      }
       if (byId.has(m.id)) {
         const prev = byId.get(m.id);
         const changed = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
@@ -699,7 +722,7 @@ async function main() {
   // Separate real matches from bye sentinels
   const allValues = Array.from(byId.values());
   const allMatches = allValues
-    .filter(m => !m.isBye)
+    .filter(m => !m.isBye && !m.isPartial)
     .sort((a, b) => a.age.localeCompare(b.age)
                  || a.rawGrade.localeCompare(b.rawGrade)
                  || a.round - b.round);
