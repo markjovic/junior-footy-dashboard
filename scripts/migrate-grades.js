@@ -165,23 +165,21 @@ Array.from(byIdFinal.values()).forEach(m => {
   if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
 });
 
-// ── SEJ rawGrade:"" purge ─────────────────────────────────────────────────────
-// After colour-suffix fix, SEJ permanent grades now have rawGrade "Blue"/"Red"
-// etc. Old records with rawGrade:"" are duplicates that cause roster conflicts.
-// Delete only the empty-rawGrade SEJ records; keep Grading records intact.
-let sejDeleted = 0;
+// ── SEJ + SER rawGrade:"" purge ──────────────────────────────────────────────
+// After colour-suffix fix, SEJ/SER permanent grades now have rawGrade
+// "Blue"/"Red"/"Gold" etc. Old records with rawGrade:"" are duplicates that
+// cause roster conflicts. Delete only the empty-rawGrade records; keep
+// Grading and Premier records intact.
+const COLOUR_GRADE_COMPS = new Set(['SEJ 2026', 'SER 2026']);
+let colourPurgeDeleted = 0;
 Array.from(byIdFinal.keys()).forEach(id => {
   const m = byIdFinal.get(id);
-  if (m.compName === 'SEJ 2026' && m.rawGrade === '') {
+  if (COLOUR_GRADE_COMPS.has(m.compName) && m.rawGrade === '') {
     byIdFinal.delete(id);
-    sejDeleted++;
+    colourPurgeDeleted++;
   }
 });
-// Reset lastRound for SEJ empty-rawGrade keys only
-Object.keys(lastRound).forEach(k => {
-  if (k.startsWith('SEJ 2026|') && k.endsWith('|')) delete lastRound[k];
-});
-console.log(`SEJ purge: deleted ${sejDeleted} empty-rawGrade match(es)`);
+console.log(`SEJ/SER purge: deleted ${colourPurgeDeleted} empty-rawGrade match(es)`);
 
 data.matches = Array.from(byIdFinal.values());
 data.roster  = roster;
