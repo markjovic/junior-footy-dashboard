@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.80</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.82</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.80</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.82</span>
         </div>
 
 
@@ -1901,7 +1901,7 @@ async function openPlayerPanel(uuid) {
     (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
 
   document.getElementById('pm-meta').innerHTML = p
-    ? `<span>${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${teamDisplay.replace(/'/g,"\'")}','${grade}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -2008,22 +2008,45 @@ function renderPlayerGames(data, p) {
 
   const stripAge = n => n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
 
-  body.innerHTML = `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
+  // Map API full comp name → stored S.compLogos key (e.g. "Eastern Football Netball League" → "EFNL 2026")
+  const COMP_ABBREV = {
+    'Eastern Football Netball League': 'EFNL',
+    'Western Football Netball League': 'WFNL',
+    'South East Juniors':              'SEJ',
+    'South East Regional':             'SER',
+  };
+  function compLogoHtml(apiCompName) {
+    const abbr = COMP_ABBREV[apiCompName] || '';
+    if (!abbr) return '';
+    // Find matching key in S.compLogos (e.g. "EFNL 2026")
+    const logoKey = Object.keys(S.compLogos).find(k => k.startsWith(abbr));
+    const logoUrl = logoKey ? S.compLogos[logoKey] : null;
+    if (logoUrl) {
+      return `<img src="${logoUrl}" style="width:14px;height:14px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0;display:block" onerror="this.style.display='none'" title="${abbr}">`;
+    }
+    // Fallback: text abbreviation
+    return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
+  }
+
+  const COLS = '60px 1fr 1fr 40px 18px 28px 28px';
+  body.innerHTML = `<div style="display:grid;grid-template-columns:${COLS};padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Round</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Home</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Away</span>
-    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Grade</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Gr</span>
+    <span></span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
   </div>` + rows.map(r => {
     const homeDisplay = stripAge(r.home);
     const awayDisplay = stripAge(r.away);
     const isPlayerHome = stripAge(r.teamName) === homeDisplay;
-    const playerTeamStyle = 'font-weight:600;color:var(--tx)';
+    // Player's own team: gold + bold (no click — team click is in the panel header)
+    const playerTeamStyle = 'font-weight:600;color:var(--gold)';
     const oppStyle = 'color:var(--tx2)';
     const dimmed = !r.isCurrentClub;
 
-    return `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
+    return `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
       <div>
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${r.round}</div>
         <div style="font-size:9px;color:var(--tx3)">${r.date ? new Date(r.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'}) : ''}</div>
@@ -2034,18 +2057,16 @@ function renderPlayerGames(data, p) {
       <div style="${!isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px">
         ${crestHTML(awayDisplay,14,'tlogo')}${awayDisplay}
       </div>
-      <div style="text-align:center">
-        <div style="font-size:8px;font-family:'DM Mono',monospace;color:var(--tx2);white-space:nowrap">${abbrevGrade(r.gradeFullName||r.gradeName)}</div>
-        ${r.compName&&r.compName.length>4?`<div style="font-size:7px;color:var(--tx3);white-space:nowrap">${r.compName.replace('Eastern Football Netball League','EFNL').replace('Western Football Netball League','WFNL').replace('South East Juniors','SEJ').replace('South East Regional','SER')}</div>`:''}
-      </div>
+      <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--tx2);text-align:center;white-space:nowrap">${abbrevGrade(r.gradeFullName||r.gradeName)}</div>
+      <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
   }).join('') +
   // Totals row
-  `<div style="display:grid;grid-template-columns:60px 1fr 1fr 72px 28px 28px;align-items:center;padding:7px 16px;gap:6px;font-size:11px;background:var(--s2);border-top:1px solid var(--b2)">
+  `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:7px 16px;gap:6px;font-size:11px;background:var(--s2);border-top:1px solid var(--b2)">
     <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2)">TOTAL</div>
-    <div></div><div></div><div></div>
+    <div></div><div></div><div></div><div></div>
     <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);text-align:right">${rows.reduce((s,r)=>s+r.goals,0)||'–'}</div>
     <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${rows.reduce((s,r)=>s+r.bp,0)||'–'}</div>
   </div>`;
