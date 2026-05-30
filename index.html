@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.85</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.86</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.85</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.86</span>
         </div>
 
 
@@ -1890,7 +1890,8 @@ async function openPlayerPanel(uuid) {
   const teamDisplay = p ? (p.teamRaw||p.team).replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').trim() : '';
   const stripAge = n => n ? n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim() : n;
   const lookupTeam = stripAge(p?.teamRaw || p?.team || '');
-  const grade = p ? abbrevGrade(currentGrade(lookupTeam, p.age, p.rawGrade, p.compName)) : '';
+  const rawGradeResolved = p ? currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) : '';
+  const grade = abbrevGrade(rawGradeResolved);  // display only
   const gc = `gtag-${(grade||'').replace(/[^A-Z0-9]/g,'')}`;
 
   document.getElementById('pm-name').innerHTML =
@@ -1900,11 +1901,11 @@ async function openPlayerPanel(uuid) {
        onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.2)'">${displayName}</a>` +
     (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
 
-  // Use same pattern as scorers: lookupTeam (teamRaw age-stripped) + p.age override
-  const drillTeam = lookupTeam;
+  // drilldown: bare club name (matches m.home/m.away), raw grade (unabbreviated), age override
+  const drillTeam = p?.team || lookupTeam;
   const drillAge  = p?.age || '';
   document.getElementById('pm-meta').innerHTML = p
-    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${grade}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${rawGradeResolved}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -1975,19 +1976,17 @@ function renderPlayerGames(data, p) {
     for (const teamStat of (reg.teamStatistics || [])) {
       const teamName = teamStat.team?.name || '';
       for (const gradeStat of (teamStat.gradeStatistics || [])) {
-        const gradeName = abbrevGrade(gradeStat.grade?.name || '');
         for (const gameStat of (gradeStat.gameStatistics || [])) {
           const g = gameStat.game;
           const {goals, bp} = parseGameStats(gameStat.statistics);
           const home = g.home?.name || '';
           const away = g.away?.name || '';
           const isPlayerHome = home === teamName;
-          const compName = reg.season?.name
-            ? (data?.data?.publicProfileStatistics?.seasonStatistics||[])
-                .find(s=>s.statistics?.some(r=>r===reg))?.name || ''
-            : '';
+          // competition.name added to query — use it directly
+          // (the old convoluted expression above this was broken and always returned '')
           // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
-          const gradeRaw = gradeStat.grade?.name || '';
+          // Strip leading asterisk/wildcard PlayHQ sometimes prepends
+          const gradeRaw = (gradeStat.grade?.name || '').replace(/^[*\s]+/, '').trim();
           // EFNL format: "U12 - B" or "Premier - Eastland Senior Men" → take part before " - "
           const dashIdx = gradeRaw.indexOf(' - ');
           let gradeShort;
@@ -1995,8 +1994,8 @@ function renderPlayerGames(data, p) {
             gradeShort = abbrevGrade(gradeRaw.slice(0, dashIdx).trim());
           } else {
             // WFNL format: "Western Bulldogs U12 Girls Division 1" → trailing Division/grade
-            const divMatch = gradeRaw.match(/(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
-            gradeShort = divMatch ? abbrevGrade(divMatch[1].trim()) : '';
+            const divMatch = gradeRaw.match(/(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
+            gradeShort = divMatch ? abbrevGrade(divMatch[1].trim()) : abbrevGrade(gradeRaw);
           }
           rows.push({
             round: g.round?.name || '',
@@ -2049,7 +2048,7 @@ function renderPlayerGames(data, p) {
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Home</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Away</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Gr</span>
-    <span></span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Comp</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
   </div>` + rows.map(r => {
