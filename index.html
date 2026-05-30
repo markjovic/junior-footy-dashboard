@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.104</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.106</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -582,7 +582,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.104</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.106</span>
         </div>
 
 
@@ -1459,8 +1459,9 @@ function renderScorers(age) {
     const gc = `gtag-${teamGrade.replace(/[^A-Za-z0-9]/g,'')}`;
     // Display name: use teamRaw stripped of age suffix for readability
     const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
+    // Scorers always show current (canonical) club — green XFER with in-arrow
     const transferBadge = p.transferred
-      ? `<span title="Transferred clubs this season" style="font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;background:rgba(240,192,64,0.15);color:var(--gold);margin-left:3px">XFER</span>`
+      ? `<span title="Transferred clubs this season" style="font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 4px;border-radius:3px;font-family:'DM Mono',monospace;background:rgba(74,222,128,.15);color:#4ade80;margin-left:3px">XFER ↙</span>`
       : '';
     // Strip age suffix from team name for drilldown — match records don't have it
     const drillTeam = lookupTeam.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
@@ -1740,8 +1741,13 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     if (p.age !== age) continue;
     if (rosterComp && p.compName !== rosterComp) continue;
 
-    // Compare with age suffix stripped from both sides
-    if (stripAge(p.teamRaw) !== normTeamName && stripAge(p.team) !== normTeamName) continue;
+    // Include if canonical team matches OR if any appearance entry matches this team
+    // (covers transferred players who played for this team before moving)
+    const canonicalMatch = stripAge(p.teamRaw) === normTeamName || stripAge(p.team) === normTeamName;
+    const appearanceMatch = !canonicalMatch && p.appearances?.some(app =>
+      stripAge(app.teamRaw) === normTeamName || stripAge(app.team) === normTeamName
+    );
+    if (!canonicalMatch && !appearanceMatch) continue;
 
     // Find the GP/goals for this specific teamRaw from appearances array
     // Sum across all appearances entries that share the same teamRaw
@@ -1780,6 +1786,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
       bestPlayer:  teamBP,
       transferred: p.transferred,
       clubs:       p.clubs,
+      isCurrentTeam: canonicalMatch,  // true = current club, false = previous club
     });
   }
 
@@ -1802,9 +1809,14 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
       rosterPlayers.map(p => {
         const gpg = p.gp ? (p.goals / p.gp).toFixed(1) : '–';
         const profileUrl = `https://www.playhq.com/public/profile/${p.uuid}/statistics?tenant=afl`;
-        const xfer = p.transferred
-          ? `<span class="roster-xfer">XFER</span>`
-          : '';
+        let xfer = '';
+        if (p.transferred) {
+          if (p.isCurrentTeam) {
+            xfer = `<span class="roster-xfer" style="background:rgba(74,222,128,.15);color:#4ade80">XFER ↙</span>`;
+          } else {
+            xfer = `<span class="roster-xfer" style="background:rgba(248,113,113,.15);color:#f87171">XFER ↗</span>`;
+          }
+        }
         const bp = p.bestPlayer || 0;
         return `<div class="roster-row">
           <div class="roster-name" style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
@@ -1936,7 +1948,7 @@ async function openPlayerPanel(uuid) {
        style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.2)"
        onmouseover="this.style.borderBottomColor='var(--gold)'"
        onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.2)'">${displayName}</a>` +
-    (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
+    (p?.transferred ? ' <span class="roster-xfer" style="background:rgba(74,222,128,.15);color:#4ade80">XFER ↙</span>' : '');
 
   // drilldown: bare club name (matches m.home/m.away), raw grade (unabbreviated), age override
   const drillTeam = p?.team || lookupTeam;
