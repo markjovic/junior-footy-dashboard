@@ -416,6 +416,23 @@ async function fetchGrade(grade, knownRounds, byId) {
 
   const allMatches = [];
 
+  // If the grade's first round number is > 1 (e.g. started at R5 after grading),
+  // fill R1 through firstRound-1 with bye sentinels so knownRounds advances correctly
+  // and we don't retry non-existent early rounds on every run.
+  const firstRoundNumber = parseInt(roundList[0]?.number, 10) || 1;
+  if (firstRoundNumber > 1 && highestKnown < firstRoundNumber - 1) {
+    for (let r = Math.max(1, highestKnown + 1); r < firstRoundNumber; r++) {
+      const byeKey = `${grade.compName}|${age}|${rawGrade}|${r}|__bye__`;
+      if (!byId.has(byeKey)) {
+        console.log(`    R${r} ... implied bye (grade starts at R${firstRoundNumber})`);
+        allMatches.push({ id: byeKey, age, rawGrade, round: r, compName: grade.compName,
+          home: '__bye__', away: '__bye__',
+          hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
+          venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
+      }
+    }
+  }
+
   for (const round of roundList) {
     const { id: roundID, provisionalDates, isFinalsRound, current } = round;
     const number = parseInt(round.number, 10) || 0;
@@ -576,6 +593,24 @@ async function fetchGrade(grade, knownRounds, byId) {
       console.log(`${matches.length} result(s)`);
     }
     allMatches.push(...matches);
+  }
+
+  // Post-loop: if a partial round exists but any later round has complete results,
+  // the partial will never be completed (forfeit, error etc.) — remove its sentinel.
+  const completeRounds = new Set(
+    allMatches.filter(m => !m.isPartial && !m.isBye && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
+      .map(m => m.round)
+  );
+  const maxCompleteRound = completeRounds.size ? Math.max(...completeRounds) : 0;
+  const stalledPartials = allMatches.filter(m =>
+    m.isPartial && m.round < maxCompleteRound
+  );
+  if (stalledPartials.length) {
+    stalledPartials.forEach(m => {
+      console.log(`    R${m.round} partial promoted to complete (later rounds up to R${maxCompleteRound} are complete)`);
+    });
+    const stalledRounds = new Set(stalledPartials.map(m => m.round));
+    return allMatches.filter(m => !(m.isPartial && stalledRounds.has(m.round)));
   }
 
   return allMatches;
