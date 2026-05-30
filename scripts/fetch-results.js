@@ -323,8 +323,18 @@ async function discoverGrades(competitions) {
     const allGradesRaw = res?.data?.discoverSeason?.grades || [];
     console.log(`  Found ${allGradesRaw.length} grade(s) from PlayHQ`);
 
-    // All grades fetched — age group visibility is controlled client-side via admin toggle
-    const grades = allGradesRaw;
+    // Filter grades using excludeGrades list from config.
+    // Each entry is matched as a case-insensitive substring against the normalised grade name.
+    const excludeList = (comp.excludeGrades || []).map(e => e.toLowerCase());
+    const grades = excludeList.length ? allGradesRaw.filter(g => {
+      const normName = g.name.toLowerCase().replace(/\bu0*(\d+)/g, 'u$1');
+      if (excludeList.some(ex => normName.includes(ex))) {
+        console.log(`  ~ EXCLUDED (config): ${g.name}`);
+        return false;
+      }
+      return true;
+    }) : allGradesRaw;
+    if (excludeList.length) console.log(`  ${grades.length} grade(s) after filtering`);
 
     // Diff against cache
     const liveIds = new Set(grades.map(g => g.id));
