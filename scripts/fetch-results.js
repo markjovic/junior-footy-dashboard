@@ -217,7 +217,14 @@ function parseGradeName(name, ageName, genderName) {
       : ageName;
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
       ? ' ' + genderName : '';
-    return { age: resolvedAge + genderSuffix, rawGrade };
+    // If rawGrade is still empty, check for a trailing colour/division word
+    // e.g. SEJ "U11 Mixed Blue" → rawGrade "Blue", "U12 Mixed Red" → "Red"
+    let resolvedRawGrade = rawGrade;
+    if (!resolvedRawGrade) {
+      const colourMatch = n.match(/\b(Blue|Red|Green|Gold|White|Black|Yellow|Purple|Orange|Navy|Silver|Teal|Grey|Gray|Maroon|Pink)\s*$/i);
+      if (colourMatch) resolvedRawGrade = colourMatch[1];
+    }
+    return { age: resolvedAge + genderSuffix, rawGrade: resolvedRawGrade };
   }
 
   // Senior/Open: use name to distinguish Senior Men / Reserves / U19.5 / Veterans
@@ -410,12 +417,18 @@ async function fetchGrade(grade, knownRounds, byId) {
   const allMatches = [];
 
   for (const round of roundList) {
-    const { id: roundID, number, provisionalDates, isFinalsRound, current } = round;
+    const { id: roundID, provisionalDates, isFinalsRound, current } = round;
+    const number = parseInt(round.number, 10) || 0;
 
-    // Skip already-stored rounds
-    if (number <= highestKnown) {
+    // Skip already-stored rounds — but always re-fetch the highest known round
+    // in case it was partial, or results were amended after storage.
+    if (number < highestKnown) {
       console.log(`    R${number} ... already stored`);
       continue;
+    }
+    if (number === highestKnown) {
+      console.log(`    R${number} ... re-checking latest stored round`);
+      // fall through to fetch
     }
 
     // Future-round detection strategy:
