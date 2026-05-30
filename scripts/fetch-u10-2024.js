@@ -96,7 +96,7 @@ async function main() {
   for (const r of results) {
     lines.push(`${r.grade},${r.round},${r.date},"${r.home}",${r.hScore},${r.hG},${r.hB},"${r.away}",${r.aScore},${r.aG},${r.aB}`);
   }
-  require('fs').writeFileSync('/home/claude/u10-2024-results.csv', lines.join('\n'));
+  require('fs').writeFileSync('u10-2024-results.csv', lines.join('\n'));
   console.log(`Done — ${results.length} matches written to u10-2024-results.csv`);
 }
 
