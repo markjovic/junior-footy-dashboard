@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.91</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.92</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.91</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.92</span>
         </div>
 
 
@@ -1960,23 +1960,17 @@ function renderPlayerGames(data, p) {
     Object.values(S.lastRound || {}).length ? [] : []
   );
   // Use all 2026 seasons
-  console.log('[PlayerDebug] seasons:', seasons.map(s => s.name + ' regs=' + (s.statistics||[]).length));
   const season2026 = seasons.find(s => s.name === '2026');
   if (!season2026?.statistics?.length) {
     body.innerHTML = '<div class="empty"><p>No 2026 season stats found.</p></div>';
     return;
   }
-  console.log('[PlayerDebug] regs:', season2026.statistics.map(r => r.club?.name + ' teams=' + (r.teamStatistics||[]).length));
 
   // Collect all game rows across all club registrations
   const rows = [];
   for (const reg of season2026.statistics) {
     const clubRaw = reg.club?.name || '';
     const clubName = clubRaw.replace(/\s*\([^)]+\)\s*$/, '').trim();
-    // Org name is in the parenthetical: "East Ringwood (Eastern Football Netball League)" → "Eastern Football Netball League"
-    const orgMatch = clubRaw.match(/\(([^)]+)\)\s*$/);
-    const regCompName = orgMatch ? orgMatch[1].trim() : '';
-    console.log('[CompDebug] club:', clubRaw, '| org:', regCompName || '(none)');
     const isCurrentClub = !p?.transferred || (p.clubs||[]).some(c =>
       clubName.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(clubName.toLowerCase())
     );
@@ -2012,7 +2006,7 @@ function renderPlayerGames(data, p) {
             home, away, teamName, clubName,
             gradeName: gradeShort,
             gradeFullName: gradeRaw,
-            compName: regCompName,
+            compName: p?.compName || '',
             goals, bp,
             isCurrentClub,
           });
@@ -2038,19 +2032,20 @@ function renderPlayerGames(data, p) {
     'South East Juniors':              'SEJ',
     'South East Regional':             'SER',
   };
-  function compLogoHtml(apiCompName) {
-    // apiCompName may be full league name or abbreviated — normalise to abbr
-    const abbr = COMP_ABBREV[apiCompName]
-      || (apiCompName && Object.values(COMP_ABBREV).find(a => apiCompName.toUpperCase().startsWith(a)))
-      || '';
-    if (!abbr) return '';
-    // Find matching stored comp key (e.g. "EFNL 2026") for logo lookup
+  function compLogoHtml(compName) {
+    if (!compName) return '';
+    // compName is e.g. "WFNL 2026" — look it up directly in S.compLogos first
+    if (S.compLogos[compName]) {
+      const abbr = compName.split(' ')[0];
+      return `<img src="${S.compLogos[compName]}" style="width:14px;height:14px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0;display:block" onerror="this.style.display='none'" title="${abbr}">`;
+    }
+    // Fallback: full league name lookup via COMP_ABBREV
+    const abbr = COMP_ABBREV[compName] || compName.split(' ')[0];
     const logoKey = Object.keys(S.compLogos).find(k => k.startsWith(abbr));
     const logoUrl = logoKey ? S.compLogos[logoKey] : null;
     if (logoUrl) {
       return `<img src="${logoUrl}" style="width:14px;height:14px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0;display:block" onerror="this.style.display='none'" title="${abbr}">`;
     }
-    // Always show text abbreviation if no logo
     return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
   }
 
