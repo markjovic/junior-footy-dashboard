@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.84</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.85</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.84</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.85</span>
         </div>
 
 
@@ -1900,11 +1900,11 @@ async function openPlayerPanel(uuid) {
        onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.2)'">${displayName}</a>` +
     (p?.transferred ? ' <span class="roster-xfer">XFER</span>' : '');
 
-  // p.team is the bare club name (e.g. "East Ringwood") matching match records.
-  // teamDisplay is the full display name (e.g. "East Ringwood Men - Seniors").
-  const drillTeam = p?.team || teamDisplay;
+  // Use same pattern as scorers: lookupTeam (teamRaw age-stripped) + p.age override
+  const drillTeam = lookupTeam;
+  const drillAge  = p?.age || '';
   document.getElementById('pm-meta').innerHTML = p
-    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${grade}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${grade}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -1986,11 +1986,18 @@ function renderPlayerGames(data, p) {
             ? (data?.data?.publicProfileStatistics?.seasonStatistics||[])
                 .find(s=>s.statistics?.some(r=>r===reg))?.name || ''
             : '';
-          // Extract just the grade abbreviation from the full grade name
-          // e.g. "Premier - Eastland Senior Men" → "Prem", "U12 - B" → "B"
+          // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
           const gradeRaw = gradeStat.grade?.name || '';
-          const gradeMatch = gradeRaw.match(/[-–]\s*([A-Z][A-Z0-9\s]*)$/i);
-          const gradeShort = abbrevGrade(gradeMatch ? gradeMatch[1].trim() : gradeRaw);
+          // EFNL format: "U12 - B" or "Premier - Eastland Senior Men" → take part before " - "
+          const dashIdx = gradeRaw.indexOf(' - ');
+          let gradeShort;
+          if (dashIdx !== -1) {
+            gradeShort = abbrevGrade(gradeRaw.slice(0, dashIdx).trim());
+          } else {
+            // WFNL format: "Western Bulldogs U12 Girls Division 1" → trailing Division/grade
+            const divMatch = gradeRaw.match(/(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
+            gradeShort = divMatch ? abbrevGrade(divMatch[1].trim()) : '';
+          }
           rows.push({
             round: g.round?.name || '',
             date: g.date || '',
