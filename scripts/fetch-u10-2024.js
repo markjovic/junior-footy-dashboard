@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const https = require('https');
+const fs = require('fs');
 
 const API_URL = 'https://api.playhq.com/graphql';
 
@@ -30,7 +31,7 @@ function gqlPost(query, variables) {
       res.on('data', c => data += c);
       res.on('end', () => {
         try { resolve(JSON.parse(data)); }
-        catch(e) { reject(new Error(`JSON: ${e.message}`)); }
+        catch(e) { reject(new Error(`JSON: ${e.message}: ${data.slice(0,100)}`)); }
       });
     });
     req.on('error', reject);
@@ -50,13 +51,20 @@ const Q_FIXTURE = `query discoverFixtureByRound($roundID: ID!) {
     games {
       home { ... on DiscoverTeam { name } }
       away { ... on DiscoverTeam { name } }
-      homeTeamScore { score goals behinds }
-      awayTeamScore { score goals behinds }
+      result {
+        home { statistics { count type { value } } }
+        away { statistics { count type { value } } }
+      }
       status { value }
       date
     }
   }
 }`;
+
+function getStat(stats, type) {
+  const s = (stats || []).find(s => s.type.value === type);
+  return s ? s.count : 0;
+}
 
 async function main() {
   const results = [];
@@ -65,6 +73,7 @@ async function main() {
     console.log(`Fetching ${grade.name}...`);
     const roundsRes = await gqlPost(Q_ROUNDS, { gradeID: grade.id });
     const rounds = roundsRes?.data?.discoverGrade?.rounds || [];
+    console.log(`  ${rounds.length} rounds`);
     await sleep(200);
 
     for (const round of rounds) {
@@ -74,29 +83,30 @@ async function main() {
 
       for (const g of games) {
         if (g.status?.value !== 'FINAL') continue;
+        const hStats = g.result?.home?.statistics || [];
+        const aStats = g.result?.away?.statistics || [];
         results.push({
           grade: grade.name,
           round: round.name,
           date: g.date ? g.date.slice(0,10) : '',
           home: g.home?.name || '',
           away: g.away?.name || '',
-          hScore: g.homeTeamScore?.score ?? '',
-          hG: g.homeTeamScore?.goals ?? '',
-          hB: g.homeTeamScore?.behinds ?? '',
-          aScore: g.awayTeamScore?.score ?? '',
-          aG: g.awayTeamScore?.goals ?? '',
-          aB: g.awayTeamScore?.behinds ?? '',
+          hScore: getStat(hStats, 'TOTAL_SCORE'),
+          hG: getStat(hStats, 'TOTAL_GOALS'),
+          hB: getStat(hStats, 'TOTAL_BEHINDS'),
+          aScore: getStat(aStats, 'TOTAL_SCORE'),
+          aG: getStat(aStats, 'TOTAL_GOALS'),
+          aB: getStat(aStats, 'TOTAL_BEHINDS'),
         });
       }
     }
   }
 
-  // Output as CSV
   const lines = ['Grade,Round,Date,Home,Home Score,Home G,Home B,Away,Away Score,Away G,Away B'];
   for (const r of results) {
     lines.push(`${r.grade},${r.round},${r.date},"${r.home}",${r.hScore},${r.hG},${r.hB},"${r.away}",${r.aScore},${r.aG},${r.aB}`);
   }
-  require('fs').writeFileSync('u10-2024-results.csv', lines.join('\n'));
+  fs.writeFileSync('u10-2024-results.csv', lines.join('\n'));
   console.log(`Done — ${results.length} matches written to u10-2024-results.csv`);
 }
 
