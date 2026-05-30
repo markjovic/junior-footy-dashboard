@@ -198,6 +198,150 @@
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
   {
+    "id": "f8859f2c",
+    "name": "U8 Girls",
+    "ageName": "U8",
+    "genderName": "Girls",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "82b12aa1",
+    "name": "U8 - Eastern",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "12c1a6e6",
+    "name": "U8 - North",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "893c4f39",
+    "name": "U8 - South",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f403b995",
+    "name": "U8 - West",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7c169c9e",
+    "name": "U9 - Black",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "dd393930",
+    "name": "U9 - Blue",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "22df68a3",
+    "name": "U9 - Gold",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "8a4bcb47",
+    "name": "U9 - Red",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3ad36675",
+    "name": "U9 - White",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "35bd0841",
+    "name": "U10 Girls - Black",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6a76d310",
+    "name": "U10 Girls - Red",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "32a0a1af",
+    "name": "U10 - Black",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d7bc87cf",
+    "name": "U10 - Blue",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "83da031b",
+    "name": "U10 - Red",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3e0678fb",
+    "name": "U10 - White",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2dcbf383",
+    "compName": "EFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
     "id": "e2eca367",
     "name": "U11 - A",
     "ageName": "U11",
@@ -628,6 +772,177 @@
     "seasonID": "2dcbf383",
     "compName": "EFNL 2026",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2e14e566",
+    "name": "U8 Future Magpies Mixed Group A",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "dc062b29",
+    "name": "U8 Future Magpies Mixed Group B",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "aa71c7b5",
+    "name": "U8 Future Magpies Mixed Group C",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6551812e",
+    "name": "U8 Future Magpies Mixed Group D",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "af5ccafd",
+    "name": "U9 Future Magpies Kickstart Girls",
+    "ageName": "U9",
+    "genderName": "Girls",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a5751e8f",
+    "name": "U9 Future Magpies Mixed Group A",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "670c67d9",
+    "name": "U9 Future Magpies Mixed Group B",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9307719c",
+    "name": "U9 Future Magpies Mixed Group C",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2d1697ea",
+    "name": "U9 Future Magpies Mixed Group D",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "af1a61fe",
+    "name": "U10 Mixed - Pool 1",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "86d4d0e4",
+    "name": "U10 Mixed - Pool 2",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5d18d477",
+    "name": "U10 Mixed - Pool 3",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "375ec42f",
+    "name": "U10 Mixed - Pool 4",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "02db2b8f",
+    "name": "U10 Mixed - Pool 5",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4a19ca7a",
+    "name": "U10 Mixed - Pool 6",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ab408e68",
+    "name": "U10 Mixed Group A",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ad445ad4",
+    "name": "U10 Mixed Group B",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "26627e35",
+    "name": "U10 Mixed Group C",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d58c08fa",
+    "name": "U10 Mixed Group D",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "cda2f0ec",
+    "compName": "YJFL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
   },
   {
     "id": "4427145c",
@@ -1323,6 +1638,69 @@
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
   },
   {
+    "id": "eacfddb0",
+    "name": "Western Bulldogs U10 Girls",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "95ec5651",
+    "name": "Western Bulldogs U10 Mixed Blue",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1541fe15",
+    "name": "Western Bulldogs U10 Mixed Red",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ddecc310",
+    "name": "Western Bulldogs U10 Mixed White",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "aa41ee59",
+    "name": "Western Bulldogs U9 Mixed Blue",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "dac08005",
+    "name": "Western Bulldogs U9 Mixed",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "c1a2c124",
+    "name": "Western Bulldogs U8 Mixed",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "2170ac5a",
+    "compName": "WFNL 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
     "id": "b5e293b3",
     "name": "Little Demons - U08 Mixed",
     "ageName": "U8",
@@ -1336,6 +1714,24 @@
     "name": "Little Demons - U09 Mixed",
     "ageName": "U9",
     "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a5a8276d",
+    "name": "Little Demons - U10 Mixed",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "4dfaaab5",
+    "compName": "SEJ 2026",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cb7b3db3",
+    "name": "Little Demons - U10 Girls A",
+    "ageName": "U10",
+    "genderName": "Girls",
     "seasonID": "4dfaaab5",
     "compName": "SEJ 2026",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
