@@ -294,7 +294,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.86</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.87</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -564,7 +564,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.86</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.87</span>
         </div>
 
 
@@ -1987,15 +1987,18 @@ function renderPlayerGames(data, p) {
           // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
           // Strip leading asterisk/wildcard PlayHQ sometimes prepends
           const gradeRaw = (gradeStat.grade?.name || '').replace(/^[*\s]+/, '').trim();
-          // EFNL format: "U12 - B" or "Premier - Eastland Senior Men" → take part before " - "
-          const dashIdx = gradeRaw.indexOf(' - ');
+          // Try to extract the grade token from anywhere in the name:
+          // Look for trailing single letter/division/premier — works for all formats:
+          //   EFNL: "U12 - B" → "B", "Premier - Eastland Senior Men" → "Premier"
+          //   WFNL: "Western Bulldogs - U12 Girls Division 1" → "D1"
+          //   WFNL: "Western Bulldogs U12 Girls Division 1" → "D1"
+          const trailMatch = gradeRaw.match(/\b(Premier|Division\s+\d+|[A-D]\d?)(?:\s*-[^-]*)?$/i);
           let gradeShort;
-          if (dashIdx !== -1) {
-            gradeShort = abbrevGrade(gradeRaw.slice(0, dashIdx).trim());
+          if (trailMatch) {
+            gradeShort = abbrevGrade(trailMatch[1].trim());
           } else {
-            // WFNL format: "Western Bulldogs U12 Girls Division 1" → trailing Division/grade
-            const divMatch = gradeRaw.match(/(Division\s+\d+|Premier|[A-D]\d?)\s*$/i);
-            gradeShort = divMatch ? abbrevGrade(divMatch[1].trim()) : abbrevGrade(gradeRaw);
+            // Single-division grades (e.g. "Thirds", "Senior Women") — no grade token
+            gradeShort = '';
           }
           rows.push({
             round: g.round?.name || '',
@@ -2030,15 +2033,18 @@ function renderPlayerGames(data, p) {
     'South East Regional':             'SER',
   };
   function compLogoHtml(apiCompName) {
-    const abbr = COMP_ABBREV[apiCompName] || '';
+    // apiCompName may be full league name or abbreviated — normalise to abbr
+    const abbr = COMP_ABBREV[apiCompName]
+      || (apiCompName && Object.values(COMP_ABBREV).find(a => apiCompName.toUpperCase().startsWith(a)))
+      || '';
     if (!abbr) return '';
-    // Find matching key in S.compLogos (e.g. "EFNL 2026")
+    // Find matching stored comp key (e.g. "EFNL 2026") for logo lookup
     const logoKey = Object.keys(S.compLogos).find(k => k.startsWith(abbr));
     const logoUrl = logoKey ? S.compLogos[logoKey] : null;
     if (logoUrl) {
       return `<img src="${logoUrl}" style="width:14px;height:14px;border-radius:50%;object-fit:contain;background:var(--s3);flex-shrink:0;display:block" onerror="this.style.display='none'" title="${abbr}">`;
     }
-    // Fallback: text abbreviation
+    // Always show text abbreviation if no logo
     return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
   }
 
