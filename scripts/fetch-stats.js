@@ -257,7 +257,7 @@ async function fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep) {
     return clubFullName.replace(/\s*\([^)]+\)\s*$/, '').trim();
   }
 
-  console.warn(`  Profile: no matching season for ${uuid}. Available: ${seasons.map(s=>s.name).join(',')}`);
+  console.warn(`  Profile: no matching season for ${uuid}`);
 
   return null;
 }
@@ -356,7 +356,6 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
   // Phase 2: profile lookups — only for multi-club players
   const currentClubMap = {};  // uuid → stripped current club name
   for (const uuid of multiClubUUIDs) {
-    console.log(`  Profile lookup: ${uuid}`);
     const club = await fetchCurrentClub(uuid, seasonIDs, gqlPost, sleep);
     if (club) currentClubMap[uuid] = club;
   }
@@ -369,9 +368,6 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
       resolveAppearances(appearances, currentClubMap[uuid] || null);
     const totalBP = canonicalEntries.reduce((s, e) => s + (e.bestPlayer || 0), 0);
 
-    if (transferred) {
-      console.log(`  XFER ${primary.firstName} ${primary.lastName}: GP=${totalGP} G=${totalGoals} clubs=[${clubs.join(',')}] canonical=${toClubName(primary.teamRaw)}`);
-    }
     players.push({
       uuid,
       name:       `${primary.firstName} ${primary.lastName}`.trim(),
