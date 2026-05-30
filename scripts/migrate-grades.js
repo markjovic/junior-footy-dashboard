@@ -165,21 +165,23 @@ Array.from(byIdFinal.values()).forEach(m => {
   if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
 });
 
-// ── SEJ purge: delete all SEJ 2026 matches and reset lastRound ──────────────
-// fetch-results.js parseGradeName now extracts colour words (Blue/Red) as
-// rawGrade for SEJ-style grades. Existing records have rawGrade:"" and must
-// be purged and re-fetched to get correct grade separation.
+// ── SEJ rawGrade:"" purge ─────────────────────────────────────────────────────
+// After colour-suffix fix, SEJ permanent grades now have rawGrade "Blue"/"Red"
+// etc. Old records with rawGrade:"" are duplicates that cause roster conflicts.
+// Delete only the empty-rawGrade SEJ records; keep Grading records intact.
 let sejDeleted = 0;
 Array.from(byIdFinal.keys()).forEach(id => {
-  if (byIdFinal.get(id).compName === 'SEJ 2026') {
+  const m = byIdFinal.get(id);
+  if (m.compName === 'SEJ 2026' && m.rawGrade === '') {
     byIdFinal.delete(id);
     sejDeleted++;
   }
 });
+// Reset lastRound for SEJ empty-rawGrade keys only
 Object.keys(lastRound).forEach(k => {
-  if (k.startsWith('SEJ 2026|')) delete lastRound[k];
+  if (k.startsWith('SEJ 2026|') && k.endsWith('|')) delete lastRound[k];
 });
-console.log(`SEJ purge: deleted ${sejDeleted} match(es), reset lastRound for SEJ 2026`);
+console.log(`SEJ purge: deleted ${sejDeleted} empty-rawGrade match(es)`);
 
 data.matches = Array.from(byIdFinal.values());
 data.roster  = roster;
