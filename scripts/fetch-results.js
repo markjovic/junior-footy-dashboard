@@ -173,11 +173,30 @@ function parseGradeName(name, ageName, genderName) {
   let n = name.replace(/^\*\s*/, '').trim();
   n = n.replace(/\s+-\s+/g, ' ').trim();
 
-  // Grading rounds
-  if (/\(Grading\)/i.test(n)) {
-    let ageLabel = (ageName?.match(/^U\d/i))
-      ? ageName + (genderName && !['Men','Mixed','Boys'].includes(genderName) ? ' ' + genderName : '')
-      : n.replace(/\s*\(Grading\)/i, '').trim();
+  // Parenthetical division number: "U12 Mixed (1)", "U13 Mastercraft Construction Mixed (2)"
+  // Must be checked before grading detection.
+  const parenDivMatch = n.match(/\((\d+)\)\s*$/);
+  if (parenDivMatch) {
+    const divNum = parenDivMatch[1];
+    const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
+      ? ' ' + genderName : '';
+    if (ageName?.match(/^U\d/i)) {
+      const nameAgeMatch = n.match(/^U(\d+(?:\.\d+)?)/i);
+      const resolvedAge = (nameAgeMatch && nameAgeMatch[0] !== ageName)
+        ? nameAgeMatch[0].toUpperCase() : ageName;
+      return { age: resolvedAge + genderSuffix, rawGrade: divNum };
+    }
+    // Non-U age e.g. "Youth Boys (1)" where ageName=U18
+    return { age: (ageName || 'Unknown') + genderSuffix, rawGrade: divNum };
+  }
+
+  // Grading rounds — "U12 Mixed Grading" (no parens) or "(Grading)" suffix
+  if (/\bGrading\b/i.test(n)) {
+    const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName))
+      ? ' ' + genderName : '';
+    const ageLabel = ageName?.match(/^U\d/i)
+      ? ageName + genderSuffix
+      : n.replace(/\s*\bGrading\b.*$/i, '').trim();
     return { age: ageLabel, rawGrade: 'Grading' };
   }
 
