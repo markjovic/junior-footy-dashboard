@@ -58,6 +58,38 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Log time and schedule context
+        run: |
+          echo "=== TIME DEBUG ==="
+          echo "UTC:  $(date -u '+%Y-%m-%d %H:%M %Z')"
+          echo "AEST: $(TZ='Australia/Melbourne' date '+%Y-%m-%d %H:%M %Z')"
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          echo "UTC DOW=$DOW HOUR=$HOUR MINUTE=$MINUTE"
+          echo "Expected cron match:"
+          if [ "$MINUTE" = "30" ]; then
+            echo "  → Stats run (:30 minute)"
+          elif { [ "$DOW" = "6" ] && [ "$HOUR" = "4" ]; }; then echo "  → Sat 2pm AEST (VIP)";
+          elif { [ "$DOW" = "6" ] && [ "$HOUR" = "7" ]; }; then echo "  → Sat 5pm AEST (VIP)";
+          elif { [ "$DOW" = "6" ] && [ "$HOUR" = "10" ]; }; then echo "  → Sat 8pm AEST (VIP)";
+          elif { [ "$DOW" = "6" ] && [ "$HOUR" = "13" ]; }; then echo "  → Sat 11pm AEST (All)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "1" ]; }; then echo "  → Sun 11am AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "2" ]; }; then echo "  → Sun 12pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "3" ]; }; then echo "  → Sun 1pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "4" ]; }; then echo "  → Sun 2pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "5" ]; }; then echo "  → Sun 3pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "6" ]; }; then echo "  → Sun 4pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "7" ]; }; then echo "  → Sun 5pm AEST (All/VIP stats)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "10" ]; }; then echo "  → Sun 8pm AEST (VIP)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "13" ]; }; then echo "  → Sun 11pm AEST (All)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "17" ]; }; then echo "  → Mon 3am AEST (All)";
+          elif { [ "$DOW" = "0" ] && [ "$HOUR" = "23" ]; }; then echo "  → Mon 9am AEST (VIP)";
+          elif { [ "$DOW" = "1" ] && [ "$HOUR" = "2" ]; }; then echo "  → Mon 12pm AEST (All)";
+          else echo "  → NO MATCH — unexpected trigger time";
+          fi
+          echo "=================="
+
       - name: Determine results mode
         id: mode
         run: |
