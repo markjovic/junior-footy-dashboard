@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.106</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.108</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -582,7 +582,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.106</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.108</span>
         </div>
 
 
@@ -1099,7 +1099,7 @@ function computeLadder(age, grade, maxRound) {
   Object.values(teams).forEach(t => {
     const played = t.w + t.d + t.l;
     t.played = played;
-    t.mr = played ? t.w / played : 0;
+    t.mr = played ? (t.w + t.d * 0.5) / played : 0;
   });
 
   // Sort: 1) MR% desc, 2) H2H (between tied teams), 3) points scored desc, 4) percentage desc
@@ -1109,9 +1109,9 @@ function computeLadder(age, grade, maxRound) {
     const aVsB = (h2h[a.name]?.[b.name] || {});
     const bVsA = (h2h[b.name]?.[a.name] || {});
     const aH2HMR = (aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0) > 0
-      ? (aVsB.w||0) / ((aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0)) : -1;
+      ? ((aVsB.w||0) + (aVsB.d||0) * 0.5) / ((aVsB.w||0) + (aVsB.d||0) + (aVsB.l||0)) : -1;
     const bH2HMR = (bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0) > 0
-      ? (bVsA.w||0) / ((bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0)) : -1;
+      ? ((bVsA.w||0) + (bVsA.d||0) * 0.5) / ((bVsA.w||0) + (bVsA.d||0) + (bVsA.l||0)) : -1;
     if (aH2HMR >= 0 && bH2HMR >= 0 && Math.abs(bH2HMR - aH2HMR) > 0.0001) return bH2HMR - aH2HMR;
     // Points scored
     if (b.f !== a.f) return b.f - a.f;
@@ -1375,8 +1375,8 @@ function renderLadder(age) {
           </td>
           <td>${t.played}</td>
           <td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
-          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.hw}-${t.hl}</td>
-          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.aw}-${t.al}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.hw}-${t.hd}-${t.hl}</td>
+          <td style="font-size:10px;font-family:'DM Mono',monospace;color:var(--tx3)">${t.aw}-${t.ad}-${t.al}</td>
           <td>${t.f}</td><td>${t.a}</td>
           <td class="pct-col">${p}%</td>
           <td style="font-family:'DM Mono',monospace;font-weight:600;color:var(--gold)">${mr}%</td>
@@ -1654,7 +1654,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     if (isHome) { hf += tf; ha += ta; } else { af += tf; aa += ta; }
   });
   const played = w+d+l;
-  const mr = played ? (w/played*100).toFixed(1) : '–';
+  const mr = played ? ((w + d*0.5)/played*100).toFixed(1) : '–';
   const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
 
   // Render modal
