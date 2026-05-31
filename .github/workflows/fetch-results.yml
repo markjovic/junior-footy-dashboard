@@ -1,35 +1,8 @@
 name: Fetch PlayHQ Results & Stats
 
 on:
-  schedule:
-    # ── Results ─────────────────────────────────────────────────────
-    # VIP only (EFNL)
-    - cron: '0 4 * * 6'    # Sat 2pm AEST
-    - cron: '0 7 * * 6'    # Sat 5pm AEST
-    - cron: '0 10 * * 6'   # Sat 8pm AEST
-    - cron: '0 1 * * 0'    # Sun 11am AEST
-    - cron: '0 2 * * 0'    # Sun 12pm AEST
-    - cron: '0 3 * * 0'    # Sun 1pm AEST
-    - cron: '0 4 * * 0'    # Sun 2pm AEST
-    - cron: '0 5 * * 0'    # Sun 3pm AEST
-    - cron: '0 6 * * 0'    # Sun 4pm AEST
-    - cron: '0 10 * * 0'   # Sun 8pm AEST
-    - cron: '0 23 * * 0'   # Mon 9am AEST
-    # All comps
-    - cron: '0 13 * * 6'   # Sat 11pm AEST
-    - cron: '0 7 * * 0'    # Sun 5pm AEST
-    - cron: '0 13 * * 0'   # Sun 11pm AEST
-    - cron: '0 17 * * 0'   # Mon 3am AEST  (Sun 17:00 UTC)
-    - cron: '0 2 * * 1'    # Mon 12pm AEST
-
-    # ── Stats ────────────────────────────────────────────────────────
-    # All comps
-    - cron: '30 13 * * 6'  # Sat 11:30pm AEST
-    - cron: '30 13 * * 0'  # Sun 11:30pm AEST
-    - cron: '30 2 * * 1'   # Mon 12:30pm AEST
-    # VIP only
-    - cron: '30 7 * * 0'   # Sun 5:30pm AEST
-
+  # Scheduling handled by Cloudflare Worker (footy-cron) — triggers workflow_dispatch
+  # at the correct AEST times. No GitHub Actions schedule needed.
   workflow_dispatch:
     inputs:
       fetch:
@@ -93,37 +66,9 @@ jobs:
       - name: Determine results mode
         id: mode
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run_results=${{ github.event.inputs.fetch != 'stats' }}" >> $GITHUB_OUTPUT
-            echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          # Determine from cron time whether this is a results run and whether VIP only
-          DOW=$(date -u +%u)   # 1=Mon 6=Sat 7=Sun
-          HOUR=$(date -u +%H)
-          MINUTE=$(date -u +%M)
-          # Stats-only runs fire at :30 — skip results
-          if [ "$MINUTE" = "30" ]; then
-            echo "run_results=false" >> $GITHUB_OUTPUT
-            echo "vip_only=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          echo "run_results=true" >> $GITHUB_OUTPUT
-          # All-comps results times:
-          # Sat 11pm = UTC 13:00 DOW=6
-          # Sun 5pm  = UTC 07:00 DOW=7
-          # Sun 11pm = UTC 13:00 DOW=7
-          # Mon 3am  = UTC 17:00 DOW=7 (Sun UTC)
-          # Mon 12pm = UTC 02:00 DOW=1
-          if { [ "$DOW" = "6" ] && [ "$HOUR" = "13" ]; } ||
-             { [ "$DOW" = "7" ] && [ "$HOUR" = "7" ]; } ||
-             { [ "$DOW" = "7" ] && [ "$HOUR" = "13" ]; } ||
-             { [ "$DOW" = "7" ] && [ "$HOUR" = "17" ]; } ||
-             { [ "$DOW" = "1" ] && [ "$HOUR" = "2" ]; }; then
-            echo "vip_only=false" >> $GITHUB_OUTPUT
-          else
-            echo "vip_only=true" >> $GITHUB_OUTPUT
-          fi
+          # All triggers come from Cloudflare Worker via workflow_dispatch
+          echo "run_results=${{ github.event.inputs.fetch != 'stats' }}" >> $GITHUB_OUTPUT
+          echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
 
       - name: Run migration (if requested)
         if: github.event.inputs.run_migration == 'yes' && steps.mode.outputs.run_results == 'true'
@@ -179,25 +124,13 @@ jobs:
             echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
             exit 0
           fi
-          # Stats runs fire at :30 past the hour only
-          MINUTE=$(date -u +%M)
-          if [ "$MINUTE" != "30" ]; then
-            echo "run=false" >> $GITHUB_OUTPUT
-            echo "vip_only=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          echo "run=true" >> $GITHUB_OUTPUT
-          # VIP only: Sun 5:30pm = UTC 07:30 DOW=7
-          # All comps: Sat 11:30pm = UTC 13:30 DOW=6
-          #            Sun 11:30pm = UTC 13:30 DOW=7
-          #            Mon 12:30pm = UTC 02:30 DOW=1
-          DOW=$(date -u +%u)
-          HOUR=$(date -u +%H)
-          if [ "$DOW" = "7" ] && [ "$HOUR" = "7" ]; then
-            echo "vip_only=true" >> $GITHUB_OUTPUT
-          else
-            echo "vip_only=false" >> $GITHUB_OUTPUT
-          fi
+          # Stats runs fire when dispatched with fetch=both (from Cloudflare worker)
+          # Scheduled cron runs never trigger stats directly (no :30 crons anymore)
+          echo "run=false" >> $GITHUB_OUTPUT
+          echo "vip_only=false" >> $GITHUB_OUTPUT
+          exit 0
+          # vip_only not used for scheduled runs (stats only run via workflow_dispatch)
+          echo "vip_only=false" >> $GITHUB_OUTPUT
 
       - name: Fetch stats
         if: steps.mode.outputs.run == 'true'
