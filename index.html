@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.108</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.109</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -355,6 +355,9 @@ body{overflow-x:hidden}
     <div class="fgroup">
       <div class="flabel">Team</div>
       <select class="fsel" id="team-sel" onchange="onFilter()"><option value="">All teams</option></select>
+    </div>
+    <div class="fgroup">
+      <button id="btn-reset-filters" class="btn-g" style="width:100%;font-size:11px;padding:5px 10px;opacity:0.4;cursor:default" disabled onclick="resetFilters()">Reset filters</button>
     </div>
     <div class="fgroup" style="margin-top:auto">
       <div class="flabel">Stats</div>
@@ -582,7 +585,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.108</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.109</span>
         </div>
 
 
@@ -1585,8 +1588,28 @@ function renderStats() {
 // ═══════════════════════════════════════
 function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
 function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
-function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); saveFilters(); render(); }
-function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); saveFilters(); render(); }
+function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); updateResetBtn(); saveFilters(); render(); }
+function onFilter() { S.selRound=document.getElementById('round-sel').value; S.selTeam=document.getElementById('team-sel').value; if(window.innerWidth<=768&&document.getElementById('sidebar').classList.contains('open'))toggleSidebar(); updateResetBtn(); saveFilters(); render(); }
+function updateResetBtn() {
+  const active = S.selGrades.size > 0 || !!S.selRound || !!S.selTeam;
+  const btn = document.getElementById('btn-reset-filters');
+  if (!btn) return;
+  btn.disabled = !active;
+  btn.style.opacity = active ? '1' : '0.4';
+  btn.style.cursor = active ? 'pointer' : 'default';
+}
+function resetFilters() {
+  S.selGrades.clear();
+  S.selRound = '';
+  S.selTeam = '';
+  const rs = document.getElementById('round-sel');
+  const ts = document.getElementById('team-sel');
+  if (rs) rs.value = '';
+  if (ts) ts.value = '';
+  updateResetBtn();
+  renderSidebarFilters(S.selectedAge);
+  render();
+}
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('sidebar-overlay');
