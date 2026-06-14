@@ -1,0 +1,16 @@
+# .github/workflows/extract-finals-data.yml
+name: Extract Finals Data
+
+on:
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Extract finals data
+        run: node scripts/extract-finals-data.js
