@@ -134947,6 +134947,27 @@
       "date": "2026-06-13"
     },
     {
+      "id": "EFNL 2026|U8 Girls||8|Knox Girls|Lilydale Girls",
+      "age": "U8 Girls",
+      "rawGrade": "",
+      "round": 8,
+      "compName": "EFNL 2026",
+      "home": "Knox Girls",
+      "away": "Lilydale Girls",
+      "hScore": 0,
+      "hG": 0,
+      "hB": 0,
+      "aScore": 0,
+      "aG": 0,
+      "aB": 0,
+      "venue": "Quambee Reserve",
+      "vSuburb": "North Ringwood",
+      "venueUrl": "https://maps.google.com/?q=-37.7827395399477,145.246006250381",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/ff08ba6e-ea05-4654-a5d3-96906df42bdb/1696902003041/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/64cdb5cf-39a0-4071-8b4f-49fd0568e438/1696902022878/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-14"
+    },
+    {
       "id": "EFNL 2026|Reserve Men|Division 3|9|Donvale Reserves|Knox Reserves",
       "age": "Reserve Men",
       "rawGrade": "Division 3",
@@ -136312,6 +136333,27 @@
       "date": "2026-06-13"
     },
     {
+      "id": "EFNL 2026|U19.5|Premier|9|Blackburn Black|South Belgrave",
+      "age": "U19.5",
+      "rawGrade": "Premier",
+      "round": 9,
+      "compName": "EFNL 2026",
+      "home": "Blackburn Black",
+      "away": "South Belgrave",
+      "hScore": 109,
+      "hG": 17,
+      "hB": 7,
+      "aScore": 37,
+      "aG": 5,
+      "aB": 7,
+      "venue": "Morton Park",
+      "vSuburb": "Blackburn",
+      "venueUrl": "https://maps.google.com/?q=-37.8213701740525,145.155116915702",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/1c7b6fc1-7572-48dd-a91c-fc566c72b338/1696901433953/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/a9a17709-1b1e-42cc-a240-9ef41df48a17/1696902333097/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-13"
+    },
+    {
       "id": "EFNL 2026|Reserve Men|Division 3|10|Coldstream Reserves|Donvale Reserves",
       "age": "Reserve Men",
       "rawGrade": "Division 3",
@@ -136519,6 +136561,27 @@
       "venueUrl": "https://maps.google.com/?q=-37.9087379159055,145.116240978241",
       "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/aa9e9b24-5632-4b61-ad13-91e2a3d637f6/1701765231310/logo.png?_a=BAMAMifg0",
       "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/f64b7521-0845-4c61-b1c8-4ba34eff3a60/1696902519978/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-13"
+    },
+    {
+      "id": "EFNL 2026|U19.5|Division 3|10|Knox|Rowville U19 Men Gold",
+      "age": "U19.5",
+      "rawGrade": "Division 3",
+      "round": 10,
+      "compName": "EFNL 2026",
+      "home": "Rowville U19 Men Gold",
+      "away": "Knox",
+      "hScore": 68,
+      "hG": 9,
+      "hB": 14,
+      "aScore": 63,
+      "aG": 10,
+      "aB": 3,
+      "venue": "Rowville Recreation Reserve",
+      "vSuburb": "Rowville",
+      "venueUrl": "https://maps.google.com/?q=-37.9434529406546,145.231533050537",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/7ed5ab85-bbf1-4043-83d3-ec007680cccd/1696902270578/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/ff08ba6e-ea05-4654-a5d3-96906df42bdb/1696902003041/logo.png?_a=BAMAMifg0",
       "date": "2026-06-13"
     }
   ],
@@ -146754,7 +146817,7 @@
     "U12 Girls|": 6,
     "U17.5|Grading": 5,
     "U18.5 Girls|Grading": 5,
-    "U8 Girls|": 7,
+    "U8 Girls|": 8,
     "U9|Black": 7,
     "U9|Blue": 7,
     "U9|Gold": 4,
@@ -147814,7 +147877,7 @@
   "compLogos": {
     "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-06-14T01:11:06.530Z",
+  "lastUpdated": "2026-06-14T03:11:22.078Z",
   "lastStatsFetch": "2026-06-13T13:59:47.113Z",
-  "lastResultsFetch": "2026-06-14T01:11:06.530Z"
+  "lastResultsFetch": "2026-06-14T03:11:22.079Z"
 }
