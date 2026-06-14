@@ -135262,6 +135262,27 @@
       "date": "2026-06-14"
     },
     {
+      "id": "EFNL 2026|U8 Girls||8|Blackburn Girls|South Croydon Girls Blue",
+      "age": "U8 Girls",
+      "rawGrade": "",
+      "round": 8,
+      "compName": "EFNL 2026",
+      "home": "South Croydon Girls Blue",
+      "away": "Blackburn Girls",
+      "hScore": 0,
+      "hG": 0,
+      "hB": 0,
+      "aScore": 0,
+      "aG": 0,
+      "aB": 0,
+      "venue": "Quambee Reserve",
+      "vSuburb": "North Ringwood",
+      "venueUrl": "https://maps.google.com/?q=-37.7827395399477,145.246006250381",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/70d6161b-52a9-49f7-a49a-bbb2b17aecd9/1696902354171/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/1c7b6fc1-7572-48dd-a91c-fc566c72b338/1696901433953/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-14"
+    },
+    {
       "id": "EFNL 2026|Reserve Men|Division 3|9|Donvale Reserves|Knox Reserves",
       "age": "Reserve Men",
       "rawGrade": "Division 3",
@@ -560182,7 +560203,7 @@
   "compLogos": {
     "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-06-14T06:11:11.865Z",
+  "lastUpdated": "2026-06-14T10:11:01.436Z",
   "lastStatsFetch": "2026-06-14T07:24:37.452Z",
-  "lastResultsFetch": "2026-06-14T06:11:11.865Z"
+  "lastResultsFetch": "2026-06-14T10:11:01.436Z"
 }
