@@ -135283,6 +135283,48 @@
       "date": "2026-06-14"
     },
     {
+      "id": "EFNL 2026|U8||8|Chirnside Park Black|Montrose Red - 1",
+      "age": "U8",
+      "rawGrade": "",
+      "round": 8,
+      "compName": "EFNL 2026",
+      "home": "Chirnside Park Black",
+      "away": "Montrose Red - 1",
+      "hScore": 0,
+      "hG": 0,
+      "hB": 0,
+      "aScore": 0,
+      "aG": 0,
+      "aB": 0,
+      "venue": "Kimberley Reserve",
+      "vSuburb": "Chirnside Park",
+      "venueUrl": "https://maps.google.com/?q=-37.7527247664481,145.309596061706",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/3692eb03-27b9-4959-bf48-7065b155ab0c/1696901486155/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/d3429a03-18e9-4171-a535-4e2a5f48fbea/1696902071422/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-14"
+    },
+    {
+      "id": "EFNL 2026|U8||8|Chirnside Park Yellow|Montrose Red - 2",
+      "age": "U8",
+      "rawGrade": "",
+      "round": 8,
+      "compName": "EFNL 2026",
+      "home": "Chirnside Park Yellow",
+      "away": "Montrose Red - 2",
+      "hScore": 0,
+      "hG": 0,
+      "hB": 0,
+      "aScore": 0,
+      "aG": 0,
+      "aB": 0,
+      "venue": "Kimberley Reserve",
+      "vSuburb": "Chirnside Park",
+      "venueUrl": "https://maps.google.com/?q=-37.7527247664481,145.309596061706",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/3692eb03-27b9-4959-bf48-7065b155ab0c/1696901486155/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/d3429a03-18e9-4171-a535-4e2a5f48fbea/1696902071422/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-14"
+    },
+    {
       "id": "EFNL 2026|Reserve Men|Division 3|9|Donvale Reserves|Knox Reserves",
       "age": "Reserve Men",
       "rawGrade": "Division 3",
@@ -560201,9 +560243,13 @@
     "South Croydon Girls Blue": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/70d6161b-52a9-49f7-a49a-bbb2b17aecd9/1696902354171/logo.png?_a=BAMAMifg0"
   },
   "compLogos": {
-    "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+    "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0",
+    "YJFL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0",
+    "WFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0",
+    "SEJ 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
+    "SER 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-06-14T10:11:01.436Z",
+  "lastUpdated": "2026-06-14T13:11:01.927Z",
   "lastStatsFetch": "2026-06-14T07:24:37.452Z",
-  "lastResultsFetch": "2026-06-14T10:11:01.436Z"
+  "lastResultsFetch": "2026-06-14T13:11:01.927Z"
 }
