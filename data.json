@@ -136270,6 +136270,48 @@
       "date": "2026-06-13"
     },
     {
+      "id": "EFNL 2026|U19.5|Division 2|9|Lilydale|Scoresby",
+      "age": "U19.5",
+      "rawGrade": "Division 2",
+      "round": 9,
+      "compName": "EFNL 2026",
+      "home": "Lilydale",
+      "away": "Scoresby",
+      "hScore": 35,
+      "hG": 5,
+      "hB": 5,
+      "aScore": 89,
+      "aG": 13,
+      "aB": 11,
+      "venue": "Lilydale Sports Oval",
+      "vSuburb": "LILYDALE",
+      "venueUrl": "https://maps.google.com/?q=-37.7556852276054,145.349024534225",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/64cdb5cf-39a0-4071-8b4f-49fd0568e438/1696902022878/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/31ad751c-7d9c-4b0e-976c-ceac9e69137a/1696902292012/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-13"
+    },
+    {
+      "id": "EFNL 2026|Senior Men|Division 4|9|Chirnside Park Seniors|Warrandyte Seniors",
+      "age": "Senior Men",
+      "rawGrade": "Division 4",
+      "round": 9,
+      "compName": "EFNL 2026",
+      "home": "Warrandyte Seniors",
+      "away": "Chirnside Park Seniors",
+      "hScore": 74,
+      "hG": 10,
+      "hB": 14,
+      "aScore": 58,
+      "aG": 8,
+      "aB": 10,
+      "venue": "Warrandyte Recreation Reserve",
+      "vSuburb": "Warrandyte",
+      "venueUrl": "https://maps.google.com/?q=-37.7463199251112,145.208058357238",
+      "hLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/5ee53da3-6343-44ff-8548-d8b98af30578/1696902501450/logo.png?_a=BAMAMifg0",
+      "aLogo": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/3692eb03-27b9-4959-bf48-7065b155ab0c/1696901486155/logo.png?_a=BAMAMifg0",
+      "date": "2026-06-13"
+    },
+    {
       "id": "EFNL 2026|Reserve Men|Division 3|10|Coldstream Reserves|Donvale Reserves",
       "age": "Reserve Men",
       "rawGrade": "Division 3",
@@ -147770,13 +147812,9 @@
     "South Croydon Girls Blue": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/70d6161b-52a9-49f7-a49a-bbb2b17aecd9/1696902354171/logo.png?_a=BAMAMifg0"
   },
   "compLogos": {
-    "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0",
-    "YJFL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0",
-    "WFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0",
-    "SEJ 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
-    "SER 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+    "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
-  "lastUpdated": "2026-06-13T13:11:06.274Z",
+  "lastUpdated": "2026-06-14T01:11:06.530Z",
   "lastStatsFetch": "2026-06-13T13:59:47.113Z",
-  "lastResultsFetch": "2026-06-13T13:11:06.274Z"
+  "lastResultsFetch": "2026-06-14T01:11:06.530Z"
 }
