@@ -188,7 +188,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
           },
           'publicGradeStatistics'
         );
-        await sleep(120);
+        await sleep(300);
         lastError = null;
         break; // success
       } catch (e) {
@@ -239,7 +239,7 @@ async function fetchGradeStats(grade, gqlPost, sleep) {
 
     console.log(`  Stats: ${grade.name} p${page}/${totalPages} (${gps.results.length} players)`);
     page++;
-    if (page <= totalPages) await sleep(120);
+    if (page <= totalPages) await sleep(300);
   } while (page <= totalPages);
 
   return appearances;
@@ -349,6 +349,10 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
   for (const grade of grades) {
     statsGradeIdx++;
     console.log(`  [${statsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
+    if (statsGradeIdx > 1 && (statsGradeIdx - 1) % 25 === 0) {
+      console.log('  [cooldown 5s]');
+      await sleep(5000);
+    }
     const rows = await fetchGradeStats(grade, gqlPost, sleep);
     allAppearances.push(...rows);
   }
@@ -445,7 +449,7 @@ if (require.main === module) {
   const DATA_PATH   = path.join(ROOT, 'data.json');
   const API_URL     = 'https://api.playhq.com/graphql';
   const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
-  const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '150', 10);
+  const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '400', 10);
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -463,6 +467,8 @@ if (require.main === module) {
           'Accept':         'application/json',
           'tenant':         'afl',
           'origin':         'https://www.playhq.com',
+          'request-id':     require('crypto').randomUUID(),
+          ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
         },
         timeout: 60000,
       }, res => {
@@ -483,7 +489,49 @@ if (require.main === module) {
     });
   }
 
+  let SESSION_COOKIE = '';
+
+  async function getSession() {
+    const body = JSON.stringify({
+      operationName: 'TenantConfig',
+      variables: {},
+      query: 'query TenantConfig { tenantConfiguration { label } }',
+    });
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      if (attempt > 1) await new Promise(r => setTimeout(r, attempt * 2000));
+      const raw = await new Promise((resolve) => {
+        const req = https.request(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type':   'application/json',
+            'Content-Length': Buffer.byteLength(body),
+            'User-Agent':     USER_AGENT,
+            'Accept':         'application/json',
+            'tenant':         'afl',
+            'origin':         'https://www.playhq.com',
+            'request-id':     require('crypto').randomUUID(),
+          },
+          timeout: 30000,
+        }, res => {
+          resolve(res.headers['set-cookie']?.join(';') || '');
+          res.resume();
+        });
+        req.on('error', () => resolve(''));
+        req.write(body);
+        req.end();
+      });
+      const m = raw.match(/phq_session=([^;]+)/);
+      if (m) {
+        SESSION_COOKIE = `phq_session=${m[1]}`;
+        console.log('Session cookie obtained');
+        return;
+      }
+    }
+    console.warn('Could not obtain session cookie — proceeding without');
+  }
+
   async function main() {
+    await getSession();
     if (!fs.existsSync(GRADES_PATH)) {
       console.error('grades.json not found — run fetch-results.js first');
       process.exit(1);
