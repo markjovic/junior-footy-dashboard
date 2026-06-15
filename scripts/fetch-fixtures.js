@@ -131,74 +131,89 @@ query discoverFixtureByRound($roundID: ID!) {
       away { ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } } }
       status { value }
       date
-      allocation { time court { venue { name suburb latitude longitude } } }
+      allocation { dateTimeList { date time } court { venue { name suburb latitude longitude } } }
     }
   }
 }`;
 
-// ─── Helpers (mirrors fetch-results.js) ──────────────────────────────────────
-function getLogoUrl(logo) {
-  if (!logo?.sizes?.length) return '';
-  const target = logo.sizes.find(s => s.dimensions?.width === 96) || logo.sizes[logo.sizes.length - 1];
-  return target?.url || '';
-}
-
-function cleanTeam(name, gradeAge) {
-  if (!name) return '';
-  if (gradeAge) {
-    const ageNum = gradeAge.match(/^(U\d+(?:\.\d+)?)/i)?.[1];
-    if (ageNum) {
-      return name.replace(new RegExp('\\s+' + ageNum.replace('.', '\\.') + '\\b\\s*', 'gi'), ' ').replace(/\s+$/, '').trim();
-    }
-  }
-  return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/, '').trim();
-}
-
+// ─── Helpers (exact copy from fetch-results.js) ──────────────────────────────
 function parseGradeName(name, ageName, genderName) {
-  const n = name.replace(/^[*\s]+/, '').trim();
+  let n = name.replace(/^\*\s*/, '').trim();
+  n = n.replace(/\s+-\s+/g, ' ').trim();
   const parenDivMatch = n.match(/\((\d+)\)\s*$/);
   if (parenDivMatch) {
+    const divNum = parenDivMatch[1];
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName)) ? ' ' + genderName : '';
-    return { age: (ageName || '').toUpperCase() + genderSuffix, rawGrade: parenDivMatch[1] };
+    if (ageName?.match(/^U\d/i)) {
+      const nameAgeMatch = n.match(/^U(\d+(?:\.\d+)?)/i);
+      const resolvedAge = (nameAgeMatch && nameAgeMatch[0] !== ageName) ? nameAgeMatch[0].toUpperCase() : ageName;
+      return { age: resolvedAge + genderSuffix, rawGrade: divNum };
+    }
+    return { age: (ageName || 'Unknown') + genderSuffix, rawGrade: divNum };
   }
   if (/\bGrading\b/i.test(n)) {
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName)) ? ' ' + genderName : '';
-    const halfAgeMatch = n.match(/^(U\d+\.5)/i);
-    const resolvedAge = halfAgeMatch ? halfAgeMatch[0].toUpperCase() : ageName;
-    return { age: (resolvedAge || '') + genderSuffix, rawGrade: 'Grading' };
-  }
-  const premDiv = n.match(/\b(Premier|Division\s+\d+)\b/i);
-  if (premDiv) {
-    let rawGrade = premDiv[1].replace(/\s+/, ' ');
-    rawGrade = rawGrade.charAt(0).toUpperCase() + rawGrade.slice(1);
-    if (ageName === 'Senior' || ageName === 'Open' || ageName === 'Master') {
-      const subtitle = n.replace(/^[^-–]*[-–]\s*/, '').trim();
-      return { age: subtitle || ageName, rawGrade };
+    let ageLabel;
+    if (ageName?.match(/^U\d/i)) {
+      const halfAgeMatch = n.match(/^U(\d+\.5)/i);
+      const resolvedAge = halfAgeMatch ? halfAgeMatch[0].toUpperCase() : ageName;
+      ageLabel = resolvedAge + genderSuffix;
+    } else {
+      ageLabel = n.replace(/\s*\bGrading\b.*$/i, '').trim();
     }
-    const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName)) ? ' ' + genderName : '';
-    return { age: (ageName || '').toUpperCase() + genderSuffix, rawGrade };
+    return { age: ageLabel, rawGrade: 'Grading' };
   }
-  const letterGrade = n.match(/\b([A-D]\d?)\s*$/);
-  if (letterGrade) {
-    if (ageName === 'Senior' || ageName === 'Open' || ageName === 'Master') {
-      const subtitle = n.replace(/^[^-–]*[-–]\s*/, '').trim();
-      return { age: subtitle || ageName, rawGrade: letterGrade[1] };
-    }
-    const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName)) ? ' ' + genderName : '';
-    return { age: (ageName || '').toUpperCase() + genderSuffix, rawGrade: letterGrade[1] };
-  }
+  const divMatch    = n.match(/\b(Premier(?:\s+Division)?|Division \d+)\b/i);
+  const letterMatch = n.match(/\b([A-D]\d*(?:\/[A-D]\d*)?)\s*$/i);
+  const rawGrade = divMatch
+    ? divMatch[1].replace(/Premier Division/i, 'Premier')
+    : letterMatch ? letterMatch[1].toUpperCase() : '';
   if (ageName?.match(/^U\d/i)) {
-    const nameAgeMatch = n.match(/^(U\d+(?:\.\d+)?)/i);
+    const nameAgeMatch = n.match(/^U(\d+(?:\.\d+)?)/i);
     const resolvedAge = (nameAgeMatch && nameAgeMatch[0] !== ageName) ? nameAgeMatch[0].toUpperCase() : ageName;
     const genderSuffix = (genderName && !['Men','Mixed','Boys'].includes(genderName)) ? ' ' + genderName : '';
-    let resolvedRawGrade = '';
-    const colourMatch = n.match(/\b(Blue|Red|Green|Gold|White|Black|Yellow|Purple|Orange|Navy|Silver|Teal|Grey|Gray|Maroon|Pink)\s*$/i);
-    if (colourMatch) resolvedRawGrade = colourMatch[1];
+    let resolvedRawGrade = rawGrade;
+    if (!resolvedRawGrade) {
+      const colourMatch = n.match(/\b(Blue|Red|Green|Gold|White|Black|Yellow|Purple|Orange|Navy|Silver|Teal|Grey|Gray|Maroon|Pink)\s*$/i);
+      if (colourMatch) resolvedRawGrade = colourMatch[1];
+    }
     return { age: resolvedAge + genderSuffix, rawGrade: resolvedRawGrade };
   }
-  return { age: ageName || name, rawGrade: '' };
+  if (ageName === 'Senior' || ageName === 'Open' || ageName?.match(/^Masters?/i) || !ageName) {
+    if (/Veterans/i.test(n) || ageName?.match(/^Masters?/i)) {
+      const vGender = /Women/i.test(n) ? 'Women' : /Men/i.test(n) ? 'Men' : genderName === 'Women' ? 'Women' : 'Men';
+      return { age: 'Veterans', rawGrade: vGender };
+    }
+    if (/U19\.5/i.test(n)) return { age: 'U19.5', rawGrade };
+    if (/Reserves?/i.test(n)) return { age: 'Reserve ' + (genderName || 'Men'), rawGrade };
+    if (genderName === 'Women' || /Women/i.test(n)) return { age: 'Senior Women', rawGrade };
+    if (/Senior/i.test(n)) return { age: 'Senior ' + (genderName || 'Men'), rawGrade };
+    const cleanedAge = n.replace(/\s*(Premier|Division \d+).*$/i, '').trim();
+    return { age: cleanedAge || n, rawGrade };
+  }
+  if (ageName) return { age: ageName + (genderName ? ' ' + genderName : ''), rawGrade };
+  n = n.replace(/^.+?(?=U\d)/i, '').trim();
+  const junior = n.match(/^(U\d+(?:\.\d+)?(?:\s+(?:Girls|Boys))?)\s+([A-D]\d*(?:\/[A-D]\d*)?)$/i);
+  if (junior) return { age: junior[1].trim(), rawGrade: junior[2].toUpperCase() };
+  return { age: n, rawGrade };
 }
 
+function cleanTeam(name, gradeAge) {
+  if (gradeAge) {
+    const ageNum = gradeAge.match(/^(U\d+(?:\.\d+)?)/i)?.[1];
+    if (ageNum) {
+      return name.replace(new RegExp('\\s+' + ageNum.replace('.','\\.')  + '\\b\\s*', 'gi'), ' ').replace(/\s+$/,'').trim();
+    }
+  }
+  return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
+}
+
+function getLogoUrl(logo) {
+  if (!logo?.sizes?.length) return '';
+  return (logo.sizes.find(s => s.dimensions?.width === 64) || logo.sizes[0]).url;
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   await getSession();
@@ -230,23 +245,6 @@ async function main() {
   const byId = new Map(data.matches.map(m => [m.id, m]));
   const today = new Date().toISOString().slice(0, 10);
 
-  // Build grade→age lookup from existing match records
-  // Key: gradeID stored in match id (compName|age|rawGrade prefix) — use compName+rawGrade
-  // This ensures scheduled records use the same age string as fetch-results.js
-  const gradeAgeMap = {};      // "compName|rawGrade" → age
-  const gradeAgeMapFull = {};  // "compName|age|rawGrade" → age (for exact match)
-  for (const m of data.matches || []) {
-    if (!m.scheduled && m.rawGrade !== undefined) {
-      const fullKey = `${m.compName}|${m.age}|${m.rawGrade}`;
-      const shortKey = `${m.compName}|${m.rawGrade}`;
-      if (!gradeAgeMapFull[fullKey]) gradeAgeMapFull[fullKey] = m.age;
-      // Only store short key if rawGrade is unique within the comp
-      // (colour grades like Blue/Red may appear in multiple age groups)
-      if (!gradeAgeMap[shortKey]) gradeAgeMap[shortKey] = m.age;
-      else if (gradeAgeMap[shortKey] !== m.age) gradeAgeMap[shortKey] = null; // ambiguous
-    }
-  }
-
   let newCount = 0;
   let gradeIdx = 0;
 
@@ -271,12 +269,7 @@ async function main() {
     const roundList = roundsRes?.data?.discoverGrade?.rounds || [];
     if (!roundList.length) { console.log('  no rounds'); continue; }
 
-    const parsed = parseGradeName(grade.name, grade.ageName, grade.genderName);
-    const rawGrade = parsed.rawGrade;
-    // Try to resolve age from existing match records to match fetch-results.js output
-    const shortKey = `${grade.compName}|${rawGrade}`;
-    const shortAge = gradeAgeMap[shortKey]; // null if ambiguous, undefined if missing
-    const age = (shortAge != null && shortAge !== undefined) ? shortAge : parsed.age;
+    const { age, rawGrade } = parseGradeName(grade.name, grade.ageName, grade.genderName);
     const currentRoundIndex = roundList.findIndex(r => r.current);
 
     // Only fetch rounds AFTER the current round
@@ -335,7 +328,7 @@ async function main() {
           hLogo: getLogoUrl(game.home?.logo),
           aLogo: getLogoUrl(game.away?.logo),
           date: game.date || '',
-          time: game.allocation?.time || '',
+          time: game.allocation?.dateTimeList?.[0]?.time || '',
           scheduled: true,
         });
         roundNew++;
