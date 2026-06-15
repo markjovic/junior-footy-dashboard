@@ -351,7 +351,7 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
     console.log(`  [${statsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
     if (statsGradeIdx > 1 && (statsGradeIdx - 1) % 25 === 0) {
       console.log('  [cooldown 5s]');
-      await sleep(5000);
+      await sleep(2000);
     }
     const rows = await fetchGradeStats(grade, gqlPost, sleep);
     allAppearances.push(...rows);
@@ -448,8 +448,8 @@ if (require.main === module) {
   const GRADES_PATH = path.join(ROOT, 'grades.json');
   const DATA_PATH   = path.join(ROOT, 'data.json');
   const API_URL     = 'https://api.playhq.com/graphql';
-  const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
-  const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '400', 10);
+  const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
+  const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
