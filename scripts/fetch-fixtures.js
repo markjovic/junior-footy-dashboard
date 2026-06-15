@@ -203,6 +203,11 @@ function parseGradeName(name, ageName, genderName) {
 async function main() {
   await getSession();
 
+  // Read grades from cache — no discovery, that's fetch-results.js's job
+  if (!fs.existsSync(GRADES_PATH)) {
+    console.error('grades.json not found — run fetch-results.js first');
+    process.exit(1);
+  }
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const allGrades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
 
