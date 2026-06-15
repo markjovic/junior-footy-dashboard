@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.113</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.114</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -596,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.113</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.114</span>
         </div>
 
 
@@ -1477,9 +1477,16 @@ function renderFixtures(age) {
   const meta = document.getElementById('fixtures-meta');
   if (!el || !body) return;
 
-  const fixtures = S.fixtures.filter(m =>
-    m.age === age && matchesComp(m)
-  ).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.round - b.round);
+  // Apply same grade/team filters as results
+  const grades = activGrades(age);
+
+  const fixtures = S.fixtures.filter(m => {
+    if (m.age !== age) return false;
+    if (!matchesComp(m)) return false;
+    if (grades.size && m.rawGrade && !grades.has(m.rawGrade)) return false;
+    if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
+    return true;
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.round - b.round);
 
   if (!fixtures.length) { el.style.display = 'none'; return; }
   el.style.display = '';
@@ -1487,31 +1494,33 @@ function renderFixtures(age) {
 
   // Group by round
   const byRound = {};
-  fixtures.forEach(m => {
-    if (!byRound[m.round]) byRound[m.round] = [];
-    byRound[m.round].push(m);
-  });
+  fixtures.forEach(m => { (byRound[m.round] = byRound[m.round] || []).push(m); });
+  const rounds = Object.keys(byRound).map(Number).sort((a, b) => a - b);
 
-  body.innerHTML = Object.entries(byRound).map(([round, matches]) => {
-    const rows = matches.map(m => {
+  body.innerHTML = rounds.map(r => {
+    const rows = byRound[r].map(m => {
       const g = m.rawGrade || '';
-      const gc = g ? `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}` : 'gtag-neutral';
-      const dateStr = m.date ? m.date.split('-').reverse().join('/') : '';
-      return `<div class="match-row" style="opacity:0.7">
+      const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
+      const dateStr = m.date ? m.date.split('-').reverse().slice(0,2).join('/') : 'TBC';
+      return `<div class="match-row">
+        <div class="mr-grade">
+          <span class="gtag ${gc}">${abbrevGrade(g)}</span>
+        </div>
         <div class="mr-left">
-          ${g ? `<span class="gtag ${gc}">${abbrevGrade(g)}</span>` : ''}
-          ${m.hLogo ? `<img src="${m.hLogo}" class="mr-crest" onerror="this.style.display='none'">` : ''}
-          <span class="mr-team home-team">${m.home}</span>
+          ${crestHTML(m.home, 16, 'mr-logo')}
+          <span class="mr-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\'")}','${g}')">${m.home}</span>
         </div>
-        <div class="mr-score" style="color:var(--tx3);font-size:11px">${dateStr || 'TBC'}</div>
+        <div class="mr-score">
+          <span style="color:var(--tx3);font-size:10px;font-family:'DM Mono',monospace">${dateStr}</span>
+        </div>
         <div class="mr-right">
-          <span class="mr-team" style="text-align:left">${m.away}</span>
-          ${m.aLogo ? `<img src="${m.aLogo}" class="mr-crest" onerror="this.style.display='none'">` : ''}
-          ${m.venue ? `<a class="venue-link" href="${m.venueUrl||'#'}" target="_blank">${m.venue} ↗</a>` : ''}
+          <span class="mr-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\'")}','${g}')">${m.away}</span>
+          ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
+        <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
       </div>`;
     }).join('');
-    return `<div class="round-hdr">Round ${round}</div>${rows}`;
+    return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
   }).join('');
 }
 
