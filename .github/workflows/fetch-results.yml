@@ -67,7 +67,12 @@ jobs:
         id: mode
         run: |
           # All triggers come from Cloudflare Worker via workflow_dispatch
-          echo "run_results=${{ github.event.inputs.fetch != 'stats' }}" >> $GITHUB_OUTPUT
+          INPUT="${{ github.event.inputs.fetch }}"
+          if [ "$INPUT" = "stats" ] || [ "$INPUT" = "fixtures" ]; then
+            echo "run_results=false" >> $GITHUB_OUTPUT
+          else
+            echo "run_results=true" >> $GITHUB_OUTPUT
+          fi
           echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
 
       - name: Run migration (if requested)
