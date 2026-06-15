@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.111</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.113</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -437,7 +437,7 @@ body{overflow-x:hidden}
           </div>
           <div class="mob-section" id="mob-results">
           <div class="card">
-            <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleResults()">
+            <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleResultsCard()">
               <span class="card-title">Results</span>
               <span class="card-meta" id="results-meta"></span>
               <span id="results-toggle" style="font-size:10px;color:var(--tx3);margin-left:8px">▼</span>
@@ -596,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.111</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.113</span>
         </div>
 
 
@@ -1217,8 +1217,10 @@ function getTopScorers(age, n=9999) {
       const lookupTeam = p.teamRaw || p.team;
       const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
       // If teamGrade is empty (single-division grade), include the player regardless of grade filter
-      // Also pass if teamGrade looks like a full grade name (e.g. "U08 Mixed") not a token
-      return !grades.size || !teamGrade || grades.has(teamGrade) || teamGrade.includes(' ');
+      // Also pass if teamGrade looks like an unresolved full grade name (e.g. "U08 Mixed")
+      // Only bypass for names containing a U-age prefix — not division names like "Senior Men"
+      const isUnresolved = /^U\d/.test(teamGrade) && teamGrade.includes(' ');
+      return !grades.size || !teamGrade || grades.has(teamGrade) || isUnresolved;
     })
     .sort((a,b) => b.goals - a.goals || a.gp - b.gp)
     .slice(0, n);
@@ -1461,7 +1463,7 @@ function toggleFixtures() {
   toggle.textContent = open ? '▼' : '▶';
 }
 
-function toggleResults() {
+function toggleResultsCard() {
   const body = document.getElementById('results-body');
   const toggle = document.getElementById('results-toggle');
   const open = body.style.display === 'none';
