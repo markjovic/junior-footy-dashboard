@@ -131,7 +131,7 @@ query discoverFixtureByRound($roundID: ID!) {
       away { ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } } }
       status { value }
       date
-      allocation { court { venue { name suburb latitude longitude } } }
+      allocation { time court { venue { name suburb latitude longitude } } }
     }
   }
 }`;
@@ -231,12 +231,19 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
 
   // Build grade→age lookup from existing match records
-  // This ensures scheduled records use the same age string as results
-  const gradeAgeMap = {};
+  // Key: gradeID stored in match id (compName|age|rawGrade prefix) — use compName+rawGrade
+  // This ensures scheduled records use the same age string as fetch-results.js
+  const gradeAgeMap = {};      // "compName|rawGrade" → age
+  const gradeAgeMapFull = {};  // "compName|age|rawGrade" → age (for exact match)
   for (const m of data.matches || []) {
     if (!m.scheduled && m.rawGrade !== undefined) {
-      const key = `${m.compName}|${m.age}|${m.rawGrade}`;
-      if (!gradeAgeMap[key]) gradeAgeMap[key] = m.age;
+      const fullKey = `${m.compName}|${m.age}|${m.rawGrade}`;
+      const shortKey = `${m.compName}|${m.rawGrade}`;
+      if (!gradeAgeMapFull[fullKey]) gradeAgeMapFull[fullKey] = m.age;
+      // Only store short key if rawGrade is unique within the comp
+      // (colour grades like Blue/Red may appear in multiple age groups)
+      if (!gradeAgeMap[shortKey]) gradeAgeMap[shortKey] = m.age;
+      else if (gradeAgeMap[shortKey] !== m.age) gradeAgeMap[shortKey] = null; // ambiguous
     }
   }
 
@@ -266,12 +273,10 @@ async function main() {
 
     const parsed = parseGradeName(grade.name, grade.ageName, grade.genderName);
     const rawGrade = parsed.rawGrade;
-    // Use age from existing match records if available — ensures consistency with fetch-results.js
-    // Falls back to parseGradeName result if no existing matches for this grade
-    const existingAgeKey = Object.keys(gradeAgeMap).find(k =>
-      k.startsWith(`${grade.compName}|`) && k.endsWith(`|${rawGrade}`)
-    );
-    const age = existingAgeKey ? gradeAgeMap[existingAgeKey] : parsed.age;
+    // Try to resolve age from existing match records to match fetch-results.js output
+    const shortKey = `${grade.compName}|${rawGrade}`;
+    const shortAge = gradeAgeMap[shortKey]; // null if ambiguous, undefined if missing
+    const age = (shortAge != null && shortAge !== undefined) ? shortAge : parsed.age;
     const currentRoundIndex = roundList.findIndex(r => r.current);
 
     // Only fetch rounds AFTER the current round
@@ -330,6 +335,7 @@ async function main() {
           hLogo: getLogoUrl(game.home?.logo),
           aLogo: getLogoUrl(game.away?.logo),
           date: game.date || '',
+          time: game.allocation?.time || '',
           scheduled: true,
         });
         roundNew++;
