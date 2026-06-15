@@ -230,6 +230,16 @@ async function main() {
   const byId = new Map(data.matches.map(m => [m.id, m]));
   const today = new Date().toISOString().slice(0, 10);
 
+  // Build grade→age lookup from existing match records
+  // This ensures scheduled records use the same age string as results
+  const gradeAgeMap = {};
+  for (const m of data.matches || []) {
+    if (!m.scheduled && m.rawGrade !== undefined) {
+      const key = `${m.compName}|${m.age}|${m.rawGrade}`;
+      if (!gradeAgeMap[key]) gradeAgeMap[key] = m.age;
+    }
+  }
+
   let newCount = 0;
   let gradeIdx = 0;
 
@@ -254,7 +264,14 @@ async function main() {
     const roundList = roundsRes?.data?.discoverGrade?.rounds || [];
     if (!roundList.length) { console.log('  no rounds'); continue; }
 
-    const { age, rawGrade } = parseGradeName(grade.name, grade.ageName, grade.genderName);
+    const parsed = parseGradeName(grade.name, grade.ageName, grade.genderName);
+    const rawGrade = parsed.rawGrade;
+    // Use age from existing match records if available — ensures consistency with fetch-results.js
+    // Falls back to parseGradeName result if no existing matches for this grade
+    const existingAgeKey = Object.keys(gradeAgeMap).find(k =>
+      k.startsWith(`${grade.compName}|`) && k.endsWith(`|${rawGrade}`)
+    );
+    const age = existingAgeKey ? gradeAgeMap[existingAgeKey] : parsed.age;
     const currentRoundIndex = roundList.findIndex(r => r.current);
 
     // Only fetch rounds AFTER the current round
