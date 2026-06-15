@@ -131,7 +131,7 @@ query discoverFixtureByRound($roundID: ID!) {
       away { ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } } }
       status { value }
       date
-      allocation { time court { venue { name suburb latitude longitude } } }
+      allocation { dateTimeList { date time } court { venue { name suburb latitude longitude } } }
     }
   }
 }`;
@@ -241,100 +241,92 @@ async function main() {
     catch (e) { console.warn('Could not parse data.json'); }
   }
 
-  // Build existing match index
-  const byId = new Map(data.matches.map(m => [m.id, m]));
+  // Build existing match index — purge all old scheduled records first
+  // (scheduled record IDs include the age string, which may have changed)
+  const byId = new Map(data.matches.filter(m => !m.scheduled).map(m => [m.id, m]));
+  console.log(`Purged existing scheduled records. ${byId.size} real matches retained.`);
   const today = new Date().toISOString().slice(0, 10);
 
   let newCount = 0;
-  let gradeIdx = 0;
+  const CONCURRENCY = 10; // parallel grade fetches
 
-  for (const grade of grades) {
-    gradeIdx++;
-    console.log(`\n[${gradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
-
-    if (gradeIdx > 1 && (gradeIdx - 1) % 25 === 0) {
-      console.log('  [cooldown 2s]');
-      await sleep(2000);
-    }
+  // Process one grade — returns array of scheduled match records
+  async function processGrade(grade, idx) {
+    console.log(`[${idx}/${grades.length}] ${grade.compName} — ${grade.name}`);
 
     let roundsRes;
     try {
       roundsRes = await gqlPost(Q_GRADE_ROUNDS, { gradeID: grade.id });
       await sleep(FETCH_DELAY);
     } catch (e) {
-      console.log(`  gradeRounds error: ${e.message}`);
-      continue;
+      console.log(`  [${idx}] gradeRounds error: ${e.message}`);
+      return [];
     }
 
     const roundList = roundsRes?.data?.discoverGrade?.rounds || [];
-    if (!roundList.length) { console.log('  no rounds'); continue; }
+    if (!roundList.length) return [];
 
     const { age, rawGrade } = parseGradeName(grade.name, grade.ageName, grade.genderName);
     const currentRoundIndex = roundList.findIndex(r => r.current);
+    const futureRounds = currentRoundIndex !== -1 ? roundList.slice(currentRoundIndex + 1) : [];
+    if (!futureRounds.length) return [];
 
-    // Only fetch rounds AFTER the current round
-    const futureRounds = currentRoundIndex !== -1
-      ? roundList.slice(currentRoundIndex + 1)
-      : [];
-
-    if (!futureRounds.length) {
-      console.log('  no future rounds');
-      continue;
-    }
-
-    console.log(`  ${futureRounds.length} future round(s) to fetch`);
-
+    const records = [];
     for (const round of futureRounds) {
       const number = parseInt(round.number, 10) || 0;
-
       let fixtureRes;
       try {
         fixtureRes = await gqlPost(Q_FIXTURE, { roundID: round.id });
         await sleep(FETCH_DELAY);
       } catch (e) {
-        console.log(`  R${number} error: ${e.message}`);
+        console.log(`  [${idx}] R${number} error: ${e.message}`);
         continue;
       }
 
       const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
-      if (!games.length) { console.log(`  R${number} ... bye`); continue; }
+      if (!games.length) continue;
 
-      let roundNew = 0;
       for (const game of games) {
-        if (game.status?.value === 'FINAL') continue; // already scored — skip, fetch-results handles it
-
+        if (game.status?.value === 'FINAL') continue;
         const homeName = cleanTeam(game.home?.name || '', age);
         const awayName = cleanTeam(game.away?.name || '', age);
         if (!homeName || !awayName) continue;
 
         const matchId = `${grade.compName}|${age}|${rawGrade}|${number}|${[homeName, awayName].sort().join('|')}`;
-
-        // Don't overwrite a completed result
         if (byId.has(matchId) && !byId.get(matchId).scheduled) continue;
 
-        const venue    = game.allocation?.court?.venue?.name    || '';
-        const vSuburb  = game.allocation?.court?.venue?.suburb  || '';
-        const vLat     = game.allocation?.court?.venue?.latitude  || '';
-        const vLng     = game.allocation?.court?.venue?.longitude || '';
-        const venueUrl = vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '';
-
-        byId.set(matchId, {
+        const vLat = game.allocation?.court?.venue?.latitude || '';
+        const vLng = game.allocation?.court?.venue?.longitude || '';
+        records.push({
           id: matchId, age, rawGrade, round: number,
           compName: grade.compName,
           home: homeName, away: awayName,
           hScore: null, hG: null, hB: null,
           aScore: null, aG: null, aB: null,
-          venue, vSuburb, venueUrl,
+          venue:    game.allocation?.court?.venue?.name    || '',
+          vSuburb:  game.allocation?.court?.venue?.suburb  || '',
+          venueUrl: vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '',
           hLogo: getLogoUrl(game.home?.logo),
           aLogo: getLogoUrl(game.away?.logo),
           date: game.date || '',
-          time: game.allocation?.time || '',
+          time: game.allocation?.dateTimeList?.[0]?.time || '',
           scheduled: true,
         });
-        roundNew++;
+      }
+    }
+    console.log(`  [${idx}] ${records.length} fixture(s)`);
+    return records;
+  }
+
+  // Process in parallel batches
+  for (let i = 0; i < grades.length; i += CONCURRENCY) {
+    const batch = grades.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(batch.map((g, j) => processGrade(g, i + j + 1)));
+    for (const records of results) {
+      for (const r of records) {
+        byId.set(r.id, r);
         newCount++;
       }
-      console.log(`  R${number} ... ${roundNew} fixture(s) stored`);
     }
   }
 
