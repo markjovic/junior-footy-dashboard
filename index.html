@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.114</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.115</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -596,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.114</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.115</span>
         </div>
 
 
@@ -1501,7 +1501,9 @@ function renderFixtures(age) {
     const rows = byRound[r].map(m => {
       const g = m.rawGrade || '';
       const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
-      const dateStr = m.date ? m.date.split('-').reverse().slice(0,2).join('/') : 'TBC';
+      const dateParts = m.date ? m.date.split('-') : null;
+      const dateStr = dateParts ? `${dateParts[2]}/${dateParts[1]}` : 'TBC';
+      const timeStr = m.time ? m.time.slice(0,5) : '';
       return `<div class="match-row">
         <div class="mr-grade">
           <span class="gtag ${gc}">${abbrevGrade(g)}</span>
@@ -1511,7 +1513,7 @@ function renderFixtures(age) {
           <span class="mr-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.home.replace(/'/g,"\'")}','${g}')">${m.home}</span>
         </div>
         <div class="mr-score">
-          <span style="color:var(--tx3);font-size:10px;font-family:'DM Mono',monospace">${dateStr}</span>
+          <span style="color:var(--tx3);font-size:10px;font-family:'DM Mono',monospace;line-height:1.3">${dateStr}${timeStr?`<br>${timeStr}`:''}</span>
         </div>
         <div class="mr-right">
           <span class="mr-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\'")}','${g}')">${m.away}</span>
