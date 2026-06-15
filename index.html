@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.109</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.110</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -423,6 +423,16 @@ body{overflow-x:hidden}
             </div>
             <div class="ldr-tabs" id="ldr-tabs"></div>
             <div id="ldr-bodies"></div>
+          </div>
+          </div>
+          <div class="mob-section" id="mob-fixtures" style="display:none">
+          <div class="card">
+            <div class="card-hdr" style="cursor:pointer" onclick="toggleFixtures()">
+              <span class="card-title">Upcoming Fixtures</span>
+              <span class="card-meta" id="fixtures-meta"></span>
+              <span id="fixtures-toggle" style="font-size:10px;color:var(--tx3);margin-left:auto">▶</span>
+            </div>
+            <div id="fixtures-body" style="display:none"></div>
           </div>
           </div>
           <div class="mob-section" id="mob-results">
@@ -585,7 +595,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.109</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.110</span>
         </div>
 
 
@@ -697,7 +707,8 @@ let S = {
   gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
   pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
-  showAllAges: false,  // admin toggle — reset each visit
+  showAllAges: false,
+  fixtures: [],        // upcoming scheduled matches (scheduled:true in data.json)  // admin toggle — reset each visit
   selComp: null,         // currently selected competition name
   compLogos: {},         // { compName: logoUrl }
   teamLogos: {},         // { teamName: logoUrl } from PlayHQ
@@ -1277,6 +1288,7 @@ function render() {
   renderGOTW(age);
   renderScorers(age);
   renderResults(age);
+  renderFixtures(age);
   renderStats();
 }
 
@@ -1438,6 +1450,58 @@ function renderGOTW(age) {
       </div>`;}).join('')}
     </div>` : ''}
   </div>`;
+}
+
+function toggleFixtures() {
+  const body = document.getElementById('fixtures-body');
+  const toggle = document.getElementById('fixtures-toggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  toggle.textContent = open ? '▼' : '▶';
+}
+
+function renderFixtures(age) {
+  const el   = document.getElementById('mob-fixtures');
+  const body = document.getElementById('fixtures-body');
+  const meta = document.getElementById('fixtures-meta');
+  if (!el || !body) return;
+
+  const fixtures = S.fixtures.filter(m =>
+    m.age === age && matchesComp(m)
+  ).sort((a, b) => a.round - b.round || (a.date || '').localeCompare(b.date || ''));
+
+  if (!fixtures.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  meta.textContent = `${fixtures.length} match${fixtures.length !== 1 ? 'es' : ''}`;
+
+  // Group by round
+  const byRound = {};
+  fixtures.forEach(m => {
+    if (!byRound[m.round]) byRound[m.round] = [];
+    byRound[m.round].push(m);
+  });
+
+  body.innerHTML = Object.entries(byRound).map(([round, matches]) => {
+    const rows = matches.map(m => {
+      const g = m.rawGrade || '';
+      const gc = g ? `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}` : 'gtag-neutral';
+      const dateStr = m.date ? m.date.split('-').reverse().join('/') : '';
+      return `<div class="match-row" style="opacity:0.7">
+        <div class="mr-left">
+          ${g ? `<span class="gtag ${gc}">${abbrevGrade(g)}</span>` : ''}
+          ${m.hLogo ? `<img src="${m.hLogo}" class="mr-crest" onerror="this.style.display='none'">` : ''}
+          <span class="mr-team home-team">${m.home}</span>
+        </div>
+        <div class="mr-score" style="color:var(--tx3);font-size:11px">${dateStr || 'TBC'}</div>
+        <div class="mr-right">
+          <span class="mr-team" style="text-align:left">${m.away}</span>
+          ${m.aLogo ? `<img src="${m.aLogo}" class="mr-crest" onerror="this.style.display='none'">` : ''}
+          ${m.venue ? `<a class="venue-link" href="${m.venueUrl||'#'}" target="_blank">${m.venue} ↗</a>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="round-hdr">Round ${round}</div>${rows}`;
+  }).join('');
 }
 
 function renderScorers(age) {
@@ -2650,7 +2714,8 @@ async function init() {
         // Load roster first — _valid/_grade pre-computation depends on it
         if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.matches?.length) {
-          S.matches = d.matches.filter(m => !m.isBye);
+          S.fixtures = d.matches.filter(m => m.scheduled);
+          S.matches  = d.matches.filter(m => !m.isBye && !m.scheduled);
           // Pre-compute validity on all matches once (roster must be loaded first)
           S.matches.forEach(m => {
             const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
