@@ -241,8 +241,10 @@ async function main() {
     catch (e) { console.warn('Could not parse data.json'); }
   }
 
-  // Build existing match index
-  const byId = new Map(data.matches.map(m => [m.id, m]));
+  // Build existing match index — purge all old scheduled records first
+  // (scheduled record IDs include the age string, which may have changed)
+  const byId = new Map(data.matches.filter(m => !m.scheduled).map(m => [m.id, m]));
+  console.log(`Purged existing scheduled records. ${byId.size} real matches retained.`);
   const today = new Date().toISOString().slice(0, 10);
 
   let newCount = 0;
