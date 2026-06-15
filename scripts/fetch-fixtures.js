@@ -248,7 +248,7 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
 
   let newCount = 0;
-  const CONCURRENCY = 8; // parallel grade fetches
+  const CONCURRENCY = 30; // parallel grade fetches
 
   // Process one grade — returns array of scheduled match records
   async function processGrade(grade, idx) {
