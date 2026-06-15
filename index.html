@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.110</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.111</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -427,19 +427,20 @@ body{overflow-x:hidden}
           </div>
           <div class="mob-section" id="mob-fixtures" style="display:none">
           <div class="card">
-            <div class="card-hdr" style="cursor:pointer" onclick="toggleFixtures()">
+            <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleFixtures()">
               <span class="card-title">Upcoming Fixtures</span>
               <span class="card-meta" id="fixtures-meta"></span>
-              <span id="fixtures-toggle" style="font-size:10px;color:var(--tx3);margin-left:auto">▶</span>
+              <span id="fixtures-toggle" style="font-size:10px;color:var(--tx3);margin-left:8px">▶</span>
             </div>
             <div id="fixtures-body" style="display:none"></div>
           </div>
           </div>
           <div class="mob-section" id="mob-results">
           <div class="card">
-            <div class="card-hdr">
+            <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleResults()">
               <span class="card-title">Results</span>
               <span class="card-meta" id="results-meta"></span>
+              <span id="results-toggle" style="font-size:10px;color:var(--tx3);margin-left:8px">▼</span>
             </div>
             <div id="results-body"></div>
           </div>
@@ -595,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.110</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.111</span>
         </div>
 
 
@@ -1460,6 +1461,14 @@ function toggleFixtures() {
   toggle.textContent = open ? '▼' : '▶';
 }
 
+function toggleResults() {
+  const body = document.getElementById('results-body');
+  const toggle = document.getElementById('results-toggle');
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  toggle.textContent = open ? '▼' : '▶';
+}
+
 function renderFixtures(age) {
   const el   = document.getElementById('mob-fixtures');
   const body = document.getElementById('fixtures-body');
@@ -1468,7 +1477,7 @@ function renderFixtures(age) {
 
   const fixtures = S.fixtures.filter(m =>
     m.age === age && matchesComp(m)
-  ).sort((a, b) => a.round - b.round || (a.date || '').localeCompare(b.date || ''));
+  ).sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.round - b.round);
 
   if (!fixtures.length) { el.style.display = 'none'; return; }
   el.style.display = '';
