@@ -753,27 +753,15 @@ async function main() {
     knownRounds.set(key, consecutive);
   });
 
-  // 5. Fetch new results for each grade
+  // 5. Fetch new results for each grade — parallel batches
   let newCount = 0;
   let updatedCount = 0;
   let fetchError = null;
-  let resultsGradeIdx = 0;
+  const CONCURRENCY = 5;
 
-  for (const grade of grades) {
-    resultsGradeIdx++;
-    console.log(`\n[${resultsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
-    if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 15 === 0) {
-      console.log('  [cooldown 3s]');
-      await sleep(3000);
-    }
-    const matches = await fetchGrade(grade, knownRounds, byId);
-
+  function mergeMatches(matches) {
     for (const m of matches) {
-      // Remove partial sentinel for this round when we have fresh results
-      if (m.isPartial) {
-        // This IS a new partial sentinel — store it (will overwrite old one by id)
-      } else {
-        // Remove any existing partial sentinel for this round/grade
+      if (!m.isPartial) {
         const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${m.round}|__partial__`;
         byId.delete(partialKey);
       }
@@ -786,6 +774,20 @@ async function main() {
         byId.set(m.id, m);
         newCount++;
       }
+    }
+  }
+
+  for (let i = 0; i < grades.length; i += CONCURRENCY) {
+    const batch = grades.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map((grade, j) => {
+        const idx = i + j + 1;
+        console.log(`\n[${idx}/${grades.length}] ${grade.compName} — ${grade.name}`);
+        return fetchGrade(grade, knownRounds, byId);
+      })
+    );
+    for (const matches of batchResults) {
+      mergeMatches(matches);
     }
   }
 
