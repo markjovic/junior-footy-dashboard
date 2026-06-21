@@ -24,7 +24,7 @@ const DATA_PATH    = path.join(ROOT, 'data.json');
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 const API_URL     = 'https://api.playhq.com/graphql';
-const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
+const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
 
 // ─── Date helper ─────────────────────────────────────────────────────────────
 
@@ -123,6 +123,8 @@ query discoverFixtureByRound($roundID: ID!) {
 
 // ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
 
+let SESSION_COOKIE = '';
+
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
@@ -141,6 +143,8 @@ function gqlPost(query, variables, operationName) {
         'Accept':         'application/json',
         'tenant':         'afl',
         'origin':         'https://www.playhq.com',
+        'request-id':     require('crypto').randomUUID(),
+        ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
       },
       timeout: 60000,
     }, res => {
@@ -681,12 +685,52 @@ function rebuildRoster(matches) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+async function getSession() {
+  const body = JSON.stringify({
+    operationName: 'TenantConfig',
+    variables: {},
+    query: 'query TenantConfig { tenantConfiguration { label } }',
+  });
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    if (attempt > 1) await sleep(attempt * 2000);
+    const raw = await new Promise((resolve) => {
+      const req = require('https').request(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'User-Agent':     USER_AGENT,
+          'Accept':         'application/json',
+          'tenant':         'afl',
+          'origin':         'https://www.playhq.com',
+          'request-id':     require('crypto').randomUUID(),
+        },
+        timeout: 30000,
+      }, res => {
+        resolve(res.headers['set-cookie']?.join(';') || '');
+        res.resume();
+      });
+      req.on('error', () => resolve(''));
+      req.write(body);
+      req.end();
+    });
+    const m = raw.match(/phq_session=([^;]+)/);
+    if (m) {
+      SESSION_COOKIE = `phq_session=${m[1]}`;
+      console.log('Session cookie obtained');
+      return;
+    }
+  }
+  console.warn('Could not obtain session cookie — proceeding without');
+}
+
 async function main() {
   // 1. Load config.json
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error('config.json not found at', CONFIG_PATH);
     process.exit(1);
   }
+  await getSession();
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const allCompetitions = config.competitions || [];
   if (!allCompetitions.length) {
@@ -762,9 +806,9 @@ async function main() {
   for (const grade of grades) {
     resultsGradeIdx++;
     console.log(`\n[${resultsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
-    if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 10 === 0) {
-      console.log('  [cooldown 5s]');
-      await sleep(5000);
+    if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 20 === 0) {
+      console.log('  [cooldown 60s — letting rate limit window reset]');
+      await sleep(60000);
     }
     const matches = await fetchGrade(grade, knownRounds, byId);
 
