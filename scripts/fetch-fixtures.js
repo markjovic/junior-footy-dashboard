@@ -248,40 +248,65 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10);
 
   let newCount = 0;
-  const CONCURRENCY = 30; // parallel grade fetches
+  const CONCURRENCY = 10; // parallel grade fetches
+
+  const MAX_RETRIES = 3;
+
+  async function gqlWithRetry(query, variables, label) {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await gqlPost(query, variables);
+        await sleep(FETCH_DELAY);
+        return res;
+      } catch (e) {
+        if (attempt < MAX_RETRIES) {
+          console.log(`  RETRY ${label} (attempt ${attempt}): ${e.message}`);
+          await sleep(1000 * attempt);
+        } else {
+          console.log(`  FAIL ${label} after ${MAX_RETRIES} attempts: ${e.message}`);
+          return null;
+        }
+      }
+    }
+  }
 
   // Process one grade — returns array of scheduled match records
   async function processGrade(grade, idx) {
     console.log(`[${idx}/${grades.length}] ${grade.compName} — ${grade.name}`);
 
-    let roundsRes;
-    try {
-      roundsRes = await gqlPost(Q_GRADE_ROUNDS, { gradeID: grade.id });
-      await sleep(FETCH_DELAY);
-    } catch (e) {
-      console.log(`  [${idx}] gradeRounds error: ${e.message}`);
-      return [];
-    }
+    const roundsRes = await gqlWithRetry(Q_GRADE_ROUNDS, { gradeID: grade.id }, grade.name);
+    if (!roundsRes) return [];
 
     const roundList = roundsRes?.data?.discoverGrade?.rounds || [];
     if (!roundList.length) return [];
 
     const { age, rawGrade } = parseGradeName(grade.name, grade.ageName, grade.genderName);
-    const currentRoundIndex = roundList.findIndex(r => r.current);
+
+    // Find current round boundary: prefer API's current flag, fall back to
+    // highest round with completed results already stored in data.json.
+    // Without this fallback, a -1 result causes slice(0) = ALL rounds,
+    // overwriting completed results with scheduled:true null-score records.
+    let currentRoundIndex = roundList.findIndex(r => r.current);
+    if (currentRoundIndex === -1) {
+      const storedRounds = new Set(
+        (data.matches || [])
+          .filter(m => !m.scheduled && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
+          .map(m => m.round)
+      );
+      if (storedRounds.size > 0) {
+        const highestStored = Math.max(...storedRounds);
+        currentRoundIndex = roundList.findIndex(r => parseInt(r.number, 10) === highestStored);
+      }
+    }
+
     const futureRounds = currentRoundIndex !== -1 ? roundList.slice(currentRoundIndex + 1) : [];
     if (!futureRounds.length) return [];
 
     const records = [];
     for (const round of futureRounds) {
       const number = parseInt(round.number, 10) || 0;
-      let fixtureRes;
-      try {
-        fixtureRes = await gqlPost(Q_FIXTURE, { roundID: round.id });
-        await sleep(FETCH_DELAY);
-      } catch (e) {
-        console.log(`  [${idx}] R${number} error: ${e.message}`);
-        continue;
-      }
+      const fixtureRes = await gqlWithRetry(Q_FIXTURE, { roundID: round.id }, `${grade.name} R${number}`);
+      if (!fixtureRes) continue;
 
       const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
       if (!games.length) continue;
