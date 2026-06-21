@@ -22,7 +22,7 @@ const DATA_PATH    = path.join(ROOT, 'data.json');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '150', 10);
+const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 const API_URL     = 'https://api.playhq.com/graphql';
 const USER_AGENT  = 'Mozilla/5.0 (compatible; EFNL-dashboard-bot/1.0)';
 
@@ -762,6 +762,10 @@ async function main() {
   for (const grade of grades) {
     resultsGradeIdx++;
     console.log(`\n[${resultsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
+    if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 15 === 0) {
+      console.log('  [cooldown 3s]');
+      await sleep(3000);
+    }
     const matches = await fetchGrade(grade, knownRounds, byId);
 
     for (const m of matches) {
