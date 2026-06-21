@@ -753,13 +753,21 @@ async function main() {
     knownRounds.set(key, consecutive);
   });
 
-  // 5. Fetch new results for each grade — parallel batches
+  // 5. Fetch new results for each grade — sequential with cooldown
   let newCount = 0;
   let updatedCount = 0;
   let fetchError = null;
-  const CONCURRENCY = 5;
+  let resultsGradeIdx = 0;
 
-  function mergeMatches(matches) {
+  for (const grade of grades) {
+    resultsGradeIdx++;
+    console.log(`\n[${resultsGradeIdx}/${grades.length}] ${grade.compName} — ${grade.name}`);
+    if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 10 === 0) {
+      console.log('  [cooldown 5s]');
+      await sleep(5000);
+    }
+    const matches = await fetchGrade(grade, knownRounds, byId);
+
     for (const m of matches) {
       if (!m.isPartial) {
         const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${m.round}|__partial__`;
@@ -774,20 +782,6 @@ async function main() {
         byId.set(m.id, m);
         newCount++;
       }
-    }
-  }
-
-  for (let i = 0; i < grades.length; i += CONCURRENCY) {
-    const batch = grades.slice(i, i + CONCURRENCY);
-    const batchResults = await Promise.all(
-      batch.map((grade, j) => {
-        const idx = i + j + 1;
-        console.log(`\n[${idx}/${grades.length}] ${grade.compName} — ${grade.name}`);
-        return fetchGrade(grade, knownRounds, byId);
-      })
-    );
-    for (const matches of batchResults) {
-      mergeMatches(matches);
     }
   }
 
