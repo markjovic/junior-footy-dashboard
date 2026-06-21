@@ -415,12 +415,12 @@ async function fetchGrade(grade, knownRounds, byId) {
     await sleep(FETCH_DELAY);
   } catch (e) {
     console.log(`    gradeRounds error: ${e.message}`);
-    return [];
+    return { matches: [], hit403: true };
   }
 
   if (!roundList?.length) {
     console.log(`    no rounds returned`);
-    return [];
+    return { matches: [], hit403: false };
   }
 
   // If grade-level dates are available and all are in the past,
@@ -430,7 +430,7 @@ async function fetchGrade(grade, knownRounds, byId) {
     const latestDate = latestMonth + '-31'; // end of that month
     if (latestDate < today) {
       console.log(`    season ended (last month: ${latestMonth}) — skipping`);
-      return [];
+      return { matches: [], hit403: false };
     }
   }
 
@@ -630,10 +630,10 @@ async function fetchGrade(grade, knownRounds, byId) {
       console.log(`    R${m.round} partial promoted to complete (later rounds up to R${maxCompleteRound} are complete)`);
     });
     const stalledRounds = new Set(stalledPartials.map(m => m.round));
-    return allMatches.filter(m => !(m.isPartial && stalledRounds.has(m.round)));
+    return { matches: allMatches.filter(m => !(m.isPartial && stalledRounds.has(m.round))), hit403: false };
   }
 
-  return allMatches;
+  return { matches: allMatches, hit403: false };
   } catch (e) {
     console.error(`  FATAL ERROR in [${name}]: ${e.message}`);
     return allMatches;
@@ -802,6 +802,7 @@ async function main() {
   let updatedCount = 0;
   let fetchError = null;
   let resultsGradeIdx = 0;
+  let consecutive403s = 0;
 
   for (const grade of grades) {
     resultsGradeIdx++;
@@ -809,8 +810,19 @@ async function main() {
     if (resultsGradeIdx > 1 && (resultsGradeIdx - 1) % 20 === 0) {
       console.log('  [cooldown 60s — letting rate limit window reset]');
       await sleep(60000);
+      consecutive403s = 0;
     }
-    const matches = await fetchGrade(grade, knownRounds, byId);
+    const { matches, hit403 } = await fetchGrade(grade, knownRounds, byId);
+    if (hit403) {
+      consecutive403s++;
+      if (consecutive403s >= 3) {
+        console.log(`  [${consecutive403s} consecutive 403s — cooldown 60s]`);
+        await sleep(60000);
+        consecutive403s = 0;
+      }
+    } else {
+      consecutive403s = 0;
+    }
 
     for (const m of matches) {
       if (!m.isPartial) {
