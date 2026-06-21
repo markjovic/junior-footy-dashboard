@@ -797,8 +797,12 @@ async function main() {
                  || a.rawGrade.localeCompare(b.rawGrade)
                  || a.round - b.round);
 
-  // Include bye sentinels in knownRounds calculation but not in output
-  const allWithByes = allValues.sort((a,b) => a.round - b.round);
+  // Include bye sentinels in round tracking but not in output.
+  // Exclude scheduled records entirely — fetch-fixtures.js owns them.
+  // They will be re-added on the next fetch-fixtures run.
+  const allWithByes = allValues
+    .filter(m => !m.scheduled)
+    .sort((a,b) => a.round - b.round);
 
   const roster = rebuildRoster(allMatches);
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
