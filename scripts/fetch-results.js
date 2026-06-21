@@ -792,17 +792,15 @@ async function main() {
   // Separate real matches from bye sentinels
   const allValues = Array.from(byId.values());
   const allMatches = allValues
-    .filter(m => !m.isBye && !m.isPartial)
+    .filter(m => !m.isBye && !m.isPartial && !m.scheduled)
     .sort((a, b) => a.age.localeCompare(b.age)
                  || a.rawGrade.localeCompare(b.rawGrade)
                  || a.round - b.round);
 
   // Include bye sentinels in round tracking but not in output.
-  // Exclude scheduled records entirely — fetch-fixtures.js owns them.
-  // They will be re-added on the next fetch-fixtures run.
-  const allWithByes = allValues
-    .filter(m => !m.scheduled)
-    .sort((a,b) => a.round - b.round);
+  // Preserve scheduled records in output unchanged — fetch-fixtures.js owns them,
+  // but fetch-results.js must not strip them or the dashboard loses upcoming fixtures.
+  const allWithByes = allValues.sort((a,b) => a.round - b.round);
 
   const roster = rebuildRoster(allMatches);
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
@@ -813,6 +811,7 @@ async function main() {
   const teamLogos = { ...(existing.teamLogos || {}) };
   // Use allWithByes for round tracking so byes advance lastRound correctly
   allWithByes.forEach(m => {
+    if (m.scheduled) return; // don't let fixture records affect lastRound
     const key = `${m.age}|${m.rawGrade}`;
     if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
     if (!m.isBye) {
