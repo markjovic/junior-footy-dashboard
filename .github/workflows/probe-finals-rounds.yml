@@ -1,0 +1,132 @@
+# .github/workflows/probe-finals-rounds.yml
+#
+# READ-ONLY probe. No commit, no push, no data.json write.
+# Permissions are contents:read so it cannot write even by accident.
+#
+# NOTE: actions/setup-node is deliberately absent. It changes the runner's
+# outbound fingerprint and causes CloudFront 403s against api.playhq.com.
+# ubuntu-latest ships with Node already.
+
+name: Probe Finals Rounds
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Competition filter (substring, e.g. "EFNL 2026"). Blank = all.'
+        required: false
+        default: ''
+      age:
+        description: 'Grade-name filter (substring, e.g. "U12"). Blank = all.'
+        required: false
+        default: ''
+      grade_id:
+        description: 'Probe exactly one grade id (overrides comp/age filters).'
+        required: false
+        default: ''
+      limit:
+        description: 'Stop after N grades (0 = no limit).'
+        required: false
+        default: '0'
+      fixtures:
+        description: 'Also probe finals fixtures for ProvisionalTeam shape.'
+        type: boolean
+        required: false
+        default: false
+      fixture_cap:
+        description: 'How many finals rounds to fixture-probe.'
+        required: false
+        default: '5'
+      cooldown_every:
+        description: 'Grades between cooldowns (0 disables). Probe makes 1 call/grade.'
+        required: false
+        default: '60'
+      cooldown_seconds:
+        description: 'Cooldown duration in seconds (0 disables).'
+        required: false
+        default: '30'
+      all_rounds:
+        description: 'Print every grade, not just grades that have finals.'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-finals-rounds
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    # Sized above the worst case: a full grade sweep with a 60s cooldown
+    # every 20 grades, plus the optional fixture probe.
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Node version
+        run: node --version
+
+      - name: Syntax check
+        run: node --check scripts/probe-finals-rounds.js
+
+      - name: Run probe
+        env:
+          # Booleans arrive as real booleans from workflow inputs, so string
+          # comparison alone is not enough — test both forms.
+          IN_COMP:        ${{ inputs.comp }}
+          IN_AGE:         ${{ inputs.age }}
+          IN_GRADE_ID:    ${{ inputs.grade_id }}
+          IN_LIMIT:       ${{ inputs.limit }}
+          IN_FIXTURE_CAP: ${{ inputs.fixture_cap }}
+          IN_COOLDOWN_EVERY:   ${{ inputs.cooldown_every }}
+          IN_COOLDOWN_SECONDS: ${{ inputs.cooldown_seconds }}
+          IN_FIXTURES:    ${{ (inputs.fixtures == true || inputs.fixtures == 'true') && 'yes' || 'no' }}
+          IN_ALL_ROUNDS:  ${{ (inputs.all_rounds == true || inputs.all_rounds == 'true') && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          # Every optional argument is added with a full if-block, never with
+          # `[ -n "$X" ] && ARGS+=(...)`. Under `set -e` a bare AND-list whose
+          # test fails is itself the failing statement and aborts the step, so
+          # an empty input would kill the run before Node ever started.
+          ARGS=()
+          if [ -n "$IN_COMP" ];        then ARGS+=("--comp=$IN_COMP"); fi
+          if [ -n "$IN_AGE" ];         then ARGS+=("--age=$IN_AGE"); fi
+          if [ -n "$IN_GRADE_ID" ];    then ARGS+=("--grade=$IN_GRADE_ID"); fi
+          if [ -n "$IN_LIMIT" ];       then ARGS+=("--limit=$IN_LIMIT"); fi
+          if [ -n "$IN_FIXTURE_CAP" ]; then ARGS+=("--fixture-cap=$IN_FIXTURE_CAP"); fi
+          if [ -n "$IN_COOLDOWN_EVERY" ];   then ARGS+=("--cooldown-every=$IN_COOLDOWN_EVERY"); fi
+          if [ -n "$IN_COOLDOWN_SECONDS" ]; then ARGS+=("--cooldown-seconds=$IN_COOLDOWN_SECONDS"); fi
+          if [ "$IN_FIXTURES" = "yes" ];   then ARGS+=("--fixtures"); fi
+          if [ "$IN_ALL_ROUNDS" = "yes" ]; then ARGS+=("--all-rounds"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          # ${ARGS[@]+...} guards against an unbound empty array under `set -u`.
+          node scripts/probe-finals-rounds.js ${ARGS[@]+"${ARGS[@]}"} 2>&1 | tee /tmp/probe-output.txt
+
+      - name: Confirm nothing was modified
+        run: |
+          set -euo pipefail
+          # The probe output goes to /tmp, so the working tree must be pristine.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "PROBE MODIFIED THE WORKING TREE — this must never happen:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean. Probe wrote nothing."
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-finals-rounds-output
+          path: /tmp/probe-output.txt
+          retention-days: 14
