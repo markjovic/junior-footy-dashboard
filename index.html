@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.117</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.118</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -596,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.117</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.118</span>
         </div>
 
 
@@ -1090,6 +1090,19 @@ function roundLabel(m) {
   return m.finalsName || m.finalsAbbrev || `Finals ${m.round}`;
 }
 
+// The sidebar round filter holds a round key ("14" or "F:GF"), not a number.
+function selRoundIsFinals() {
+  return typeof S.selRound === 'string' && S.selRound.startsWith('F:');
+}
+
+// The ladder only ever cuts off at a home-and-away round. Selecting a finals
+// round means "no cutoff" rather than an unparseable one — parseInt('F:GF')
+// is NaN and every <= comparison against it is false, which would empty the
+// ladder entirely.
+function ladderCutoff() {
+  return (!S.selRound || selRoundIsFinals()) ? '' : S.selRound;
+}
+
 // ═══════════════════════════════════════
 // COMPUTED — LADDER
 // ═══════════════════════════════════════
@@ -1203,8 +1216,7 @@ function getGOTWMatch(age) {
   // would silently freeze there. Order by (isFinals, round) instead.
   let roundMatches;
   if (S.selRound) {
-    // The sidebar round filter selects home-and-away rounds only.
-    roundMatches = validMatches.filter(m => !isFinalsMatch(m) && m.round === parseInt(S.selRound));
+    roundMatches = validMatches.filter(m => roundKey(m) === S.selRound);
   } else {
     const latest = [...validMatches].sort(cmpRound).pop();
     const latestKey = roundKey(latest);
@@ -1386,10 +1398,19 @@ function renderSidebarFilters(age) {
     </button>`
   ).join('');
 
-  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)).map(m=>m.round))].sort((a,b)=>a-b);
+  // One entry per round key, so a Grand Final and Round 1 are separate options.
+  const roundOpts = new Map(); // roundKey -> sample match
+  S.matches.filter(m=>m.age===age&&matchesComp(m)).forEach(m => {
+    const k = roundKey(m);
+    if (!roundOpts.has(k)) roundOpts.set(k, m);
+  });
+  const rounds = [...roundOpts.values()].sort(cmpRound);
   const rs = document.getElementById('round-sel');
   rs.innerHTML = '<option value="">All rounds</option>' +
-    rounds.map(r=>`<option value="${r}"${r==S.selRound?' selected':''}>Round ${r}</option>`).join('');
+    rounds.map(m=>{
+      const k = roundKey(m);
+      return `<option value="${k}"${k===S.selRound?' selected':''}>${roundLabel(m)}</option>`;
+    }).join('');
 
   const teams = allTeamsForAge(age);
   const ts = document.getElementById('team-sel');
@@ -1402,12 +1423,14 @@ function renderLadder(age) {
   if (!grades.length) { document.getElementById('ldr-tabs').innerHTML=''; document.getElementById('ldr-bodies').innerHTML='<div class="empty">No valid matches yet</div>'; return; }
   if (!S.selLdrGrade || !grades.includes(S.selLdrGrade)) S.selLdrGrade = grades[0];
 
-  const maxRound = S.selRound || '';
+  const maxRound = ladderCutoff();
   // Header freezes at the highest home-and-away round for this age. Grades run
   // to 14, 15, 16, 17 or 18 depending on competition, so this is measured, not
   // assumed (design v2 §3.3).
   const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)&&matchIsValid(m)).map(m=>m.round),0);
   document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
+  // Note: when a finals round is selected the cutoff is blank, so the ladder
+  // correctly shows the full home-and-away season rather than nothing.
 
   document.getElementById('ldr-tabs').innerHTML = grades.map(g => {
     const key = `${S.selComp||''}|${age}|${g}`;
@@ -1637,22 +1660,22 @@ function renderResults(age) {
       const g = matchGrade(m) || m.rawGrade || '';
       if (grades.size && g && !grades.has(g)) return false;
     }
-    // The round filter selects home-and-away rounds only; finals get named
-    // entries in step 4. Until then a selected round hides finals rather than
-    // matching a finals round that happens to share the number.
-    if (S.selRound && (isFinalsMatch(m) || m.round != S.selRound)) return false;
+    // The round filter holds a round key, so "Grand Final" and "Round 1" are
+    // distinct selections even though both have round === 1.
+    if (S.selRound && roundKey(m) !== S.selRound) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
     return true;
-  }).sort((a,b)=>b.round-a.round||(GRADE_ORDER.indexOf(matchGrade(a))-GRADE_ORDER.indexOf(matchGrade(b))));
+  }).sort((a,b)=>-cmpRound(a,b)||(GRADE_ORDER.indexOf(matchGrade(a))-GRADE_ORDER.indexOf(matchGrade(b))));
 
   const el = document.getElementById('results-body');
   document.getElementById('results-meta').textContent = `${matches.length} match${matches.length!==1?'es':''}`;
   if (!matches.length) { el.innerHTML='<div class="empty">No results match current filters</div>'; return; }
 
-  // Group by round
+  // Group by round key — finals restart at 1, so grouping on the bare number
+  // would bury a Grand Final among the Round 1 games.
   const byRound = {};
-  matches.forEach(m=>{(byRound[m.round]=byRound[m.round]||[]).push(m);});
-  const rounds = Object.keys(byRound).map(Number).sort((a,b)=>b-a);
+  matches.forEach(m=>{const k=roundKey(m);(byRound[k]=byRound[k]||[]).push(m);});
+  const rounds = Object.keys(byRound).sort((a,b)=>-cmpRound(byRound[a][0],byRound[b][0]));
 
   el.innerHTML = rounds.map(r=>{
     const rms = byRound[r];
@@ -1667,6 +1690,7 @@ function renderResults(age) {
         <div class="mr-grade">
           <span class="gtag gtag-${g.replace(/[^A-Za-z0-9]/g,'')}">${abbrevGrade(g)}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
+          ${m.isFinals?`<span style="font-size:7px;color:var(--gold);letter-spacing:.5px;line-height:1.2">${m.finalsAbbrev||'F'}</span>`:''}
           ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
         </div>
         <div class="mr-left">
@@ -1686,7 +1710,7 @@ function renderResults(age) {
         <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
       </div>`;
     }).join('');
-    return `<div class="rnd-hdr">Round ${r}</div>${rows}`;
+    return `<div class="rnd-hdr">${roundLabel(rms[0])}</div>${rows}`;
   }).join('');
 }
 
@@ -2869,8 +2893,8 @@ async function init() {
       // Restore round — validate it still exists for this age
       if (f.selRound && S.selectedAge) {
         const validRounds = new Set(S.matches
-          .filter(m => m.age === S.selectedAge && matchesComp(m) && !isFinalsMatch(m))
-          .map(m => String(m.round)));
+          .filter(m => m.age === S.selectedAge && matchesComp(m))
+          .map(m => roundKey(m)));
         if (validRounds.has(String(f.selRound))) S.selRound = f.selRound;
         // else: round gone (new season?) — fall back to all rounds
       }
