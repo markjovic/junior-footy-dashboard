@@ -69,6 +69,7 @@ query gradeRounds($gradeID: ID!) {
     rounds {
       id
       name
+      abbreviatedName
       number
       current
       isFinalsRound
@@ -288,6 +289,24 @@ function cleanTeam(name, gradeAge) {
   return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
 }
 
+// ─── Round identity ───────────────────────────────────────────────────────────
+// PlayHQ restarts finals numbering at 1 in every grade (verified across all 249
+// grades, 2026-08-09), so a Grand Final and Round 1 both have number === 1.
+// Every id and sentinel key therefore carries a token rather than a bare number.
+//
+// Home-and-away rounds return the bare number, so all 12,765 already-stored ids
+// are byte-identical to what they were. Finals use abbreviatedName, which is
+// populated on all 480 finals rounds and is stable where the name is not
+// ("Preliminary Final" in EFNL, "Preliminary Finals" in WFNL, both "PF").
+function roundToken(number, finalsAbbrev) {
+  return finalsAbbrev ? `F:${finalsAbbrev}` : String(number);
+}
+
+// The token for an already-stored match record.
+function tokenOfMatch(m) {
+  return roundToken(m.round, m.isFinals ? (m.finalsAbbrev || String(m.round)) : '');
+}
+
 function getStat(stats, type) {
   const s = (stats || []).find(s => s.type.value === type);
   return s ? s.count : 0;
@@ -395,13 +414,18 @@ async function discoverGrades(competitions) {
 
 // ─── Per-grade results fetcher ────────────────────────────────────────────────
 
-async function fetchGrade(grade, knownRounds, byId) {
+async function fetchGrade(grade, knownRounds, byId, knownFinals) {
   const { id, name, ageName = '', genderName = '' } = grade;
   const { age, rawGrade } = parseGradeName(name, ageName, genderName);
   const today = todayAEST();
-  const highestKnown = knownRounds.get(`${grade.compName}|${age}|${rawGrade}`) || 0;
+  const gradeKey     = `${grade.compName}|${age}|${rawGrade}`;
+  const highestKnown = knownRounds.get(gradeKey) || 0;
+  // Finals are tracked by abbreviation, not by number. Their numbers restart at
+  // 1 and carry no ordering information relative to home-and-away rounds.
+  const storedFinals = (knownFinals && knownFinals.get(gradeKey)) || new Set();
 
-  console.log(`  known up to R${highestKnown}`);
+  console.log(`  known up to R${highestKnown}` +
+    (storedFinals.size ? ` + finals [${[...storedFinals].join(',')}]` : ''));
   try {
 
   // Get round list for this grade
@@ -436,10 +460,31 @@ async function fetchGrade(grade, knownRounds, byId) {
 
   const allMatches = [];
 
-  // If the grade's first round number is > 1 (e.g. started at R5 after grading),
-  // fill R1 through firstRound-1 with bye sentinels so knownRounds advances correctly
-  // and we don't retry non-existent early rounds on every run.
-  const firstRoundNumber = parseInt(roundList[0]?.number, 10) || 1;
+  const finalsAbbrevOf = r =>
+    r.isFinalsRound === true ? (r.abbreviatedName || String(parseInt(r.number, 10) || 0)) : '';
+
+  // Position within roundList is the ONLY ordering valid across both tracks,
+  // because finals numbering restarts at 1.
+  const orderOf = new Map(); // round token -> index in roundList
+  roundList.forEach((r, i) => {
+    orderOf.set(roundToken(parseInt(r.number, 10) || 0, finalsAbbrevOf(r)), i);
+  });
+
+  // The most recently stored finals round is re-fetched every run so amended
+  // finals results are picked up. Mirrors the home-and-away behaviour of always
+  // re-checking the highest known round.
+  let recheckFinalsIdx = -1;
+  roundList.forEach((r, i) => {
+    if (r.isFinalsRound === true && storedFinals.has(finalsAbbrevOf(r))) recheckFinalsIdx = i;
+  });
+
+  // If the grade's first home-and-away round number is > 1 (e.g. started at R5
+  // after grading), fill R1 through firstRound-1 with bye sentinels so
+  // knownRounds advances correctly and we don't retry non-existent early rounds.
+  // Scoped to home-and-away deliberately: finals restart at 1, so backfilling
+  // them would manufacture phantom bye records.
+  const firstHARound = roundList.find(r => r.isFinalsRound !== true);
+  const firstRoundNumber = parseInt(firstHARound?.number, 10) || 1;
   if (firstRoundNumber > 1 && highestKnown < firstRoundNumber - 1) {
     for (let r = Math.max(1, highestKnown + 1); r < firstRoundNumber; r++) {
       const byeKey = `${grade.compName}|${age}|${rawGrade}|${r}|__bye__`;
@@ -455,17 +500,35 @@ async function fetchGrade(grade, knownRounds, byId) {
 
   for (const round of roundList) {
     const { id: roundID, provisionalDates, isFinalsRound, current } = round;
-    const number = parseInt(round.number, 10) || 0;
+    const number   = parseInt(round.number, 10) || 0;
+    const isFinals = isFinalsRound === true;
+    const fAbbrev  = finalsAbbrevOf(round);
+    const fName    = isFinals ? (round.name || '') : '';
+    const rToken   = roundToken(number, fAbbrev);
+    const rLabel   = isFinals ? (fName || fAbbrev) : `R${number}`;
+    const rIndex   = roundList.indexOf(round);
 
-    // Skip already-stored rounds — but always re-fetch the highest known round
-    // in case it was partial, or results were amended after storage.
-    if (number < highestKnown) {
-      console.log(`    R${number} ... already stored`);
-      continue;
-    }
-    if (number === highestKnown) {
-      console.log(`    R${number} ... re-checking latest stored round`);
-      // fall through to fetch
+    // Skip already-stored rounds, on the appropriate track.
+    if (isFinals) {
+      if (storedFinals.has(fAbbrev) && rIndex !== recheckFinalsIdx) {
+        console.log(`    ${rLabel} ... already stored`);
+        continue;
+      }
+      if (storedFinals.has(fAbbrev)) {
+        console.log(`    ${rLabel} ... re-checking latest stored finals round`);
+        // fall through to fetch
+      }
+    } else {
+      // Always re-fetch the highest known round in case it was partial, or
+      // results were amended after storage.
+      if (number < highestKnown) {
+        console.log(`    R${number} ... already stored`);
+        continue;
+      }
+      if (number === highestKnown) {
+        console.log(`    R${number} ... re-checking latest stored round`);
+        // fall through to fetch
+      }
     }
 
     // Future-round detection strategy:
@@ -480,7 +543,7 @@ async function fetchGrade(grade, knownRounds, byId) {
       // A current round exists — use it as the cutoff
       const roundIndex = roundList.indexOf(round);
       if (roundIndex > currentRoundIndex) {
-        console.log(`    R${number} ... beyond current round — stopping`);
+        console.log(`    ${rLabel} ... beyond current round — stopping`);
         break;
       }
       // Rounds up to and including current are fetched (may have finals)
@@ -491,7 +554,7 @@ async function fetchGrade(grade, knownRounds, byId) {
       if (gradeDates.length) {
         const earliestMonth = gradeDates.slice().sort()[0]; // e.g. "2026-04"
         if (earliestMonth > today.slice(0, 7)) {
-          console.log(`    R${number} ... season not started yet (starts ${earliestMonth}) — stopping`);
+          console.log(`    ${rLabel} ... season not started yet (starts ${earliestMonth}) — stopping`);
           break;
         }
       } else {
@@ -504,7 +567,7 @@ async function fetchGrade(grade, knownRounds, byId) {
         if (earliest) {
           const daysAhead = (new Date(earliest) - new Date(today)) / (1000 * 60 * 60 * 24);
           if (daysAhead > 90) {
-            console.log(`    R${number} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
+            console.log(`    ${rLabel} ... future (${earliest}, ${Math.round(daysAhead)} days away) — stopping`);
             break;
           }
         }
@@ -512,14 +575,14 @@ async function fetchGrade(grade, knownRounds, byId) {
     }
 
     // Skip fixture fetch if this round is already stored as a bye sentinel
-    const byeKey = `${grade.compName}|${age}|${rawGrade}|${number}|__bye__`;
+    const byeKey = `${grade.compName}|${age}|${rawGrade}|${rToken}|__bye__`;
     if (byId.has(byeKey)) {
       // Already know it's a bye — push sentinel and continue without API call
       allMatches.push(byId.get(byeKey));
       continue;
     }
 
-    process.stdout.write(`    R${number}${isFinalsRound ? ' [Finals]' : ''} ... `);
+    process.stdout.write(`    ${rLabel}${isFinals ? ' [Finals]' : ''} ... `);
 
     let fixtureRes;
     let fetchAttempts = 0;
@@ -547,8 +610,9 @@ async function fetchGrade(grade, knownRounds, byId) {
     if (games.length === 0) {
       // No games — bye round. Push a sentinel so knownRounds advances past it.
       console.log(`bye — continuing`);
-      allMatches.push({ id: `${grade.compName}|${age}|${rawGrade}|${number}|__bye__`,
+      allMatches.push({ id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__bye__`,
         age, rawGrade, round: number, compName: grade.compName,
+        ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__bye__', away: '__bye__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
         venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
@@ -583,10 +647,11 @@ async function fetchGrade(grade, knownRounds, byId) {
       const venueUrl = vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '';
 
       // Dedup key — same as dashboard
-      const matchId = `${grade.compName}|${age}|${rawGrade}|${number}|${[homeName, awayName].sort().join('|')}`;
+      const matchId = `${grade.compName}|${age}|${rawGrade}|${rToken}|${[homeName, awayName].sort().join('|')}`;
 
       matches.push({
         id: matchId, age, rawGrade, round: number,
+        ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         compName: grade.compName,
         home: homeName, away: awayName,
         hScore, hG, hB,
@@ -603,8 +668,9 @@ async function fetchGrade(grade, knownRounds, byId) {
       console.log(`${matches.length} result(s) (PARTIAL — ${games.length - finalGames.length} game(s) not yet final)`);
       // Store a partial sentinel so this round is re-fetched next run
       allMatches.push({
-        id: `${grade.compName}|${age}|${rawGrade}|${number}|__partial__`,
+        id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__partial__`,
         age, rawGrade, round: number, compName: grade.compName,
+        ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__partial__', away: '__partial__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
         venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isPartial: true,
@@ -617,20 +683,35 @@ async function fetchGrade(grade, knownRounds, byId) {
 
   // Post-loop: if a partial round exists but any later round has complete results,
   // the partial will never be completed (forfeit, error etc.) — remove its sentinel.
-  const completeRounds = new Set(
-    allMatches.filter(m => !m.isPartial && !m.isBye && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
-      .map(m => m.round)
-  );
-  const maxCompleteRound = completeRounds.size ? Math.max(...completeRounds) : 0;
-  const stalledPartials = allMatches.filter(m =>
-    m.isPartial && m.round < maxCompleteRound
-  );
+  // Ordering MUST come from position in roundList, not from round number.
+  // Finals restart at 1, so "R1 partial vs R14 complete" and "GF partial vs R14
+  // complete" are not comparable by number and would promote the wrong records.
+  const idxOfMatch = m => {
+    const i = orderOf.get(tokenOfMatch(m));
+    return i === undefined ? -1 : i;
+  };
+  const ownGrade = m =>
+    m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade;
+  const completeIdx = allMatches
+    .filter(m => !m.isPartial && !m.isBye && ownGrade(m))
+    .map(idxOfMatch)
+    .filter(i => i >= 0);
+  const maxCompleteIdx = completeIdx.length ? Math.max(...completeIdx) : -1;
+  const stalledPartials = allMatches.filter(m => {
+    if (!m.isPartial) return false;
+    const i = idxOfMatch(m);
+    return i >= 0 && i < maxCompleteIdx;
+  });
   if (stalledPartials.length) {
     stalledPartials.forEach(m => {
-      console.log(`    R${m.round} partial promoted to complete (later rounds up to R${maxCompleteRound} are complete)`);
+      const lbl = m.isFinals ? (m.finalsName || m.finalsAbbrev) : `R${m.round}`;
+      console.log(`    ${lbl} partial promoted to complete (a later round is complete)`);
     });
-    const stalledRounds = new Set(stalledPartials.map(m => m.round));
-    return { matches: allMatches.filter(m => !(m.isPartial && stalledRounds.has(m.round))), hit403: false };
+    const stalledTokens = new Set(stalledPartials.map(tokenOfMatch));
+    return {
+      matches: allMatches.filter(m => !(m.isPartial && stalledTokens.has(tokenOfMatch(m)))),
+      hit403: false,
+    };
   }
 
   return { matches: allMatches, hit403: false };
@@ -648,6 +729,12 @@ async function fetchGrade(grade, knownRounds, byId) {
 // and a warning is logged.
 
 function rebuildRoster(matches) {
+  // Finals are excluded explicitly. With finals at 1-3 and home-and-away at
+  // 14-18 they could never win the `round > prev.round` comparison anyway, but
+  // that is a numeric coincidence rather than a rule, and it would break the
+  // moment a competition ran a short home-and-away season.
+  matches = matches.filter(m => !m.isFinals);
+
   // Key by "teamName|age" so clubs with multiple teams in different age groups
   // don't overwrite each other. e.g. "Norwood|U12" and "Norwood|U14" are separate.
   // latest: "teamName|age" → { grade, age, round }
@@ -772,6 +859,10 @@ async function main() {
   // Build a map of which rounds exist per grade, and which are partial
   const roundsByGrade = new Map();
   const partialRounds = new Map(); // key → Set of partial round numbers
+  // Finals tracked separately by abbreviation — their numbers restart at 1 and
+  // would corrupt the consecutive-from-R1 scan if mixed into roundsByGrade.
+  const finalsByGrade = new Map(); // key → Set of finals abbreviations stored
+  const partialFinals = new Map(); // key → Set of finals abbreviations that are partial
   (existing.matches || []).forEach(m => {
     byId.set(m.id, m);
     // Scheduled (fixture-only) records must not affect highestKnown —
@@ -779,6 +870,16 @@ async function main() {
     if (m.scheduled) return;
     // Key by compName|age|rawGrade to keep competitions separate
     const key = `${m.compName || ''}|${m.age}|${m.rawGrade}`;
+    if (m.isFinals) {
+      const ab = m.finalsAbbrev || String(m.round);
+      if (!finalsByGrade.has(key)) finalsByGrade.set(key, new Set());
+      finalsByGrade.get(key).add(ab);
+      if (m.isPartial) {
+        if (!partialFinals.has(key)) partialFinals.set(key, new Set());
+        partialFinals.get(key).add(ab);
+      }
+      return; // finals must never reach the home-and-away round scan
+    }
     if (!roundsByGrade.has(key)) roundsByGrade.set(key, new Set());
     roundsByGrade.get(key).add(m.round);
     // Track partial rounds — these must be re-fetched even if within consecutive count
@@ -788,13 +889,21 @@ async function main() {
     }
   });
 
-  // knownRounds = highest *consecutive* round from R1 with no gaps,
-  // excluding partial rounds (they need re-fetching).
+  // knownRounds = highest *consecutive* home-and-away round from R1 with no
+  // gaps, excluding partial rounds (they need re-fetching).
   roundsByGrade.forEach((rounds, key) => {
     const partial = partialRounds.get(key) || new Set();
     let consecutive = 0;
     for (let r = 1; rounds.has(r) && !partial.has(r); r++) consecutive = r;
     knownRounds.set(key, consecutive);
+  });
+
+  // knownFinals = finals abbreviations stored AND complete. A partial finals
+  // round is deliberately absent so it gets re-fetched.
+  const knownFinals = new Map();
+  finalsByGrade.forEach((abbrevs, key) => {
+    const partial = partialFinals.get(key) || new Set();
+    knownFinals.set(key, new Set([...abbrevs].filter(a => !partial.has(a))));
   });
 
   // 5. Fetch new results for each grade — sequential with cooldown
@@ -812,7 +921,7 @@ async function main() {
       await sleep(60000);
       consecutive403s = 0;
     }
-    const { matches, hit403 } = await fetchGrade(grade, knownRounds, byId);
+    const { matches, hit403 } = await fetchGrade(grade, knownRounds, byId, knownFinals);
     if (hit403) {
       consecutive403s++;
       if (consecutive403s >= 3) {
@@ -826,7 +935,7 @@ async function main() {
 
     for (const m of matches) {
       if (!m.isPartial) {
-        const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${m.round}|__partial__`;
+        const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${tokenOfMatch(m)}|__partial__`;
         byId.delete(partialKey);
       }
       if (byId.has(m.id)) {
@@ -851,12 +960,16 @@ async function main() {
     .filter(m => !m.isBye && !m.isPartial && !m.scheduled)
     .sort((a, b) => a.age.localeCompare(b.age)
                  || a.rawGrade.localeCompare(b.rawGrade)
+                 || ((a.isFinals ? 1 : 0) - (b.isFinals ? 1 : 0))
                  || a.round - b.round);
 
   // Include bye sentinels in round tracking but not in output.
   // Preserve scheduled records in output unchanged — fetch-fixtures.js owns them,
   // but fetch-results.js must not strip them or the dashboard loses upcoming fixtures.
-  const allWithByes = allValues.sort((a,b) => a.round - b.round);
+  // Two-key sort: home-and-away before finals, then by round. Sorting on round
+  // alone would interleave a Grand Final (round 1) among the Round 1 games.
+  const allWithByes = allValues.sort((a,b) =>
+    ((a.isFinals ? 1 : 0) - (b.isFinals ? 1 : 0)) || (a.round - b.round));
 
   const roster = rebuildRoster(allMatches);
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
@@ -868,8 +981,10 @@ async function main() {
   // Use allWithByes for round tracking so byes advance lastRound correctly
   allWithByes.forEach(m => {
     if (m.scheduled) return; // don't let fixture records affect lastRound
+    // lastRound is the last home-and-away round. A finals round numbered 1 must
+    // never overwrite R14, and a finals number means nothing on its own.
     const key = `${m.age}|${m.rawGrade}`;
-    if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
+    if (!m.isFinals && (!lastRound[key] || m.round > lastRound[key])) lastRound[key] = m.round;
     if (!m.isBye) {
       if (m.hLogo) teamLogos[m.home] = m.hLogo;
       if (m.aLogo) teamLogos[m.away] = m.aLogo;
