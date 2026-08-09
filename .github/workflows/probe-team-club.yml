@@ -1,0 +1,87 @@
+# .github/workflows/probe-team-club.yml
+#
+# READ-ONLY probe. No commit, no push, no data.json write.
+# permissions: contents:read so it cannot write even by accident.
+#
+# NOTE: actions/setup-node is deliberately absent. It changes the runner's
+# outbound fingerprint and causes CloudFront 403s against api.playhq.com.
+# ubuntu-latest ships with Node already.
+
+name: Probe Team Club
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Competition filter (substring, e.g. "EFNL 2026"). Blank = all.'
+        required: false
+        default: ''
+      grade_id:
+        description: 'Probe exactly one grade id (overrides comp).'
+        required: false
+        default: ''
+      limit:
+        description: 'How many grades to sample.'
+        required: false
+        default: '6'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-team-club
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Node version
+        run: node --version
+
+      - name: Syntax check
+        run: node --check scripts/probe-team-club.js
+
+      - name: Run probe
+        env:
+          IN_COMP:     ${{ inputs.comp }}
+          IN_GRADE_ID: ${{ inputs.grade_id }}
+          IN_LIMIT:    ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          # Full if-blocks, never `[ -n "$X" ] && ARGS+=(...)`. Under `set -e` a
+          # bare AND-list whose test fails is itself the failing statement and
+          # would abort the step when an input is blank.
+          ARGS=()
+          if [ -n "$IN_COMP" ];     then ARGS+=("--comp=$IN_COMP"); fi
+          if [ -n "$IN_GRADE_ID" ]; then ARGS+=("--grade=$IN_GRADE_ID"); fi
+          if [ -n "$IN_LIMIT" ];    then ARGS+=("--limit=$IN_LIMIT"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          node scripts/probe-team-club.js ${ARGS[@]+"${ARGS[@]}"} 2>&1 | tee /tmp/probe-team-club.txt
+
+      - name: Confirm nothing was modified
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "PROBE MODIFIED THE WORKING TREE — this must never happen:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean. Probe wrote nothing."
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-team-club-output
+          path: /tmp/probe-team-club.txt
+          retention-days: 14
