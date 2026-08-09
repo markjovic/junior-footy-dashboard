@@ -312,7 +312,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.115</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.116</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <div style="flex:1"></div>
@@ -596,7 +596,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.115</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.116</span>
         </div>
 
 
@@ -705,7 +705,7 @@ let S = {
   matches: [],   // {id,age,rawGrade,home,away,hScore,hG,hB,aScore,aG,aB,round,venue,hLogo,aLogo}
   players: [],   // {uuid,name,team,teamRaw,rawGrade,age,gp,goals}
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
-  gotwFlags: {}, // { "U12|3": "matchId" }  age|round -> matchId
+  gotwFlags: {}, // { "U12|3": "matchId", "U12|F:GF": "matchId" }  age|roundKey -> matchId
   pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
   showAllAges: false,
@@ -1060,12 +1060,46 @@ function matchGrade(m) {
 }
 
 // ═══════════════════════════════════════
+// FINALS HELPERS  (design v2 §3.1)
+// ═══════════════════════════════════════
+// PlayHQ restarts finals numbering at 1 in every grade, verified across all 249
+// grades on 2026-08-09. A Grand Final and Round 1 both carry round === 1, so
+// `round` alone does not identify a round within a grade.
+
+function isFinalsMatch(m) { return m.isFinals === true; }
+
+// Two-key ordering: home-and-away first, then finals, each by round number.
+// Deliberately NOT a derived sequence such as maxHA + n — maxHA is data
+// dependent, so a late home-and-away round would silently reorder history.
+function cmpRound(a, b) {
+  const af = a.isFinals ? 1 : 0, bf = b.isFinals ? 1 : 0;
+  if (af !== bf) return af - bf;
+  return (a.round || 0) - (b.round || 0);
+}
+
+// Stable key for a round, unique within a grade. Keyed on the abbreviation
+// because the name varies by competition ("Preliminary Final" in EFNL,
+// "Preliminary Finals" in WFNL) while the abbreviation does not.
+// Home-and-away returns the bare number, so existing gotwFlags keys still match.
+function roundKey(m) {
+  return m.isFinals ? `F:${m.finalsAbbrev || m.round}` : String(m.round);
+}
+
+function roundLabel(m) {
+  if (!m.isFinals) return `Round ${m.round}`;
+  return m.finalsName || m.finalsAbbrev || `Finals ${m.round}`;
+}
+
+// ═══════════════════════════════════════
 // COMPUTED — LADDER
 // ═══════════════════════════════════════
 function computeLadder(age, grade, maxRound) {
+  // Finals never count towards the ladder (design v2 §3.3). maxRound is a
+  // home-and-away round number, so the <= comparison only ever sees H&A rounds.
   const matches = S.matches.filter(m =>
     m.age === age &&
     matchesComp(m) &&
+    !isFinalsMatch(m) &&
     matchIsValid(m) &&
     matchGrade(m) === grade &&
     (maxRound === '' || m.round <= parseInt(maxRound))
@@ -1164,18 +1198,32 @@ function getGOTWMatch(age) {
   );
   if (!validMatches.length) return null;
 
-  const maxRound = S.selRound ? parseInt(S.selRound) : Math.max(...validMatches.map(m=>m.round));
-  const roundMatches = validMatches.filter(m => m.round === maxRound);
+  // "Latest round" cannot be Math.max(round) — finals restart at 1, so once
+  // finals begin the maximum stays on the last home-and-away round and GOTW
+  // would silently freeze there. Order by (isFinals, round) instead.
+  let roundMatches;
+  if (S.selRound) {
+    // The sidebar round filter selects home-and-away rounds only.
+    roundMatches = validMatches.filter(m => !isFinalsMatch(m) && m.round === parseInt(S.selRound));
+  } else {
+    const latest = [...validMatches].sort(cmpRound).pop();
+    const latestKey = roundKey(latest);
+    roundMatches = validMatches.filter(m => roundKey(m) === latestKey);
+  }
+  if (!roundMatches.length) return null;
+
+  const rKey  = roundKey(roundMatches[0]);
+  const rText = roundLabel(roundMatches[0]);
 
   // Check for admin GOTW flag for this round
-  const flagKey = `${age}|${maxRound}`;
+  const flagKey = `${age}|${rKey}`;
   const flaggedId = S.gotwFlags[flagKey];
   if (flaggedId) {
     const flagged = roundMatches.find(m => m.id === flaggedId);
     if (flagged) {
       // Nominees: closest game per other grade
       const nominees = getNominees(roundMatches.filter(m=>m.id!==flaggedId));
-      return { match: flagged, nominees, round: maxRound };
+      return { match: flagged, nominees, roundKey: rKey, roundText: rText };
     }
   }
 
@@ -1184,7 +1232,7 @@ function getGOTWMatch(age) {
   const winner = sorted[0];
   // Nominees: closest game in each OTHER grade (not the winner's grade)
   const nominees = getNominees(sorted.slice(1).filter(m => matchGrade(m) !== matchGrade(winner)));
-  return winner ? { match: winner, nominees, round: maxRound } : null;
+  return winner ? { match: winner, nominees, roundKey: rKey, roundText: rText } : null;
 }
 
 function getNominees(matches) {
@@ -1338,7 +1386,7 @@ function renderSidebarFilters(age) {
     </button>`
   ).join('');
 
-  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchesComp(m)).map(m=>m.round))].sort((a,b)=>a-b);
+  const rounds = [...new Set(S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)).map(m=>m.round))].sort((a,b)=>a-b);
   const rs = document.getElementById('round-sel');
   rs.innerHTML = '<option value="">All rounds</option>' +
     rounds.map(r=>`<option value="${r}"${r==S.selRound?' selected':''}>Round ${r}</option>`).join('');
@@ -1355,15 +1403,19 @@ function renderLadder(age) {
   if (!S.selLdrGrade || !grades.includes(S.selLdrGrade)) S.selLdrGrade = grades[0];
 
   const maxRound = S.selRound || '';
-  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).map(m=>m.round),0);
+  // Header freezes at the highest home-and-away round for this age. Grades run
+  // to 14, 15, 16, 17 or 18 depending on competition, so this is measured, not
+  // assumed (design v2 §3.3).
+  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)&&matchIsValid(m)).map(m=>m.round),0);
   document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
 
   document.getElementById('ldr-tabs').innerHTML = grades.map(g => {
     const key = `${S.selComp||''}|${age}|${g}`;
     const lr = S.lastRound[key];
-    const roundLabel = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
+    // Renamed from roundLabel to avoid shadowing the global roundLabel() helper.
+    const lrTag = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
     return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#fff'}`:''}"
-      onclick="selLdrGrade('${g}')">${abbrevGrade(g||'Premier')}${roundLabel}</button>`;
+      onclick="selLdrGrade('${g}')">${abbrevGrade(g||'Premier')}${lrTag}</button>`;
   }).join('');
 
   document.getElementById('ldr-bodies').innerHTML = grades.map(g => {
@@ -1416,7 +1468,7 @@ function renderGOTW(age) {
     return;
   }
   const m = gotwData.match;
-  metaEl.textContent = `R${gotwData.round}`;
+  metaEl.textContent = m.isFinals ? gotwData.roundText : `R${m.round}`;
   const hWon = m.hScore > m.aScore, aWon = m.aScore > m.hScore;
   const margin = Math.abs(m.hScore - m.aScore);
   const grade = matchGrade(m) || m.rawGrade || '';
@@ -1580,7 +1632,10 @@ function renderResults(age) {
       const g = matchGrade(m) || m.rawGrade || '';
       if (grades.size && g && !grades.has(g)) return false;
     }
-    if (S.selRound && m.round != S.selRound) return false;
+    // The round filter selects home-and-away rounds only; finals get named
+    // entries in step 4. Until then a selected round hides finals rather than
+    // matching a finals round that happens to share the number.
+    if (S.selRound && (isFinalsMatch(m) || m.round != S.selRound)) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
     return true;
   }).sort((a,b)=>b.round-a.round||(GRADE_ORDER.indexOf(matchGrade(a))-GRADE_ORDER.indexOf(matchGrade(b))));
@@ -1601,7 +1656,7 @@ function renderResults(age) {
       const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
       const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
       const valid = matchIsValid(m);
-      const gotwKey = `${age}|${m.round}`;
+      const gotwKey = `${age}|${roundKey(m)}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
@@ -1635,7 +1690,7 @@ function renderStats() {
   const allAges = getAges();
 
   // ── System totals (unfiltered) ──
-  const allValidMatches = S.matches.filter(m => matchIsValid(m));
+  const allValidMatches = S.matches.filter(m => matchIsValid(m) && !isFinalsMatch(m));
   const allGrades = new Set();
   const allTeams = new Set();
   allValidMatches.forEach(m => {
@@ -1650,7 +1705,7 @@ function renderStats() {
 
   // ── Current selection (filtered by comp + age) ──
   const ms = S.matches.filter(m =>
-    matchesComp(m) && matchIsValid(m) &&
+    matchesComp(m) && matchIsValid(m) && !isFinalsMatch(m) &&
     (!age || m.age === age)
   );
   const ts  = new Set([...ms.map(m=>m.home), ...ms.map(m=>m.away)]);
@@ -1752,7 +1807,9 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
 
   // Compute season stats from VALID matches only
   let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
-  matches.filter(m=>matchIsValid(m)).forEach(m => {
+  // Finals are shown in the results list below but excluded from the season
+  // stat strip and home/away breakdown (design v2 §3.3).
+  matches.filter(m=>matchIsValid(m) && !isFinalsMatch(m)).forEach(m => {
     const isHome = m.home === teamName;
     const tf = isHome ? m.hScore : m.aScore;
     const ta = isHome ? m.aScore : m.hScore;
@@ -1803,7 +1860,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
     const haText = isHome ? 'Home' : 'Away';
-    const gotwKey = `${age}|${m.round}`;
+    const gotwKey = `${age}|${roundKey(m)}`;
     const isGotw = S.gotwFlags[gotwKey] === m.id;
     return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
       <span class="gtag ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(g)}</span>
@@ -2609,25 +2666,30 @@ function renderGotwAges() {
 function renderGotwRounds() {
   const comp = document.getElementById('gotw-comp-sel').value;
   const age = document.getElementById('gotw-age-sel').value;
-  const rounds = [...new Set(S.matches.filter(m=>m.compName===comp&&m.age===age&&matchIsValid(m)).map(m=>m.round))].sort((a,b)=>b-a);
-  document.getElementById('gotw-round-sel').innerHTML = rounds.map(r=>`<option value="${r}">Round ${r}</option>`).join('');
+  // Keyed by roundKey so a Grand Final and Round 1 are distinct entries.
+  const pool = S.matches.filter(m=>m.compName===comp&&m.age===age&&matchIsValid(m));
+  const byKey = new Map();
+  pool.forEach(m => { const k = roundKey(m); if (!byKey.has(k)) byKey.set(k, m); });
+  const opts = [...byKey.values()].sort((a,b)=>cmpRound(b,a));
+  document.getElementById('gotw-round-sel').innerHTML =
+    opts.map(m=>`<option value="${roundKey(m)}">${roundLabel(m)}</option>`).join('');
   renderGotwPicker();
 }
 
 function renderGotwPicker() {
   const comp  = document.getElementById('gotw-comp-sel').value;
   const age   = document.getElementById('gotw-age-sel').value;
-  const round = parseInt(document.getElementById('gotw-round-sel').value);
-  if (!age || !round) return;
+  const rKey = document.getElementById('gotw-round-sel').value;
+  if (!age || !rKey) return;
   const matches = S.matches
-    .filter(m=>m.compName===comp&&m.age===age&&m.round===round&&matchIsValid(m))
+    .filter(m=>m.compName===comp&&m.age===age&&roundKey(m)===rKey&&matchIsValid(m))
     .sort((a,b)=>{
       // Sort by margin% ascending (closest first)
       const total = s => s.hScore + s.aScore;
       const pct = m => total(m) ? Math.abs(m.hScore-m.aScore)/total(m) : 1;
       return pct(a)-pct(b);
     });
-  const flagKey = `${age}|${round}`;
+  const flagKey = `${age}|${rKey}`;
   const flaggedId = S.gotwFlags[flagKey] || '';
 
   document.getElementById('gotw-picker-list').innerHTML = matches.length
@@ -2648,11 +2710,12 @@ function renderGotwPicker() {
 
 async function saveGotwFlags() {
   const age = document.getElementById('gotw-age-sel').value;
-  const round = document.getElementById('gotw-round-sel').value;
-  // flagKey remains age|round for backward compat — comp disambiguates via age names
+  const rKey = document.getElementById('gotw-round-sel').value;
+  // flagKey stays age|roundKey. roundKey() returns the bare number for
+  // home-and-away rounds, so every already-stored flag still matches.
   const picked = document.querySelector('input[name="gotw-pick"]:checked');
   if (!picked) return;
-  const flagKey = `${age}|${round}`;
+  const flagKey = `${age}|${rKey}`;
   if (picked.value) S.gotwFlags[flagKey] = picked.value;
   else delete S.gotwFlags[flagKey];
   await sSet(SK.gotw, S.gotwFlags);
@@ -2801,7 +2864,7 @@ async function init() {
       // Restore round — validate it still exists for this age
       if (f.selRound && S.selectedAge) {
         const validRounds = new Set(S.matches
-          .filter(m => m.age === S.selectedAge && matchesComp(m))
+          .filter(m => m.age === S.selectedAge && matchesComp(m) && !isFinalsMatch(m))
           .map(m => String(m.round)));
         if (validRounds.has(String(f.selRound))) S.selRound = f.selRound;
         // else: round gone (new season?) — fall back to all rounds
