@@ -114,6 +114,7 @@ query gradeRounds($gradeID: ID!) {
     rounds {
       id
       name
+      abbreviatedName
       number
       current
       isFinalsRound
@@ -127,14 +128,30 @@ query discoverFixtureByRound($roundID: ID!) {
   discoverFixtureByRound(roundID: $roundID) {
     games {
       id
-      home { ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } } }
-      away { ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } } }
+      home {
+        ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } }
+        ... on ProvisionalTeam { name }
+      }
+      away {
+        ... on DiscoverTeam { id name logo { sizes { url dimensions { width height } } } }
+        ... on ProvisionalTeam { name }
+      }
       status { value }
       date
       allocation { dateTimeList { date time } court { venue { name suburb latitude longitude } } }
     }
   }
 }`;
+
+// ─── Round identity (exact copy from fetch-results.js) ───────────────────────
+// PlayHQ restarts finals numbering at 1 in every grade, so a Grand Final and
+// Round 1 both have number === 1. Home-and-away rounds keep the bare number so
+// existing ids are unchanged; finals use the stable abbreviation.
+// If these two writers ever disagree about a key, one silently creates
+// duplicates of the other's records.
+function roundToken(number, finalsAbbrev) {
+  return finalsAbbrev ? `F:${finalsAbbrev}` : String(number);
+}
 
 // ─── Helpers (exact copy from fetch-results.js) ──────────────────────────────
 function parseGradeName(name, ageName, genderName) {
@@ -288,14 +305,18 @@ async function main() {
     // overwriting completed results with scheduled:true null-score records.
     let currentRoundIndex = roundList.findIndex(r => r.current);
     if (currentRoundIndex === -1) {
+      // Home-and-away only. Finals numbers restart at 1, so including them here
+      // would compare a Grand Final's "1" against a Round 14 and could match the
+      // wrong entry in roundList.
       const storedRounds = new Set(
         (data.matches || [])
-          .filter(m => !m.scheduled && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
+          .filter(m => !m.scheduled && !m.isFinals && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
           .map(m => m.round)
       );
       if (storedRounds.size > 0) {
         const highestStored = Math.max(...storedRounds);
-        currentRoundIndex = roundList.findIndex(r => parseInt(r.number, 10) === highestStored);
+        currentRoundIndex = roundList.findIndex(r =>
+          r.isFinalsRound !== true && parseInt(r.number, 10) === highestStored);
       }
     }
 
@@ -304,8 +325,14 @@ async function main() {
 
     const records = [];
     for (const round of futureRounds) {
-      const number = parseInt(round.number, 10) || 0;
-      const fixtureRes = await gqlWithRetry(Q_FIXTURE, { roundID: round.id }, `${grade.name} R${number}`);
+      const number   = parseInt(round.number, 10) || 0;
+      const isFinals = round.isFinalsRound === true;
+      const fAbbrev  = isFinals ? (round.abbreviatedName || String(number)) : '';
+      const fName    = isFinals ? (round.name || '') : '';
+      const rToken   = roundToken(number, fAbbrev);
+      const rLabel   = isFinals ? (fName || fAbbrev) : `R${number}`;
+
+      const fixtureRes = await gqlWithRetry(Q_FIXTURE, { roundID: round.id }, `${grade.name} ${rLabel}`);
       if (!fixtureRes) continue;
 
       const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
@@ -313,17 +340,29 @@ async function main() {
 
       for (const game of games) {
         if (game.status?.value === 'FINAL') continue;
-        const homeName = cleanTeam(game.home?.name || '', age);
-        const awayName = cleanTeam(game.away?.name || '', age);
+
+        // A DiscoverTeam carries an id; a ProvisionalTeam does not. Provisional
+        // sides are placeholders such as "Winner Game 1" that PlayHQ publishes
+        // before a finals fixture's qualifiers are known.
+        const homeProv = !game.home?.id && !!game.home?.name;
+        const awayProv = !game.away?.id && !!game.away?.name;
+        const provisional = homeProv || awayProv;
+
+        // Provisional names are stored verbatim — they are not club names and
+        // must not be put through the age-stripping cleaner.
+        const homeName = homeProv ? game.home.name.trim() : cleanTeam(game.home?.name || '', age);
+        const awayName = awayProv ? game.away.name.trim() : cleanTeam(game.away?.name || '', age);
         if (!homeName || !awayName) continue;
 
-        const matchId = `${grade.compName}|${age}|${rawGrade}|${number}|${[homeName, awayName].sort().join('|')}`;
+        const matchId = `${grade.compName}|${age}|${rawGrade}|${rToken}|${[homeName, awayName].sort().join('|')}`;
         if (byId.has(matchId) && !byId.get(matchId).scheduled) continue;
 
         const vLat = game.allocation?.court?.venue?.latitude || '';
         const vLng = game.allocation?.court?.venue?.longitude || '';
         records.push({
           id: matchId, age, rawGrade, round: number,
+          ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
+          ...(provisional ? { provisional: true } : {}),
           compName: grade.compName,
           home: homeName, away: awayName,
           hScore: null, hG: null, hB: null,
@@ -331,8 +370,8 @@ async function main() {
           venue:    game.allocation?.court?.venue?.name    || '',
           vSuburb:  game.allocation?.court?.venue?.suburb  || '',
           venueUrl: vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '',
-          hLogo: getLogoUrl(game.home?.logo),
-          aLogo: getLogoUrl(game.away?.logo),
+          hLogo: homeProv ? '' : getLogoUrl(game.home?.logo),
+          aLogo: awayProv ? '' : getLogoUrl(game.away?.logo),
           date: game.date || '',
           time: game.allocation?.dateTimeList?.[0]?.time || '',
           scheduled: true,
