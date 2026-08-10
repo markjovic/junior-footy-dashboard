@@ -61,8 +61,9 @@ Applied across all four writers (`fetch-results`, `fetch-fixtures`, `fetch-stats
 agree, or whichever runs next re-inflates the file and every run produces a
 whole-file diff.
 
-53 MB to about 41.5 MB — 21.7% measured on representative records. Does not
-shrink `.git`; the pretty-printed blobs remain in history.
+53 MB to 36.6 MB — 31% on the real file. A synthetic fixture predicted only
+21.7%, so the measurement was conservative. Does not shrink `.git`; the
+pretty-printed blobs remain in history.
 
 `grades.json` and `clubs.json` are deliberately left pretty-printed. They are
 84 KB and 14 KB and get read by eye.
@@ -86,7 +87,64 @@ fail with a 422. The Worker source is not in this repo and was not checked.
 
 ---
 
-## 5. Known-broken, low priority
+## 5. Add a Sunday fixtures run during finals
+
+`footy-cron` dispatches `fetch=fixtures` only on Monday and Thursday evenings.
+Finals are played Saturday and Sunday, and the finals view's elimination rule
+depends on the next round's fixture existing — a team that lost with no fixture
+after it reads as out.
+
+So from the last game on Saturday until Monday 9pm AEST, teams that lost a
+qualifying final can show as eliminated when they still have a preliminary final
+to come. Adding `{ dow: 0, hour: 10, fetch: 'fixtures', vip: false }` (Sun 8pm
+AEST) to the Worker's `SCHEDULE` closes the gap. Worker source is not in this
+repo.
+
+---
+
+## 6. parseGradeName collapses 17 grades into 5 keys
+
+Surfaced 2026-08-10 by the duplicate-key warning in `buildGradeMeta`. Pre-existing,
+not caused by the finals work.
+
+`parseGradeName` derives `rawGrade` only from a trailing letter (`A`–`D`),
+`Division N`, `Premier`, or a fixed colour list. Any other distinguishing token is
+discarded, so several PlayHQ grades resolve to one key:
+
+| PlayHQ grades | Resolve to |
+|---|---|
+| `U8 - Eastern / North / South / West` | `EFNL 2026\|U8\|` |
+| `U10 Mixed - Pool 1` … `Pool 6` | `YJFL 2026\|U10\|` |
+| `U10 Mixed Lightning Cup - Hoppers Crossing / Truganina / Wyndhamvale` | `WFNL 2026\|U10\|` |
+| `Little Demons - U10 Mixed Blue` and `SEJ Lightning Premiership - U10 Mixed Blue` | `SEJ 2026\|U10\|Blue` |
+| the same pair in Red | `SEJ 2026\|U10\|Red` |
+
+**The consequence is not just ranking.** That key is the match id prefix —
+`compName|age|rawGrade|round|teams`. Two grades sharing it share an id namespace:
+SEJ's Lightning Premiership has a Round 1 and Little Demons has Rounds 1–14, so
+the same two teams meeting in Round 1 of both means one result overwrites the
+other. Where teams differ, the grade's ladder silently mixes two competitions.
+
+Everything affected is U8 or U10, hidden by default, so nothing visible is wrong
+today.
+
+**Why this is not a quick patch.** `parseGradeName` produces every match id.
+Changing it changes ids, orphaning existing records and creating duplicates — it
+needs a design document and a migration, which is what `migrate-grades.js` did
+last time.
+
+**And a trailing-token rule does not fix the SEJ case.** There the distinguishing
+part is a prefix — `Little Demons` versus `SEJ Lightning Premiership` — which are
+effectively separate competitions sharing an age and a colour. That may be better
+modelled as a competition, not a grade.
+
+Verify the damage before designing: count match records under
+`SEJ 2026|U10|Blue` and check whether any round holds more fixtures than the
+grade should have.
+
+---
+
+## 7. Known-broken, low priority
 
 **`lastRound` is dead in the dashboard.** It reads
 `S.lastRound["comp|age|grade"]`; `fetch-results.js` writes `"age|grade"` with no
@@ -108,7 +166,7 @@ all.
 
 ---
 
-## 6. Documentation
+## 8. Documentation
 
 `README.md` is current at 0.124 and matches the post-tidy 28 files. If
 `2024.html` and `fetch-u10-2024.js` are restored, the repo structure block needs

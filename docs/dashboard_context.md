@@ -89,6 +89,11 @@ two conventions in one codebase.
 - **The dashboard is scoped to one `S.selectedAge`.** `computeLadder`,
   `getGOTWMatch`, `getTopScorers` and `renderResults` all assume it. Anything
   cross-age needs its own view, not an "All ages" option.
+- **`parseGradeName` collapses 17 grades into 5 keys** across EFNL U8, YJFL U10,
+  WFNL U10 and SEJ U10. That key is the match id prefix, so those grades share an
+  id namespace and can overwrite each other. All U8/U10, hidden by default. See
+  `OUTSTANDING_TASKS.md` item 6 — do not patch it without a migration, because
+  changing the function changes every match id.
 - **Provisional records must never reach** `rebuildRoster`, `allTeamsForAge`,
   `teamLogos`, the team dropdown, or the ladder. `S.matches` excludes scheduled
   records, which is what keeps them out.
@@ -116,8 +121,9 @@ two conventions in one codebase.
 Finals support is complete and deployed — see `finals_support.md` for the
 implementation, and `README.md` for user-facing behaviour.
 
-**Repo state.** Tidied 2026-08-10 to 28 files, 54.2 MB — of which `data.json` is
-53 MB, now 97.8% of the repository. The fixture generator's leftover club images
+**Repo state.** 30 files, 37.8 MB as at 2026-08-10 — down from 163 files and
+65 MB. `data/data.json` is 36.6 MB of it. Machine-written JSON lives in `data/`,
+documentation in `docs/`, the Cloudflare Worker in `workers/`. The fixture generator's leftover club images
 were removed (~10.7 MB), along with the superseded `extract-finals-data` script.
 `2024.html` and `fetch-u10-2024.js` went in the same pass and should be restored
 from git history when multi-season work begins.
@@ -130,9 +136,8 @@ logo. Verify before building anything on it; on `discoverCompetitions` the
 equivalent field is the league, not the club.
 
 **`data.json` is written with `JSON.stringify(merged, null, 2)`.** Minifying
-reduces a 53 MB file to about 41.5 MB — measured at 21.7% on representative
-records, not the third I first estimated. Applied 2026-08-10 across all four
-writers.
+reduced a 53 MB file to 36.6 MB — 31% on the real data. Applied 2026-08-10
+across all four writers; all must agree or the next run re-inflates it.
 
 **Next up: multi-season support.** The groundwork established so far:
 
