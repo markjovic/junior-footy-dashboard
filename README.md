@@ -26,8 +26,6 @@ README.md
     repo-audit.yml          ← Manual, read-only — inventory, duplicates, orphans
     repo-tidy.yml           ← Manual — removes dead files, dry run by default
     probe-finals-rounds.yml ← Manual, read-only diagnostic
-    probe-team-club.yml     ← Manual, read-only diagnostic
-    probe-club-index.yml    ← Manual, read-only diagnostic
 scripts/
   fetch-results.js          ← Match results + grade metadata from PlayHQ
   fetch-stats.js            ← Player statistics from PlayHQ
@@ -37,15 +35,14 @@ scripts/
   repo-audit.js             ← Read-only repo inventory and dead-file report
   repo-tidy.js              ← Removes dead files; dry run unless --apply
   probe-finals-rounds.js    ← Diagnostic: round structure and numbering
-  probe-team-club.js        ← Diagnostic: whether DiscoverTeam exposes a club
-  probe-club-index.js       ← Diagnostic: validates the club id derivation
 assets/
   icons/
     icon-192.png            ← PWA home screen icon (192×192)
     icon-512.png            ← PWA home screen icon (512×512)
 ```
 
-28 files, 54.2 MB — of which `data.json` is 53 MB. Run **Repo Audit** for the current picture.
+20 files after the 2026-08-10 tidy. `data.json` is ~41.5 MB of it and lives in
+`data/`. Run **Repo Audit** for the current picture.
 
 ---
 
