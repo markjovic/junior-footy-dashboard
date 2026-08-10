@@ -101,7 +101,7 @@ const GROUPS = {
     label: 'Completed migration (REQUIRES a workflow edit — see notes)',
     paths: [
       ['scripts/migrate-grades.js',
-       'One-off grade remapping, already applied. fetch-results.yml still invokes it behind the run_migration input.'],
+       'One-off grade remapping, already applied. The run_migration input, both migration steps, the admin checkbox and the dispatch payload entry were all removed 2026-08-10, so nothing invokes it any more.'],
     ],
   },
   assets: {
