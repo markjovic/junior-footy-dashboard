@@ -328,18 +328,27 @@ body{overflow-x:hidden}
 .fv-out{font-size:9px;color:#ef4444;letter-spacing:.5px;text-transform:uppercase}
 .fv-club{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--b1);margin-bottom:2px}
 .fv-club-name{font-size:14px;font-weight:500}
-.fv-win-row{display:grid;grid-template-columns:46px 1fr auto;gap:14px;align-items:center;
-  padding:8px 0;border-bottom:1px solid var(--b1);font-size:12px}
+/* grade | winner | score | loser | venue+time */
+.fv-win-row{display:grid;grid-template-columns:46px minmax(0,1.5fr) auto minmax(0,1.2fr) minmax(0,1.3fr);
+  gap:18px;align-items:center;padding:9px 0;border-bottom:1px solid var(--b1);font-size:12px}
 .fv-win-row:last-child{border-bottom:0}
-.fv-win-row > span:nth-child(2){display:flex;align-items:center;gap:6px;min-width:0}
+.fv-winner{display:flex;align-items:center;gap:7px;min-width:0}
 .fv-champ{font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fv-beat{color:var(--tx3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv-loser{display:flex;align-items:center;gap:6px;min-width:0;color:var(--tx3)}
+.fv-loser span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv-scorecell{display:flex;flex-direction:column;align-items:center;line-height:1.3;white-space:nowrap}
+.fv-vs{color:var(--tx3);margin:0 5px}
+.fv-where{text-align:right;line-height:1.4;min-width:0}
+.fv-pending{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
 .fv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;color:var(--tx3);
   border:1px solid var(--b1);border-radius:3px;padding:1px 5px;white-space:nowrap}
 @media(max-width:768px){
   .fv-row{grid-template-columns:1fr !important}
-  .fv-win-row{grid-template-columns:40px 1fr;row-gap:2px}
-  .fv-win-row > span:last-child{grid-column:2;justify-self:start}
+  .fv-win-row{grid-template-columns:40px 1fr auto;row-gap:4px;gap:10px}
+  /* winner keeps its own row; loser and venue drop beneath it */
+  .fv-loser{grid-column:2/4}
+  .fv-where{grid-column:2/4;text-align:left}
+  .fv-pending{grid-column:2/4 !important}
   .fv-hdr-row{display:none !important}
   .fv-cell{border-left:2px solid var(--b1);padding-left:8px}
 }
@@ -351,7 +360,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.128</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.129</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -672,7 +681,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.128</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.129</span>
         </div>
 
 
@@ -2172,40 +2181,61 @@ function renderFinalsWinners(pool) {
 
     const rows = grades.map(g => {
       // A grade should have exactly one Grand Final; take the played one if a
-      // stale scheduled record is still hanging around beside the result.
+      // stale scheduled record is still sitting beside the result.
       const games = byGrade[g];
       const m = games.find(isPlayed) || games[0];
       const rank = gradeRankOf(m.compName, age, g);
       const tag = `<span class="fv-tag"${rank===1?' style="color:var(--gold);border-color:rgba(240,192,64,.35)"':''}>${abbrevGrade(g)}</span>`;
 
+      // Venue and time share the last column. Both may be absent on an old record.
+      const where = [
+        venueLink(m.venue, m.venueUrl, 'font-size:11px'),
+        `<span class="fv-date" style="margin:0">${fmtDate(m)}</span>`,
+      ].filter(Boolean).join('<br>');
+
+      const gb = (a, b) => (a !== null && a !== undefined && b !== null && b !== undefined)
+        ? `${a}.${b}` : '';
+
       if (isPlayed(m)) {
-        decided++;
         const homeWon = m.hScore > m.aScore;
         const drawn   = m.hScore === m.aScore;
-        const win  = homeWon ? m.home : m.away;
-        const lose = homeWon ? m.away : m.home;
-        const ws = homeWon ? m.hScore : m.aScore, ls = homeWon ? m.aScore : m.hScore;
-        const wg = homeWon ? m.hG : m.aG, wb = homeWon ? m.hB : m.aB;
-        const lg = homeWon ? m.aG : m.hG, lb = homeWon ? m.aB : m.hB;
-        const gb = (a,b) => (a!==null&&a!==undefined&&b!==null&&b!==undefined) ? `<span class="fv-gb">${a}.${b}</span>` : '';
+
         if (drawn) {
+          // A drawn grand final has no winner to promote, so the matchup spans
+          // the winner, score and loser columns rather than inventing one.
+          decided++;
           return `<div class="fv-win-row">${tag}
-            <span class="fv-prov">drawn — ${m.home} v ${m.away}</span>
-            <span class="fv-score"><span>${m.hScore}</span>${gb(m.hG,m.hB)}</span></div>`;
+            <span style="grid-column:2/5" class="fv-prov">drawn &mdash; ${m.home} v ${m.away}, ${m.hScore} apiece</span>
+            <span class="fv-where">${where}</span></div>`;
         }
+
+        decided++;
+        const win  = homeWon ? m.home   : m.away;
+        const lose = homeWon ? m.away   : m.home;
+        const ws   = homeWon ? m.hScore : m.aScore;
+        const ls   = homeWon ? m.aScore : m.hScore;
+        const wgb  = homeWon ? gb(m.hG, m.hB) : gb(m.aG, m.aB);
+        const lgb  = homeWon ? gb(m.aG, m.aB) : gb(m.hG, m.hB);
+
         return `<div class="fv-win-row">${tag}
-          <span>${crestHTML(win, 16, 'mr-logo')}<span class="fv-champ">${win}</span>
-            <span class="fv-beat">def ${lose}</span></span>
-          <span class="fv-score"><span class="fv-win">${ws}</span>${gb(wg,wb)}
-            <span class="fv-gb">v</span><span class="fv-lose">${ls}</span>${gb(lg,lb)}</span></div>`;
+          <span class="fv-winner">${crestHTML(win, 18, 'mr-logo')}<span class="fv-champ">${win}</span></span>
+          <span class="fv-scorecell">
+            <span><span class="fv-win">${ws}</span><span class="fv-vs">&ndash;</span><span class="fv-lose">${ls}</span></span>
+            ${(wgb || lgb) ? `<span class="fv-gb">${wgb} &ndash; ${lgb}</span>` : ''}
+          </span>
+          <span class="fv-loser">${crestHTML(lose, 14, 'mr-logo')}<span>${lose}</span></span>
+          <span class="fv-where">${where}</span></div>`;
       }
 
+      // Not played. Show both sides — real names once the preliminary finals
+      // resolve them, placeholders such as "Winner Game 3" before that.
       pending++;
-      const sides = [m.home, m.away].map((n,i) =>
-        isProvSide(m, i===0?'h':'a') ? `<span class="fv-prov">${n}</span>` : `<span>${n}</span>`).join(' v ');
+      const side = (n, which) => isProvSide(m, which)
+        ? `<span class="fv-prov">${n}</span>`
+        : `<span>${crestHTML(n, 14, 'mr-logo')}${n}</span>`;
       return `<div class="fv-win-row">${tag}
-        <span>${sides}</span>
-        <span class="fv-date" style="margin:0">${fmtDate(m)}</span></div>`;
+        <span class="fv-pending" style="grid-column:2/5">${side(m.home,'h')}<span class="fv-vs">v</span>${side(m.away,'a')}</span>
+        <span class="fv-where">${where}</span></div>`;
     }).join('');
 
     return `<div class="fv-age"><span>${age}</span>
