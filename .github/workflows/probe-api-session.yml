@@ -1,0 +1,76 @@
+# .github/workflows/probe-api-session.yml
+#
+# READ-ONLY probe. No commit, no push, no writes.
+# permissions: contents:read so it cannot write even by accident.
+
+name: Probe API Session
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Competition filter for the season-teams test. Blank = all.'
+        required: false
+        default: ''
+      test_org:
+        description: 'Organisation code used for discoverCompetitions.'
+        required: false
+        default: '6d405ccb'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-api-session
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/probe-api-session.js
+
+      - name: Run probe
+        env:
+          IN_COMP:  ${{ inputs.comp }}
+          TEST_ORG: ${{ inputs.test_org }}
+        run: |
+          set -euo pipefail
+          # Full if-blocks, never `[ -n "$X" ] && ARGS+=(...)`: under `set -e` a
+          # bare AND-list whose test fails is itself the failing statement.
+          ARGS=()
+          if [ -n "$IN_COMP" ]; then ARGS+=("--comp=$IN_COMP"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          node scripts/probe-api-session.js ${ARGS[@]+"${ARGS[@]}"} 2>&1 | tee /tmp/probe-api-session.txt
+
+      - name: Confirm nothing was modified
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "PROBE MODIFIED THE WORKING TREE — this must never happen:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean. Probe wrote nothing."
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-api-session
+          path: /tmp/probe-api-session.txt
+          retention-days: 14
