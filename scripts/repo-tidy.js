@@ -229,6 +229,17 @@ const haystack = walk(ROOT)
 
 console.log(`Scanning ${haystack.length} text file(s) for references.\n`);
 
+// A line that is entirely a comment is documentation, wherever it lives. Code
+// files routinely explain themselves by naming other files — build-club-index.js
+// credits the probe that established its approach — and treating that as a
+// dependency refuses a removal that is perfectly safe.
+function isCommentLine(line, ext) {
+  const t = line.trim();
+  if (!t) return true;
+  if (ext === '.yml' || ext === '.yaml') return t.startsWith('#');
+  return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+}
+
 const refused = [];
 const noted   = [];
 for (const c of candidates) {
@@ -238,7 +249,12 @@ for (const c of candidates) {
     // Match the full path or the bare filename. The bare filename is
     // deliberately loose — a false refusal is cheap, a wrong deletion is not.
     if (!h.text.includes(c.rel) && !h.text.includes(base)) continue;
-    (CODE_EXT.has(path.extname(h.rel)) ? code : docs).push(h.rel);
+    const ext = path.extname(h.rel);
+    if (!CODE_EXT.has(ext)) { docs.push(h.rel); continue; }
+    // Inside a code file, only a non-comment mention is a real dependency.
+    const hits = h.text.split('\n').filter(l => l.includes(c.rel) || l.includes(base));
+    const live = hits.filter(l => !isCommentLine(l, ext));
+    (live.length ? code : docs).push(h.rel);
   }
   if (code.length) { c.codeRefs = code; refused.push(c); }
   if (docs.length) { c.docRefs = docs; noted.push(c); }
