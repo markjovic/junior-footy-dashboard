@@ -1,0 +1,86 @@
+# .github/workflows/build-club-index.yml
+#
+# Builds the club index and commits data.json + clubs.json.
+#
+# actions/setup-node is omitted because ubuntu-latest already ships Node and
+# this script needs nothing newer. Note that fetch-results.yml DOES use
+# setup-node (v4, node 20) against the same API host without trouble, so its
+# absence here is a simplification, not a requirement.
+#
+# Exit contract matches fetch-results.js:
+#   0 = changed, commit
+#   2 = no changes, skip commit
+#   1 = fatal, fail the run
+
+name: Build Club Index
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Competition filter (substring). Blank = all competitions.'
+        required: false
+        default: ''
+      refresh:
+        description: 'Re-resolve every club, ignoring the clubs.json cache.'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-club-index
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Node version
+        run: node --version
+
+      - name: Syntax check
+        run: node --check scripts/build-club-index.js
+
+      - name: Build club index
+        id: build
+        env:
+          # Booleans arrive as real booleans from workflow inputs, so string
+          # comparison alone is not enough — test both forms.
+          IN_COMP:    ${{ inputs.comp }}
+          IN_REFRESH: ${{ (inputs.refresh == true || inputs.refresh == 'true') && 'yes' || 'no' }}
+        run: |
+          # Full if-blocks, never `[ -n "$X" ] && ARGS+=(...)`: under `set -e` a
+          # bare AND-list whose test fails is itself the failing statement.
+          ARGS=()
+          if [ -n "$IN_COMP" ];         then ARGS+=("--comp=$IN_COMP"); fi
+          if [ "$IN_REFRESH" = "yes" ]; then ARGS+=("--refresh"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          # Same capture pattern as fetch-results.yml: exit 2 means "no changes"
+          # and must not fail the step, so the code is captured rather than
+          # allowed to propagate.
+          set +e
+          node scripts/build-club-index.js ${ARGS[@]+"${ARGS[@]}"}
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          set -e
+
+      - name: Commit club index
+        if: steps.build.outputs.exit_code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json clubs.json
+          git diff --staged --quiet || git commit -m "clubs: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
