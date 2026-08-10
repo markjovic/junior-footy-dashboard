@@ -4,7 +4,12 @@
 //   - data.json: network-first, fall back to cache so offline still works
 //   - Everything else (Cloudinary logos, Google Fonts): network-first, cache on success
 
-const CACHE_NAME = 'efnl-v3';
+// Bumped to v4 for the data/ relocation. The shell is cache-first, so without a
+// new cache name an installed PWA would keep serving the old index.html — which
+// requests the old data.json path — until the background refresh landed.
+// The fetch handler below needs no change: it matches on endsWith('data.json'),
+// which data/data.json still satisfies.
+const CACHE_NAME = 'efnl-v4';
 
 // Files that make up the app shell — cached on install
 const SHELL_URLS = [
