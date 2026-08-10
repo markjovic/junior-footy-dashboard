@@ -401,14 +401,32 @@ async function discoverGrades(competitions) {
     });
   }
 
-  // Update grades.json cache if anything changed
-  if (gradeChanges || allGrades.length !== cached.length) {
-    fs.writeFileSync(GRADES_PATH, JSON.stringify(allGrades, null, 2), 'utf8');
-    console.log(`\nUpdated grades.json (${allGrades.length} grade(s))`);
+  // Update grades.json, preserving competitions this run did not fetch.
+  //
+  // Previously this wrote allGrades wholesale, which held only the competitions
+  // just discovered. EFNL is the sole vip:true competition, so every VIP_ONLY
+  // run shrank grades.json to EFNL's grades alone, and the next all-competition
+  // run then reported the other four competitions' grades as brand new. The
+  // cache oscillated on every cycle and the "+ NEW grade" log became noise that
+  // buried genuine additions.
+  const coveredSeasons = new Set(competitions.map(c => c.seasonID));
+  const preserved = cached.filter(g => !coveredSeasons.has(g.seasonID));
+  const nextCache = [...preserved, ...allGrades];
+
+  const canon = list => JSON.stringify(
+    list.map(g => [g.id, g.name, g.ageName, g.genderName, g.seasonID, g.compName])
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+  );
+  if (canon(nextCache) !== canon(cached)) {
+    fs.writeFileSync(GRADES_PATH, JSON.stringify(nextCache, null, 2), 'utf8');
+    console.log(`\nUpdated grades.json (${nextCache.length} grade(s): ` +
+      `${allGrades.length} fetched, ${preserved.length} preserved from other competitions)`);
   } else {
-    console.log(`\nGrades unchanged (${allGrades.length} grade(s))`);
+    console.log(`\nGrades unchanged (${nextCache.length} grade(s))`);
   }
 
+  // Only the grades this run fetched are returned — the fetch loop and
+  // buildGradeMeta must not act on competitions that were not refreshed.
   return allGrades;
 }
 
