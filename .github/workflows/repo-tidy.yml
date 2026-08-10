@@ -1,0 +1,86 @@
+# .github/workflows/repo-tidy.yml
+#
+# Removes dead files identified by repo-audit.yml.
+#
+# DRY RUN BY DEFAULT. The `apply` checkbox must be ticked for anything to be
+# deleted, and nothing is committed unless files actually changed.
+#
+# Exit contract matches the other scripts:
+#   0 = files removed, commit
+#   2 = nothing to do, skip commit
+#   1 = error
+
+name: Repo Tidy
+
+on:
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: 'Comma separated. Blank lists the options without changing anything.'
+        required: false
+        default: ''
+      apply:
+        description: 'Actually delete. Leave unticked for a dry run.'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-tidy
+  cancel-in-progress: false
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/repo-tidy.js
+
+      - name: Tidy
+        id: tidy
+        env:
+          IN_GROUPS: ${{ inputs.groups }}
+          # Booleans arrive as real booleans from workflow inputs, so string
+          # comparison alone is not enough — test both forms.
+          IN_APPLY: ${{ (inputs.apply == true || inputs.apply == 'true') && 'yes' || 'no' }}
+        run: |
+          ARGS=()
+          if [ -n "$IN_GROUPS" ];      then ARGS+=("--groups=$IN_GROUPS"); fi
+          if [ "$IN_APPLY" = "yes" ];  then ARGS+=("--apply"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none — will list groups and exit)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          # Exit 2 means "nothing to do" and must not fail the step.
+          set +e
+          node scripts/repo-tidy.js ${ARGS[@]+"${ARGS[@]}"}
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          set -e
+
+      - name: Commit removals
+        if: steps.tidy.outputs.exit_code == '0'
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Working tree unchanged — dry run, or nothing was deleted."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -u
+          git diff --staged --quiet || git commit -m "tidy: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
