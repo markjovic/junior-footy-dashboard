@@ -18,8 +18,8 @@ const crypto = require('crypto');
 
 const ROOT        = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
-const GRADES_PATH = path.join(ROOT, 'grades.json');
-const DATA_PATH   = path.join(ROOT, 'data.json');
+const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
+const DATA_PATH   = path.join(ROOT, 'data', 'data.json');
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 const API_URL     = 'https://api.playhq.com/graphql';
@@ -232,7 +232,34 @@ function getLogoUrl(logo) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 // ─── Main ─────────────────────────────────────────────────────────────────────
+
+// ─── Data directory ───────────────────────────────────────────────────────────
+// Machine-written JSON lives in data/. config.json stays at the repo root because
+// it is hand-edited configuration, not generated data.
+//
+// This moves any legacy root-level copies on first run, so the relocation needs
+// no manual git operation — Mark has no local git. It no-ops thereafter. If a
+// file exists in BOTH places, data/ is authoritative and the root copy is
+// deleted, which is what happens on the run after the move.
+function ensureDataDir() {
+  const dir = path.join(ROOT, 'data');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  for (const name of ['data.json', 'grades.json', 'clubs.json']) {
+    const legacy = path.join(ROOT, name);
+    const target = path.join(dir, name);
+    if (!fs.existsSync(legacy)) continue;
+    if (fs.existsSync(target)) {
+      fs.unlinkSync(legacy);
+      console.log(`Removed superseded root copy of ${name}`);
+    } else {
+      fs.renameSync(legacy, target);
+      console.log(`Moved ${name} -> data/${name}`);
+    }
+  }
+}
+
 async function main() {
+  ensureDataDir();
   await getSession();
 
   // Read grades from cache — no discovery, that's fetch-results.js's job
@@ -397,7 +424,12 @@ async function main() {
   // Write back — preserve all existing matches, add/update scheduled ones
   data.matches = [...byId.values()];
   data.lastFixtureFetch = new Date().toISOString();
-  fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
+  // data.json is written MINIFIED. At 53MB pretty-printed it was 98% of the
+  // repository, checked out by every workflow run and downloaded by every
+  // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
+  // build-club-index — must agree, or whichever runs next re-inflates the file
+  // and every run produces a whole-file diff.
+  fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
   console.log(`\nFixtures: ${newCount} new scheduled records written`);
   console.log('Wrote data.json');
 }

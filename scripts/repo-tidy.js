@@ -11,13 +11,20 @@
 //
 // Groups (choose with --groups=a,b,c — nothing runs without an explicit choice):
 //
-//   oneoffs     One-off scripts already run, with their workflows.
+//   oneoffs     Scripts superseded by shipped features, with their workflows.
 //   placeholders  1-byte a.txt files used to create empty directories in git.
-//   legacy      2024.html, SETUP.txt — superseded, confirm before removing.
+//   legacy      Superseded documentation.
+//   probes      Diagnostics whose question is answered. probe-finals-rounds is
+//               deliberately NOT included — it is a reusable round-structure
+//               tool, not a one-off.
+//   historic    2024 material. DO NOT REMOVE until multi-season support lands —
+//               the dashboard is single-season today, so 2024.html is likely the
+//               only working copy of that season outside git history, and
+//               fetch-u10-2024.js is a proven example of fetching a past season.
 //   migration   scripts/migrate-grades.js. SEPARATE because fetch-results.yml
 //               still invokes it; removing it needs a workflow edit too, which
 //               this script does NOT do.
-//   assets      assets/clubs/** — 129 files, ~24MB. Confirmed dead: nothing in
+//   assets      assets/clubs/** — 129 files, ~10.7MB. Confirmed dead: nothing in
 //               this repo references them, and markjovic/fixture-generator is
 //               self-contained ("All assets sit alongside index.html", its
 //               README) with its own assets/clubs tree. Leftovers from when the
@@ -42,15 +49,11 @@ const ROOT = path.resolve(__dirname, '..');
 
 const GROUPS = {
   oneoffs: {
-    label: 'One-off scripts already run, with their workflows',
+    label: 'Superseded by shipped features',
     paths: [
       ['scripts/extract-finals-data.js',
        'One-off analysis, hardcoded to EFNL 2026 U12 B with a hand-maintained relegated-teams list. Superseded by the finals view.'],
       ['.github/workflows/extract-finals-data.yml',
-       'Workflow for the above.'],
-      ['scripts/fetch-u10-2024.js',
-       'One-off historical import for U10 2024. Last changed 2026-05-30.'],
-      ['.github/workflows/fetch-u10-2024.yml',
        'Workflow for the above.'],
     ],
   },
@@ -64,12 +67,34 @@ const GROUPS = {
     ],
   },
   legacy: {
-    label: 'Superseded files',
+    label: 'Superseded documentation',
     paths: [
-      ['2024.html',
-       'Standalone 2024 page. Not referenced by index.html, sw.js or any workflow.'],
       ['SETUP.txt',
        'Superseded by README.md.'],
+    ],
+  },
+  probes: {
+    label: 'Diagnostics whose question is answered',
+    paths: [
+      ['scripts/probe-team-club.js',
+       'Asked for club{id name} on DiscoverTeam and concluded no club exists. The field is named organisation — the conclusion is WRONG and re-running this would re-teach the error. Findings are recorded correctly in playhq_api_reference.md.'],
+      ['.github/workflows/probe-team-club.yml',
+       'Workflow for the above.'],
+      ['scripts/probe-club-index.js',
+       'Validated the logo-URL to club-id derivation. build-club-index.js performs the same derivation on every run and reports conflicts, so this is redundant.'],
+      ['.github/workflows/probe-club-index.yml',
+       'Workflow for the above.'],
+    ],
+  },
+  historic: {
+    label: '2024 material — HOLD until multi-season support lands',
+    paths: [
+      ['2024.html',
+       'Standalone 2024 page, 45KB. The dashboard is single-season, and there is no 2024 data file anywhere in the repo — so this very likely embeds the season and is its only working copy outside git history. The multi-season work should absorb it before it is removed.'],
+      ['scripts/fetch-u10-2024.js',
+       'One-off historical import for U10 2024. A proven, working example of fetching a past season, which is exactly what the multi-season work needs. Keep until that is built.'],
+      ['.github/workflows/fetch-u10-2024.yml',
+       'Workflow for the above.'],
     ],
   },
   migration: {
@@ -80,7 +105,7 @@ const GROUPS = {
     ],
   },
   assets: {
-    label: 'Club image assets unused by this repo (~24MB)',
+    label: 'Club image assets unused by this repo (~10.7MB, 129 files)',
     paths: [
       ['assets/clubs/**',
        'Dead. index.html references only assets/icons. markjovic/fixture-generator carries its own assets/clubs tree and loads it relative to its own index.html, so nothing outside this repo depends on these either. Confirmed 2026-08-10.'],

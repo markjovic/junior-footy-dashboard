@@ -17,8 +17,8 @@ const https = require('https');
 
 const ROOT         = path.resolve(__dirname, '..');
 const CONFIG_PATH  = path.join(ROOT, 'config.json');
-const GRADES_PATH  = path.join(ROOT, 'grades.json');
-const DATA_PATH    = path.join(ROOT, 'data.json');
+const GRADES_PATH  = path.join(ROOT, 'data', 'grades.json');
+const DATA_PATH    = path.join(ROOT, 'data', 'data.json');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -897,7 +897,34 @@ async function getSession() {
   console.warn('Could not obtain session cookie — proceeding without');
 }
 
+
+// ─── Data directory ───────────────────────────────────────────────────────────
+// Machine-written JSON lives in data/. config.json stays at the repo root because
+// it is hand-edited configuration, not generated data.
+//
+// This moves any legacy root-level copies on first run, so the relocation needs
+// no manual git operation — Mark has no local git. It no-ops thereafter. If a
+// file exists in BOTH places, data/ is authoritative and the root copy is
+// deleted, which is what happens on the run after the move.
+function ensureDataDir() {
+  const dir = path.join(ROOT, 'data');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  for (const name of ['data.json', 'grades.json', 'clubs.json']) {
+    const legacy = path.join(ROOT, name);
+    const target = path.join(dir, name);
+    if (!fs.existsSync(legacy)) continue;
+    if (fs.existsSync(target)) {
+      fs.unlinkSync(legacy);
+      console.log(`Removed superseded root copy of ${name}`);
+    } else {
+      fs.renameSync(legacy, target);
+      console.log(`Moved ${name} -> data/${name}`);
+    }
+  }
+}
+
 async function main() {
+  ensureDataDir();
   // 1. Load config.json
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error('config.json not found at', CONFIG_PATH);
@@ -1119,7 +1146,12 @@ async function main() {
     lastStatsFetch: existing.lastStatsFetch || null,
   };
 
-  fs.writeFileSync(DATA_PATH, JSON.stringify(merged, null, 2), 'utf8');
+  // data.json is written MINIFIED. At 53MB pretty-printed it was 98% of the
+  // repository, checked out by every workflow run and downloaded by every
+  // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
+  // build-club-index — must agree, or whichever runs next re-inflates the file
+  // and every run produces a whole-file diff.
+  fs.writeFileSync(DATA_PATH, JSON.stringify(merged), 'utf8');
   console.log(`Wrote data.json`);
 
   if (newCount === 0 && updatedCount === 0 && !gradeMetaChanged) {
