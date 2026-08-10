@@ -317,10 +317,12 @@ body{overflow-x:hidden}
 .fv-row:last-child{border-bottom:0}
 .fv-hdr{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--tx3)}
 .fv-cell{font-size:12px;line-height:1.55;min-width:0}
-.fv-team{display:flex;justify-content:space-between;gap:14px;align-items:baseline}
-.fv-score{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.fv-team{display:grid;grid-template-columns:minmax(0,1fr) 2.7em 3.4em;gap:7px;align-items:baseline}
+.fv-tname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv-tscore{text-align:right;font-variant-numeric:tabular-nums}
+.fv-tgb{text-align:right;font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);
+  letter-spacing:.3px;font-variant-numeric:tabular-nums}
 .fv-gb{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:.3px}
-.fv-team span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fv-win{color:var(--tx);font-weight:600}
 .fv-lose{color:var(--tx2)}
 .fv-prov{color:var(--tx3);font-style:italic}
@@ -332,14 +334,14 @@ body{overflow-x:hidden}
 .fv-win-row{display:grid;grid-template-columns:46px minmax(0,1.5fr) auto minmax(0,1.2fr) minmax(0,1.3fr);
   gap:18px;align-items:center;padding:9px 0;border-bottom:1px solid var(--b1);font-size:12px}
 .fv-win-row:last-child{border-bottom:0}
-.fv-winner{display:flex;align-items:center;gap:7px;min-width:0}
+.fv-winner{display:flex;align-items:center;gap:10px;min-width:0}
 .fv-champ{font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fv-loser{display:flex;align-items:center;gap:6px;min-width:0;color:var(--tx3)}
+.fv-loser{display:flex;align-items:center;gap:9px;min-width:0;color:var(--tx3)}
 .fv-loser span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fv-scorecell{display:flex;flex-direction:column;align-items:center;line-height:1.3;white-space:nowrap}
 .fv-vs{color:var(--tx3);margin:0 5px}
 .fv-where{text-align:right;line-height:1.4;min-width:0}
-.fv-pending{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.fv-pending{display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap}
 .fv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;color:var(--tx3);
   border:1px solid var(--b1);border-radius:3px;padding:1px 5px;white-space:nowrap}
 @media(max-width:768px){
@@ -360,7 +362,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.129</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.130</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -681,7 +683,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.129</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.130</span>
         </div>
 
 
@@ -2040,17 +2042,22 @@ function fvSide(m, side) {
   const name  = side === 'h' ? m.home : m.away;
   const score = side === 'h' ? m.hScore : m.aScore;
   const other = side === 'h' ? m.aScore : m.hScore;
-  if (isProvSide(m, side)) return `<div class="fv-team fv-prov"><span>${name}</span></div>`;
+  if (isProvSide(m, side)) {
+    return `<div class="fv-team fv-prov"><span class="fv-tname">${name}</span>` +
+           `<span class="fv-tscore"></span><span class="fv-tgb"></span></div>`;
+  }
   const cls = !isPlayed(m) ? 'fv-lose' : (score > other ? 'fv-win' : 'fv-lose');
-  // Goals and behinds sit after the total in a smaller face. Guard for nulls:
-  // a completed game can still be missing its breakdown.
+  // Total and breakdown occupy their own grid columns so the totals align down
+  // the page. Both cells are always emitted, empty if unplayed, or a short
+  // breakdown would pull the column out of line. Guard for nulls: a completed
+  // game can still be missing its goals and behinds.
   const g = side === 'h' ? m.hG : m.aG;
   const b = side === 'h' ? m.hB : m.aB;
-  const gb = (g !== null && g !== undefined && b !== null && b !== undefined)
-    ? `<span class="fv-gb">${g}.${b}</span>` : '';
-  const sc = isPlayed(m)
-    ? `<span class="fv-score"><span class="${cls}">${score}</span>${gb}</span>` : '';
-  return `<div class="fv-team"><span class="${cls}">${name}</span>${sc}</div>`;
+  const gbTxt = (g !== null && g !== undefined && b !== null && b !== undefined) ? `${g}.${b}` : '';
+  return `<div class="fv-team">` +
+    `<span class="fv-tname ${cls}">${name}</span>` +
+    `<span class="fv-tscore ${cls}">${isPlayed(m) ? score : ''}</span>` +
+    `<span class="fv-tgb">${isPlayed(m) ? gbTxt : ''}</span></div>`;
 }
 
 // ── By age group ──
@@ -2218,7 +2225,7 @@ function renderFinalsWinners(pool) {
         const lgb  = homeWon ? gb(m.aG, m.aB) : gb(m.hG, m.hB);
 
         return `<div class="fv-win-row">${tag}
-          <span class="fv-winner">${crestHTML(win, 18, 'mr-logo')}<span class="fv-champ">${win}</span></span>
+          <span class="fv-winner">${crestHTML(win, 18, 'tlogo')}<span class="fv-champ">${win}</span></span>
           <span class="fv-scorecell">
             <span><span class="fv-win">${ws}</span><span class="fv-vs">&ndash;</span><span class="fv-lose">${ls}</span></span>
             ${(wgb || lgb) ? `<span class="fv-gb">${wgb} &ndash; ${lgb}</span>` : ''}
