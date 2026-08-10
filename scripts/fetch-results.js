@@ -1066,7 +1066,15 @@ async function main() {
   // Merged, never replaced: a VIP_ONLY run only discovers the VIP competitions'
   // grades, and replacing would delete every other competition's metadata.
   const gradeMeta = { ...(existing.gradeMeta || {}), ...buildGradeMeta(grades) };
-  console.log(`Grade metadata: ${Object.keys(gradeMeta).length} grade(s)`);
+  // Compared on sorted entries so key insertion order cannot register as a
+  // change. gradeMeta is the first thing this script writes that can change
+  // without any match changing — a new grade, or simply the first run after the
+  // feature landed — so the exit code below has to account for it or the work
+  // is written to data.json and then never committed.
+  const canon = o => JSON.stringify(Object.entries(o || {}).sort((a,b) => a[0] < b[0] ? -1 : 1));
+  const gradeMetaChanged = canon(existing.gradeMeta) !== canon(gradeMeta);
+  console.log(`Grade metadata: ${Object.keys(gradeMeta).length} grade(s)` +
+    (gradeMetaChanged ? ' (changed)' : ' (unchanged)'));
 
   const merged = {
     ...existing,
@@ -1085,9 +1093,12 @@ async function main() {
   fs.writeFileSync(DATA_PATH, JSON.stringify(merged, null, 2), 'utf8');
   console.log(`Wrote data.json`);
 
-  if (newCount === 0 && updatedCount === 0) {
-    console.log('No match changes — skipping commit');
+  if (newCount === 0 && updatedCount === 0 && !gradeMetaChanged) {
+    console.log('No match or grade metadata changes — skipping commit');
     process.exit(2);
+  }
+  if (newCount === 0 && updatedCount === 0) {
+    console.log('No match changes, but grade metadata changed — committing');
   }
 
   process.exit(0);
