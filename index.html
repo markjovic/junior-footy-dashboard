@@ -341,7 +341,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.125</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.126</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -617,10 +617,6 @@ body{overflow-x:hidden}
           <input type="checkbox" id="gh-vip-only" style="accent-color:var(--gold)" checked>
           <label for="gh-vip-only" style="font-size:12px;color:var(--tx2);cursor:pointer">VIP competitions only (EFNL)</label>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="checkbox" id="gh-migrate" style="accent-color:var(--gold)">
-          <label for="gh-migrate" style="font-size:12px;color:var(--tx2);cursor:pointer">Run grade migration first</label>
-        </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="btn-p" onclick="triggerFetch('results')" style="width:100%">⬇ Fetch Results</button>
           <button class="btn-p" onclick="triggerFetch('stats')" style="width:100%">📊 Fetch Stats</button>
@@ -662,7 +658,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.125</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.126</span>
         </div>
 
 
@@ -2974,7 +2970,6 @@ async function triggerFetch(what) {
     showFetchStatus('Enter your GitHub PAT first.', 'err');
     return;
   }
-  const migrate = document.getElementById('gh-migrate')?.checked ? 'yes' : 'no';
   showFetchStatus('Triggering workflow…', 'info');
 
   try {
@@ -2992,7 +2987,6 @@ async function triggerFetch(what) {
           ref: 'main',
           inputs: {
             fetch: what,
-            run_migration: migrate,
             vip_only: document.getElementById('gh-vip-only')?.checked ? 'true' : 'false',
           },
         }),
