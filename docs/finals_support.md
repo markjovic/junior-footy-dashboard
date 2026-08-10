@@ -352,11 +352,11 @@ does.
 
 ## 11. Tooling added
 
-| Script | Purpose |
-|---|---|
-| `probe-finals-rounds.js` | Round structure, numbering scheme, fixture shapes. Read-only. |
-| `probe-team-club.js` | Whether `DiscoverTeam` exposes a club. Read-only. |
-| `probe-club-index.js` | Validates the logo-to-club-id derivation. Read-only. |
-| `build-club-index.js` | Builds `clubs` and `teamClub`. Commits. |
+| Script | Purpose | Status |
+|---|---|---|
+| `probe-finals-rounds.js` | Round structure, numbering scheme, fixture shapes | Kept — re-run each season to detect a numbering change |
+| `probe-team-club.js` | Whether `DiscoverTeam` exposes a club | **Removed 2026-08-10.** It asked for `club` when the field is `organisation`, so its recorded conclusion was wrong and re-running it would re-teach the error |
+| `probe-club-index.js` | Validated the logo-to-club-id derivation | Removed 2026-08-10 — `build-club-index.js` performs and reports the same derivation on every run |
+| `build-club-index.js` | Builds `clubs` and `teamClub` | Live |
 
 All probes are `contents: read` and verify a clean working tree before finishing.
