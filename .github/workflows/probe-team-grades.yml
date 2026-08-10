@@ -1,0 +1,95 @@
+# .github/workflows/probe-team-grades.yml
+#
+# READ-ONLY probe. No commit, no push, no writes.
+# permissions: contents:read so it cannot write even by accident.
+
+name: Probe Team Grades
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: 'Stored key, e.g. EFNL 2026|U18 Girls|Grading'
+        required: false
+        default: 'EFNL 2026|U18 Girls|Grading'
+      teams:
+        description: 'Comma separated team names instead of a key.'
+        required: false
+        default: ''
+      limit:
+        description: 'How many teams to resolve (each costs 2-3 API calls).'
+        required: false
+        default: '50'
+      comps:
+        description: 'Also list every competition each club belongs to.'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-team-grades
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/probe-team-grades.js
+
+      - name: Run probe
+        env:
+          IN_KEY:   ${{ inputs.key }}
+          IN_TEAMS: ${{ inputs.teams }}
+          IN_LIMIT: ${{ inputs.limit }}
+          # Booleans arrive as real booleans from workflow inputs, so string
+          # comparison alone is not enough — test both forms.
+          IN_COMPS: ${{ (inputs.comps == true || inputs.comps == 'true') && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          # Full if-blocks, never `[ -n "$X" ] && ARGS+=(...)`: under `set -e` a
+          # bare AND-list whose test fails is itself the failing statement.
+          ARGS=()
+          if [ -n "$IN_TEAMS" ]; then
+            ARGS+=("--teams=$IN_TEAMS")
+          elif [ -n "$IN_KEY" ]; then
+            ARGS+=("--key=$IN_KEY")
+          fi
+          if [ -n "$IN_LIMIT" ];      then ARGS+=("--limit=$IN_LIMIT"); fi
+          if [ "$IN_COMPS" = "yes" ]; then ARGS+=("--comps"); fi
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            echo "Arguments: (none)"
+          else
+            echo "Arguments: ${ARGS[*]}"
+          fi
+          node scripts/probe-team-grades.js ${ARGS[@]+"${ARGS[@]}"} 2>&1 | tee /tmp/probe-team-grades.txt
+
+      - name: Confirm nothing was modified
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "PROBE MODIFIED THE WORKING TREE — this must never happen:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean. Probe wrote nothing."
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-team-grades
+          path: /tmp/probe-team-grades.txt
+          retention-days: 14
