@@ -176,8 +176,15 @@ else for (const [p, wfs] of broken) {
 
 // ── 5b. Root-level scripts, which the house convention says belong in scripts/ ──
 console.log('\n--- scripts outside scripts/ ---');
+// scripts/ is where GitHub Actions runs things from. Code that lives elsewhere
+// on purpose is not stray:
+//   sw.js      — service worker, must be served from the site root to control
+//                the whole origin scope
+//   workers/   — Cloudflare Workers, deployed to Cloudflare rather than run by
+//                Actions, so no workflow will ever invoke them
+//   assets/    — not code
 const stray = files.filter(f => /\.(js|mjs|cjs)$/.test(f.rel) && !f.rel.startsWith('scripts/')
-  && !f.rel.startsWith('assets/') && f.base !== 'sw.js');
+  && !f.rel.startsWith('assets/') && !f.rel.startsWith('workers/') && f.base !== 'sw.js');
 if (!stray.length) console.log('  None.');
 else for (const f of stray) {
   const alsoInScripts = files.find(x => x.rel === `scripts/${f.base}`);
