@@ -721,6 +721,34 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
   }
 }
 
+// ─── Grade strength ranking ───────────────────────────────────────────────────
+// PlayHQ returns grades strongest-first within each age, verified across all
+// five competitions on 2026-08-09:
+//   EFNL  U11 -> A, B, C, D1, D2
+//   SER   U13 -> Premier Division, Blue, Gold, Navy, Orange
+//   SEJ   U11 -> Blue, Red
+// The colour-named grades carry no order in their names, so this ordering is
+// the only sound source of strength. It is NOT derivable from GRADE_ORDER in
+// the dashboard, which is a flat display list where the colours are arbitrary.
+//
+// Rank is meaningful only within one competition and one age. Never compare an
+// EFNL "A" with an SER "Blue".
+function buildGradeRank(grades) {
+  const rank = {};
+  const next = new Map(); // "comp|age" -> rank counter
+  for (const g of grades) {
+    const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
+    // Grading is a pre-season sorting pool, not a competitive tier. It would
+    // otherwise consume a rank slot and push every real grade down one.
+    if (rawGrade === 'Grading') continue;
+    const key = `${g.compName}|${age}`;
+    const n = (next.get(key) || 0) + 1;
+    next.set(key, n);
+    rank[`${g.compName}|${age}|${rawGrade}`] = n;
+  }
+  return rank;
+}
+
 // ─── Roster rebuild ───────────────────────────────────────────────────────────
 // Current grade for each team = the grade they appeared in during their
 // highest round number across all stored matches.
@@ -995,10 +1023,16 @@ async function main() {
   const compLogos = {};
   grades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
 
+  // Merged, never replaced: a VIP_ONLY run only discovers the VIP competitions'
+  // grades, and replacing would delete every other competition's ranks.
+  const gradeRank = { ...(existing.gradeRank || {}), ...buildGradeRank(grades) };
+  console.log(`Grade ranks: ${Object.keys(gradeRank).length} grade(s) ranked`);
+
   const merged = {
     ...existing,
     matches: allWithByes,
     roster,
+    gradeRank,
     lastRound,
     teamLogos,
     compLogos,
