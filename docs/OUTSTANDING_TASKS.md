@@ -69,11 +69,20 @@ shrink `.git`; the pretty-printed blobs remain in history.
 
 ---
 
-## 4. Retire `migrate-grades.js`
+## 4. ~~Retire `migrate-grades.js`~~ — workflow cleared 2026-08-10
 
-A completed one-off, but `fetch-results.yml` still invokes it behind the
-`run_migration` input. `repo-tidy.js` correctly refuses to delete it. Removing it
-means deleting the input and its two steps from the workflow first.
+The `run_migration` input, both migration steps in `fetch-results.yml`, the admin
+panel checkbox and the `run_migration` entry in the dashboard's dispatch payload
+were all removed together. They had to go together: the admin panel sent
+`run_migration` on **every** dispatch, so removing only the workflow input would
+have made every admin-triggered fetch fail with a 422 "Unexpected inputs
+provided".
+
+The script itself can now be removed with `repo-tidy.yml`, `groups: migration`.
+
+**Check the Cloudflare Worker first.** `footy-cron` dispatches this workflow on a
+schedule. If its payload includes `run_migration`, every scheduled run will now
+fail with a 422. The Worker source is not in this repo and was not checked.
 
 ---
 
