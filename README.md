@@ -20,8 +20,10 @@ favicon.ico                 ← Browser tab icon
 README.md
 .github/
   workflows/
-    fetch-results.yml       ← workflow_dispatch only (scheduling via Cloudflare Worker)
+    fetch-results.yml       ← results + stats + fixtures (dispatch only; Worker schedules it)
     build-club-index.yml    ← Manual — rebuilds the club index
+    repo-audit.yml          ← Manual, read-only — inventory, duplicates, orphans
+    repo-tidy.yml           ← Manual — removes dead files, dry run by default
     probe-finals-rounds.yml ← Manual, read-only diagnostic
     probe-team-club.yml     ← Manual, read-only diagnostic
     probe-club-index.yml    ← Manual, read-only diagnostic
@@ -30,16 +32,19 @@ scripts/
   fetch-stats.js            ← Player statistics from PlayHQ
   fetch-fixtures.js         ← Future scheduled fixtures from PlayHQ
   build-club-index.js       ← Resolves teams to PlayHQ clubs
+  migrate-grades.js         ← One-off grade remapping (still wired to run_migration)
+  repo-audit.js             ← Read-only repo inventory and dead-file report
+  repo-tidy.js              ← Removes dead files; dry run unless --apply
   probe-finals-rounds.js    ← Diagnostic: round structure and numbering
   probe-team-club.js        ← Diagnostic: whether DiscoverTeam exposes a club
   probe-club-index.js       ← Diagnostic: validates the club id derivation
-  migrate-grades.js         ← One-off migration for grade name/compName remapping
-  fetch-u10-2024.js         ← Standalone one-off script for U10 2024 historical data
 assets/
   icons/
     icon-192.png            ← PWA home screen icon (192×192)
     icon-512.png            ← PWA home screen icon (512×512)
 ```
+
+28 files, 54.2 MB — of which `data.json` is 53 MB. Run **Repo Audit** for the current picture.
 
 ---
 
@@ -376,6 +381,29 @@ Works offline using last-loaded data. Service worker skips POST requests (Cache 
 |--------|-----|---------|
 | PlayHQ proxy | `solitary-snowflake-cb3e.insanoflash.workers.dev` | Proxies GraphQL POST requests for player panel (CORS bypass) |
 | Cron scheduler | `footy-cron.insanoflash.workers.dev` | Dispatches GitHub Actions workflow at correct AEST times |
+
+---
+
+## Repo maintenance
+
+**Repo Audit** (read-only) reports every file with size and last-commit date, duplicate
+filenames, identical content under different names, which workflow invokes which script,
+orphaned scripts, and workflow references to files that do not exist.
+
+**Repo Tidy** removes dead files. Dry run unless `apply` is ticked. It scans every text file
+for references first and distinguishes code references, which block a removal, from
+documentation references, which only warn. Groups: `oneoffs`, `placeholders`, `legacy`,
+`historic`, `migration`, `assets`.
+
+A tidy on 2026-08-10 removed 135 files — the fixture generator's leftover club images
+(`assets/clubs`, ~10.7 MB), the superseded `extract-finals-data` script and workflow, two git
+directory placeholders, and `SETUP.txt`. `2024.html` and `fetch-u10-2024.js` were removed in
+the same pass; both are recoverable from git history and should be restored when multi-season
+support is built, since the dashboard is single-season today and `2024.html` is likely the only
+standalone copy of that season.
+
+`migrate-grades.js` cannot be removed while `fetch-results.yml` still invokes it behind the
+`run_migration` input.
 
 ---
 

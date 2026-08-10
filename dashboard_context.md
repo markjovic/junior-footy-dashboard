@@ -75,6 +75,11 @@ two conventions in one codebase.
 - **Never derive a club from a team name.** `"Norwood Gold/Heathmont"` is a
   merged team; Templestowe fields separate senior and junior organisations.
   Use `teamClub`.
+- **The club field on a team is `organisation`, not `club`.** A probe asked for
+  `club { id name }` on `DiscoverTeam`, got a validation error, and the club
+  index was built on logo-URL derivation instead. `club` exists only on
+  `publicProfileStatistics`. Whether `organisation` on a team returns the club or
+  the league is unverified — see "Next up" below.
 - **`excludeGrades` shifts grade ranks.** Excluded grades are filtered before
   discovery and do not consume a rank slot. Empty in all five competitions —
   keep it that way unless the consequence is accepted.
@@ -109,6 +114,23 @@ two conventions in one codebase.
 
 Finals support is complete and deployed — see `finals_support.md` for the
 implementation, and `README.md` for user-facing behaviour.
+
+**Repo state.** Tidied 2026-08-10 to 28 files, 54.2 MB — of which `data.json` is
+53 MB, now 97.8% of the repository. The fixture generator's leftover club images
+were removed (~10.7 MB), along with the superseded `extract-finals-data` script.
+`2024.html` and `fetch-u10-2024.js` went in the same pass and should be restored
+from git history when multi-season work begins.
+
+**Open lead worth an hour: does `DiscoverTeam.organisation` return the club?**
+The API reference documents `organisation { id name }` on `DiscoverTeam`. If it
+is the club, both fetchers can capture the club id at fetch time and
+`build-club-index.js` becomes unnecessary — it would also cover any team with no
+logo. Verify before building anything on it; on `discoverCompetitions` the
+equivalent field is the league, not the club.
+
+**`data.json` is written with `JSON.stringify(merged, null, 2)`.** Minifying
+would cut roughly a third off a 53 MB file that every workflow checks out and
+every visitor downloads. One line in `fetch-results.js`, one enormous first diff.
 
 **Next up: multi-season support.** The groundwork established so far:
 
