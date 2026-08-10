@@ -721,32 +721,72 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
   }
 }
 
-// ─── Grade strength ranking ───────────────────────────────────────────────────
-// PlayHQ returns grades strongest-first within each age, verified across all
-// five competitions on 2026-08-09:
+// ─── Grade metadata ───────────────────────────────────────────────────────────
+// One map carrying everything the dashboard needs to know about a grade that it
+// cannot work out from a match record: strength rank, level and gender.
+//
+//   gradeMeta["EFNL 2026|U12|A"] = { r: 1, lvl: 'junior', g: 'M' }
+//
+// RANK. PlayHQ returns grades strongest-first within each age, verified across
+// all five competitions on 2026-08-09:
 //   EFNL  U11 -> A, B, C, D1, D2
 //   SER   U13 -> Premier Division, Blue, Gold, Navy, Orange
 //   SEJ   U11 -> Blue, Red
 // The colour-named grades carry no order in their names, so this ordering is
-// the only sound source of strength. It is NOT derivable from GRADE_ORDER in
-// the dashboard, which is a flat display list where the colours are arbitrary.
+// the only sound source of strength. Rank is meaningful only within one
+// competition and one age — never compare an EFNL "A" with an SER "Blue".
 //
-// Rank is meaningful only within one competition and one age. Never compare an
-// EFNL "A" with an SER "Blue".
-function buildGradeRank(grades) {
-  const rank = {};
+// LEVEL and GENDER come from the API rather than from the grade name.
+// Q_GRADE_LIST already selects age{name value} and gender{name value}, and
+// discoverGrades already stores them; nothing downstream was reading them.
+// This matters: PlayHQ classifies U19.5 as SENIOR, so any "starts with U" rule
+// gets it wrong. It also returns ageName "U17" for U17.5 competitions.
+function buildGradeMeta(grades) {
+  const meta = {};
   const next = new Map(); // "comp|age" -> rank counter
+
+  // PlayHQ age values: U7..U23, JUNIOR, INTERMEDIATE, SENIOR, OPEN, MASTER,
+  // MASTERS_35S.., UNSPECIFIED. Intermediate is treated as junior because it is
+  // age-restricted; it has not been observed in any of these competitions.
+  const levelOf = (ageName, parsedAge) => {
+    const v = String(ageName || '').trim();
+    if (/^U\d/i.test(v) || /^(junior|intermediate)/i.test(v)) return 'junior';
+    if (/^(senior|open|master)/i.test(v)) return 'senior';
+    return /^U\d/i.test(parsedAge || '') ? 'junior' : 'senior';
+  };
+
+  // Boys, Mixed and Men are one group; Girls and Women the other.
+  const genderOf = (genderName, parsedAge, rawGrade) => {
+    const v = String(genderName || '').trim();
+    if (/^(girls|women)s?$/i.test(v)) return 'F';
+    if (v) return 'M';
+    return /\b(girls|women)\b/i.test(`${parsedAge || ''} ${rawGrade || ''}`) ? 'F' : 'M';
+  };
+
   for (const g of grades) {
     const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
     // Grading is a pre-season sorting pool, not a competitive tier. It would
     // otherwise consume a rank slot and push every real grade down one.
     if (rawGrade === 'Grading') continue;
-    const key = `${g.compName}|${age}`;
-    const n = (next.get(key) || 0) + 1;
-    next.set(key, n);
-    rank[`${g.compName}|${age}|${rawGrade}`] = n;
+
+    const key = `${g.compName}|${age}|${rawGrade}`;
+    const ageKey = `${g.compName}|${age}`;
+    const r = (next.get(ageKey) || 0) + 1;
+    next.set(ageKey, r);
+
+    // Two PlayHQ grades parsing to one key would silently overwrite each other
+    // and corrupt the ranking. Report it rather than let it pass.
+    if (meta[key]) {
+      console.warn(`  WARNING: two grades resolve to "${key}" — ranks ${meta[key].r} and ${r}; keeping ${meta[key].r}`);
+      continue;
+    }
+    meta[key] = {
+      r,
+      lvl: levelOf(g.ageName, age),
+      g:   genderOf(g.genderName, age, rawGrade),
+    };
   }
-  return rank;
+  return meta;
 }
 
 // ─── Roster rebuild ───────────────────────────────────────────────────────────
@@ -1024,15 +1064,15 @@ async function main() {
   grades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
 
   // Merged, never replaced: a VIP_ONLY run only discovers the VIP competitions'
-  // grades, and replacing would delete every other competition's ranks.
-  const gradeRank = { ...(existing.gradeRank || {}), ...buildGradeRank(grades) };
-  console.log(`Grade ranks: ${Object.keys(gradeRank).length} grade(s) ranked`);
+  // grades, and replacing would delete every other competition's metadata.
+  const gradeMeta = { ...(existing.gradeMeta || {}), ...buildGradeMeta(grades) };
+  console.log(`Grade metadata: ${Object.keys(gradeMeta).length} grade(s)`);
 
   const merged = {
     ...existing,
     matches: allWithByes,
     roster,
-    gradeRank,
+    gradeMeta,
     lastRound,
     teamLogos,
     compLogos,
