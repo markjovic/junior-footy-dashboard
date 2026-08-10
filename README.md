@@ -61,6 +61,43 @@ copy lives in the Cloudflare dashboard — editing this file alone changes nothi
 
 ---
 
+## Documentation
+
+Absolute URLs so they can be followed directly from this page.
+
+If you are working with Claude, paste this block first — it can only fetch URLs
+that already appear in the conversation, and cannot construct them or browse
+folders.
+
+```
+https://github.com/markjovic/junior-footy-dashboard/blob/main/README.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/dashboard_context.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/working_practice.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/playhq_api_reference.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/finals_support.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/OUTSTANDING_TASKS.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/project_setup.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/index.html
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-results.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-stats.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-fixtures.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-club-index.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/workers/footy-cron.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
+```
+
+
+| Document | Purpose |
+|---|---|
+| [dashboard_context.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/dashboard_context.md) | Repo-specific conventions, standing traps, current state |
+| [working_practice.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/working_practice.md) | Portable delivery and verification rules |
+| [playhq_api_reference.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/playhq_api_reference.md) | PlayHQ API behaviour — **shared with `sports-players-stats`** |
+| [finals_support.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/finals_support.md) | Finals implementation notes |
+| [OUTSTANDING_TASKS.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/OUTSTANDING_TASKS.md) | Work queue |
+| [project_setup.md](https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/project_setup.md) | Claude project setup |
+
+---
+
 ## First-time setup
 
 1. Fork or clone this repo
@@ -258,9 +295,11 @@ A separate top-level view, reached from the **FINALS** switch in the header. It 
 
 **Filters:** gender (male / female / both, default both) and level (junior / senior / both, default both). Both apply to every statistic including the headline totals.
 
-**Sorting:** alphabetical (default), grade strength, most teams, most remaining, most GF appearances, most premierships.
+**Sorting** is two independent choices. The dropdown picks the **measure** — alphabetical (default), most teams in finals, most remaining, most GF appearances, most premierships. The **TOTAL / BY GRADE** toggle then decides how two clubs are compared on it.
 
-**Grade strength** compares tier by tier — two top-grade finalists rank above ten second-grade ones. It is deliberately not a weighted score.
+**TOTAL** compares plain counts. **BY GRADE** compares tier by tier, from the top grade down, so one top-grade result outranks any number of lower-grade ones — a single A-grade premiership beats three C-grade ones. Deliberately not a weighted score: any formula invites argument about the coefficients and stops the number being checkable by eye.
+
+When BY GRADE is on, each club's line shows the breakdown for the selected measure — `premierships: top grade ×1` — including clubs with nothing in the top grade, so the shape of a club's finals presence is visible rather than only its best result.
 
 ### Status rules
 

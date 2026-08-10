@@ -313,11 +313,13 @@ body{overflow-x:hidden}
 .fv-age{font-size:15px;font-weight:500;margin:18px 0 6px;display:flex;align-items:baseline;justify-content:space-between}
 .fv-age .fv-meta{font-size:11px;color:var(--tx3);font-weight:400}
 .fv-card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:10px 12px;margin-bottom:10px}
-.fv-row{display:grid;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1);align-items:start}
+.fv-row{display:grid;gap:26px;padding:9px 0;border-bottom:1px solid var(--b1);align-items:start}
 .fv-row:last-child{border-bottom:0}
 .fv-hdr{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--tx3)}
 .fv-cell{font-size:12px;line-height:1.55;min-width:0}
-.fv-team{display:flex;justify-content:space-between;gap:8px}
+.fv-team{display:flex;justify-content:space-between;gap:14px;align-items:baseline}
+.fv-score{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.fv-gb{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:.3px}
 .fv-team span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fv-win{color:var(--tx);font-weight:600}
 .fv-lose{color:var(--tx2)}
@@ -326,10 +328,18 @@ body{overflow-x:hidden}
 .fv-out{font-size:9px;color:#ef4444;letter-spacing:.5px;text-transform:uppercase}
 .fv-club{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--b1);margin-bottom:2px}
 .fv-club-name{font-size:14px;font-weight:500}
+.fv-win-row{display:grid;grid-template-columns:46px 1fr auto;gap:14px;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--b1);font-size:12px}
+.fv-win-row:last-child{border-bottom:0}
+.fv-win-row > span:nth-child(2){display:flex;align-items:center;gap:6px;min-width:0}
+.fv-champ{font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv-beat{color:var(--tx3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;color:var(--tx3);
   border:1px solid var(--b1);border-radius:3px;padding:1px 5px;white-space:nowrap}
 @media(max-width:768px){
   .fv-row{grid-template-columns:1fr !important}
+  .fv-win-row{grid-template-columns:40px 1fr;row-gap:2px}
+  .fv-win-row > span:last-child{grid-column:2;justify-self:start}
   .fv-hdr-row{display:none !important}
   .fv-cell{border-left:2px solid var(--b1);padding-left:8px}
 }
@@ -341,7 +351,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.126</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.128</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -508,8 +518,9 @@ body{overflow-x:hidden}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
         <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="fv-switch">
-            <button id="fvm-age"  class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
-            <button id="fvm-club"          onclick="setFinalsMode('club')">BY CLUB</button>
+            <button id="fvm-age"     class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
+            <button id="fvm-club"             onclick="setFinalsMode('club')">BY CLUB</button>
+            <button id="fvm-winners"          onclick="setFinalsMode('winners')">WINNERS</button>
           </span>
           <span class="fv-switch">
             <button id="fvg-all"    class="on" onclick="setFinalsGender('all')">ALL</button>
@@ -524,12 +535,15 @@ body{overflow-x:hidden}
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
             <option value="name">Alphabetical</option>
-            <option value="grade">By grade strength</option>
             <option value="teams">Most teams in finals</option>
             <option value="remaining">Most remaining</option>
             <option value="gf">Most GF appearances</option>
             <option value="premiers">Most premierships</option>
           </select>
+          <span class="fv-switch" id="fv-weight-wrap" style="display:none">
+            <button id="fvw-off" class="on" onclick="setFinalsWeighted(false)">TOTAL</button>
+            <button id="fvw-on"           onclick="setFinalsWeighted(true)">BY GRADE</button>
+          </span>
         </span>
         <span class="card-meta" id="fv-meta"></span>
       </div>
@@ -658,7 +672,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.126</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.128</span>
         </div>
 
 
@@ -737,6 +751,7 @@ function saveFilters() {
       view:       S.view,
       finalsMode: S.finalsMode,
       finalsSort: S.finalsSort,
+      finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
       finalsLevel:  S.finalsLevel,
       selClub:    S.selClub,
@@ -787,8 +802,9 @@ let S = {
   selGrades: new Set(),
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
-  finalsMode: 'age',    // 'age'  | 'club'
-  finalsSort: 'name',   // club mode ordering — see FINALS_SORTS
+  finalsMode: 'age',    // 'age' | 'club' | 'winners'
+  finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
+  finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
   finalsLevel:  'all',  // 'all' | 'junior' | 'senior'
   selClub:    '',       // club filter, finals view only
@@ -1826,26 +1842,36 @@ function switchView(v) {
 
 // Club-mode orderings. Every numeric sort is descending and falls through the
 // remaining measures before settling on name, so ties never order at random.
+// A measure is WHAT is counted. Weighting is HOW two clubs' counts are compared:
+// as a flat total, or tier by tier so a top-grade one outranks any number of
+// lower-grade ones. The two are independent — every measure can be either.
+//
+// `flat` reads the plain count; `tiers` names the per-rank breakdown to compare
+// when weighting is on.
 const FINALS_SORTS = {
-  teams:     (a, b) => b.teams.length - a.teams.length,
-  remaining: (a, b) => b.remaining    - a.remaining,
-  gf:        (a, b) => b.inGF         - a.inGF,
-  premiers:  (a, b) => b.premiers     - a.premiers,
-  // Grade strength compares tier by tier: two top-grade finalists beat ten
-  // second-grade ones. Deliberately not a weighted score, because any weighting
-  // invites argument about the formula and stops the number being checkable.
-  grade:     (a, b) => cmpGradeStrength(a, b),
-  name:      null, // handled separately — alphabetical must not fall through
+  teams:     { label: 'teams in finals', flat: e => e.teams.length, tiers: 'tiersAll' },
+  remaining: { label: 'remaining',       flat: e => e.remaining,    tiers: 'tiersRemaining' },
+  gf:        { label: 'GF appearances',  flat: e => e.inGF,         tiers: 'tiersGF' },
+  premiers:  { label: 'premierships',    flat: e => e.premiers,     tiers: 'tiersPremiers' },
+  name:      null, // alphabetical — never weighted, never falls through
 };
 
-function cmpGradeStrength(a, b) {
-  const keys = new Set([...Object.keys(a.tiers), ...Object.keys(b.tiers)].map(Number));
+// Compare two per-rank breakdowns from the top grade down. Deliberately not a
+// weighted score: any formula invites argument about the coefficients and stops
+// the number being checkable by eye.
+function cmpTiers(at, bt) {
+  const keys = new Set([...Object.keys(at || {}), ...Object.keys(bt || {})].map(Number));
   const max = keys.size ? Math.max(...keys) : 0;
   for (let r = 1; r <= max; r++) {
-    const d = (b.tiers[r] || 0) - (a.tiers[r] || 0);
+    const d = ((bt && bt[r]) || 0) - ((at && at[r]) || 0);
     if (d) return d;
   }
   return 0;
+}
+
+function setFinalsWeighted(on) {
+  if (S.finalsWeighted === on) return;
+  S.finalsWeighted = on; saveFilters(); render();
 }
 
 function setFinalsGender(v) {
@@ -1865,7 +1891,7 @@ function setFinalsSort(v) {
 }
 
 function setFinalsMode(m) {
-  if (S.finalsMode === m) return;
+  if (!['age','club','winners'].includes(m) || S.finalsMode === m) return;
   S.finalsMode = m;
   saveFilters();
   render();
@@ -1880,15 +1906,23 @@ function applyViewChrome() {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', (id === 'vsw-finals') === finals);
   });
-  ['fvm-age','fvm-club'].forEach(id => {
+  [['fvm-age','age'],['fvm-club','club'],['fvm-winners','winners']].forEach(([id,v]) => {
     const b = document.getElementById(id);
-    if (b) b.classList.toggle('on', (id === 'fvm-club') === (S.finalsMode === 'club'));
+    if (b) b.classList.toggle('on', S.finalsMode === v);
   });
+  const inClubMode = finals && S.finalsMode === 'club';
   const sortSel = document.getElementById('fv-sort');
   if (sortSel) {
-    sortSel.style.display = (finals && S.finalsMode === 'club') ? '' : 'none';
+    sortSel.style.display = inClubMode ? '' : 'none';
     sortSel.value = S.finalsSort;
   }
+  // Weighting has no meaning for an alphabetical sort.
+  const wrap = document.getElementById('fv-weight-wrap');
+  if (wrap) wrap.style.display = (inClubMode && S.finalsSort !== 'name') ? '' : 'none';
+  const wOff = document.getElementById('fvw-off');
+  const wOn  = document.getElementById('fvw-on');
+  if (wOff) wOff.classList.toggle('on', !S.finalsWeighted);
+  if (wOn)  wOn.classList.toggle('on',  !!S.finalsWeighted);
   [['fvg-all','all'],['fvg-M','M'],['fvg-F','F']].forEach(([id,v]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', S.finalsGender === v);
@@ -1999,7 +2033,14 @@ function fvSide(m, side) {
   const other = side === 'h' ? m.aScore : m.hScore;
   if (isProvSide(m, side)) return `<div class="fv-team fv-prov"><span>${name}</span></div>`;
   const cls = !isPlayed(m) ? 'fv-lose' : (score > other ? 'fv-win' : 'fv-lose');
-  const sc  = isPlayed(m) ? `<span class="${cls}">${score}</span>` : '';
+  // Goals and behinds sit after the total in a smaller face. Guard for nulls:
+  // a completed game can still be missing its breakdown.
+  const g = side === 'h' ? m.hG : m.aG;
+  const b = side === 'h' ? m.hB : m.aB;
+  const gb = (g !== null && g !== undefined && b !== null && b !== undefined)
+    ? `<span class="fv-gb">${g}.${b}</span>` : '';
+  const sc = isPlayed(m)
+    ? `<span class="fv-score"><span class="${cls}">${score}</span>${gb}</span>` : '';
   return `<div class="fv-team"><span class="${cls}">${name}</span>${sc}</div>`;
 }
 
@@ -2091,14 +2132,90 @@ function tierLabel(r) {
   return r === 1 ? 'top grade' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`;
 }
 
+// Breakdown of whichever measure is being weighted. Every tier a club holds is
+// shown, including when it has none in the top grade — the point is to see the
+// shape of a club's finals presence, not only its best result.
 function tierSummary(e) {
-  const ranks = Object.keys(e.tiers).map(Number).sort((a,b) => a - b);
-  if (!ranks.length) return `${e.teams.length} team${e.teams.length!==1?'s':''} · unranked`;
+  const def   = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+  const tiers = e[def.tiers] || {};
+  const total = def.flat(e);
+  const ranks = Object.keys(tiers).map(Number).sort((a,b) => a - b);
+  if (!ranks.length) return `no ${def.label}`;
   const parts = ranks.map(r =>
-    `<span style="${r===1?'color:var(--gold)':''}">${tierLabel(r)} &times;${e.tiers[r]}</span>`);
-  const unranked = e.teams.length - ranks.reduce((n,r) => n + e.tiers[r], 0);
-  if (unranked) parts.push(`unranked &times;${unranked}`);
-  return parts.join(' &middot; ');
+    `<span style="${r===1?'color:var(--gold)':''}">${tierLabel(r)} &times;${tiers[r]}</span>`);
+  const unranked = total - ranks.reduce((n,r) => n + tiers[r], 0);
+  if (unranked > 0) parts.push(`unranked &times;${unranked}`);
+  return `${def.label}: ` + parts.join(' &middot; ');
+}
+
+// ── Winners ──
+// One line per grade: who won the Grand Final. Where it has not been played the
+// line shows the fixture instead, so the view is useful during finals rather
+// than only after them.
+function renderFinalsWinners(pool) {
+  const byAge = {};
+  pool.filter(m => m.finalsAbbrev === 'GF')
+      .forEach(m => { (byAge[m.age] = byAge[m.age] || []).push(m); });
+  const ages = Object.keys(byAge).sort(ageSort);
+  if (!ages.length) {
+    return '<div class="empty"><p>No Grand Finals scheduled yet for the selected competition.</p></div>';
+  }
+
+  let decided = 0, pending = 0;
+
+  const blocks = ages.map(age => {
+    const byGrade = {};
+    byAge[age].forEach(m => { const g = m.rawGrade || ''; (byGrade[g] = byGrade[g] || []).push(m); });
+    const grades = Object.keys(byGrade).sort((a,b) =>
+      (gradeRankOf(byGrade[a][0].compName, age, a) || 99) - (gradeRankOf(byGrade[b][0].compName, age, b) || 99)
+      || a.localeCompare(b));
+
+    const rows = grades.map(g => {
+      // A grade should have exactly one Grand Final; take the played one if a
+      // stale scheduled record is still hanging around beside the result.
+      const games = byGrade[g];
+      const m = games.find(isPlayed) || games[0];
+      const rank = gradeRankOf(m.compName, age, g);
+      const tag = `<span class="fv-tag"${rank===1?' style="color:var(--gold);border-color:rgba(240,192,64,.35)"':''}>${abbrevGrade(g)}</span>`;
+
+      if (isPlayed(m)) {
+        decided++;
+        const homeWon = m.hScore > m.aScore;
+        const drawn   = m.hScore === m.aScore;
+        const win  = homeWon ? m.home : m.away;
+        const lose = homeWon ? m.away : m.home;
+        const ws = homeWon ? m.hScore : m.aScore, ls = homeWon ? m.aScore : m.hScore;
+        const wg = homeWon ? m.hG : m.aG, wb = homeWon ? m.hB : m.aB;
+        const lg = homeWon ? m.aG : m.hG, lb = homeWon ? m.aB : m.hB;
+        const gb = (a,b) => (a!==null&&a!==undefined&&b!==null&&b!==undefined) ? `<span class="fv-gb">${a}.${b}</span>` : '';
+        if (drawn) {
+          return `<div class="fv-win-row">${tag}
+            <span class="fv-prov">drawn — ${m.home} v ${m.away}</span>
+            <span class="fv-score"><span>${m.hScore}</span>${gb(m.hG,m.hB)}</span></div>`;
+        }
+        return `<div class="fv-win-row">${tag}
+          <span>${crestHTML(win, 16, 'mr-logo')}<span class="fv-champ">${win}</span>
+            <span class="fv-beat">def ${lose}</span></span>
+          <span class="fv-score"><span class="fv-win">${ws}</span>${gb(wg,wb)}
+            <span class="fv-gb">v</span><span class="fv-lose">${ls}</span>${gb(lg,lb)}</span></div>`;
+      }
+
+      pending++;
+      const sides = [m.home, m.away].map((n,i) =>
+        isProvSide(m, i===0?'h':'a') ? `<span class="fv-prov">${n}</span>` : `<span>${n}</span>`).join(' v ');
+      return `<div class="fv-win-row">${tag}
+        <span>${sides}</span>
+        <span class="fv-date" style="margin:0">${fmtDate(m)}</span></div>`;
+    }).join('');
+
+    return `<div class="fv-age"><span>${age}</span>
+      <span class="fv-meta">${grades.length} grand final${grades.length!==1?'s':''}</span></div>
+      <div class="fv-card">${rows}</div>`;
+  }).join('');
+
+  const head = `<div style="font-size:12px;color:var(--tx3);margin-bottom:10px">` +
+    `${decided} decided &middot; ${pending} still to play</div>`;
+  return head + blocks;
 }
 
 // ── By club ──
@@ -2132,24 +2249,38 @@ function renderFinalsByClub(pool) {
   for (const t of [...teams.values()]) t.status = teamStatus(t, pool);
 
   let entries = [...clubs.entries()].map(([id, ts]) => {
-    // Teams per grade tier, so clubs can be compared strongest-grade-first.
-    const tiers = {};
-    ts.forEach(t => {
-      const r = gradeRankOf(t.comp, t.age, t.grade);
-      if (r) tiers[r] = (tiers[r] || 0) + 1;
-    });
+    // One per-grade-tier breakdown for every measure, so any of them can be
+    // compared strongest-grade-first rather than only the team count.
+    const tierCount = pred => {
+      const out = {};
+      ts.forEach(t => {
+        if (pred && !pred(t)) return;
+        const r = gradeRankOf(t.comp, t.age, t.grade);
+        if (r) out[r] = (out[r] || 0) + 1;
+      });
+      return out;
+    };
     return {
-      id, name: clubNameOf(id) || id, teams: ts, tiers,
+      id, name: clubNameOf(id) || id, teams: ts,
       remaining: ts.filter(t => t.status.remaining).length,
       inGF:      ts.filter(t => t.status.inGF).length,
       premiers:  ts.filter(t => t.status.wonGF).length,
+      tiersAll:       tierCount(null),
+      tiersRemaining: tierCount(t => t.status.remaining),
+      tiersGF:        tierCount(t => t.status.inGF),
+      tiersPremiers:  tierCount(t => t.status.wonGF),
     };
   });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
   if (S.finalsSort === 'name') {
     entries.sort((a,b) => a.name.localeCompare(b.name));
   } else {
-    const primary = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+    const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+    // Weighted compares the chosen measure tier by tier; flat compares totals.
+    // Either way the tiebreaks below keep equal clubs in a stable order.
+    const primary = S.finalsWeighted
+      ? (a,b) => cmpTiers(a[def.tiers], b[def.tiers])
+      : (a,b) => def.flat(b) - def.flat(a);
     entries.sort((a,b) =>
       primary(a,b) ||
       b.premiers - a.premiers ||
@@ -2192,7 +2323,7 @@ function renderFinalsByClub(pool) {
         <span class="fv-club-name">${e.name}</span>
         <span style="flex:1"></span>
         <span class="fv-meta" style="font-size:11px;color:var(--tx3)">${
-          S.finalsSort === 'grade' ? tierSummary(e) : [
+          S.finalsWeighted && S.finalsSort !== 'name' ? tierSummary(e) : [
           `${e.teams.length} team${e.teams.length!==1?'s':''}`,
           e.remaining ? `${e.remaining} remaining` : '',
           e.inGF      ? `${e.inGF} in GF`          : '',
@@ -2255,7 +2386,10 @@ function renderFinalsView() {
     nPrem      ? `<span style="color:var(--gold)">${nPrem} premier${nPrem!==1?'s':''}</span>` : '',
   ].filter(Boolean).join(' &middot; ');
 
-  body.innerHTML = S.finalsMode === 'club' ? renderFinalsByClub(pool) : renderFinalsByAge(pool);
+  body.innerHTML =
+    S.finalsMode === 'club'    ? renderFinalsByClub(pool)  :
+    S.finalsMode === 'winners' ? renderFinalsWinners(pool) :
+                                 renderFinalsByAge(pool);
 }
 
 function renderStats() {
@@ -3445,8 +3579,9 @@ async function init() {
       }
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
-      if (f.finalsMode === 'age' || f.finalsMode === 'club') S.finalsMode = f.finalsMode;
+      if (['age','club','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) S.finalsSort = f.finalsSort;
+      if (typeof f.finalsWeighted === 'boolean') S.finalsWeighted = f.finalsWeighted;
       if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
