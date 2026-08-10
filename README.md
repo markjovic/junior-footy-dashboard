@@ -1,3 +1,4 @@
+<!-- README.md -->
 # Local Footy Dashboard — Beta 0.124
 
 A single-file HTML dashboard for AFL football results, automatically fetched from PlayHQ. Renders a live ladder, results, top scorers, Game of the Week, finals progress, and player profiles across all age groups and grades for multiple competitions simultaneously.
