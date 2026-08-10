@@ -29,10 +29,17 @@
 //
 // OUTPUT (merged into data.json, plus a clubs.json cache)
 //   clubs:    { "6d405ccb": { name, type } }
-//   teamClub: { "EFNL 2026|Norwood Purple": "6d405ccb" }
+//   teamClub: { "EFNL 2026|Norwood Purple|U12": "6d405ccb" }
 //
-// Teams are keyed by competition as well as name, matching the house
-// convention used by match ids and rebuildRoster.
+// Teams are keyed compName|teamName|age, matching rebuildRoster exactly.
+// Age is load-bearing, not decoration. PlayHQ routinely registers a senior and
+// a junior club as separate organisations — Templestowe is 225d5de5 "Templestowe
+// (Eastern Football Netball League)" and 2545b284 "Templestowe Junior Football
+// Club" — and cleanTeam strips the age suffix, so both arrive as plain
+// "Templestowe". Without age in the key they collapse into one entry and the
+// majority vote silently assigns every senior team to the junior club.
+// The same applies within a club: "Norwood U12 Purple" and "Norwood U14 Purple"
+// both clean to "Norwood Purple" and are different teams.
 //
 // Exits 0 when data.json changed, 2 when nothing changed, 1 on fatal error —
 // the same contract as fetch-results.js, so the workflow decides on committing.
@@ -234,8 +241,8 @@ async function main() {
   // ── Scan match records for club evidence ──
   // A team can appear in many records. Count the club id seen per team rather
   // than trusting the first, so a single odd logo cannot decide the answer.
-  const votes    = new Map(); // "comp|team" -> Map(clubId -> count)
-  const noLogo   = new Set(); // "comp|team" with no logo on any record
+  const votes    = new Map(); // "comp|team|age" -> Map(clubId -> count)
+  const noLogo   = new Set(); // "comp|team|age" with no logo on any record
   const withLogo = new Set();
 
   for (const m of (data.matches || [])) {
@@ -250,7 +257,7 @@ async function main() {
       // A provisional placeholder such as "Winner Game 1" is not a team and
       // must never become a club member.
       if (prov) continue;
-      const key = `${comp}|${name}`;
+      const key = `${comp}|${name}|${m.age || ''}`;
       const id  = clubIdFromLogo(logo);
       if (!id) { noLogo.add(key); continue; }
       withLogo.add(key);
