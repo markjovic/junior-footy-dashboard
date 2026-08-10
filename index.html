@@ -341,7 +341,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.119</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.121</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -506,9 +506,19 @@ body{overflow-x:hidden}
 
     <div id="finals-view" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="fv-switch">
-          <button id="fvm-age"  class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
-          <button id="fvm-club"          onclick="setFinalsMode('club')">BY CLUB</button>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="fv-switch">
+            <button id="fvm-age"  class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
+            <button id="fvm-club"          onclick="setFinalsMode('club')">BY CLUB</button>
+          </span>
+          <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
+                  style="display:none;width:auto;font-size:11px;padding:4px 6px">
+            <option value="teams">Most teams in finals</option>
+            <option value="remaining">Most remaining</option>
+            <option value="gf">Most GF appearances</option>
+            <option value="premiers">Most premierships</option>
+            <option value="name">Alphabetical</option>
+          </select>
         </span>
         <span class="card-meta" id="fv-meta"></span>
       </div>
@@ -641,7 +651,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.119</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.121</span>
         </div>
 
 
@@ -719,6 +729,7 @@ function saveFilters() {
       selTeam:   S.selTeam,
       view:       S.view,
       finalsMode: S.finalsMode,
+      finalsSort: S.finalsSort,
       selClub:    S.selClub,
     }));
   } catch(e) {}
@@ -767,6 +778,7 @@ let S = {
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age'  | 'club'
+  finalsSort: 'teams',  // club mode ordering — see FINALS_SORTS
   selClub:    '',       // club filter, finals view only
   selTeam: '',
   selLdrGrade: null,
@@ -1800,6 +1812,23 @@ function switchView(v) {
   render();
 }
 
+// Club-mode orderings. Every numeric sort is descending and falls through the
+// remaining measures before settling on name, so ties never order at random.
+const FINALS_SORTS = {
+  teams:     (a, b) => b.teams.length - a.teams.length,
+  remaining: (a, b) => b.remaining    - a.remaining,
+  gf:        (a, b) => b.inGF         - a.inGF,
+  premiers:  (a, b) => b.premiers     - a.premiers,
+  name:      null, // handled separately — alphabetical must not fall through
+};
+
+function setFinalsSort(v) {
+  if (!Object.prototype.hasOwnProperty.call(FINALS_SORTS, v) || S.finalsSort === v) return;
+  S.finalsSort = v;
+  saveFilters();
+  render();
+}
+
 function setFinalsMode(m) {
   if (S.finalsMode === m) return;
   S.finalsMode = m;
@@ -1820,6 +1849,11 @@ function applyViewChrome() {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', (id === 'fvm-club') === (S.finalsMode === 'club'));
   });
+  const sortSel = document.getElementById('fv-sort');
+  if (sortSel) {
+    sortSel.style.display = (finals && S.finalsMode === 'club') ? '' : 'none';
+    sortSel.value = S.finalsSort;
+  }
   const groups = document.querySelectorAll('.sidebar .fgroup');
   groups.forEach(g => {
     const label = g.querySelector('.flabel')?.textContent || '';
@@ -1924,6 +1958,37 @@ function renderFinalsByAge(pool) {
   }).join('');
 }
 
+// A team's standing in its finals campaign.
+//   out       — certainly eliminated. Claimed only when their last game was a
+//               loss, a later round exists in that grade, every later round is
+//               resolved (no provisional sides), and they are in none of them.
+//               Losing week one with a double chance must not read as "out".
+//   inGF      — named in a Grand Final, played or scheduled.
+//   wonGF     — won a played Grand Final.
+//   remaining — still alive: not eliminated and has not yet played a Grand
+//               Final. A team whose next round is still provisional counts as
+//               remaining, matching the conservative elimination rule above.
+function teamStatus(t, pool) {
+  const won = m => (m.home === t.team ? m.hScore > m.aScore : m.aScore > m.hScore);
+  const lost = m => (m.home === t.team ? m.hScore < m.aScore : m.aScore < m.hScore);
+  const played = t.matches.filter(isPlayed);
+  const lastPlayed = played[played.length - 1];
+
+  let out = false;
+  if (lastPlayed && lost(lastPlayed)) {
+    const later = pool.filter(m => m.compName === t.comp && m.age === t.age &&
+      (m.rawGrade || '') === t.grade && cmpRound(m, lastPlayed) > 0);
+    const anyUnresolved = later.some(m => m.provisional);
+    const inLater = later.some(m => finalsTeams(m).includes(t.team));
+    out = later.length > 0 && !anyUnresolved && !inLater;
+  }
+
+  const inGF     = t.matches.some(m => m.finalsAbbrev === 'GF');
+  const gfPlayed = t.matches.some(m => m.finalsAbbrev === 'GF' && isPlayed(m));
+  const wonGF    = t.matches.some(m => m.finalsAbbrev === 'GF' && isPlayed(m) && won(m));
+  return { out, inGF, wonGF, remaining: !out && !gfPlayed };
+}
+
 // ── By club ──
 function renderFinalsByClub(pool) {
   // team key -> { comp, age, grade, team, clubId, matches[] }
@@ -1950,26 +2015,31 @@ function renderFinalsByClub(pool) {
     clubs.get(t.clubId).push(t);
   }
 
-  let entries = [...clubs.entries()].map(([id, ts]) => ({ id, name: clubNameOf(id) || id, teams: ts }));
+  // Status is computed once per team and read by both the club summary and the
+  // team row, so the two can never disagree.
+  for (const t of [...teams.values()]) t.status = teamStatus(t, pool);
+
+  let entries = [...clubs.entries()].map(([id, ts]) => ({
+    id, name: clubNameOf(id) || id, teams: ts,
+    remaining: ts.filter(t => t.status.remaining).length,
+    inGF:      ts.filter(t => t.status.inGF).length,
+    premiers:  ts.filter(t => t.status.wonGF).length,
+  }));
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
-  entries.sort((a,b) => a.name.localeCompare(b.name));
+  if (S.finalsSort === 'name') {
+    entries.sort((a,b) => a.name.localeCompare(b.name));
+  } else {
+    const primary = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+    entries.sort((a,b) =>
+      primary(a,b) ||
+      b.premiers - a.premiers ||
+      b.inGF - a.inGF ||
+      b.teams.length - a.teams.length ||
+      a.name.localeCompare(b.name));
+  }
 
   const teamRow = t => {
-    const last = t.matches[t.matches.length - 1];
-    const played = t.matches.filter(isPlayed);
-    const lastPlayed = played[played.length - 1];
-    // Only claim elimination when it is certain: their last game was a loss and
-    // every later round in that grade is already resolved without them.
-    let out = false;
-    if (lastPlayed) {
-      const lost = (lastPlayed.home === t.team ? lastPlayed.hScore < lastPlayed.aScore
-                                              : lastPlayed.aScore < lastPlayed.hScore);
-      const later = pool.filter(m => m.compName === t.comp && m.age === t.age &&
-        (m.rawGrade || '') === t.grade && cmpRound(m, lastPlayed) > 0);
-      const anyUnresolved = later.some(m => m.provisional);
-      const inLater = later.some(m => finalsTeams(m).includes(t.team));
-      out = lost && later.length > 0 && !anyUnresolved && !inLater;
-    }
+    const out = (t.status || teamStatus(t, pool)).out;
     const path = t.matches.map(m => {
       const opp = m.home === t.team ? m.away : m.home;
       const mine = m.home === t.team ? m.hScore : m.aScore;
@@ -1994,7 +2064,12 @@ function renderFinalsByClub(pool) {
         ${crestHTML(e.teams[0].team, 20, 'tlogo')}
         <span class="fv-club-name">${e.name}</span>
         <span style="flex:1"></span>
-        <span class="fv-meta" style="font-size:11px;color:var(--tx3)">${e.teams.length} team${e.teams.length!==1?'s':''} in finals</span>
+        <span class="fv-meta" style="font-size:11px;color:var(--tx3)">${[
+          `${e.teams.length} team${e.teams.length!==1?'s':''}`,
+          e.remaining ? `${e.remaining} remaining` : '',
+          e.inGF      ? `${e.inGF} in GF`          : '',
+          e.premiers  ? `<span style="color:var(--gold)">${e.premiers} premier${e.premiers!==1?'s':''}</span>` : '',
+        ].filter(Boolean).join(' &middot; ')}</span>
       </div>
       ${e.teams.map(teamRow).join('')}
     </div>`;
@@ -2023,12 +2098,34 @@ function renderFinalsView() {
     return;
   }
 
+  // Aggregate across every finals team, so the headline totals do not depend on
+  // which mode is showing.
   const clubIds = new Set();
+  const allTeams = new Map();
   pool.forEach(m => finalsTeams(m).forEach(t => {
     const id = clubIdOf(m.compName, t, m.age);
     if (id) clubIds.add(id);
+    const key = `${m.compName}|${t}|${m.age}|${m.rawGrade}`;
+    if (!allTeams.has(key)) allTeams.set(key, {
+      comp: m.compName, age: m.age, grade: m.rawGrade || '', team: t, matches: [],
+    });
+    allTeams.get(key).matches.push(m);
   }));
-  if (meta) meta.textContent = `${pool.length} finals match${pool.length!==1?'es':''} · ${clubIds.size} club${clubIds.size!==1?'s':''}`;
+  let nRemaining = 0, nGF = 0, nPrem = 0;
+  for (const t of allTeams.values()) {
+    t.matches.sort(cmpRound);
+    const st = teamStatus(t, pool);
+    if (st.remaining) nRemaining++;
+    if (st.inGF)      nGF++;
+    if (st.wonGF)     nPrem++;
+  }
+  if (meta) meta.innerHTML = [
+    `${clubIds.size} club${clubIds.size!==1?'s':''}`,
+    `${allTeams.size} team${allTeams.size!==1?'s':''} in finals`,
+    nRemaining ? `${nRemaining} remaining` : '',
+    nGF        ? `${nGF} in GF`            : '',
+    nPrem      ? `<span style="color:var(--gold)">${nPrem} premier${nPrem!==1?'s':''}</span>` : '',
+  ].filter(Boolean).join(' &middot; ');
 
   body.innerHTML = S.finalsMode === 'club' ? renderFinalsByClub(pool) : renderFinalsByAge(pool);
 }
@@ -3222,6 +3319,7 @@ async function init() {
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (f.finalsMode === 'age' || f.finalsMode === 'club') S.finalsMode = f.finalsMode;
+      if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) S.finalsSort = f.finalsSort;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
 
       // Restore team — validate it still exists for this age
