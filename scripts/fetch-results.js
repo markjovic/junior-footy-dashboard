@@ -1063,9 +1063,20 @@ async function main() {
   const compLogos = {};
   grades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
 
-  // Merged, never replaced: a VIP_ONLY run only discovers the VIP competitions'
-  // grades, and replacing would delete every other competition's metadata.
-  const gradeMeta = { ...(existing.gradeMeta || {}), ...buildGradeMeta(grades) };
+  // Merged per COMPETITION, not per key. A VIP_ONLY run only discovers the VIP
+  // competitions' grades, so replacing wholesale would delete the others — but
+  // a blind key merge is also wrong, because a renamed or withdrawn grade would
+  // leave its old key behind forever and inflate the tier count that team rows
+  // display ("2/5" where only four grades exist).
+  // So: for every competition this run actually covered, its metadata is
+  // rebuilt from scratch; every other competition is left exactly as it was.
+  const covered = new Set(grades.map(g => g.compName));
+  const kept = {};
+  for (const [k, v] of Object.entries(existing.gradeMeta || {})) {
+    const comp = k.slice(0, k.indexOf('|'));
+    if (!covered.has(comp)) kept[k] = v;
+  }
+  const gradeMeta = { ...kept, ...buildGradeMeta(grades) };
   // Compared on sorted entries so key insertion order cannot register as a
   // change. gradeMeta is the first thing this script writes that can change
   // without any match changing — a new grade, or simply the first run after the
