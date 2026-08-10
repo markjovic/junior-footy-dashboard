@@ -11,14 +11,24 @@ A single-file HTML dashboard for AFL football results, automatically fetched fro
 
 ```
 index.html                  ← Single-file dashboard PWA (all HTML/CSS/JS)
-data.json                   ← Match data, player stats, logos, club index (auto-committed)
-grades.json                 ← Grade cache (auto-populated by fetch workflow)
-clubs.json                  ← Club id → name cache (auto-populated by club index workflow)
 config.json                 ← Competition config (season IDs, VIP flag, grade exclusions)
 manifest.json               ← PWA manifest (home screen install)
 sw.js                       ← Service worker (offline support, cache-first shell)
 favicon.ico                 ← Browser tab icon
 README.md
+data/
+  data.json                 ← Match data, player stats, logos, club index (auto-committed)
+  grades.json               ← Grade cache (auto-populated by fetch workflow)
+  clubs.json                ← Club id → name cache (auto-populated by club index workflow)
+docs/
+  dashboard_context.md      ← Repo-specific rules, traps, current state
+  finals_support.md         ← Finals implementation notes
+  working_practice.md       ← Portable conventions (shared with other projects)
+  playhq_api_reference.md   ← PlayHQ behaviour (shared with sports-players-stats)
+  OUTSTANDING_TASKS.md      ← Work queue
+  project_setup.md          ← Claude project setup notes
+workers/
+  footy-cron.js             ← Cloudflare Worker — dispatches the fetch workflow
 .github/
   workflows/
     fetch-results.yml       ← results + stats + fixtures (dispatch only; Worker schedules it)
@@ -31,7 +41,6 @@ scripts/
   fetch-stats.js            ← Player statistics from PlayHQ
   fetch-fixtures.js         ← Future scheduled fixtures from PlayHQ
   build-club-index.js       ← Resolves teams to PlayHQ clubs
-  migrate-grades.js         ← One-off grade remapping (still wired to run_migration)
   repo-audit.js             ← Read-only repo inventory and dead-file report
   repo-tidy.js              ← Removes dead files; dry run unless --apply
   probe-finals-rounds.js    ← Diagnostic: round structure and numbering
@@ -41,8 +50,14 @@ assets/
     icon-512.png            ← PWA home screen icon (512×512)
 ```
 
-20 files after the 2026-08-10 tidy. `data.json` is ~41.5 MB of it and lives in
-`data/`. Run **Repo Audit** for the current picture.
+30 files, 37.8 MB — of which `data/data.json` is 36.6 MB. Down from 163 files and
+65 MB before the 2026-08-10 tidy, `data/` relocation and minification. Run
+**Repo Audit** for the current picture.
+
+`workers/footy-cron.js` is the source of truth for the schedule, but the running
+copy lives in the Cloudflare dashboard — editing this file alone changes nothing.
+
+
 
 ---
 
@@ -148,27 +163,44 @@ Resolves every team to its PlayHQ club and writes `clubs` and `teamClub` into `d
 Scheduling is handled by a **Cloudflare Worker** (`footy-cron.insanoflash.workers.dev`) which dispatches the GitHub Actions workflow at the correct AEST times. GitHub Actions scheduled crons are not used (unreliable on free plans).
 
 ### Cloudflare cron triggers (UTC)
+
 ```
-10 4,7,10,13 * * 7                      Saturday
-10 1,2,3,4,5,6,7,10,13,17,23 * * 1      Sunday
-10 2 * * 2                               Monday
+10 * * * 7      Saturday  — fires hourly at :10, filtered by the Worker
+10 * * * 1      Sunday    — fires hourly at :10, filtered by the Worker
+10 * * * 2      Monday    — fires hourly at :10, filtered by the Worker
+10 11 * * 4     Thursday 9pm AEST
 ```
+
+The Worker fires every hour on those days and matches the current UTC day and
+hour against its own `SCHEDULE` table, dispatching only on a match. Cloudflare
+day numbers differ from JavaScript's: the trigger uses 7=Sat, 1=Sun, 2=Mon, 4=Thu,
+while the Worker compares `getUTCDay()` where 6=Sat, 0=Sun, 1=Mon, 4=Thu.
 
 ### Effective AEST schedule
 
-| Time (AEST) | Results | Stats | Comps |
-|-------------|---------|-------|-------|
-| Sat 2pm/5pm/8pm | ✓ | — | VIP only |
-| Sat 11pm | ✓ | ✓ | All |
-| Sun 11am–4pm hourly | ✓ | — | VIP only |
-| Sun 5pm | ✓ | ✓ | All |
-| Sun 8pm | ✓ | — | VIP only |
-| Sun 11pm | ✓ | ✓ | All |
-| Mon 3am | ✓ | — | All |
-| Mon 9am | ✓ | — | VIP only |
-| Mon 12pm | ✓ | ✓ | All |
+| Time (AEST) | Results | Stats | Fixtures | Comps |
+|-------------|---------|-------|----------|-------|
+| Sat 2pm / 5pm / 8pm | ✓ | — | — | VIP only |
+| Sat 11pm | ✓ | ✓ | — | All |
+| Sun 11am–4pm hourly | ✓ | — | — | VIP only |
+| Sun 5pm | ✓ | ✓ | — | All |
+| Sun 8pm | ✓ | — | — | VIP only |
+| Sun 11pm | ✓ | ✓ | — | All |
+| Mon 3am | ✓ | — | — | All |
+| Mon 9am | ✓ | — | — | VIP only |
+| Mon 12pm | ✓ | ✓ | — | All |
+| **Mon 9pm** | — | — | ✓ | All |
+| **Thu 9pm** | — | — | ✓ | All |
 
-Stats run alongside results at the 11pm/5pm/12pm slots (fetch=both dispatch).
+Stats run alongside results wherever the dispatch is `fetch=both`. Fixtures run
+only on their own two slots.
+
+> **Finals caveat.** Elimination in the finals view depends on the next round's
+> fixture being published — a team that lost and has no fixture after it is out.
+> Fixtures refresh only on Monday and Thursday evenings, so from the final
+> whistle on Saturday until Monday 9pm the next round is not yet loaded and teams
+> that lost a qualifying final can read as eliminated when they are not. During
+> finals, consider adding a Sunday evening fixtures run.
 
 `grades.json` and `gradeMeta` are **merged per competition**, so a VIP-only run refreshes EFNL and leaves the other four competitions untouched.
 
