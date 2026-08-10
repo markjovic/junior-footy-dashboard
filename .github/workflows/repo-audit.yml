@@ -1,0 +1,58 @@
+# .github/workflows/repo-audit.yml
+#
+# READ-ONLY. No commit, no push, no file writes.
+# permissions: contents:read so it cannot write even by accident.
+#
+# fetch-depth: 0 is required — the audit reports each file's last commit date,
+# which a shallow clone cannot provide.
+
+name: Repo Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout (full history for commit dates)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/repo-audit.js
+
+      - name: Run audit
+        run: node scripts/repo-audit.js 2>&1 | tee /tmp/repo-audit.txt
+
+      - name: Confirm nothing was modified
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "AUDIT MODIFIED THE WORKING TREE — this must never happen:"
+            git status --porcelain
+            exit 1
+          fi
+          echo "Working tree clean. Audit wrote nothing."
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-audit
+          path: /tmp/repo-audit.txt
+          retention-days: 14
