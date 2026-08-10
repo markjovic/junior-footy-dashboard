@@ -341,7 +341,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.121</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.124</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -511,13 +511,24 @@ body{overflow-x:hidden}
             <button id="fvm-age"  class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
             <button id="fvm-club"          onclick="setFinalsMode('club')">BY CLUB</button>
           </span>
+          <span class="fv-switch">
+            <button id="fvg-all"    class="on" onclick="setFinalsGender('all')">ALL</button>
+            <button id="fvg-M"                 onclick="setFinalsGender('M')">MALE</button>
+            <button id="fvg-F"                 onclick="setFinalsGender('F')">FEMALE</button>
+          </span>
+          <span class="fv-switch">
+            <button id="fvl-all"    class="on" onclick="setFinalsLevel('all')">ALL</button>
+            <button id="fvl-junior"            onclick="setFinalsLevel('junior')">JUNIOR</button>
+            <button id="fvl-senior"            onclick="setFinalsLevel('senior')">SENIOR</button>
+          </span>
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
+            <option value="name">Alphabetical</option>
+            <option value="grade">By grade strength</option>
             <option value="teams">Most teams in finals</option>
             <option value="remaining">Most remaining</option>
             <option value="gf">Most GF appearances</option>
             <option value="premiers">Most premierships</option>
-            <option value="name">Alphabetical</option>
           </select>
         </span>
         <span class="card-meta" id="fv-meta"></span>
@@ -651,7 +662,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.121</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.124</span>
         </div>
 
 
@@ -730,6 +741,8 @@ function saveFilters() {
       view:       S.view,
       finalsMode: S.finalsMode,
       finalsSort: S.finalsSort,
+      finalsGender: S.finalsGender,
+      finalsLevel:  S.finalsLevel,
       selClub:    S.selClub,
     }));
   } catch(e) {}
@@ -772,13 +785,16 @@ let S = {
   selComp: null,         // currently selected competition name
   compLogos: {},         // { compName: logoUrl }
   teamLogos: {},         // { teamName: logoUrl } from PlayHQ
+  gradeMeta: {},         // { "comp|age|grade": {r,lvl,g} }       from fetch-results.js
   clubs:    {},          // { clubId: { name, type } }            from build-club-index.js
   teamClub: {},          // { "comp|team|age": clubId }           from build-club-index.js
   selGrades: new Set(),
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age'  | 'club'
-  finalsSort: 'teams',  // club mode ordering — see FINALS_SORTS
+  finalsSort: 'name',   // club mode ordering — see FINALS_SORTS
+  finalsGender: 'all',  // 'all' | 'M' | 'F'
+  finalsLevel:  'all',  // 'all' | 'junior' | 'senior'
   selClub:    '',       // club filter, finals view only
   selTeam: '',
   selLdrGrade: null,
@@ -1819,8 +1835,31 @@ const FINALS_SORTS = {
   remaining: (a, b) => b.remaining    - a.remaining,
   gf:        (a, b) => b.inGF         - a.inGF,
   premiers:  (a, b) => b.premiers     - a.premiers,
+  // Grade strength compares tier by tier: two top-grade finalists beat ten
+  // second-grade ones. Deliberately not a weighted score, because any weighting
+  // invites argument about the formula and stops the number being checkable.
+  grade:     (a, b) => cmpGradeStrength(a, b),
   name:      null, // handled separately — alphabetical must not fall through
 };
+
+function cmpGradeStrength(a, b) {
+  const keys = new Set([...Object.keys(a.tiers), ...Object.keys(b.tiers)].map(Number));
+  const max = keys.size ? Math.max(...keys) : 0;
+  for (let r = 1; r <= max; r++) {
+    const d = (b.tiers[r] || 0) - (a.tiers[r] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+function setFinalsGender(v) {
+  if (!['all','M','F'].includes(v) || S.finalsGender === v) return;
+  S.finalsGender = v; saveFilters(); render();
+}
+function setFinalsLevel(v) {
+  if (!['all','junior','senior'].includes(v) || S.finalsLevel === v) return;
+  S.finalsLevel = v; saveFilters(); render();
+}
 
 function setFinalsSort(v) {
   if (!Object.prototype.hasOwnProperty.call(FINALS_SORTS, v) || S.finalsSort === v) return;
@@ -1854,6 +1893,14 @@ function applyViewChrome() {
     sortSel.style.display = (finals && S.finalsMode === 'club') ? '' : 'none';
     sortSel.value = S.finalsSort;
   }
+  [['fvg-all','all'],['fvg-M','M'],['fvg-F','F']].forEach(([id,v]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', S.finalsGender === v);
+  });
+  [['fvl-all','all'],['fvl-junior','junior'],['fvl-senior','senior']].forEach(([id,v]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', S.finalsLevel === v);
+  });
   const groups = document.querySelectorAll('.sidebar .fgroup');
   groups.forEach(g => {
     const label = g.querySelector('.flabel')?.textContent || '';
@@ -1874,14 +1921,60 @@ function clubNameOf(id) {
   return (S.clubs || {})[id]?.name || '';
 }
 
+// Grade metadata comes from PlayHQ via fetch-results.js: strength rank, level
+// and gender. Level and gender are the API's own classification, which matters
+// because PlayHQ calls U19.5 SENIOR — any "starts with U" rule gets it wrong.
+function gradeMetaOf(comp, age, grade) {
+  return (S.gradeMeta || {})[`${comp}|${age}|${grade || ''}`] || null;
+}
+
+// Fallbacks below apply only to grades absent from gradeMeta — that is, until
+// fetch-results.js has run since this feature landed. They read the parsed age
+// and grade, which is all a match record carries.
+function genderOf(comp, age, grade) {
+  const m = gradeMetaOf(comp, age, grade);
+  if (m && m.g) return m.g;
+  return /\b(girls|women)\b/i.test(`${age || ''} ${grade || ''}`) ? 'F' : 'M';
+}
+
+function levelOf(comp, age, grade) {
+  const m = gradeMetaOf(comp, age, grade);
+  if (m && m.lvl) return m.lvl;
+  return /^U\d/i.test(age || '') ? 'junior' : 'senior';
+}
+
+// Strength within its own competition and age. 1 is the top grade; 0 means the
+// grade has no metadata yet.
+function gradeRankOf(comp, age, grade) {
+  const m = gradeMetaOf(comp, age, grade);
+  return (m && m.r) || 0;
+}
+
+// How many ranked grades exist in that competition and age, so a rank can be
+// shown as "2 of 4" rather than a bare number.
+function gradeTierCount(comp, age) {
+  const prefix = `${comp}|${age}|`;
+  let n = 0;
+  for (const k in (S.gradeMeta || {})) if (k.startsWith(prefix)) n++;
+  return n;
+}
+
 // Every finals match, results and scheduled fixtures together, respecting the
-// competition chips and the young-age toggle. The toggle is what keeps the SEJ
-// Lightning Premiership grades out, since they are all U10.
+// competition chips, the young-age toggle, and the finals view's own gender and
+// level filters. The young-age toggle is what keeps the SEJ Lightning
+// Premiership grades out, since they are all U10.
 function finalsPool() {
-  return [...S.matches, ...S.fixtures].filter(m =>
-    m.isFinals && matchesComp(m) && !m.isBye && !m.isPartial &&
-    (S.showAllAges || !DEFAULT_HIDDEN_AGES.has(m.age))
-  );
+  return [...S.matches, ...S.fixtures].filter(m => {
+    if (!m.isFinals || !matchesComp(m) || m.isBye || m.isPartial) return false;
+    if (!S.showAllAges && DEFAULT_HIDDEN_AGES.has(m.age)) return false;
+    // Default to 'all' rather than trusting the field to exist. An undefined
+    // filter would match nothing and empty the whole view with no explanation.
+    const g = S.finalsGender || 'all';
+    const l = S.finalsLevel  || 'all';
+    if (g !== 'all' && genderOf(m.compName, m.age, m.rawGrade) !== g) return false;
+    if (l !== 'all' && levelOf(m.compName, m.age, m.rawGrade) !== l) return false;
+    return true;
+  });
 }
 
 const isProvSide = (m, side) => !!m.provisional && !(side === 'h' ? m.hLogo : m.aLogo);
@@ -1959,15 +2052,19 @@ function renderFinalsByAge(pool) {
 }
 
 // A team's standing in its finals campaign.
-//   out       — certainly eliminated. Claimed only when their last game was a
-//               loss, a later round exists in that grade, every later round is
-//               resolved (no provisional sides), and they are in none of them.
-//               Losing week one with a double chance must not read as "out".
+//   out       — eliminated. A team is out when its last played game was a loss
+//               AND it has no fixture after it, in a grade where a later round
+//               exists. The team's own fixture list is the authority: losing a
+//               qualifying final still leaves a preliminary final fixture, so
+//               the double chance is handled without special-casing it.
 //   inGF      — named in a Grand Final, played or scheduled.
 //   wonGF     — won a played Grand Final.
-//   remaining — still alive: not eliminated and has not yet played a Grand
-//               Final. A team whose next round is still provisional counts as
-//               remaining, matching the conservative elimination rule above.
+//   remaining — still alive: not eliminated and has not yet played a Grand Final.
+//
+// An earlier version also refused to claim elimination while any later round in
+// the grade had a provisional side. That was wrong: the Grand Final shows
+// "Winner Game 3" in almost every grade, so the guard suppressed every
+// elimination and every team read as remaining.
 function teamStatus(t, pool) {
   const won = m => (m.home === t.team ? m.hScore > m.aScore : m.aScore > m.hScore);
   const lost = m => (m.home === t.team ? m.hScore < m.aScore : m.aScore < m.hScore);
@@ -1976,17 +2073,36 @@ function teamStatus(t, pool) {
 
   let out = false;
   if (lastPlayed && lost(lastPlayed)) {
-    const later = pool.filter(m => m.compName === t.comp && m.age === t.age &&
+    // Anything in t.matches after their last played game is by definition an
+    // unplayed fixture naming them — so they are still alive.
+    const hasFixtureAfter = t.matches.some(m => cmpRound(m, lastPlayed) > 0);
+    // Guard against a grade whose next round simply has not been published yet.
+    const laterRoundExists = pool.some(m => m.compName === t.comp && m.age === t.age &&
       (m.rawGrade || '') === t.grade && cmpRound(m, lastPlayed) > 0);
-    const anyUnresolved = later.some(m => m.provisional);
-    const inLater = later.some(m => finalsTeams(m).includes(t.team));
-    out = later.length > 0 && !anyUnresolved && !inLater;
+    out = !hasFixtureAfter && laterRoundExists;
   }
 
   const inGF     = t.matches.some(m => m.finalsAbbrev === 'GF');
   const gfPlayed = t.matches.some(m => m.finalsAbbrev === 'GF' && isPlayed(m));
   const wonGF    = t.matches.some(m => m.finalsAbbrev === 'GF' && isPlayed(m) && won(m));
   return { out, inGF, wonGF, remaining: !out && !gfPlayed };
+}
+
+// Ordinal label for a grade tier. Comp-agnostic on purpose: a club can hold
+// teams across ages whose grades are named differently ("A" in U12, "Premier"
+// in Senior Men), so the tier number is the only common language.
+function tierLabel(r) {
+  return r === 1 ? 'top grade' : r === 2 ? '2nd' : r === 3 ? '3rd' : `${r}th`;
+}
+
+function tierSummary(e) {
+  const ranks = Object.keys(e.tiers).map(Number).sort((a,b) => a - b);
+  if (!ranks.length) return `${e.teams.length} team${e.teams.length!==1?'s':''} · unranked`;
+  const parts = ranks.map(r =>
+    `<span style="${r===1?'color:var(--gold)':''}">${tierLabel(r)} &times;${e.tiers[r]}</span>`);
+  const unranked = e.teams.length - ranks.reduce((n,r) => n + e.tiers[r], 0);
+  if (unranked) parts.push(`unranked &times;${unranked}`);
+  return parts.join(' &middot; ');
 }
 
 // ── By club ──
@@ -2019,12 +2135,20 @@ function renderFinalsByClub(pool) {
   // team row, so the two can never disagree.
   for (const t of [...teams.values()]) t.status = teamStatus(t, pool);
 
-  let entries = [...clubs.entries()].map(([id, ts]) => ({
-    id, name: clubNameOf(id) || id, teams: ts,
-    remaining: ts.filter(t => t.status.remaining).length,
-    inGF:      ts.filter(t => t.status.inGF).length,
-    premiers:  ts.filter(t => t.status.wonGF).length,
-  }));
+  let entries = [...clubs.entries()].map(([id, ts]) => {
+    // Teams per grade tier, so clubs can be compared strongest-grade-first.
+    const tiers = {};
+    ts.forEach(t => {
+      const r = gradeRankOf(t.comp, t.age, t.grade);
+      if (r) tiers[r] = (tiers[r] || 0) + 1;
+    });
+    return {
+      id, name: clubNameOf(id) || id, teams: ts, tiers,
+      remaining: ts.filter(t => t.status.remaining).length,
+      inGF:      ts.filter(t => t.status.inGF).length,
+      premiers:  ts.filter(t => t.status.wonGF).length,
+    };
+  });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
   if (S.finalsSort === 'name') {
     entries.sort((a,b) => a.name.localeCompare(b.name));
@@ -2051,8 +2175,15 @@ function renderFinalsByClub(pool) {
       return `<span class="fv-tag">${m.finalsAbbrev||'F'}</span> ${res} ${mine}–${thrs} v ${opp}`;
     }).join('<span style="color:var(--tx3)"> &middot; </span>');
 
-    return `<div style="display:grid;grid-template-columns:96px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px">
+    const rank  = gradeRankOf(t.comp, t.age, t.grade);
+    const tiers = gradeTierCount(t.comp, t.age);
+    const rankTag = rank
+      ? `<span class="fv-tag" style="${rank===1?'color:var(--gold);border-color:rgba(240,192,64,.35)':''}"
+              title="Grade ${rank} of ${tiers} in ${t.age}">${rank===1?'TOP':rank+'/'+tiers}</span>`
+      : '';
+    return `<div style="display:grid;grid-template-columns:96px 40px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px">
       <span class="fv-tag" style="justify-self:start">${t.age} ${abbrevGrade(t.grade)}</span>
+      <span style="justify-self:start">${rankTag}</span>
       <span>${path}${out ? ' <span class="fv-out">&middot; out</span>' : ''}</span>
     </div>`;
   };
@@ -2064,7 +2195,8 @@ function renderFinalsByClub(pool) {
         ${crestHTML(e.teams[0].team, 20, 'tlogo')}
         <span class="fv-club-name">${e.name}</span>
         <span style="flex:1"></span>
-        <span class="fv-meta" style="font-size:11px;color:var(--tx3)">${[
+        <span class="fv-meta" style="font-size:11px;color:var(--tx3)">${
+          S.finalsSort === 'grade' ? tierSummary(e) : [
           `${e.teams.length} team${e.teams.length!==1?'s':''}`,
           e.remaining ? `${e.remaining} remaining` : '',
           e.inGF      ? `${e.inGF} in GF`          : '',
@@ -3259,6 +3391,7 @@ async function init() {
         if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
         if (d.teamLogos && Object.keys(d.teamLogos).length) S.teamLogos = d.teamLogos;
+        if (d.gradeMeta && Object.keys(d.gradeMeta).length) S.gradeMeta = d.gradeMeta;
         if (d.clubs && Object.keys(d.clubs).length) S.clubs = d.clubs;
         if (d.teamClub && Object.keys(d.teamClub).length) S.teamClub = d.teamClub;
         // Freshness timestamps
@@ -3320,6 +3453,8 @@ async function init() {
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (f.finalsMode === 'age' || f.finalsMode === 'club') S.finalsMode = f.finalsMode;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) S.finalsSort = f.finalsSort;
+      if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
+      if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
 
       // Restore team — validate it still exists for this age
