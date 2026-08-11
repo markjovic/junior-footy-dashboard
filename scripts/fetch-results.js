@@ -453,6 +453,22 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
   const finalsAbbrevOf = r =>
     r.isFinalsRound === true ? (r.abbreviatedName || String(parseInt(r.number, 10) || 0)) : '';
 
+  // Loop-invariant, so computed once rather than per round.
+  const currentRoundIndex = roundList.findIndex(r => r.current);
+
+  // Once the competition has moved into finals, the last home-and-away round is
+  // complete and cannot change, so re-fetching it on every run costs one call
+  // per grade for nothing. Verified safe against the partial case: a partial
+  // round is excluded from highestKnown by the consecutive scan in main(), so
+  // it is re-fetched by the normal path below and never reaches this branch.
+  //
+  // Preference order matters. `current` is PlayHQ's own marker and is the
+  // stronger signal; the stored-finals fallback only applies when no round is
+  // flagged current at all, which happens between seasons.
+  const haFinished = currentRoundIndex !== -1
+    ? roundList[currentRoundIndex].isFinalsRound === true
+    : storedFinals.size > 0;
+
   // Position within roundList is the ONLY ordering valid across both tracks,
   // because finals numbering restarts at 1.
   const orderOf = new Map(); // round token -> index in roundList
@@ -516,6 +532,10 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
         continue;
       }
       if (number === highestKnown) {
+        if (haFinished) {
+          console.log(`    R${number} ... home-and-away complete, finals under way — not re-checking`);
+          continue;
+        }
         console.log(`    R${number} ... re-checking latest stored round`);
         // fall through to fetch
       }
@@ -528,7 +548,6 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     //    (e.g. Premier Reserve Men R1 shows 2026-11-04 instead of 2026-04-11).
     // 2. If NO round is marked current (season not started or finished),
     //    fall back to provisionalDates but only stop if > 90 days away.
-    const currentRoundIndex = roundList.findIndex(r => r.current);
     if (currentRoundIndex !== -1) {
       // A current round exists — use it as the cutoff
       const roundIndex = roundList.indexOf(round);
