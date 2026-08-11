@@ -3545,8 +3545,18 @@ async function loadStoredData() {
   // season falls back to its archive.
   const live = new Set(), retired = new Set();
   for (const m of core.manifest) (m.retired ? retired : live).add(m.org);
-  const files = [...live].map(o => `data/orgs/${o}-current.json`);
+  let files = [...live].map(o => `data/orgs/${o}-current.json`);
   for (const o of retired) if (!live.has(o)) files.push(`data/orgs/${o}-archive.json`);
+
+  // core.orgFiles lists the files that actually exist. A configured organisation
+  // that has never been fetched has no file, and requesting it costs every
+  // visitor a 404 — there were twelve of those. Filter to what exists; if the
+  // index is absent (an older core.json) fall back to asking for all of them.
+  if (Array.isArray(core.orgFiles) && core.orgFiles.length) {
+    const present = new Set(core.orgFiles.map(f => f.file));
+    const wanted = files.filter(f => present.has(f));
+    if (wanted.length) files = wanted;
+  }
 
   const parts = await Promise.all(files.map(async f => {
     try {
