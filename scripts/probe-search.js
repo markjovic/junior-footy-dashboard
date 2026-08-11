@@ -25,6 +25,13 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const REPORT_PATH = path.join(ROOT, 'probe-search-report.json');
 const API_URL = 'https://api.playhq.com/graphql';
+// Third endpoint, not in playhq_api_reference.md. The website's organisation
+// directory is served from here, not from api.playhq.com.
+const SEARCH_URL = 'https://search.playhq.com/graphql';
+
+// Filled in by the S sweep below once we know which header shape this host
+// wants. Every operationName 'search' probe picks it up automatically.
+const SEARCH_CTX = { extraHeaders: null, noCookie: false, useSearchCookie: false };
 
 const HEADERS_BASE = {
   accept: '*/*',
@@ -80,6 +87,7 @@ const REPORT = { startedAt: new Date().toISOString(), probes: [] };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let sessionCookie = null;
+let searchCookie = null;
 let cookieMethod = null;
 
 function log(...args) {
@@ -164,14 +172,26 @@ async function refreshSession(tenant) {
 // ---------------------------------------------------------------------------
 
 // Never collapse a failure into "no data". Every call returns a kind.
-async function gql({ tenant, query, variables, operationName, expect }) {
+async function gql({ tenant, query, variables, operationName, expect, url, extraHeaders, noCookie, useSearchCookie }) {
+  // Any operation named search goes to the search host unless a url is forced.
+  const isSearch = operationName === 'search';
+  const target = url || (isSearch ? SEARCH_URL : API_URL);
+  const extra = extraHeaders !== undefined ? extraHeaders : isSearch ? SEARCH_CTX.extraHeaders : null;
+  const skipCookie = noCookie !== undefined ? noCookie : isSearch ? SEARCH_CTX.noCookie : false;
+  const preferSearchCookie =
+    useSearchCookie !== undefined ? useSearchCookie : isSearch ? SEARCH_CTX.useSearchCookie : false;
+
   const headers = { ...HEADERS_BASE, 'request-id': crypto.randomUUID() };
-  if (tenant !== null) headers.tenant = tenant;
-  if (sessionCookie) headers.Cookie = sessionCookie;
+  if (tenant !== null && tenant !== undefined) headers.tenant = tenant;
+  if (extra) Object.assign(headers, extra);
+  if (!skipCookie) {
+    const cookie = preferSearchCookie ? searchCookie || sessionCookie : sessionCookie;
+    if (cookie) headers.Cookie = cookie;
+  }
 
   let res;
   try {
-    res = await fetch(API_URL, {
+    res = await fetch(target, {
       method: 'POST',
       headers,
       body: JSON.stringify({ operationName, query, variables }),
@@ -322,6 +342,80 @@ async function main() {
   }
   log(`session acquired via ${cookieMethod}`);
   REPORT.cookieMethod = cookieMethod;
+
+  // -------------------------------------------------------------------------
+  // S — which header shape does search.playhq.com want?
+  // Cookies are host-scoped, so the api.playhq.com session may be worthless
+  // here, and the spectator endpoint already sets a precedent for a host in
+  // this family needing a different header set. Establish the shape first and
+  // run everything else with whatever worked, rather than assuming one.
+  // -------------------------------------------------------------------------
+
+  const directoryVars = {
+    filter: {
+      meta: { page: 1, limit: 12 },
+      organisation: { types: ['ASSOCIATION'], tenantSlug: 'afl' },
+    },
+  };
+
+  // Try to obtain a cookie from the search host itself.
+  try {
+    const r0 = await fetch(SEARCH_URL, {
+      method: 'POST',
+      headers: { ...HEADERS_BASE, tenant: 'afl', 'request-id': crypto.randomUUID() },
+      body: JSON.stringify({
+        operationName: 'search',
+        query: SEARCH_QUERY_MIN,
+        variables: directoryVars,
+      }),
+    });
+    const parts =
+      typeof r0.headers.getSetCookie === 'function'
+        ? r0.headers.getSetCookie().map((c) => c.split(';')[0].trim())
+        : (r0.headers.get('set-cookie') || '').split(',').map((c) => c.trim().split(';')[0]);
+    const pick = (n) => parts.find((p) => p.startsWith(n + '=')) || null;
+    const tier = pick('phq_tier');
+    const sess = pick('phq_session');
+    const sub = pick('phq_sub');
+    if (tier && sess && sub) searchCookie = `${tier}; ${sess}; ${sub}`;
+    log(`search host session: status=${r0.status} tier=${!!tier} session=${!!sess} sub=${!!sub}`);
+  } catch (err) {
+    log(`search host session: network error ${err.message}`);
+  }
+  REPORT.searchHostCookieObtained = !!searchCookie;
+
+  const shapes = [
+    { label: 'S1-tenant-afl-apicookie', tenant: 'afl', extraHeaders: null, noCookie: false, useSearchCookie: false },
+    { label: 'S2-tenant-afl-nocookie', tenant: 'afl', extraHeaders: null, noCookie: true, useSearchCookie: false },
+    { label: 'S3-no-tenant-apicookie', tenant: null, extraHeaders: null, noCookie: false, useSearchCookie: false },
+    { label: 'S4-x-phq-tenant', tenant: 'afl', extraHeaders: { 'x-phq-tenant': 'afl' }, noCookie: false, useSearchCookie: false },
+    { label: 'S5-searchhost-cookie', tenant: 'afl', extraHeaders: null, noCookie: false, useSearchCookie: true },
+  ];
+
+  let chosenShape = null;
+  for (const s of shapes) {
+    const r = await probe(s.label, `search.playhq.com header shape: ${s.label}`, {
+      tenant: s.tenant,
+      operationName: 'search',
+      query: SEARCH_QUERY_MIN,
+      variables: directoryVars,
+      extraHeaders: s.extraHeaders,
+      noCookie: s.noCookie,
+      useSearchCookie: s.useSearchCookie,
+    });
+    if (!chosenShape && r.kind === 'ok') chosenShape = s;
+  }
+
+  if (chosenShape) {
+    SEARCH_CTX.extraHeaders = chosenShape.extraHeaders;
+    SEARCH_CTX.noCookie = chosenShape.noCookie;
+    SEARCH_CTX.useSearchCookie = chosenShape.useSearchCookie;
+    log(`\n>>> search.playhq.com accepts ${chosenShape.label}; remaining search probes use it.`);
+  } else {
+    log('\n>>> No header shape worked against search.playhq.com.');
+    log('>>> The remaining search probes still run, to collect their error text.');
+  }
+  REPORT.searchHeaderShape = chosenShape ? chosenShape.label : null;
 
   // The second capture, from https://www.playhq.com/afl?page=1&types=ASSOCIATION.
   // It has NO query key at all, and uses tenantSlug instead of sports. The
@@ -763,9 +857,8 @@ async function main() {
   const kinds = {};
   for (const p of REPORT.probes) kinds[p.kind] = (kinds[p.kind] || 0) + 1;
   log(`Probe outcomes: ${JSON.stringify(kinds)}`);
-  log('\nIf every probe returned graphql_error naming an unknown field "search",');
-  log('the operation lives on a different endpoint and I need the Request URL');
-  log('from the network tab of the capture.');
+  log(`\nEndpoints: search -> ${SEARCH_URL}, everything else -> ${API_URL}`);
+  log(`search header shape that worked: ${REPORT.searchHeaderShape || 'none'}`);
 }
 
 main().catch((err) => {
