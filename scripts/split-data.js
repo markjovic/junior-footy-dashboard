@@ -66,7 +66,13 @@ function readJson(p, label) {
   }
 }
 
+// Printed on every run. Without it there is no way to tell from a log which
+// version of this script produced it, and a stale copy looks exactly like a
+// real failure.
+const VERSION = '1.1 — total-order verification';
+
 function main() {
+  log(`split-data.js ${VERSION}`);
   const data = readJson(DATA_PATH, 'data.json');
   const core = readJson(CORE_PATH, 'core.json');
 
