@@ -1,0 +1,293 @@
+<!doctype html>
+<!-- org-discovery.html -->
+<!-- Standalone viewer for data/org-discovery.json, written by -->
+<!-- scripts/discover-orgs.js. Separate from index.html and separately -->
+<!-- versioned — this is Beta 0.1 and has nothing to do with the -->
+<!-- dashboard's version badge. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organisation discovery</title>
+<style>
+  :root {
+    --bg: #11141a;
+    --panel: #1a1f28;
+    --line: #2b323f;
+    --text: #e6e9ef;
+    --dim: #98a2b3;
+    --accent: #6ea8fe;
+    --active: #4ade80;
+    --dormant: #fbbf24;
+    --none: #94a3b8;
+    --error: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 18px 20px 10px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  .meta { color: var(--dim); font-size: 12px; }
+  .wrap { padding: 16px 20px 60px; }
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 14px; min-width: 120px;
+  }
+  .card .n { font-size: 22px; font-weight: 600; }
+  .card .l { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sorted::after { content: " \25B4"; }
+  th.sorted.desc::after { content: " \25BE"; }
+  tbody tr:hover { background: #1e242e; }
+  .xtab { margin-bottom: 18px; }
+  .xtab table { width: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  input, select {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: inherit;
+  }
+  input[type=search] { min-width: 240px; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+  .a-active { color: var(--active); }
+  .a-dormant { color: var(--dormant); }
+  .a-noSeasons { color: var(--none); }
+  .a-error { color: var(--error); }
+  .seasons { color: var(--dim); font-size: 12px; }
+  .expand { cursor: pointer; color: var(--accent); }
+  .detail td { background: #151a22; }
+  .detail table { width: auto; margin: 4px 0 8px; }
+  .detail th, .detail td { border-bottom: 1px solid #232a35; padding: 3px 10px; }
+  .err { color: var(--error); }
+  .count { color: var(--dim); margin-left: auto; font-size: 12px; }
+  #status { padding: 20px; color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Organisation discovery <span class="meta">Beta 0.1</span></h1>
+  <div class="meta" id="generated">loading…</div>
+</header>
+
+<div id="status">Loading data/org-discovery.json…</div>
+
+<div class="wrap" id="app" hidden>
+  <div class="cards" id="cards"></div>
+
+  <div class="xtab">
+    <table>
+      <thead>
+        <tr><th>&nbsp;</th><th>Active</th><th>Dormant</th><th>No seasons</th><th>Error</th></tr>
+      </thead>
+      <tbody id="xtab"></tbody>
+    </table>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search name or code">
+    <select id="fState"></select>
+    <select id="fActivity">
+      <option value="">All activity</option>
+      <option value="active">Active</option>
+      <option value="dormant">Dormant</option>
+      <option value="noSeasons">No seasons</option>
+      <option value="error">Error</option>
+    </select>
+    <select id="fAddress">
+      <option value="">Address: any</option>
+      <option value="yes">Has address</option>
+      <option value="no">No address</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th data-k="name">Organisation</th>
+        <th data-k="code">Code</th>
+        <th data-k="state">State</th>
+        <th data-k="suburb">Suburb</th>
+        <th data-k="activity">Activity</th>
+        <th data-k="nComps">Comps</th>
+        <th data-k="nSeasons">Seasons</th>
+        <th data-k="latestEnd">Latest end</th>
+        <th>Seasons</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<script>
+(function () {
+  var DATA = null, ROWS = [], sortKey = 'name', sortDesc = false, open = {};
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function card(n, l) {
+    return '<div class="card"><div class="n">' + esc(n) + '</div><div class="l">' + esc(l) + '</div></div>';
+  }
+
+  function build() {
+    var s = DATA.summary || {};
+    el('generated').textContent =
+      'Generated ' + (s.generatedAt || '?') + ' · ' + (s.totalOrganisations || 0) + ' organisations · reference date ' + (s.today || '?');
+
+    var x = s.crosstab || { hasAddress: {}, noAddress: {} };
+    var totals = { active: 0, dormant: 0, noSeasons: 0, error: 0 };
+    ['hasAddress', 'noAddress'].forEach(function (b) {
+      Object.keys(totals).forEach(function (k) { totals[k] += (x[b] && x[b][k]) || 0; });
+    });
+
+    var vic = 0;
+    ROWS.forEach(function (r) { if (r.state === 'VIC') vic++; });
+
+    el('cards').innerHTML =
+      card(s.totalOrganisations || 0, 'Organisations') +
+      card(totals.active, 'Active') +
+      card(totals.dormant, 'Dormant') +
+      card(totals.noSeasons, 'No seasons') +
+      card(totals.error, 'Errored') +
+      card(vic, 'State = VIC') +
+      card((x.noAddress && x.noAddress.active) || 0, 'No address, active');
+
+    el('xtab').innerHTML = ['hasAddress', 'noAddress'].map(function (b) {
+      var row = x[b] || {};
+      return '<tr><th>' + (b === 'hasAddress' ? 'Has address' : 'No address') + '</th>' +
+        ['active', 'dormant', 'noSeasons', 'error'].map(function (k) {
+          return '<td class="a-' + k + '">' + (row[k] || 0) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+
+    var states = {};
+    ROWS.forEach(function (r) { states[r.state || (r.stateRaw ? r.stateRaw : '(none)')] = 1; });
+    var opts = ['<option value="">All states</option>'];
+    Object.keys(states).sort().forEach(function (k) {
+      opts.push('<option value="' + esc(k) + '">' + esc(k) + '</option>');
+    });
+    el('fState').innerHTML = opts.join('');
+  }
+
+  function filtered() {
+    var q = el('q').value.trim().toLowerCase();
+    var fs = el('fState').value, fa = el('fActivity').value, fd = el('fAddress').value;
+    return ROWS.filter(function (r) {
+      if (q && (r.name + ' ' + r.code).toLowerCase().indexOf(q) === -1) return false;
+      if (fs && (r.state || r.stateRaw || '(none)') !== fs) return false;
+      if (fa && r.activity !== fa) return false;
+      if (fd === 'yes' && !r.hasAddress) return false;
+      if (fd === 'no' && r.hasAddress) return false;
+      return true;
+    });
+  }
+
+  function seasonTable(r) {
+    if (r.activity === 'error') {
+      return '<div class="err">' + esc(r.errorKind) + ': ' + esc(r.errorNote) + '</div>';
+    }
+    if (!r.seasons.length) return '<div class="seasons">No seasons returned.</div>';
+    return '<table><thead><tr><th>Competition</th><th>Season</th><th>Start</th><th>End</th><th>Status</th><th>Season id</th></tr></thead><tbody>' +
+      r.seasons.slice().sort(function (a, b) {
+        return String(b.startDate || '').localeCompare(String(a.startDate || ''));
+      }).map(function (s) {
+        return '<tr><td>' + esc(s.competition) + '</td><td>' + esc(s.name) + '</td><td>' +
+          esc(s.startDate) + '</td><td>' + esc(s.endDate) + '</td><td>' + esc(s.status) +
+          '</td><td><code>' + esc(s.id) + '</code></td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function render() {
+    var list = filtered().slice();
+    list.sort(function (a, b) {
+      var av = a[sortKey], bv = b[sortKey];
+      if (av == null) av = '';
+      if (bv == null) bv = '';
+      var c = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return sortDesc ? -c : c;
+    });
+
+    el('count').textContent = list.length + ' of ' + ROWS.length + ' shown';
+
+    var html = [];
+    list.forEach(function (r) {
+      html.push(
+        '<tr><td>' + esc(r.name) + '</td>' +
+        '<td><code>' + esc(r.code) + '</code></td>' +
+        '<td>' + esc(r.state || r.stateRaw || '') + '</td>' +
+        '<td>' + esc(r.suburb || '') + '</td>' +
+        '<td><span class="pill a-' + r.activity + '">' + esc(r.activity) + '</span></td>' +
+        '<td>' + r.nComps + '</td>' +
+        '<td>' + r.nSeasons + '</td>' +
+        '<td>' + esc(r.latestEnd || '') + '</td>' +
+        '<td><span class="expand" data-code="' + esc(r.code) + '">' +
+        (open[r.code] ? 'hide' : 'show') + '</span></td></tr>'
+      );
+      if (open[r.code]) {
+        html.push('<tr class="detail"><td colspan="9">' + seasonTable(r) + '</td></tr>');
+      }
+    });
+    el('rows').innerHTML = html.join('');
+  }
+
+  function wire() {
+    ['q', 'fState', 'fActivity', 'fAddress'].forEach(function (id) {
+      el(id).addEventListener('input', render);
+      el(id).addEventListener('change', render);
+    });
+    document.querySelectorAll('th[data-k]').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var k = th.getAttribute('data-k');
+        if (sortKey === k) { sortDesc = !sortDesc; } else { sortKey = k; sortDesc = false; }
+        document.querySelectorAll('th[data-k]').forEach(function (o) { o.className = ''; });
+        th.className = 'sorted' + (sortDesc ? ' desc' : '');
+        render();
+      });
+    });
+    el('rows').addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.classList.contains('expand')) {
+        var c = t.getAttribute('data-code');
+        open[c] = !open[c];
+        render();
+      }
+    });
+  }
+
+  fetch('data/org-discovery.json')
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      DATA = d;
+      ROWS = (d.organisations || []).map(function (o) {
+        return Object.assign({}, o, {
+          nComps: (o.competitions || []).length,
+          nSeasons: (o.seasons || []).length,
+        });
+      });
+      el('status').hidden = true;
+      el('app').hidden = false;
+      build();
+      wire();
+      render();
+    })
+    .catch(function (err) {
+      el('status').textContent =
+        'Could not load data/org-discovery.json — ' + err.message +
+        '. Run the "Discover organisations" workflow first.';
+    });
+})();
+</script>
+</body>
+</html>
