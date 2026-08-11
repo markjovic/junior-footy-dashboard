@@ -1,0 +1,46 @@
+# .github/workflows/report-data-size.yml
+name: Report data.json composition
+
+# READ-ONLY diagnostic. Commits nothing, so contents:read is enough and there is
+# no git step. The report is uploaded as an artifact and printed to the log.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report-data-size
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Measure data.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run report
+        # A 36.6 MB minified JSON expands to a far larger object graph once
+        # parsed, so the default heap is raised rather than risking an
+        # out-of-memory abort partway through.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: node scripts/report-data-size.js
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-size-report
+          path: data-size-report.json
+          if-no-files-found: warn
+          retention-days: 7
