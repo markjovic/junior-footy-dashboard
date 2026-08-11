@@ -422,12 +422,12 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     await sleep(FETCH_DELAY);
   } catch (e) {
     console.log(`    gradeRounds error: ${e.message}`);
-    return { matches: [], hit403: true };
+    return { matches: [], hit403: true, logos: {} };
   }
 
   if (!roundList?.length) {
     console.log(`    no rounds returned`);
-    return { matches: [], hit403: false };
+    return { matches: [], hit403: false, logos: {} };
   }
 
   // If grade-level dates are available and all are in the past,
@@ -437,11 +437,18 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     const latestDate = latestMonth + '-31'; // end of that month
     if (latestDate < today) {
       console.log(`    season ended (last month: ${latestMonth}) — skipping`);
-      return { matches: [], hit403: false };
+      return { matches: [], hit403: false, logos: {} };
     }
   }
 
   const allMatches = [];
+
+  // Logos are collected here rather than written onto every match record.
+  // teamLogos already holds each URL once, keyed by team name, and index.html
+  // renders every crest from it — the per-match copies were read only on
+  // provisional records, which this script does not own. Measured 2026-08-11:
+  // hLogo + aLogo were 3.82 MB of a 36.57 MB data.json for 167 distinct URLs.
+  const logos = {};
 
   const finalsAbbrevOf = r =>
     r.isFinalsRound === true ? (r.abbreviatedName || String(parseInt(r.number, 10) || 0)) : '';
@@ -476,7 +483,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
         allMatches.push({ id: byeKey, age, rawGrade, round: r, compName: grade.compName,
           home: '__bye__', away: '__bye__',
           hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
-          venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
+          venue:'', venueUrl:'', date:'', isBye: true });
       }
     }
   }
@@ -598,7 +605,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__bye__', away: '__bye__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
-        venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isBye: true });
+        venue:'', venueUrl:'', date:'', isBye: true });
       continue;
     }
 
@@ -640,10 +647,13 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
         hScore, hG, hB,
         aScore, aG, aB,
         venue, vSuburb, venueUrl,
-        hLogo: getLogoUrl(game.home?.logo),
-        aLogo: getLogoUrl(game.away?.logo),
         date: game.date || '',
       });
+
+      const hUrl = getLogoUrl(game.home?.logo);
+      const aUrl = getLogoUrl(game.away?.logo);
+      if (hUrl) logos[homeName] = hUrl;
+      if (aUrl) logos[awayName] = aUrl;
     }
 
     const isPartial = finalGames.length < games.length;
@@ -656,7 +666,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__partial__', away: '__partial__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
-        venue:'', venueUrl:'', hLogo:'', aLogo:'', date:'', isPartial: true,
+        venue:'', venueUrl:'', date:'', isPartial: true,
       });
     } else {
       console.log(`${matches.length} result(s)`);
@@ -694,10 +704,11 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     return {
       matches: allMatches.filter(m => !(m.isPartial && stalledTokens.has(tokenOfMatch(m)))),
       hit403: false,
+      logos,
     };
   }
 
-  return { matches: allMatches, hit403: false };
+  return { matches: allMatches, hit403: false, logos };
   } catch (e) {
     console.error(`  FATAL ERROR in [${name}]: ${e.message}`);
     return allMatches;
@@ -956,6 +967,7 @@ async function main() {
   let fetchError = null;
   let resultsGradeIdx = 0;
   let consecutive403s = 0;
+  const fetchedLogos = {};
 
   for (const grade of grades) {
     resultsGradeIdx++;
@@ -965,7 +977,8 @@ async function main() {
       await sleep(60000);
       consecutive403s = 0;
     }
-    const { matches, hit403 } = await fetchGrade(grade, knownRounds, byId, knownFinals);
+    const { matches, hit403, logos } = await fetchGrade(grade, knownRounds, byId, knownFinals);
+    Object.assign(fetchedLogos, logos);
     if (hit403) {
       consecutive403s++;
       if (consecutive403s >= 3) {
@@ -1021,7 +1034,10 @@ async function main() {
   // 7. Write data.json — preserve gotwFlags and players, replace matches and roster
   // Build lastRound map: "age|rawGrade" → highest round in data
   const lastRound = {};
-  const teamLogos = { ...(existing.teamLogos || {}) };
+  let strippedLogos = 0;
+  // Merged over the stored map, so teams not covered by this run keep the URL
+  // they already had — a VIP-only run must not drop the other competitions.
+  const teamLogos = { ...(existing.teamLogos || {}), ...fetchedLogos };
   // Use allWithByes for round tracking so byes advance lastRound correctly
   allWithByes.forEach(m => {
     if (m.scheduled) return; // don't let fixture records affect lastRound
@@ -1030,10 +1046,26 @@ async function main() {
     const key = `${m.age}|${m.rawGrade}`;
     if (!m.isFinals && (!lastRound[key] || m.round > lastRound[key])) lastRound[key] = m.round;
     if (!m.isBye) {
+      // Logos come from fetchedLogos above. Records stored before this change
+      // still carry them, so they are harvested here too — that is what keeps
+      // the first run after the change from losing a single URL.
       if (m.hLogo) teamLogos[m.home] = m.hLogo;
       if (m.aLogo) teamLogos[m.away] = m.aLogo;
     }
+    // Then drop the per-match copies. Ordering matters: harvest above, strip
+    // here, so nothing is discarded before teamLogos has absorbed it.
+    // Scheduled records never reach this line — they return at the top of the
+    // loop, because fetch-fixtures.js owns them and index.html reads their
+    // logos to detect a provisional side.
+    if ('hLogo' in m || 'aLogo' in m) {
+      delete m.hLogo;
+      delete m.aLogo;
+      strippedLogos++;
+    }
   });
+  if (strippedLogos) {
+    console.log(`Stripped per-match logo URLs from ${strippedLogos} record(s) — teamLogos holds ${Object.keys(teamLogos).length}`);
+  }
 
   // Build compLogos map: compName → logo URL
   const compLogos = {};
