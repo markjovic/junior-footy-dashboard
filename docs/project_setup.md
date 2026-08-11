@@ -7,41 +7,52 @@ What to do, in order, so the new project starts fully briefed.
 
 ---
 
-## 1. Decide where things live — the short answer
+## 1. Reading the repo directly — paste this first
 
-**Both, with a rule.**
+Claude can fetch any file in this repository, but **only from a URL that already
+appears in the conversation**. A URL it constructs itself is refused before any
+request is made, and GitHub blocks automated access to folder pages, so it cannot
+browse `docs/` to discover what is there.
 
-| | Where | Why |
-|---|---|---|
-| Documents a project needs every session | **Project knowledge (uploaded)** | Always in context. Zero tool calls. This is what stops the re-teaching. |
-| The master copy of those documents | **The repo, in `docs/`** | Version controlled, diffable, and readable by any project on request. |
-| Everything else | The repo | No reason to duplicate. |
+Pasting the block below satisfies that condition for every file at once. Do it in
+the project's **custom instructions** and it is present from the first message of
+every conversation, with nothing to remember.
 
-OneDrive is not needed. The repo is public and readable, and project knowledge is
-what actually delivers the seamlessness — a connector fetch costs a tool call and
-only happens if something prompts it, whereas uploaded knowledge is simply there.
+```
+https://github.com/markjovic/junior-footy-dashboard/blob/main/README.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/dashboard_context.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/working_practice.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/playhq_api_reference.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/finals_support.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/OUTSTANDING_TASKS.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/project_setup.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/index.html
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-results.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-stats.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-fixtures.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-club-index.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/workers/footy-cron.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
+```
 
-**The rule:** the repo is the source of truth; project knowledge is a dated copy.
-When a shared document changes, commit it and re-upload it to every project that
-holds it, in the same sitting.
+**If that works, upload nothing.** The repository is the single source of truth,
+every read is current, and no copy can drift. Test it once: ask Claude to read
+`docs/playhq_api_reference.md` and see whether it fetches or refuses.
 
-### On reading files from the repo
+**If it does not work**, paste the block manually at the start of a conversation —
+it unlocks every file for that session — or fall back to §2.
 
-Verified 2026-08-10: the repo is public and
-`https://github.com/markjovic/junior-footy-dashboard/blob/main/<path>` returns
-file contents. Two constraints:
+### Why not just upload everything
 
-- `raw.githubusercontent.com` and `github.com/.../raw/...` are blocked by robots.
-- A URL cannot be *constructed*; it must already have appeared in the
-  conversation. Fetching the repo root first lists every file as a followable
-  link, which works but costs a large page.
-
-So repo reads are a **fallback for checking something specific**, not the primary
-channel. Put the documents in project knowledge.
+Project knowledge is a copy taken at upload time. It is always in context with no
+tool call, which is genuinely faster, but it drifts the moment the repository
+moves on and nothing surfaces the drift. That failure has already happened here:
+this session opened with three documents claiming versions 0.92, 0.106 and 0.115
+while the deployed code was 0.115, and only reading the file settled it.
 
 ---
 
-## 2. Files to upload into the new project
+## 2. Fallback — files to upload if repo reading does not work
 
 ```
 README.md                 user-facing behaviour, current at 0.124

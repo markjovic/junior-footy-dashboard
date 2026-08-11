@@ -10,6 +10,31 @@ Read alongside `working_practice.md` (portable) and `playhq_api_reference.md`
 
 ---
 
+## Reading the repo
+
+Claude can fetch any file here, but only from a URL already present in the
+conversation — a constructed URL is refused, and folder pages are robots-blocked
+so `docs/` cannot be browsed. Paste this block to unlock every file:
+
+```
+https://github.com/markjovic/junior-footy-dashboard/blob/main/README.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/dashboard_context.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/working_practice.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/playhq_api_reference.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/finals_support.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/OUTSTANDING_TASKS.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/project_setup.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/index.html
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-results.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-stats.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-fixtures.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-club-index.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/workers/footy-cron.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
+```
+
+---
+
 ## What this is
 
 **Repo:** `markjovic/junior-footy-dashboard` (public)

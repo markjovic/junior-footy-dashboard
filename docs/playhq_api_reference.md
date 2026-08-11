@@ -681,7 +681,44 @@ query discoverOrganisationTeams($seasonId: ID!, $organisationId: ID!) {
 that league's season, which is correct behaviour and makes this unsuitable for identifying
 clubs generally.
 
+### discoverTeams WITHOUT an organisation — the whole season
+
+```graphql
+query discoverTeamsBySeason($seasonId: ID!) {
+  discoverTeams(filter: {seasonID: $seasonId}) {
+    id name gender { value } ageGroup { value }
+    grade { id name }
+    organisation { id name }
+  }
+}
+```
+
+**`organisationID` is optional.** Verified 2026-08-10: one call per season
+returns every registered team with its grade and owning organisation — 2,399
+teams across five competitions, EFNL alone returning 969 teams and 60
+organisations.
+
+This is the authoritative source for three things otherwise derived by guesswork:
+whether a team is **registered** in a season at all, its **real grade name**
+(`"Deakin Uni - U18 Girls - A/B"`, not a parsed fragment), and its **club**.
+
+Teams with no grade are practice-match and unassigned entries — registered, but
+not competing. EFNL 2026: 687 of 969 carry a grade.
+
+**Registration discriminates members from visitors.** A club playing in a
+league's grading pool while registered elsewhere returns nothing for that
+league's season. In EFNL's U18 Girls grading pool, 27 of 45 clubs are not
+registered in EFNL at all.
+
 ### discoverCompetitions — season history
+
+⚠️ **Not usable from a guest session.** Verified 2026-08-10: fails with
+`There was an error. Please try again later.` across every variation tried —
+one cookie, all three cookies, with and without `operationName`, and the exact
+document shape playhq.com sends. It works from a signed-in browser. Our tier is
+`phq_tier=cookie-no-jwt`, so an authenticated session is the likely requirement.
+Do not build season discovery on it; carry season ids in configuration.
+
 
 ```graphql
 query discoverCompetitions($organisationID: ID!) {

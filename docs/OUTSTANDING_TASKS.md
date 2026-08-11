@@ -42,7 +42,17 @@ a past season.
 
 ---
 
-## 2. Verify `DiscoverTeam.organisation`
+## 2. ~~Verify `DiscoverTeam.organisation`~~ — CONFIRMED 2026-08-10
+
+It resolves and returns clubs. Superseded by the team registry — see
+`team_registry_design.md`, which uses `discoverTeams(filter:{seasonID})` to get
+registration, grade and organisation for every team in one call per season.
+
+**Blocked on approval of that design document.**
+
+---
+
+## 2b. Verify `DiscoverTeam.organisation`
 
 `playhq_api_reference.md` documents `organisation { id name }` on `DiscoverTeam`.
 The club index was built on logo-URL derivation because a probe asked for `club`
