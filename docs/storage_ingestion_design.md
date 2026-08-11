@@ -158,13 +158,20 @@ live, and PlayHQ is not always prompt about flipping status.
 comparison with `Date.UTC(y, m - 1, d)` from split components — never
 `new Date(string)`, per `working_practice.md`.
 
-**The rollover touches two files and must not lose a season if it fails between
-them.** Order: append the season to `archive`, rewrite `current` without it,
-then update the manifest. **The manifest is the authority for which file holds
-which season.** If the run dies partway, the manifest still points at `current`,
-the data is still there, and the next run repeats the move harmlessly. A season
-briefly present in both files is not a corruption, because nothing reads a file
-without first asking the manifest.
+**⚠️ CORRECTION 2026-08-11 — the implemented order is the reverse of this.**
+`discover-seasons.js` sets `retired` and `file` and rebuilds the manifest; the
+records move later, on the next `store.save()`. So the manifest points at
+`-archive.json` files before they exist — 48 entries do so today. The writers
+survive it because `filesForScope()` opens both files for an organisation
+regardless, and `index.html` derives its paths from the organisation code rather
+than reading `manifest.file`, so nothing currently follows a dangling pointer.
+
+That is luck, not design. Either the ordering below must be implemented, or
+`manifest.file` must be documented as a prediction rather than a location.
+
+The intended order was: append the season to `archive`, rewrite `current`
+without it, then update the manifest, so a failure part-way leaves the manifest
+pointing at data that is still there.
 
 **Known cost, accepted.** Appending to the archive rewrites it, so year N stores
 a blob holding N seasons. Over a handful of years that is bounded and small —
@@ -190,15 +197,23 @@ holds only the current ones — see §6.1. Records carry a season id so the two
 files have the same shape and the archive is just the same structure with more
 seasons in it.
 
-Two current keys are fixed by construction rather than by code:
+**⚠️ CORRECTION 2026-08-11 — this was NOT built as described.** The paragraph
+below claimed `lastRound`, `gotwFlags` and `teamLogos` would be fixed by
+construction by living in the per-organisation file. They are in `CORE_KEYS` in
+`store.js` and therefore in `core.json`, so all three still carry their original
+missing-competition keys:
 
-- **`lastRound` is keyed `age|rawGrade` with no competition**, which is why the
-  ladder round label has never rendered. Inside a per-competition file the
-  competition is the filename and the key is correct as it stands.
-- **`teamLogos` is keyed by bare team name.** Across five competitions a
-  collision is unlikely; across sixteen, two organisations each fielding a
-  "Blackburn" would overwrite each other. Scoping it to the file removes the
-  risk without a key change.
+- **`lastRound` is keyed `age|rawGrade`** — no competition and no season. **The
+  Phase A backfill will corrupt it**: writing EFNL 2025 overwrites the live 2026
+  value for every age and grade they share. The backfill must either not write
+  `lastRound` at all, or the key must be fixed first.
+- **`gotwFlags` is keyed `age|roundKey`** — same defect, and it is read by
+  `index.html` in three places.
+- **`teamLogos` is keyed by bare team name** — same exposure, though the
+  colliding value is usually the same URL, so the damage is cosmetic.
+
+Moving them into the per-organisation file remains the right fix and is not
+done. Until it is, treat all three as cross-competition state.
 
 **`gotwFlags` is empty** (0 entries). It is preserved on merge by three writers.
 Whether it is still used should be settled before it is carried into the new
@@ -329,6 +344,14 @@ than necessary and every later change rewrites all of it.
 
 ### 6.1 Backfill — two phases, one script
 
+**⚠️ FIXED 2026-08-11 — `store.save()` could not create a file under a scope.**
+`filesForScope()` filtered to existing paths and `save()` built its permission
+set from that, so a scoped run whose records belonged in a file that did not yet
+exist — exactly a Phase A run writing the first `-archive.json` — dropped those
+records and reported success. `save()` now takes the files a scope *covers*
+rather than the files that exist, and refuses to complete if the number of
+records bucketed does not match the number loaded.
+
 Walks the configured organisations, reads their seasons from
 `discoverCompetitions`, and writes one file per competition-season.
 
@@ -389,11 +412,31 @@ list per season**, or the archive cannot be read without it. At roughly 85 grade
 per season this is about 9 KB per organisation-season, which is negligible
 against the saving it enables.
 
-**File completeness must be explicit.** Each competition-season file carries a
-`meta` block recording which phases have been written, and the manifest in
-`core.json` mirrors it, so the dashboard can tell a season with no player data
-from a season whose players are genuinely absent — and can hide player features
-for a season that has not reached Phase B rather than rendering an empty ladder.
+**⚠️ File completeness is NOT implemented, at either end (2026-08-11).**
+
+`store.save()` writes `phases: { results, players }` **per file**, inferred from
+record counts. An archive holding 2025 results-only and 2024 results-and-players
+reports one flag pair for both, which answers the wrong question.
+
+`discover-seasons.js` writes `phases: { results: false, players: false }` per
+manifest entry, commented "filled in by the writers". Nothing fills it in —
+`store.save()` copies only `CORE_KEYS` and `TIMESTAMP_KEYS` into core and never
+touches `manifest` — and `discover-seasons.js` rebuilds the manifest from scratch
+each run, so anything written there would be reset.
+
+**This has to be built as part of Phase A**, because Phase A is what creates the
+first season with results and no players.
+
+**Two further gaps for Phase A to resolve:**
+
+- **The per-season grade list has no key to live in.** §6.1 requires one and
+  names no shape. `store.js` handles `matches`, `players`, `roster` and
+  `gradeMeta` only; anything set on `data.grades` is dropped silently by both
+  `load()` and `save()`.
+- **The scope unit is a competition name, not a season.** `filesForScope()` adds
+  both `-current` and `-archive` for an organisation unconditionally, so a run
+  scoped to one retired season still rewrites the live file. Records round-trip,
+  so it is not destructive, but it is not season-scoped either.
 
 ### 6.2 Scheduled runs — active seasons only
 
