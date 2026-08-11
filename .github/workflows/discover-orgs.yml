@@ -1,0 +1,65 @@
+# .github/workflows/discover-orgs.yml
+name: Discover organisations
+
+# Writes data/org-discovery.json and commits it. Exit codes follow the repo
+# convention: 0 = changed, 2 = no change, 1 = fatal.
+#
+# NOTE: unlike the existing workflows, a fatal exit fails this run rather than
+# showing green with no commit. dashboard_context.md records that behaviour as a
+# known flaw; this is a new file, so it does not inherit it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discover-orgs
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: Sweep AFL organisations
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run sweep
+        id: sweep
+        run: |
+          set +e
+          node scripts/discover-orgs.js
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "1" ]; then
+            echo "Script exited 1 (fatal)."
+            exit 1
+          fi
+          exit 0
+
+      - name: Commit
+        if: steps.sweep.outputs.code == '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/org-discovery.json
+          git diff --staged --quiet || git commit -m "org discovery: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: org-discovery
+          path: data/org-discovery.json
+          if-no-files-found: warn
+          retention-days: 7
