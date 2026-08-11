@@ -24,6 +24,8 @@ const TENANT_SLUG = 'afl';
 // Verified honoured 2026-08-11. Anything above this is untested.
 const PAGE_LIMIT = 500;
 const MAX_PAGES = 30;
+// ~10,000 AFL clubs at limit 500 is about 21 pages. Headroom, not a target.
+const CLUB_MAX_PAGES = 60;
 const CONCURRENCY = 8;
 
 const HEADERS_BASE = {
@@ -58,6 +60,29 @@ const COMPETITIONS_QUERY =
   '    }\n' +
   '  }\n' +
   '}\n';
+
+// Member clubs of a season. The organisation on a team is the club — verified
+// by the 60-organisations-in-EFNL result, which could not be true if it were
+// the league.
+const TEAMS_QUERY =
+  'query discoverTeamsBySeason($seasonId: ID!) {\n' +
+  '  discoverTeams(filter: {seasonID: $seasonId}) {\n' +
+  '    id\n' +
+  '    organisation { id name }\n' +
+  '  }\n' +
+  '}\n';
+
+// discoverOrganisation takes the 8-character code and returns null for a UUID.
+const ORG_QUERY =
+  'query discoverOrganisation($organisationCode: String!) {\n' +
+  '  discoverOrganisation(code: $organisationCode) {\n' +
+  '    id type name address { state }\n' +
+  '  }\n' +
+  '}\n';
+
+// Ceiling on club lookups so a pathological run cannot exhaust the job timeout.
+// If it is hit, the report says so rather than quietly returning less.
+const CLUB_LOOKUP_BUDGET = 8000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let sessionCookie = null;
@@ -158,12 +183,18 @@ async function gql(url, body, useCookie) {
   return { kind: 'ok', data: json.data };
 }
 
-async function fetchAllAssociations() {
+// Paged enumeration from search.playhq.com. `strict` throws on a failed page,
+// which is right for associations because a partial list is a wrong answer.
+// Clubs are a lookup table, so a partial one is still useful and truncation is
+// recorded instead.
+async function fetchAllOrgs(type, { strict, maxPages }) {
   const orgs = new Map();
   let page = 1;
   let totalPages = null;
+  let totalRecords = null;
+  let truncated = null;
 
-  while (page <= MAX_PAGES) {
+  while (page <= maxPages) {
     const r = await gql(
       SEARCH_URL,
       {
@@ -172,31 +203,52 @@ async function fetchAllAssociations() {
         variables: {
           filter: {
             meta: { page, limit: PAGE_LIMIT },
-            organisation: { types: ['ASSOCIATION'], tenantSlug: TENANT_SLUG },
+            organisation: { types: [type], tenantSlug: TENANT_SLUG },
           },
         },
       },
       false
     );
-    if (r.kind !== 'ok') throw new Error(`association page ${page} failed: ${r.kind} ${r.note || ''}`);
+
+    if (r.kind !== 'ok') {
+      if (strict) throw new Error(`${type} page ${page} failed: ${r.kind} ${r.note || ''}`);
+      truncated = `page ${page} failed: ${r.kind} ${r.note || ''}`;
+      break;
+    }
 
     const s = r.data && r.data.search;
-    if (!s) throw new Error(`association page ${page} returned no search node`);
-    totalPages = s.meta && s.meta.totalPages;
+    if (!s) {
+      if (strict) throw new Error(`${type} page ${page} returned no search node`);
+      truncated = `page ${page} returned no search node`;
+      break;
+    }
 
+    totalPages = s.meta && s.meta.totalPages;
+    totalRecords = s.meta && s.meta.totalRecords;
     for (const o of s.results || []) if (o && o.routingCode) orgs.set(o.routingCode, o);
-    log(`  page ${page}/${totalPages} — ${(s.results || []).length} results, ${orgs.size} distinct`);
+    log(`  ${type} page ${page}/${totalPages} — ${(s.results || []).length} results, ${orgs.size} distinct`);
 
     if (!totalPages || page >= totalPages) break;
     page++;
     await sleep(300);
   }
 
+  if (page > maxPages && totalPages && page <= totalPages) {
+    truncated = `stopped at maxPages ${maxPages} of ${totalPages}`;
+  }
+
   // A wrong tenantSlug returns zero records with no error, so an empty result
   // is indistinguishable from a typo unless it is asserted against.
-  if (orgs.size === 0) throw new Error('zero associations returned — check tenantSlug before trusting this');
+  if (strict && orgs.size === 0) {
+    throw new Error('zero results returned — check tenantSlug before trusting this');
+  }
 
-  return [...orgs.values()];
+  return { list: [...orgs.values()], totalPages, totalRecords, truncated };
+}
+
+async function fetchAllAssociations() {
+  const r = await fetchAllOrgs('ASSOCIATION', { strict: true, maxPages: MAX_PAGES });
+  return r.list;
 }
 
 function classify(comps) {
@@ -221,6 +273,144 @@ function classify(comps) {
   if (!live && latestEnd && latestEnd >= TODAY) live = true;
 
   return { activity: live ? 'active' : 'dormant', seasons, latestEnd };
+}
+
+// ---------------------------------------------------------------------------
+// Location resolution for organisations with no address of their own.
+// ---------------------------------------------------------------------------
+
+// Built once from search.playhq.com, so the common case costs no request at all.
+const clubIndex = new Map();
+let clubIndexTruncated = null;
+
+// Individual lookups are now the fallback, not the mechanism — used only for
+// club codes the bulk index did not contain.
+const clubCache = new Map();
+let clubLookups = 0;
+
+async function buildClubIndex() {
+  const r = await fetchAllOrgs('CLUB', { strict: false, maxPages: CLUB_MAX_PAGES });
+  for (const c of r.list) {
+    clubIndex.set(c.routingCode, {
+      name: c.name,
+      stateRaw: (c.address && c.address.state) || null,
+      state: normaliseState(c.address && c.address.state),
+    });
+  }
+  clubIndexTruncated = r.truncated;
+  // totalRecords is clamped at 10,000 on this host while totalPages is not, so
+  // the two disagreeing is expected rather than a fault. Both are recorded.
+  return { size: clubIndex.size, totalRecords: r.totalRecords, totalPages: r.totalPages, truncated: r.truncated };
+}
+
+// The cache holds the in-flight promise, not the settled value. Caching the
+// value instead lets two concurrent workers both miss on the same code before
+// either has finished, which measured out at roughly double the necessary
+// requests.
+function clubState(code) {
+  const hit = clubIndex.get(code);
+  if (hit) return Promise.resolve(hit);
+
+  if (clubCache.has(code)) return clubCache.get(code);
+  if (clubLookups >= CLUB_LOOKUP_BUDGET) return Promise.resolve({ budgetExhausted: true });
+
+  clubLookups++;
+  const p = (async () => {
+    let r = await gql(API_URL, { operationName: 'discoverOrganisation', query: ORG_QUERY, variables: { organisationCode: code } }, true);
+    if (r.kind === 'blocked') {
+      await sleep(2000);
+      await refreshSession();
+      r = await gql(API_URL, { operationName: 'discoverOrganisation', query: ORG_QUERY, variables: { organisationCode: code } }, true);
+    }
+    if (r.kind !== 'ok') return { error: r.kind };
+    const o = r.data && r.data.discoverOrganisation;
+    // A null organisation is not an error and is not "no state" — it is a
+    // lookup that did not resolve, and it is counted separately.
+    return o
+      ? { stateRaw: (o.address && o.address.state) || null, state: normaliseState(o.address && o.address.state), name: o.name }
+      : { notFound: true };
+  })();
+
+  clubCache.set(code, p);
+  return p;
+}
+
+// Prefer a season that is currently running, then one about to, then the most
+// recently finished. A dormant organisation still has clubs worth resolving.
+function pickSeason(seasons) {
+  const byStatus = (v) => (seasons || []).filter((s) => s.status === v);
+  const active = byStatus('ACTIVE');
+  if (active.length) return active[0];
+  const upcoming = byStatus('UPCOMING');
+  if (upcoming.length) return upcoming[0];
+  const done = (seasons || [])
+    .filter((s) => typeof s.endDate === 'string')
+    .sort((a, b) => b.endDate.localeCompare(a.endDate));
+  return done[0] || (seasons || [])[0] || null;
+}
+
+async function resolveFromClubs(rec) {
+  const season = pickSeason(rec.seasons);
+  if (!season) return { resolution: 'noSeason' };
+
+  let r = await gql(API_URL, { operationName: 'discoverTeamsBySeason', query: TEAMS_QUERY, variables: { seasonId: season.id } }, true);
+  if (r.kind === 'blocked') {
+    await sleep(2000);
+    await refreshSession();
+    r = await gql(API_URL, { operationName: 'discoverTeamsBySeason', query: TEAMS_QUERY, variables: { seasonId: season.id } }, true);
+  }
+  if (r.kind !== 'ok') return { resolution: 'teamsFailed', errorKind: r.kind, seasonUsed: season.id };
+
+  const teams = (r.data && r.data.discoverTeams) || [];
+  const codes = new Set();
+  for (const t of teams) {
+    const id = t && t.organisation && t.organisation.id;
+    // routingCode is the first eight hex characters of the UUID, so slicing is
+    // safe whichever form the id arrives in.
+    if (id) codes.add(String(id).slice(0, 8));
+  }
+  if (!codes.size) return { resolution: 'noClubs', seasonUsed: season.id, teams: teams.length };
+
+  const tally = {};
+  let known = 0;
+  let unknown = 0;
+  let budgetHit = false;
+
+  for (const code of codes) {
+    const c = await clubState(code);
+    if (c.budgetExhausted) {
+      budgetHit = true;
+      break;
+    }
+    if (c.state) {
+      tally[c.state] = (tally[c.state] || 0) + 1;
+      known++;
+    } else if (c.stateRaw) {
+      tally['other:' + c.stateRaw] = (tally['other:' + c.stateRaw] || 0) + 1;
+      known++;
+    } else {
+      unknown++;
+    }
+  }
+
+  const ranked = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  if (!ranked.length) {
+    return { resolution: 'clubsHadNoAddress', seasonUsed: season.id, clubs: codes.size, unknown, budgetHit };
+  }
+
+  return {
+    resolution: 'resolved',
+    seasonUsed: season.id,
+    clubs: codes.size,
+    clubsWithState: known,
+    clubsWithoutState: unknown,
+    // The full distribution is kept, not just the winner, so a 51/49 split is
+    // visible rather than being reported as a clean answer.
+    distribution: Object.fromEntries(ranked),
+    inferredState: ranked[0][0],
+    inferredShare: Number((ranked[0][1] / known).toFixed(3)),
+    budgetHit,
+  };
 }
 
 async function pool(items, n, worker) {
@@ -320,6 +510,63 @@ async function main() {
     };
   });
 
+  // -------------------------------------------------------------------------
+  // Phase 3 — resolve a state for every organisation with no address of its
+  // own, from the addresses of its member clubs. Runs every sweep, so a newly
+  // added organisation is classified without anyone looking at it.
+  // Organisations with no seasons are skipped: they have no clubs to ask.
+  // -------------------------------------------------------------------------
+
+  const needResolution = records.filter((r) => !r.hasAddress && r.activity !== 'noSeasons' && r.activity !== 'error');
+
+  let clubIndexStats = { size: 0 };
+  if (needResolution.length) {
+    log('\nbuilding club index from search.playhq.com...');
+    clubIndexStats = await buildClubIndex();
+    log(`  ${clubIndexStats.size} clubs indexed (totalRecords reported ${clubIndexStats.totalRecords}, totalPages ${clubIndexStats.totalPages})`);
+    if (clubIndexStats.truncated) log(`  WARNING: club index truncated — ${clubIndexStats.truncated}`);
+  }
+
+  log(`resolving ${needResolution.length} organisations with no address, from their clubs...`);
+
+  let resolved = 0;
+  await pool(needResolution, CONCURRENCY, async (rec) => {
+    const res = await resolveFromClubs(rec);
+    rec.clubResolution = res;
+    if (res.resolution === 'resolved') {
+      rec.inferredState = res.inferredState;
+      rec.inferredShare = res.inferredShare;
+    }
+    resolved++;
+    if (resolved % 50 === 0) log(`  ${resolved}/${needResolution.length} (${clubLookups} fallback lookups)`);
+  });
+
+  // effectiveState is what downstream code should read: the organisation's own
+  // address where it has one, the club-derived value otherwise, null when
+  // neither is available.
+  for (const rec of records) {
+    rec.effectiveState = rec.state || rec.inferredState || null;
+    rec.stateSource = rec.state ? 'own' : rec.inferredState ? 'clubs' : 'none';
+  }
+
+  const resolutionCounts = {};
+  for (const rec of needResolution) {
+    const k = (rec.clubResolution && rec.clubResolution.resolution) || 'notAttempted';
+    resolutionCounts[k] = (resolutionCounts[k] || 0) + 1;
+  }
+
+  const effectiveByState = {};
+  for (const rec of records) {
+    const k = rec.effectiveState || '(unresolved)';
+    effectiveByState[k] = (effectiveByState[k] || 0) + 1;
+  }
+
+  // A low share means the clubs disagreed. Surfaced rather than buried, because
+  // a 51/49 split is a different fact from a unanimous one.
+  const lowConfidence = records
+    .filter((r) => r.stateSource === 'clubs' && typeof r.inferredShare === 'number' && r.inferredShare < 0.7)
+    .map((r) => `${r.code} ${r.name} -> ${r.inferredState} ${Math.round(r.inferredShare * 100)}%`);
+
   // Cross-tabulation: the question this sweep exists to answer.
   const crosstab = {
     hasAddress: { active: 0, dormant: 0, noSeasons: 0, error: 0 },
@@ -360,6 +607,18 @@ async function main() {
       vicActive: examples.vicActive.length,
       errors: examples.errors.length,
     },
+    clubResolution: {
+      attempted: needResolution.length,
+      outcomes: resolutionCounts,
+      clubIndexSize: clubIndexStats.size,
+      clubIndexTotalRecords: clubIndexStats.totalRecords || null,
+      clubIndexTruncated: clubIndexTruncated || null,
+      fallbackLookups: clubLookups,
+      budgetExhausted: clubLookups >= CLUB_LOOKUP_BUDGET,
+      lowConfidence,
+    },
+    effectiveByState,
+    effectiveVicActive: records.filter((r) => r.effectiveState === 'VIC' && r.activity === 'active').length,
   };
 
   log('\n--- summary ---');
@@ -367,7 +626,15 @@ async function main() {
   log(`with address:    ${JSON.stringify(crosstab.hasAddress)}`);
   log(`without address: ${JSON.stringify(crosstab.noAddress)}`);
   log(`season status values seen: ${JSON.stringify(statusCounts)}`);
-  log(`VIC active: ${summary.counts.vicActive}`);
+  log(`club resolution: ${JSON.stringify(resolutionCounts)}`);
+  log(`club index: ${clubIndexStats.size} clubs, ${clubLookups} individual fallback lookups`);
+  if (clubLookups >= CLUB_LOOKUP_BUDGET) log('WARNING: club lookup budget exhausted — resolution is incomplete');
+  log(`VIC by own address, active: ${summary.counts.vicActive}`);
+  log(`VIC by own address or clubs, active: ${summary.effectiveVicActive}`);
+  if (lowConfidence.length) {
+    log(`clubs disagreed on ${lowConfidence.length} organisations:`);
+    for (const l of lowConfidence.slice(0, 10)) log(`  ${l}`);
+  }
   log(`no address but active: ${summary.counts.noAddressActive}`);
   log(`errors: ${summary.counts.errors}`);
   for (const [k, v] of Object.entries(summary.examples)) {
