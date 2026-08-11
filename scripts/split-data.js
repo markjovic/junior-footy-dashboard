@@ -197,8 +197,12 @@ function main() {
   for (const k of SPLIT_ARRAY_KEYS) rebuilt[k].push(...unplaced[k]);
   for (const k of SPLIT_PREFIX_KEYS) for (const [kk, vv] of unplaced[k]) rebuilt[k][kk] = vv;
 
-  const byIdSort = (a, b) => String(a.id || a.uuid || '').localeCompare(String(b.id || b.uuid || ''));
-  const canonArr = (a) => JSON.stringify([...a].sort(byIdSort));
+  // Sort by the SERIALISED record, not by an id field. Player records have no
+  // `id` and their `uuid` repeats — one record per age per competition — so
+  // sorting on uuid left ties, and Array.sort being stable meant the two sides
+  // kept their own input orders and compared unequal despite holding identical
+  // records. Serialising first is a total order by construction.
+  const canonArr = (a) => JSON.stringify(a.map((x) => JSON.stringify(x)).sort());
   const canonObj = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
 
   let ok = true;
