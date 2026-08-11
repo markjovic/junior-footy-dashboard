@@ -11,7 +11,6 @@
 
 const fs   = require('fs');
 const path = require('path');
-const https = require('https');
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -23,8 +22,8 @@ const DATA_PATH    = path.join(ROOT, 'data', 'data.json');
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
-const API_URL     = 'https://api.playhq.com/graphql';
-const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
+// API_URL and USER_AGENT moved to scripts/lib/playhq.js — leaving copies here
+// would invite someone to change the endpoint in a file that no longer uses it.
 
 // ─── Date helper ─────────────────────────────────────────────────────────────
 
@@ -123,48 +122,14 @@ query discoverFixtureByRound($roundID: ID!) {
 }`;
 
 // ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
+// Session and transport now live in scripts/lib/playhq.js, shared with the other
+// fetchers. gqlPost keeps the same signature and resolved shape, so nothing
+// below this line changed. What it fixes: all three cookies are captured in the
+// required order, the session is refreshed before it expires rather than after
+// it fails, and a CloudFront WAF block, an expired session and an application
+// error are now told apart instead of all being "HTTP error, retry twice".
 
-let SESSION_COOKIE = '';
-
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
-
-function gqlPost(query, variables, operationName) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify(operationName
-      ? { operationName, query, variables }
-      : { query, variables });
-    const req = https.request(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'User-Agent':     USER_AGENT,
-        'Accept':         'application/json',
-        'tenant':         'afl',
-        'origin':         'https://www.playhq.com',
-        'request-id':     require('crypto').randomUUID(),
-        ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
-      },
-      timeout: 60000,
-    }, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        if (res.statusCode !== 200)
-          return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-    req.write(body);
-    req.end();
-  });
-}
+const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
 // ─── Name helpers ─────────────────────────────────────────────────────────────
 
@@ -858,44 +823,10 @@ function rebuildRoster(matches) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function getSession() {
-  const body = JSON.stringify({
-    operationName: 'TenantConfig',
-    variables: {},
-    query: 'query TenantConfig { tenantConfiguration { label } }',
-  });
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    if (attempt > 1) await sleep(attempt * 2000);
-    const raw = await new Promise((resolve) => {
-      const req = require('https').request(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'User-Agent':     USER_AGENT,
-          'Accept':         'application/json',
-          'tenant':         'afl',
-          'origin':         'https://www.playhq.com',
-          'request-id':     require('crypto').randomUUID(),
-        },
-        timeout: 30000,
-      }, res => {
-        resolve(res.headers['set-cookie']?.join(';') || '');
-        res.resume();
-      });
-      req.on('error', () => resolve(''));
-      req.write(body);
-      req.end();
-    });
-    const m = raw.match(/phq_session=([^;]+)/);
-    if (m) {
-      SESSION_COOKIE = `phq_session=${m[1]}`;
-      console.log('Session cookie obtained');
-      return;
-    }
-  }
-  console.warn('Could not obtain session cookie — proceeding without');
-}
+// getSession() removed — scripts/lib/playhq.js acquires a session on first use
+// and refreshes it on age or on a 403, which the old once-at-startup version
+// could not do.
+
 
 
 // ─── Data directory ───────────────────────────────────────────────────────────
@@ -930,7 +861,7 @@ async function main() {
     console.error('config.json not found at', CONFIG_PATH);
     process.exit(1);
   }
-  await getSession();
+  await refreshSession();
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const allCompetitions = config.competitions || [];
   if (!allCompetitions.length) {
@@ -1153,6 +1084,11 @@ async function main() {
   // and every run produces a whole-file diff.
   fs.writeFileSync(DATA_PATH, JSON.stringify(merged), 'utf8');
   console.log(`Wrote data.json`);
+
+  // Never collapse a failure into "no data" — the run's own call outcomes,
+  // printed so a quiet degradation is visible in the log rather than inferred
+  // from a low match count.
+  logSummary('fetch-results');
 
   if (newCount === 0 && updatedCount === 0 && !gradeMetaChanged) {
     console.log('No match or grade metadata changes — skipping commit');

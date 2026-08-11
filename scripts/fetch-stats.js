@@ -442,7 +442,6 @@ if (require.main === module) {
   'use strict';
   const fs   = require('fs');
   const path = require('path');
-  const https = require('https');
 
   const ROOT        = path.resolve(__dirname, '..');
   const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
@@ -473,91 +472,17 @@ if (require.main === module) {
     }
   }
   ensureDataDir();
-  const API_URL     = 'https://api.playhq.com/graphql';
-  const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
+  // Session and transport come from the shared module, the same one
+  // fetch-results.js uses. The local copies removed here captured only
+  // phq_session, never refreshed, and could not tell a CloudFront block from an
+  // expired session. That last point matters most in this script: Phase 2 calls
+  // publicProfileStatistics, where a 403 means the profile is private rather
+  // than the session being stale, and refreshing on it wasted the session quota.
+  const { gqlPost, refreshSession, sleep } = require('./lib/playhq');
   const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  function gqlPost(query, variables, operationName) {
-    return new Promise((resolve, reject) => {
-      const body = JSON.stringify(operationName
-        ? { operationName, query, variables }
-        : { query, variables });
-      const req = https.request(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'User-Agent':     USER_AGENT,
-          'Accept':         'application/json',
-          'tenant':         'afl',
-          'origin':         'https://www.playhq.com',
-          'request-id':     require('crypto').randomUUID(),
-          ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
-        },
-        timeout: 60000,
-      }, res => {
-        let data = '';
-        res.setEncoding('utf8');
-        res.on('data', c => { data += c; });
-        res.on('end', () => {
-          if (res.statusCode !== 200)
-            return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-          try { resolve(JSON.parse(data)); }
-          catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
-        });
-      });
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-      req.write(body);
-      req.end();
-    });
-  }
-
-  let SESSION_COOKIE = '';
-
-  async function getSession() {
-    const body = JSON.stringify({
-      operationName: 'TenantConfig',
-      variables: {},
-      query: 'query TenantConfig { tenantConfiguration { label } }',
-    });
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      if (attempt > 1) await new Promise(r => setTimeout(r, attempt * 2000));
-      const raw = await new Promise((resolve) => {
-        const req = https.request(API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type':   'application/json',
-            'Content-Length': Buffer.byteLength(body),
-            'User-Agent':     USER_AGENT,
-            'Accept':         'application/json',
-            'tenant':         'afl',
-            'origin':         'https://www.playhq.com',
-            'request-id':     require('crypto').randomUUID(),
-          },
-          timeout: 30000,
-        }, res => {
-          resolve(res.headers['set-cookie']?.join(';') || '');
-          res.resume();
-        });
-        req.on('error', () => resolve(''));
-        req.write(body);
-        req.end();
-      });
-      const m = raw.match(/phq_session=([^;]+)/);
-      if (m) {
-        SESSION_COOKIE = `phq_session=${m[1]}`;
-        console.log('Session cookie obtained');
-        return;
-      }
-    }
-    console.warn('Could not obtain session cookie — proceeding without');
-  }
-
   async function main() {
-    await getSession();
+    await refreshSession();
     if (!fs.existsSync(GRADES_PATH)) {
       console.error('grades.json not found — run fetch-results.js first');
       process.exit(1);
@@ -593,6 +518,7 @@ if (require.main === module) {
     // and every run produces a whole-file diff.
     fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
     console.log('Wrote data.json');
+    require('./lib/playhq').logSummary('fetch-stats');
     process.exit(0);
   }
 
