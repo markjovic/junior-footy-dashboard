@@ -32,6 +32,9 @@ const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 const ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
+// Written by discover-orgs.js. Holds every AFL organisation with its seasons, so
+// an unmatched seasonID can be traced to its owner without a single API call.
+const ORG_DISCOVERY_PATH = path.join(ROOT, 'data', 'org-discovery.json');
 
 // A season stops being live 30 days after it ends, not the moment its status
 // flips. Both conditions are required: PlayHQ is not always prompt about
@@ -242,7 +245,49 @@ async function main() {
   if (unmatched.length) {
     console.warn(`\n  WARNING: ${unmatched.length} configured competition(s) could not be matched:`);
     for (const u of unmatched) console.warn(`    ${u.name} seasonID=${u.seasonID}${u.note ? ' — ' + u.note : ''}`);
-    console.warn('  Do not migrate config.json until these are explained — an unmatched');
+
+    // Don't just report the problem — find the answer. discover-orgs.js already
+    // recorded every AFL organisation's seasons, so an unmatched seasonID can be
+    // traced to its owning organisation locally. Without this the user is told
+    // something is wrong and left to search 1,175 organisations by hand.
+    let sweep = null;
+    if (fs.existsSync(ORG_DISCOVERY_PATH)) {
+      try { sweep = JSON.parse(fs.readFileSync(ORG_DISCOVERY_PATH, 'utf8')); }
+      catch (e) { console.warn(`  (could not parse org-discovery.json: ${e.message})`); }
+    }
+
+    if (!sweep) {
+      console.warn('  data/org-discovery.json is absent, so the owning organisation could not');
+      console.warn('  be traced. Run the "Discover organisations" workflow and try again.');
+    } else {
+      const owners = new Map();
+      for (const o of sweep.organisations || []) {
+        for (const s of o.seasons || []) {
+          if (!owners.has(s.id)) owners.set(s.id, { code: o.code, name: o.name, season: s.name, state: o.effectiveState || o.state });
+        }
+      }
+      console.warn('\n  Traced against data/org-discovery.json:');
+      for (const u of unmatched) {
+        const hit = owners.get(u.seasonID);
+        if (hit) {
+          console.warn(
+            `    ${u.name} (season ${u.seasonID}) belongs to ${hit.code} — ` +
+            `"${hit.name}"${hit.state ? ` [${hit.state}]` : ''}, season "${hit.season}"`
+          );
+          const suffix = ' ' + hit.season;
+          const short = u.name.endsWith(suffix) ? u.name.slice(0, -suffix.length) : null;
+          console.warn(
+            `      -> add "${hit.code}" to organisationCodes` +
+            (short ? `; its short name will resolve to "${short}"` : '')
+          );
+        } else {
+          console.warn(`    ${u.name} (season ${u.seasonID}) — not found in org-discovery.json either.`);
+          console.warn('      That sweep only covers type ASSOCIATION under tenantSlug afl, so a');
+          console.warn('      season belonging to a CLUB-type organisation would not appear.');
+        }
+      }
+    }
+    console.warn('\n  Do not migrate config.json until these are resolved — an unmatched');
     console.warn('  competition means compName would change and orphan every stored match id.');
   }
 
@@ -357,6 +402,15 @@ async function main() {
 
   if (failures.length) {
     console.error(`FATAL: ${failures.length} organisation(s) failed — manifest is incomplete`);
+    process.exit(1);
+  }
+  if (unmatched.length) {
+    console.error(
+      `\nFATAL: ${unmatched.length} configured competition(s) have no organisation in the list.\n` +
+      `core.json was still written and is usable, but config.json MUST NOT be migrated yet:\n` +
+      `a competition with no organisation loses its compName, and every stored match id\n` +
+      `built from it is orphaned. Add the traced codes above and re-run.`
+    );
     process.exit(1);
   }
   if (!changed) {
