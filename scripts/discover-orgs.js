@@ -84,6 +84,11 @@ const ORG_QUERY =
 // If it is hit, the report says so rather than quietly returning less.
 const CLUB_LOOKUP_BUDGET = 8000;
 
+// A club-derived state below this share is recorded but NOT used. SANFL
+// Interleague Games came back VIC on a 50/50 split, which is a coin toss
+// dressed as an answer.
+const INFER_MIN_SHARE = 0.6;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let sessionCookie = null;
 
@@ -372,6 +377,7 @@ async function resolveFromClubs(rec) {
   if (!codes.size) return { resolution: 'noClubs', seasonUsed: season.id, teams: teams.length };
 
   const tally = {};
+  const clubList = [];
   let known = 0;
   let unknown = 0;
   let budgetHit = false;
@@ -382,6 +388,7 @@ async function resolveFromClubs(rec) {
       budgetHit = true;
       break;
     }
+    clubList.push({ code, name: c.name || null, state: c.state || null, stateRaw: c.stateRaw || null });
     if (c.state) {
       tally[c.state] = (tally[c.state] || 0) + 1;
       known++;
@@ -393,9 +400,11 @@ async function resolveFromClubs(rec) {
     }
   }
 
+  clubList.sort((a, b) => String(a.name || a.code).localeCompare(String(b.name || b.code)));
+
   const ranked = Object.entries(tally).sort((a, b) => b[1] - a[1]);
   if (!ranked.length) {
-    return { resolution: 'clubsHadNoAddress', seasonUsed: season.id, clubs: codes.size, unknown, budgetHit };
+    return { resolution: 'clubsHadNoAddress', seasonUsed: season.id, clubs: codes.size, unknown, budgetHit, clubList };
   }
 
   return {
@@ -410,6 +419,7 @@ async function resolveFromClubs(rec) {
     inferredState: ranked[0][0],
     inferredShare: Number((ranked[0][1] / known).toFixed(3)),
     budgetHit,
+    clubList,
   };
 }
 
@@ -517,7 +527,10 @@ async function main() {
   // Organisations with no seasons are skipped: they have no clubs to ask.
   // -------------------------------------------------------------------------
 
-  const needResolution = records.filter((r) => !r.hasAddress && r.activity !== 'noSeasons' && r.activity !== 'error');
+  // Every organisation with seasons, not only the unaddressed ones: the club
+  // list is the evidence for checking a classification by hand, and it is worth
+  // having for organisations whose own address we already trust.
+  const needResolution = records.filter((r) => r.activity === 'active' || r.activity === 'dormant');
 
   let clubIndexStats = { size: 0 };
   if (needResolution.length) {
@@ -527,15 +540,17 @@ async function main() {
     if (clubIndexStats.truncated) log(`  WARNING: club index truncated — ${clubIndexStats.truncated}`);
   }
 
-  log(`resolving ${needResolution.length} organisations with no address, from their clubs...`);
+  log(`fetching clubs for ${needResolution.length} organisations with seasons...`);
 
   let resolved = 0;
   await pool(needResolution, CONCURRENCY, async (rec) => {
     const res = await resolveFromClubs(rec);
     rec.clubResolution = res;
+    rec.clubCount = typeof res.clubs === 'number' ? res.clubs : 0;
     if (res.resolution === 'resolved') {
       rec.inferredState = res.inferredState;
       rec.inferredShare = res.inferredShare;
+      rec.inferredAmbiguous = res.inferredShare < INFER_MIN_SHARE;
     }
     resolved++;
     if (resolved % 50 === 0) log(`  ${resolved}/${needResolution.length} (${clubLookups} fallback lookups)`);
@@ -545,8 +560,35 @@ async function main() {
   // address where it has one, the club-derived value otherwise, null when
   // neither is available.
   for (const rec of records) {
-    rec.effectiveState = rec.state || rec.inferredState || null;
-    rec.stateSource = rec.state ? 'own' : rec.inferredState ? 'clubs' : 'none';
+    if (typeof rec.clubCount !== 'number') rec.clubCount = 0;
+    // An address outside Australia is a KNOWN location, not an unknown one.
+    // Folding it in with the addressless organisations overstated how much we
+    // could not place.
+    if (rec.state) {
+      rec.effectiveState = rec.state;
+      rec.stateSource = 'own';
+    } else if (rec.stateRaw) {
+      rec.effectiveState = 'other:' + rec.stateRaw;
+      rec.stateSource = 'own-foreign';
+    } else if (rec.inferredState && !rec.inferredAmbiguous) {
+      rec.effectiveState = rec.inferredState;
+      rec.stateSource = 'clubs';
+    } else {
+      rec.effectiveState = null;
+      rec.stateSource = rec.inferredAmbiguous ? 'ambiguous' : 'none';
+    }
+  }
+
+  const unresolved = records.filter((r) => !r.effectiveState);
+  const unresolvedByActivity = {};
+  const unresolvedReason = {};
+  for (const r of unresolved) {
+    unresolvedByActivity[r.activity] = (unresolvedByActivity[r.activity] || 0) + 1;
+    const reason =
+      r.stateSource === 'ambiguous'
+        ? 'clubsDisagreed'
+        : (r.clubResolution && r.clubResolution.resolution) || 'noSeasonsSoNotAttempted';
+    unresolvedReason[reason] = (unresolvedReason[reason] || 0) + 1;
   }
 
   const resolutionCounts = {};
@@ -563,8 +605,11 @@ async function main() {
 
   // A low share means the clubs disagreed. Surfaced rather than buried, because
   // a 51/49 split is a different fact from a unanimous one.
+  // Only disagreements that actually mattered. An organisation with its own
+  // address is placed by that address, so its clubs disagreeing changes nothing
+  // and reporting it as a problem is noise.
   const lowConfidence = records
-    .filter((r) => r.stateSource === 'clubs' && typeof r.inferredShare === 'number' && r.inferredShare < 0.7)
+    .filter((r) => r.stateSource === 'ambiguous')
     .map((r) => `${r.code} ${r.name} -> ${r.inferredState} ${Math.round(r.inferredShare * 100)}%`);
 
   // Cross-tabulation: the question this sweep exists to answer.
@@ -619,6 +664,12 @@ async function main() {
     },
     effectiveByState,
     effectiveVicActive: records.filter((r) => r.effectiveState === 'VIC' && r.activity === 'active').length,
+    unresolved: {
+      total: unresolved.length,
+      byActivity: unresolvedByActivity,
+      byReason: unresolvedReason,
+      examples: sample(unresolved.filter((r) => r.activity === 'active'), 15),
+    },
   };
 
   log('\n--- summary ---');
@@ -631,6 +682,9 @@ async function main() {
   if (clubLookups >= CLUB_LOOKUP_BUDGET) log('WARNING: club lookup budget exhausted — resolution is incomplete');
   log(`VIC by own address, active: ${summary.counts.vicActive}`);
   log(`VIC by own address or clubs, active: ${summary.effectiveVicActive}`);
+  log(`UNRESOLVED location: ${unresolved.length} of ${records.length}`);
+  log(`  by activity: ${JSON.stringify(unresolvedByActivity)}`);
+  log(`  by reason:   ${JSON.stringify(unresolvedReason)}`);
   if (lowConfidence.length) {
     log(`clubs disagreed on ${lowConfidence.length} organisations:`);
     for (const l of lowConfidence.slice(0, 10)) log(`  ${l}`);
