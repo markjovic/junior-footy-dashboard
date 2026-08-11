@@ -1,0 +1,33 @@
+# .github/workflows/verify-store.yml
+#
+# Runs scripts/verify-store.js against the committed scripts/lib/store.js.
+# Touches nothing: the verification builds its own fixture in a temp directory
+# and never opens data/. There is no commit step and nothing to roll back.
+#
+# Run this BEFORE any writer runs on a new store.js, and after any change to it.
+
+name: Verify store.js
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check scripts/lib/store.js
+          node --check scripts/verify-store.js
+          echo "both files parse"
+
+      # No `set +e` here. Unlike the fetch workflows, a failure must fail the
+      # job — a verification that reports green when it failed is worse than
+      # having no verification at all.
+      - name: Run verification
+        run: node scripts/verify-store.js
