@@ -1,15 +1,16 @@
 # .github/workflows/verify-store.yml
 #
-# Runs both storage-layer verifications. Same filename as before so it replaces
-# the previous version cleanly; the display name changed because it now covers
-# discover-seasons.js as well.
+# Runs every storage-layer verification. Same filename as before so it replaces
+# the previous version cleanly; the display name has changed again because it now
+# covers the results engine and the backfill too.
 #
-# Touches nothing. Both verifications build their own fixtures in temp
-# directories and never open data/ or config.json. There is no commit step and
-# nothing to roll back.
+# Touches nothing. Each verification builds its own fixture in a temp directory
+# and stubs the network, so no PlayHQ call is made and data/ and config.json are
+# never opened. There is no commit step and nothing to roll back.
 #
-# Run this BEFORE any writer runs on a changed store.js or discover-seasons.js,
-# and after any change to either.
+# Run this BEFORE any writer runs on changed code, and after any change to
+# store.js, discover-seasons.js, results-engine.js, fetch-results.js or
+# backfill.js.
 
 name: Verify storage layer
 
@@ -27,19 +28,26 @@ jobs:
 
       - name: Syntax check
         run: |
-          node --check scripts/lib/store.js
-          node --check scripts/discover-seasons.js
-          node --check scripts/verify-store.js
-          node --check scripts/verify-discover-seasons.js
-          echo "all four files parse"
+          for f in scripts/lib/store.js \
+                   scripts/lib/results-engine.js \
+                   scripts/discover-seasons.js \
+                   scripts/fetch-results.js \
+                   scripts/backfill.js \
+                   scripts/verify-store.js \
+                   scripts/verify-discover-seasons.js \
+                   scripts/verify-backfill.js; do
+            node --check "$f" || exit 1
+            echo "  parsed $f"
+          done
 
-      # No `set +e` in either step. Unlike the fetch workflows, a failure must
-      # fail the job — a verification that reports green when it failed is worse
-      # than having no verification at all.
+      # No `set +e` in any step. Unlike the fetch workflows, a failure must fail
+      # the job — a verification that reports green when it failed is worse than
+      # having no verification at all.
       - name: Verify store.js
         run: node scripts/verify-store.js
 
-      # Runs the real discover-seasons.js as a child process with only
-      # scripts/lib/playhq.js stubbed, so it makes no network calls.
       - name: Verify discover-seasons.js
         run: node scripts/verify-discover-seasons.js
+
+      - name: Verify the results engine and backfill
+        run: node scripts/verify-backfill.js
