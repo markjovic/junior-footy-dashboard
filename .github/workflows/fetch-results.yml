@@ -87,7 +87,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data/ data.json grades.json clubs.json
+          git add -A data/
           git diff --staged --quiet || git commit -m "results: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
@@ -140,7 +140,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data/ data.json
+          git add -A data/
           git diff --staged --quiet || git commit -m "stats: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
@@ -179,7 +179,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A data/ data.json
+          git add -A data/
           git diff --staged --quiet || git commit -m "fixtures: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
