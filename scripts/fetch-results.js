@@ -130,6 +130,7 @@ query discoverFixtureByRound($roundID: ID!) {
 // error are now told apart instead of all being "HTTP error, retry twice".
 
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
+const store = require('./lib/store');
 
 // ─── Name helpers ─────────────────────────────────────────────────────────────
 
@@ -927,17 +928,23 @@ async function main() {
   console.log(`Fetching ${vipOnly ? 'VIP' : 'ALL'} competitions: ${competitions.map(c=>c.name).join(', ')}`);
 
 
-  // 2. Load existing data.json
+  // 2. Load existing data, scoped to the competitions this run covers.
+  // store.load() returns the shape data.json had, so nothing below changes.
+  // Scoping is what makes a VIP-only run safe: the other organisations' files
+  // are never opened, so they cannot be overwritten.
+  const storeScope = competitions.map(c => c.name);
   let existing = { matches: [], players: [], gotwFlags: {} };
-  if (fs.existsSync(DATA_PATH)) {
+  {
     try {
-      existing = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
-      console.log(`Loaded data.json: ${(existing.matches || []).length} existing match(es)`);
+      existing = store.load(storeScope);
+      console.log(`Loaded ${storeScope.length} organisation scope(s): ${(existing.matches || []).length} existing match(es)`);
     } catch (e) {
-      console.warn('Could not parse data.json — starting fresh');
+      console.error(`FATAL: ${e.message}`);
+      process.exit(1);
     }
-  } else {
-    console.log('No data.json — will create');
+  }
+  if (!existing.matches.length) {
+    console.log('No existing matches in scope — will create');
   }
 
   // 3. Discover grades (diffs against grades.json cache)
@@ -1162,8 +1169,7 @@ async function main() {
   // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
-  fs.writeFileSync(DATA_PATH, JSON.stringify(merged), 'utf8');
-  console.log(`Wrote data.json`);
+  store.report(store.save(merged, storeScope), 'fetch-results');
 
   // Never collapse a failure into "no data" — the run's own call outcomes,
   // printed so a quiet degradation is visible in the log rather than inferred

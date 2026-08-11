@@ -95,6 +95,7 @@ const OPTS = parseArgs(process.argv.slice(2));
 // could not tell a CloudFront WAF block from an expired session.
 
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
+const store = require('./lib/store');
 
 
 // ─── Query ────────────────────────────────────────────────────────────────────
@@ -195,7 +196,15 @@ async function main() {
   console.log(`Options: ${JSON.stringify(OPTS)}`);
 
   readJson(CONFIG_PATH, 'config.json'); // presence check only
-  const data  = readJson(DATA_PATH, 'data.json');
+  // Unscoped: the club index is derived from every competition's records, and
+  // it writes only cross-organisation keys.
+  let data;
+  try {
+    data = store.load(null);
+  } catch (e) {
+    console.error(`FATAL: ${e.message}`);
+    process.exit(1);
+  }
   const cache = readJson(CLUBS_PATH, 'clubs.json', {});
   console.log(`Loaded data.json: ${(data.matches || []).length} match record(s)`);
   console.log(`Loaded clubs.json cache: ${Object.keys(cache).length} club(s)`);
@@ -352,7 +361,10 @@ async function main() {
   // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
-  fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
+  // Only clubs and teamClub changed, both cross-organisation. Using save()
+  // would rewrite every organisation file with a fresh timestamp and produce a
+  // whole-file diff on every run.
+  store.report(store.saveCore(data), 'build-club-index');
   console.log(`Wrote data.json — ${Object.keys(mergedClubs).length} club(s), ${Object.keys(mergedTeamClub).length} team mapping(s)`);
   process.exit(0);
 }

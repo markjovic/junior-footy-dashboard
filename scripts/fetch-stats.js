@@ -495,6 +495,7 @@ if (require.main === module) {
   // publicProfileStatistics, where a 403 means the profile is private rather
   // than the session being stale, and refreshing on it wasted the session quota.
   const { gqlPost, refreshSession, sleep } = require('./lib/playhq');
+  const store = require('./lib/store');
   const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 
   async function main() {
@@ -516,10 +517,15 @@ if (require.main === module) {
       : allGrades;
     console.log(`Fetching stats for ${vipOnly ? 'VIP' : 'ALL'} comps: ${[...new Set(grades.map(g=>g.compName))].join(', ')} (${grades.length} grades)`);
 
-    let data = { matches: [], players: [], roster: {}, gotwFlags: {} };
-    if (fs.existsSync(DATA_PATH)) {
-      try { data = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); }
-      catch (e) { console.warn('Could not parse data.json — starting fresh'); }
+    // Scoped to the competitions these grades belong to, so a VIP-only run
+    // never opens another organisation's file and therefore cannot overwrite it.
+    const storeScope = [...new Set(grades.map(g => g.compName).filter(Boolean))];
+    let data;
+    try {
+      data = store.load(storeScope);
+    } catch (e) {
+      console.error(`FATAL: ${e.message}`);
+      process.exit(1);
     }
 
     const seasonIDs = new Set(grades.map(g => g.seasonID).filter(Boolean));
@@ -532,8 +538,7 @@ if (require.main === module) {
     // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
     // build-club-index — must agree, or whichever runs next re-inflates the file
     // and every run produces a whole-file diff.
-    fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
-    console.log('Wrote data.json');
+    store.report(store.save(data, storeScope), 'fetch-stats');
     require('./lib/playhq').logSummary('fetch-stats');
     process.exit(0);
   }

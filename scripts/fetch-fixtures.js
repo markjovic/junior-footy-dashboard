@@ -29,6 +29,7 @@ const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 // could not tell a CloudFront WAF block from an expired session.
 
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
+const store = require('./lib/store');
 
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -206,10 +207,16 @@ async function main() {
 
   console.log(`Fetching fixtures for ${vipOnly ? 'VIP' : 'ALL'} comps (${grades.length} grades)`);
 
-  let data = { matches: [], players: [], roster: {}, gotwFlags: {} };
-  if (fs.existsSync(DATA_PATH)) {
-    try { data = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); }
-    catch (e) { console.warn('Could not parse data.json'); }
+  // Scoped to the competitions these grades belong to. The scheduled-record
+  // purge below is therefore bounded to the organisations this run covers —
+  // the other files are never opened.
+  const storeScope = [...new Set(grades.map(g => g.compName).filter(Boolean))];
+  let data;
+  try {
+    data = store.load(storeScope);
+  } catch (e) {
+    console.error(`FATAL: ${e.message}`);
+    process.exit(1);
   }
 
   // Build the existing match index. Scheduled records for the competitions this
@@ -382,7 +389,7 @@ async function main() {
   // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
-  fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
+  store.report(store.save(data, storeScope), 'fetch-fixtures');
   console.log(`\nFixtures: ${newCount} new scheduled records written`);
   console.log('Wrote data.json');
   logSummary('fetch-fixtures');
