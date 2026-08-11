@@ -850,6 +850,88 @@ async function main() {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // P — does discoverTeams work for COMPLETED seasons?
+  // The sweep found 89 organisations returning no clubs, most of them dormant.
+  // discoverFixtureByRound is documented as active-seasons-only; if
+  // discoverTeams shares that restriction, a per-season team registry cannot be
+  // built for past years and the multi-season plan needs rethinking.
+  // EFNL's three seasons are the test: one ACTIVE, two COMPLETED.
+  // -------------------------------------------------------------------------
+
+  const TEAMS_PROBE_QUERY =
+    'query discoverTeamsBySeason($seasonId: ID!) {\n' +
+    '  discoverTeams(filter: {seasonID: $seasonId}) {\n' +
+    '    id name\n' +
+    '    grade { id name }\n' +
+    '    organisation { id name }\n' +
+    '  }\n' +
+    '}\n';
+
+  const seasonsToTest = [
+    { label: 'P1-2026-ACTIVE', id: '2dcbf383', note: 'EFNL 2026, status ACTIVE' },
+    { label: 'P2-2025-COMPLETED', id: '75d8a232', note: 'EFNL 2025, status COMPLETED' },
+    { label: 'P3-2024-COMPLETED', id: 'ca9cc98b', note: 'EFNL 2024, status COMPLETED' },
+  ];
+
+  REPORT.teamsBySeason = {};
+
+  for (const s of seasonsToTest) {
+    const r = await gql({
+      tenant: 'afl',
+      operationName: 'discoverTeamsBySeason',
+      query: TEAMS_PROBE_QUERY,
+      variables: { seasonId: s.id },
+      expect: null,
+    });
+
+    const teams = (r.data && r.data.discoverTeams) || [];
+    const orgIds = new Set();
+    const idLengths = {};
+    let withGrade = 0;
+
+    for (const t of teams) {
+      if (t.grade && t.grade.id) withGrade++;
+      const oid = t.organisation && t.organisation.id;
+      if (oid) {
+        orgIds.add(oid);
+        idLengths[String(oid).length] = (idLengths[String(oid).length] || 0) + 1;
+      }
+    }
+
+    const rec = {
+      seasonId: s.id,
+      note: s.note,
+      kind: r.kind,
+      errors: r.errors || null,
+      teams: teams.length,
+      withGrade,
+      distinctOrganisations: orgIds.size,
+      organisationIdLengths: idLengths,
+      sampleOrganisations: [...orgIds].slice(0, 3),
+      sampleTeams: teams.slice(0, 3).map((t) => ({
+        name: t.name,
+        grade: t.grade && t.grade.name,
+        org: t.organisation && t.organisation.name,
+      })),
+    };
+    REPORT.teamsBySeason[s.label] = rec;
+
+    log(`\n[${s.label}] ${s.note}`);
+    log(`  kind=${r.kind} teams=${teams.length} withGrade=${withGrade} distinctOrgs=${orgIds.size}`);
+    if (r.errors) for (const e of r.errors) log(`  error: ${e.message}`);
+    log(`  organisation id lengths: ${JSON.stringify(idLengths)}`);
+    for (const t of rec.sampleTeams) log(`    ${t.name} | ${t.grade} | ${t.org}`);
+    await sleep(500);
+  }
+
+  // EFNL 2026 returning many organisations rather than one settles the standing
+  // question of whether organisation on a team is the club or the league.
+  const active = REPORT.teamsBySeason['P1-2026-ACTIVE'];
+  if (active && active.distinctOrganisations > 1) {
+    log(`\n>>> organisation on a team is the CLUB, not the league: ${active.distinctOrganisations} distinct organisations in one EFNL season.`);
+  }
+
   REPORT.finishedAt = new Date().toISOString();
   fs.writeFileSync(REPORT_PATH, JSON.stringify(REPORT, null, 2));
   log(`\nReport written to ${REPORT_PATH}`);
