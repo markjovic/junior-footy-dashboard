@@ -13,8 +13,6 @@
 'use strict';
 const fs    = require('fs');
 const path  = require('path');
-const https = require('https');
-const crypto = require('crypto');
 
 const ROOT        = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -22,87 +20,16 @@ const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 const DATA_PATH   = path.join(ROOT, 'data', 'data.json');
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
-const API_URL     = 'https://api.playhq.com/graphql';
-const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+// ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
+// Session and transport come from the shared module, so all four writers behave
+// identically. The local copies removed here captured only phq_session — not
+// phq_tier or phq_sub, which playhq_api_reference.md requires in that order —
+// never refreshed inside a run longer than the 30-40 minute cookie life, and
+// could not tell a CloudFront WAF block from an expired session.
 
-let SESSION_COOKIE = '';
+const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-// ─── HTTP ─────────────────────────────────────────────────────────────────────
-function gqlPost(query, variables) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ query, variables });
-    const req = https.request(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'User-Agent':     USER_AGENT,
-        'Accept':         'application/json',
-        'tenant':         'afl',
-        'origin':         'https://www.playhq.com',
-        'request-id':     crypto.randomUUID(),
-        ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
-      },
-      timeout: 60000,
-    }, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        if (res.statusCode !== 200)
-          return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-    req.write(body);
-    req.end();
-  });
-}
-
-// ─── Session cookie ───────────────────────────────────────────────────────────
-async function getSession() {
-  const body = JSON.stringify({
-    operationName: 'TenantConfig',
-    variables: {},
-    query: 'query TenantConfig { tenantConfiguration { label } }',
-  });
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    if (attempt > 1) await sleep(attempt * 2000);
-    const raw = await new Promise((resolve) => {
-      const req = https.request(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'User-Agent':     USER_AGENT,
-          'Accept':         'application/json',
-          'tenant':         'afl',
-          'origin':         'https://www.playhq.com',
-          'request-id':     crypto.randomUUID(),
-        },
-        timeout: 30000,
-      }, res => {
-        resolve(res.headers['set-cookie']?.join(';') || '');
-        res.resume();
-      });
-      req.on('error', () => resolve(''));
-      req.write(body);
-      req.end();
-    });
-    const m = raw.match(/phq_session=([^;]+)/);
-    if (m) {
-      SESSION_COOKIE = `phq_session=${m[1]}`;
-      console.log('Session cookie obtained');
-      return;
-    }
-  }
-  console.warn('Could not obtain session cookie — proceeding without');
-}
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 const Q_GRADE_ROUNDS = `
@@ -260,7 +187,7 @@ function ensureDataDir() {
 
 async function main() {
   ensureDataDir();
-  await getSession();
+  await refreshSession();
 
   // Read grades from cache — no discovery, that's fetch-results.js's job
   if (!fs.existsSync(GRADES_PATH)) {
@@ -285,10 +212,36 @@ async function main() {
     catch (e) { console.warn('Could not parse data.json'); }
   }
 
-  // Build existing match index — purge all old scheduled records first
-  // (scheduled record IDs include the age string, which may have changed)
-  const byId = new Map(data.matches.filter(m => !m.scheduled).map(m => [m.id, m]));
-  console.log(`Purged existing scheduled records. ${byId.size} real matches retained.`);
+  // Build the existing match index. Scheduled records for the competitions this
+  // run covers are purged and rewritten, because their ids embed the age string
+  // and that can change.
+  //
+  // ⚠️ Scheduled records for competitions this run does NOT cover are RETAINED.
+  // Purging all of them and re-adding only the ones fetched meant a VIP_ONLY run
+  // deleted every other competition's fixtures until the next all-competition
+  // run replaced them. EFNL is the only vip:true competition, so that was most
+  // runs. This is the same defect fetch-results.js already fixes for grades.json
+  // and gradeMeta, and fetch-stats.js for players — anything derived from a
+  // filtered grade list must merge per competition rather than replace.
+  const coveredComps = new Set(grades.map(g => g.compName));
+  const keptScheduled = data.matches.filter(m => m.scheduled && !coveredComps.has(m.compName));
+  const byId = new Map(
+    data.matches
+      .filter(m => !m.scheduled || !coveredComps.has(m.compName))
+      .map(m => [m.id, m])
+  );
+  console.log(
+    `Purged scheduled records for [${[...coveredComps].join(', ')}]. ` +
+    `${byId.size - keptScheduled.length} real matches and ` +
+    `${keptScheduled.length} scheduled record(s) from other competitions retained.`
+  );
+
+  // Compared against the final state to decide the exit code. Sorted by id
+  // because byId's insertion order is not stable across runs and an ordering
+  // difference is not a change.
+  const canonical = arr =>
+    JSON.stringify([...arr].sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  const matchesBefore = canonical(data.matches);
   const today = new Date().toISOString().slice(0, 10);
 
   let newCount = 0;
@@ -432,6 +385,16 @@ async function main() {
   fs.writeFileSync(DATA_PATH, JSON.stringify(data), 'utf8');
   console.log(`\nFixtures: ${newCount} new scheduled records written`);
   console.log('Wrote data.json');
+  logSummary('fetch-fixtures');
+
+  // Exit codes now match the other three writers: 0 = changed, 2 = no change,
+  // 1 = fatal. Previously main() simply returned, so every run exited 0 and the
+  // workflow always reached its commit step.
+  if (canonical(data.matches) === matchesBefore) {
+    console.log('No fixture changes — skipping commit');
+    process.exit(2);
+  }
+  process.exit(0);
 }
 
 main().catch(e => { console.error('Fatal:', e); process.exit(1); });

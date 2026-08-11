@@ -53,8 +53,6 @@
 
 const fs     = require('fs');
 const path   = require('path');
-const https  = require('https');
-const crypto = require('crypto');
 
 const ROOT        = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -62,8 +60,6 @@ const DATA_PATH   = path.join(ROOT, 'data', 'data.json');
 const CLUBS_PATH  = path.join(ROOT, 'data', 'clubs.json');
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '250', 10);
-const API_URL     = 'https://api.playhq.com/graphql';
-const USER_AGENT  = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
 
 // Cooldown pacing. probe-club-index.js saw "There was an error. Please try
 // again later." from PlayHQ after a run of calls, so this paces deliberately.
@@ -91,76 +87,15 @@ const OPTS = parseArgs(process.argv.slice(2));
 
 // ─── HTTP (copied from fetch-results.js) ──────────────────────────────────────
 
-let SESSION_COOKIE = '';
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
+// Session and transport come from the shared module, so all four writers behave
+// identically. The local copies removed here captured only phq_session — not
+// phq_tier or phq_sub, which playhq_api_reference.md requires in that order —
+// never refreshed inside a run longer than the 30-40 minute cookie life, and
+// could not tell a CloudFront WAF block from an expired session.
 
-function gqlPost(query, variables) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ query, variables });
-    const req = https.request(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'User-Agent':     USER_AGENT,
-        'Accept':         'application/json',
-        'tenant':         'afl',
-        'origin':         'https://www.playhq.com',
-        'request-id':     crypto.randomUUID(),
-        ...(SESSION_COOKIE ? { 'Cookie': SESSION_COOKIE } : {}),
-      },
-      timeout: 60000,
-    }, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => { data += c; });
-      res.on('end', () => {
-        if (res.statusCode !== 200) {
-          try { return resolve(JSON.parse(data)); }
-          catch { return reject(new Error(`HTTP ${res.statusCode}: ${data.slice(0, 200)}`)); }
-        }
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error(`JSON parse: ${e.message}`)); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-    req.write(body);
-    req.end();
-  });
-}
+const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-async function getSession() {
-  const body = JSON.stringify({
-    operationName: 'TenantConfig',
-    variables: {},
-    query: 'query TenantConfig { tenantConfiguration { label } }',
-  });
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    if (attempt > 1) await sleep(attempt * 2000);
-    const raw = await new Promise(resolve => {
-      const req = https.request(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'User-Agent':     USER_AGENT,
-          'Accept':         'application/json',
-          'tenant':         'afl',
-          'origin':         'https://www.playhq.com',
-          'request-id':     crypto.randomUUID(),
-        },
-        timeout: 30000,
-      }, res => { resolve(res.headers['set-cookie']?.join(';') || ''); res.resume(); });
-      req.on('error', () => resolve(''));
-      req.write(body);
-      req.end();
-    });
-    const m = raw.match(/phq_session=([^;]+)/);
-    if (m) { SESSION_COOKIE = `phq_session=${m[1]}`; console.log('Session cookie obtained'); return; }
-  }
-  console.warn('Could not obtain session cookie — proceeding without');
-}
 
 // ─── Query ────────────────────────────────────────────────────────────────────
 // Argument name and shape copied from the live playhq.com call, not written
@@ -272,6 +207,26 @@ async function main() {
   const noLogo   = new Set(); // "comp|team|age" with no logo on any record
   const withLogo = new Set();
 
+  // teamOrg is written by fetch-results.js at fetch time, keyed comp|team|age,
+  // and is authoritative: the competition and age were known when the logo was
+  // read, so nothing is inferred. It supersedes scanning hLogo/aLogo on match
+  // records, which fetch-results.js no longer stores.
+  const teamOrgMap = data.teamOrg || {};
+  let fromTeamOrg = 0;
+  for (const [key, id] of Object.entries(teamOrgMap)) {
+    const comp = key.slice(0, key.indexOf('|'));
+    if (OPTS.comp && !comp.toLowerCase().includes(OPTS.comp.toLowerCase())) continue;
+    if (!id) continue;
+    withLogo.add(key);
+    if (!votes.has(key)) votes.set(key, new Map());
+    votes.get(key).set(id, (votes.get(key).get(id) || 0) + 1);
+    fromTeamOrg++;
+  }
+  console.log(`Club codes from teamOrg (fetch-time): ${fromTeamOrg}`);
+
+  // Fallback for records written before that change, and for the scheduled
+  // fixtures fetch-fixtures.js still stores logos on.
+  let fromMatchLogos = 0;
   for (const m of (data.matches || [])) {
     if (m.isBye || m.isPartial) continue;
     const comp = m.compName || '';
@@ -291,8 +246,10 @@ async function main() {
       if (!votes.has(key)) votes.set(key, new Map());
       const v = votes.get(key);
       v.set(id, (v.get(id) || 0) + 1);
+      fromMatchLogos++;
     }
   }
+  console.log(`Club codes from match logos (fallback): ${fromMatchLogos}`);
   for (const k of [...noLogo]) if (withLogo.has(k)) noLogo.delete(k);
 
   // Resolve each team to a single club id, reporting any disagreement rather
@@ -324,7 +281,7 @@ async function main() {
   const toResolve = [...clubIds].filter(id => OPTS.refresh || !cache[id]).sort();
   console.log(`\n${toResolve.length} club id(s) to resolve (${clubIds.size - toResolve.length} already cached).`);
 
-  if (toResolve.length) await getSession();
+  if (toResolve.length) await refreshSession();
 
   let resolved = 0, failed = 0, notClub = 0;
   let idx = 0;
@@ -360,6 +317,21 @@ async function main() {
   // ── Write ──
   const before = JSON.stringify({ clubs: data.clubs || {}, teamClub: data.teamClub || {} });
   // A --comp run must not delete mappings for other competitions.
+  // ⚠️ A full run REPLACES teamClub, so a run that resolved almost nothing would
+  // silently wipe it. That is exactly what happened when fetch-results.js
+  // stopped storing hLogo/aLogo and this script's only evidence source vanished.
+  // Refuse rather than commit an empty index — "no data" must never be mistaken
+  // for "no clubs".
+  const priorTeamClubCount = Object.keys(data.teamClub || {}).length;
+  if (!OPTS.comp && priorTeamClubCount > 0 && Object.keys(teamClub).length < priorTeamClubCount * 0.5) {
+    console.error(
+      `FATAL: resolved ${Object.keys(teamClub).length} team-to-club mappings but ${priorTeamClubCount} ` +
+      `are already stored. A full run replaces teamClub, so this would discard most of it.\n` +
+      `Check that data.teamOrg is populated — fetch-results.js writes it, and this script depends on it.`
+    );
+    process.exit(1);
+  }
+
   const mergedTeamClub = OPTS.comp ? { ...(data.teamClub || {}), ...teamClub } : teamClub;
   const mergedClubs    = { ...(data.clubs || {}), ...clubs };
   const after = JSON.stringify({ clubs: mergedClubs, teamClub: mergedTeamClub });
