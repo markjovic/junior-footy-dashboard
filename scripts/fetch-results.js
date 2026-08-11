@@ -422,12 +422,12 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     await sleep(FETCH_DELAY);
   } catch (e) {
     console.log(`    gradeRounds error: ${e.message}`);
-    return { matches: [], hit403: true, logos: {} };
+    return { matches: [], hit403: true, logos: {}, teamOrgs: {} };
   }
 
   if (!roundList?.length) {
     console.log(`    no rounds returned`);
-    return { matches: [], hit403: false, logos: {} };
+    return { matches: [], hit403: false, logos: {}, teamOrgs: {} };
   }
 
   // If grade-level dates are available and all are in the past,
@@ -437,7 +437,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
     const latestDate = latestMonth + '-31'; // end of that month
     if (latestDate < today) {
       console.log(`    season ended (last month: ${latestMonth}) — skipping`);
-      return { matches: [], hit403: false, logos: {} };
+      return { matches: [], hit403: false, logos: {}, teamOrgs: {} };
     }
   }
 
@@ -449,6 +449,18 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
   // provisional records, which this script does not own. Measured 2026-08-11:
   // hLogo + aLogo were 3.82 MB of a 36.57 MB data.json for 167 distinct URLs.
   const logos = {};
+
+  // Club identity, captured at fetch time rather than reconstructed later.
+  // PlayHQ logo URLs embed the owning organisation's UUID under
+  // /production/afl/<uuid>/, whose first 8 hex characters are the public
+  // organisation code. build-club-index.js recovered this by scanning hLogo and
+  // aLogo on every match record; those are no longer stored, and here the
+  // competition and age are known, so the key is exact rather than inferred.
+  const teamOrgs = {};
+  const orgCodeFromLogo = (url) => {
+    const m = String(url || '').match(/\/production\/[a-z]+\/([0-9a-f]{8})-[0-9a-f-]+\//i);
+    return m ? m[1].toLowerCase() : '';
+  };
 
   const finalsAbbrevOf = r =>
     r.isFinalsRound === true ? (r.abbreviatedName || String(parseInt(r.number, 10) || 0)) : '';
@@ -673,6 +685,14 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
       const aUrl = getLogoUrl(game.away?.logo);
       if (hUrl) logos[homeName] = hUrl;
       if (aUrl) logos[awayName] = aUrl;
+
+      // Keyed comp|team|age, matching rebuildRoster and teamClub exactly. Age is
+      // load-bearing: cleanTeam strips it, and PlayHQ registers the senior and
+      // junior arms of a club as separate organisations.
+      const hOrg = orgCodeFromLogo(hUrl);
+      const aOrg = orgCodeFromLogo(aUrl);
+      if (hOrg) teamOrgs[`${grade.compName}|${homeName}|${age}`] = hOrg;
+      if (aOrg) teamOrgs[`${grade.compName}|${awayName}|${age}`] = aOrg;
     }
 
     const isPartial = finalGames.length < games.length;
@@ -724,10 +744,11 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals) {
       matches: allMatches.filter(m => !(m.isPartial && stalledTokens.has(tokenOfMatch(m)))),
       hit403: false,
       logos,
+      teamOrgs,
     };
   }
 
-  return { matches: allMatches, hit403: false, logos };
+  return { matches: allMatches, hit403: false, logos, teamOrgs };
   } catch (e) {
     console.error(`  FATAL ERROR in [${name}]: ${e.message}`);
     return allMatches;
@@ -987,6 +1008,7 @@ async function main() {
   let resultsGradeIdx = 0;
   let consecutive403s = 0;
   const fetchedLogos = {};
+  const fetchedTeamOrgs = {};
 
   for (const grade of grades) {
     resultsGradeIdx++;
@@ -996,8 +1018,9 @@ async function main() {
       await sleep(60000);
       consecutive403s = 0;
     }
-    const { matches, hit403, logos } = await fetchGrade(grade, knownRounds, byId, knownFinals);
+    const { matches, hit403, logos, teamOrgs } = await fetchGrade(grade, knownRounds, byId, knownFinals);
     Object.assign(fetchedLogos, logos);
+    Object.assign(fetchedTeamOrgs, teamOrgs);
     if (hit403) {
       consecutive403s++;
       if (consecutive403s >= 3) {
@@ -1057,6 +1080,10 @@ async function main() {
   // Merged over the stored map, so teams not covered by this run keep the URL
   // they already had — a VIP-only run must not drop the other competitions.
   const teamLogos = { ...(existing.teamLogos || {}), ...fetchedLogos };
+
+  // Merged over the stored map for the same reason as teamLogos: a VIP-only run
+  // covers one competition and must not delete the other four.
+  const teamOrg = { ...(existing.teamOrg || {}), ...fetchedTeamOrgs };
   // Use allWithByes for round tracking so byes advance lastRound correctly
   allWithByes.forEach(m => {
     if (m.scheduled) return; // don't let fixture records affect lastRound
@@ -1082,6 +1109,7 @@ async function main() {
       strippedLogos++;
     }
   });
+  console.log(`Team-to-club codes: ${Object.keys(fetchedTeamOrgs).length} from this run, ${Object.keys(teamOrg).length} total`);
   if (strippedLogos) {
     console.log(`Stripped per-match logo URLs from ${strippedLogos} record(s) — teamLogos holds ${Object.keys(teamLogos).length}`);
   }
@@ -1121,6 +1149,7 @@ async function main() {
     gradeMeta,
     lastRound,
     teamLogos,
+    teamOrg,
     compLogos,
     lastUpdated: new Date().toISOString(),
     lastResultsFetch: new Date().toISOString(),
