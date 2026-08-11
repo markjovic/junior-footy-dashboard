@@ -396,26 +396,31 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
     }
     players.push({
       uuid,
+      // firstName and lastName are NOT stored. index.html reads player.name
+      // seven times and neither component even once, so they were 1.81 MB of
+      // write-only data. Measured 2026-08-11.
       name:       `${primary.firstName} ${primary.lastName}`.trim(),
-      firstName:  primary.firstName,
-      lastName:   primary.lastName,
       team:       toClubName(primary.teamRaw),  // bare club name e.g. "East Ringwood"
       teamRaw:    primary.teamRaw,              // full name e.g. "East Ringwood U12"
       rawGrade:   primary.rawGrade,             // primary grade e.g. "C"
       age:        primary.age,                  // e.g. "U12"
       compName:   primary.compName,
+      // gradeID is kept as the join key to grades.json — it is what a future
+      // archive uses to resolve a season-scoped grade. gradeName is dropped:
+      // unread by index.html, and derivable from gradeID. 1.53 MB.
       gradeID:    primary.gradeID,
-      gradeName:  primary.gradeName,
       gp:         totalGP,
       goals:      totalGoals,
       bestPlayer: totalBP,
       transferred,
       clubs,
       // Per-grade breakdown — for team roster and transfer history features
+      // gradeName (2.21 MB) and rawGrade (1.07 MB) are dropped here too —
+      // neither is read anywhere in index.html, and both follow from gradeID.
+      // team and teamRaw stay: index.html reads app.team six times and
+      // app.teamRaw three, to attribute a multi-grade player to one side.
       appearances: appearances.map(a => ({
         gradeID:   a.gradeID,
-        gradeName: a.gradeName,
-        rawGrade:  a.rawGrade,
         teamRaw:   a.teamRaw,
         team:      toClubName(a.teamRaw),
         gp:         a.gp,
@@ -429,7 +434,18 @@ async function fetchAllStats(grades, data, seasonIDs, gqlPost, sleep) {
     `(${players.filter(p=>p.transferred).length} transferred, ` +
     `${players.filter(p=>p.goals>0).length} with goals)`);
 
-  data.players = players;
+  // ⚠️ Merged per COMPETITION, not replaced wholesale.
+  //
+  // EFNL is the only vip:true competition, so a VIP_ONLY stats run builds
+  // players from EFNL's grades alone. Assigning that array over data.players
+  // deleted every other competition's players until the next all-competition
+  // run put them back. fetch-results.js already carries this fix for
+  // grades.json and gradeMeta; this is the same defect in the same shape.
+  const coveredComps = new Set(grades.map(g => g.compName));
+  const keptPlayers = (data.players || []).filter(p => !coveredComps.has(p.compName));
+  console.log(`  Writing ${players.length} player(s) for [${[...coveredComps].join(', ')}], ` +
+    `keeping ${keptPlayers.length} from competitions this run did not cover`);
+  data.players = [...keptPlayers, ...players];
 }
 
 module.exports = { fetchAllStats };
