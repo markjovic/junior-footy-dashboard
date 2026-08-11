@@ -22,8 +22,19 @@
 // fetch-fixtures — and this makes it structural rather than remembered.
 //
 // Layout: storage_ingestion_design.md §3.
+//
+// v2, 2026-08-12 — per-season completeness, storage_ingestion_design.md §6.1a.
+// meta.phases is now keyed by season id instead of being one flag pair for the
+// whole file, and the same figures are copied into the manifest so the dashboard
+// can decide what to fetch without downloading an archive to find out. The file
+// is authoritative if the two ever disagree. Also in v2: the loss check covers
+// roster and gradeMeta, and runs before the write loop rather than after it.
 
 'use strict';
+
+// Bump on every change. Printed by report() so a stale copy in an Actions log
+// is distinguishable from a real failure.
+const STORE_VERSION = 'v2 2026-08-12 per-season-phases';
 
 const fs = require('fs');
 const path = require('path');
@@ -149,75 +160,155 @@ function load(scope) {
 /**
  * Distribute data back to the organisation files and core.json.
  * Only files covered by scope are rewritten.
- * @returns {{written: string[], skipped: number, unplaced: object, rolledOver: object[]}}
+ * @returns {{written: string[], skipped: number, emptied: string[],
+ *            unplaced: object, rolledOver: object[], seasonPhases: object[]}}
  */
 function save(data, scope) {
   const core = data.__core || loadCore();
   const idx = compIndex(core);
   const scopeSet = scope ? new Set(scope) : null;
 
-  // Bucket every record by the file it belongs in.
+  // Bucket every record by the file it belongs in, and count it against the
+  // season it came from. The per-season counts are what meta.phases is built
+  // from: a single flag per file cannot describe an archive holding three
+  // seasons, one of which has players and two of which do not.
   const buckets = new Map();
   const unplaced = {};
+  const rolledOverSeen = new Set();
   const rolledOver = [];
 
   function bucket(entry) {
     const kind = entry.retired ? 'archive' : 'current';
     const key = `${entry.org}|${kind}`;
     if (!buckets.has(key)) {
-      buckets.set(key, { org: entry.org, kind, seasons: new Set(), matches: [], players: [], roster: {}, gradeMeta: {} });
+      buckets.set(key, {
+        org: entry.org, kind,
+        seasons: new Set(), counts: new Map(),
+        matches: [], players: [], roster: {}, gradeMeta: {},
+      });
     }
     const b = buckets.get(key);
     b.seasons.add(entry.seasonId);
+    if (!b.counts.has(entry.seasonId)) {
+      b.counts.set(entry.seasonId, { matches: 0, players: 0, roster: 0, gradeMeta: 0 });
+    }
     return b;
   }
 
+  // Returns the bucket AND the season the record belongs to. A record carries
+  // compName and nothing else, so the season id has to come from the manifest
+  // at the same point the organisation does.
   function place(compName, key) {
     const e = idx.get(compName);
     if (!e) {
       if (!unplaced[key]) unplaced[key] = {};
-      unplaced[key][compName || '(none)'] = (unplaced[key][compName || '(none)'] || 0) + 1;
+      const c = compName || '(none)';
+      unplaced[key][c] = (unplaced[key][c] || 0) + 1;
       return null;
     }
     // A season that retired since the last run has its records in -current;
-    // bucketing by the manifest's current flag moves them to -archive, and both
-    // files are rewritten below, which is the rollover.
-    if (e.retired) rolledOver.push({ comp: compName, org: e.org, seasonId: e.seasonId });
-    return bucket(e);
+    // bucketing by the manifest's retired flag moves them to -archive, and both
+    // files are rewritten below, which is the rollover. Recorded once per
+    // season — it used to be pushed once per record, which produced thousands
+    // of identical entries on a backfill.
+    if (e.retired && !rolledOverSeen.has(e.seasonId)) {
+      rolledOverSeen.add(e.seasonId);
+      rolledOver.push({ comp: compName, org: e.org, seasonId: e.seasonId });
+    }
+    return { b: bucket(e), seasonId: e.seasonId };
   }
 
   for (const k of ARRAY_KEYS) {
     for (const rec of data[k] || []) {
-      const b = place(rec.compName, k);
-      if (b) b[k].push(rec);
+      const r = place(rec.compName, k);
+      if (!r) continue;
+      r.b[k].push(rec);
+      r.b.counts.get(r.seasonId)[k]++;
     }
   }
   for (const k of PREFIX_KEYS) {
     for (const [kk, vv] of Object.entries(data[k] || {})) {
       const comp = kk.slice(0, kk.indexOf('|'));
-      const b = place(comp, k);
-      if (b) b[k][kk] = vv;
+      const r = place(comp, k);
+      if (!r) continue;
+      r.b[k][kk] = vv;
+      r.b.counts.get(r.seasonId)[k]++;
     }
   }
 
   // Which files this save is allowed to touch. Anything outside the scope keeps
   // whatever it already holds — that is the property that makes a VIP-only run
-  // safe by construction.
+  // safe by construction. Files the scope COVERS, not files that exist, so a
+  // backfill can create an organisation's first -archive.json.
   const allowed = scopeSet ? new Set(filesForScope(core, scopeSet, false)) : null;
+  const inScope = (b) => !allowed || allowed.has(orgFilePath(b.org, b.kind));
+
+  // ── The loss check, BEFORE anything is written ──────────────────────────────
+  // A save that cannot prove it kept everything is not a save. Count what came
+  // in against what reached a bucket inside scope; anything skipped or unplaced
+  // is a record that will not be on disk.
+  //
+  // Two changes from the first version. It covers PREFIX_KEYS as well as
+  // ARRAY_KEYS, because a roster or gradeMeta key with no manifest entry used to
+  // be dropped with a warning while the save exited zero. And it runs before the
+  // write loop rather than after it, because a save that throws should not
+  // already have rewritten half the files.
+  const bucketed = {};
+  for (const k of [...ARRAY_KEYS, ...PREFIX_KEYS]) bucketed[k] = 0;
+  for (const b of buckets.values()) {
+    if (!inScope(b)) continue;
+    for (const k of ARRAY_KEYS) bucketed[k] += b[k].length;
+    for (const k of PREFIX_KEYS) bucketed[k] += Object.keys(b[k]).length;
+  }
+  const lost = {};
+  for (const k of ARRAY_KEYS) {
+    const n = (data[k] || []).length;
+    if (bucketed[k] !== n) lost[k] = { in: n, would: bucketed[k] };
+  }
+  for (const k of PREFIX_KEYS) {
+    const n = Object.keys(data[k] || {}).length;
+    if (bucketed[k] !== n) lost[k] = { in: n, would: bucketed[k] };
+  }
+  if (Object.keys(lost).length) {
+    for (const [key, comps] of Object.entries(unplaced)) {
+      for (const [c, n] of Object.entries(comps)) {
+        console.error(`  ${key}: ${n} record(s) for "${c}" have no manifest entry`);
+      }
+    }
+    const detail = Object.entries(lost)
+      .map(([k, v]) => `${k}: ${v.in} in, ${v.would} would be written`).join('; ');
+    throw new Error(
+      `store.save would lose records — ${detail}. NOTHING HAS BEEN WRITTEN. ` +
+      `Either a bucket fell outside the scope, or a competition is missing from ` +
+      `the manifest — run "Discover seasons" if a season is new.`
+    );
+  }
+
   // Recorded before writing, so "emptied" means a file that HAD content and now
   // has none — not one that never existed.
   const existedBefore = new Set(listOrgFiles().map((f) => path.join(ORGS_DIR, f)));
-
   fs.mkdirSync(ORGS_DIR, { recursive: true });
+
   const written = [];
+  const seasonPhases = new Map();
   let skipped = 0;
 
   for (const b of buckets.values()) {
     const p = orgFilePath(b.org, b.kind);
-    // One guard, on scope membership alone. The old second guard also skipped
-    // when the file did not exist, which made creating a new organisation or
-    // archive file impossible from a scoped run.
-    if (allowed && !allowed.has(p)) { skipped++; continue; }
+    if (!inScope(b)) { skipped++; continue; }
+
+    // Per season, not per file. The counts are stored alongside the flags so a
+    // claim of results:true has a number behind it that can be checked.
+    const phases = {};
+    for (const [seasonId, c] of b.counts) {
+      phases[seasonId] = {
+        results: c.matches > 0,
+        players: c.players > 0,
+        matches: c.matches,
+        players_n: c.players,
+      };
+      seasonPhases.set(seasonId, phases[seasonId]);
+    }
 
     const payload = {
       meta: {
@@ -225,7 +316,7 @@ function save(data, scope) {
         kind: b.kind,
         seasons: [...b.seasons].sort(),
         generatedAt: new Date().toISOString(),
-        phases: { results: b.matches.length > 0, players: b.players.length > 0 },
+        phases,
       },
       matches: b.matches,
       players: b.players,
@@ -249,36 +340,25 @@ function save(data, scope) {
     }
   }
 
-  // A save that cannot prove it kept everything is not a save. Count what came
-  // in against what went to a bucket; anything skipped or unplaced is a record
-  // that will not be on disk. This is the check that would have caught the
-  // scoped-save file-creation bug, which discarded records while reporting
-  // success.
-  const bucketed = {};
-  for (const k of ARRAY_KEYS) bucketed[k] = 0;
-  for (const b of buckets.values()) {
-    const p = orgFilePath(b.org, b.kind);
-    if (allowed && !allowed.has(p)) continue;
-    for (const k of ARRAY_KEYS) bucketed[k] += b[k].length;
-  }
-  const lost = {};
-  for (const k of ARRAY_KEYS) {
-    const inCount = (data[k] || []).length;
-    if (bucketed[k] !== inCount) lost[k] = { loaded: inCount, written: bucketed[k] };
-  }
-  if (Object.keys(lost).length) {
-    const detail = Object.entries(lost)
-      .map(([k, v]) => `${k}: loaded ${v.loaded}, written ${v.written}`).join('; ');
-    throw new Error(
-      `store.save would lose records — ${detail}. ` +
-      `Nothing outside the written files has been changed. This means a bucket ` +
-      `fell outside the scope, or a competition is missing from the manifest.`
-    );
-  }
-
   const nextCore = { ...core };
   for (const k of CORE_KEYS) if (data[k] !== undefined) nextCore[k] = data[k];
   for (const k of TIMESTAMP_KEYS) if (data[k] !== undefined) nextCore[k] = data[k];
+
+  // The manifest carries a COPY of the completeness signal, because the
+  // dashboard has to decide what to fetch before it fetches it, and a flag
+  // readable only from inside a 10 MB archive cannot inform that decision.
+  //
+  // It is DERIVED here from the buckets just written, never maintained by hand
+  // and never written anywhere else. The file and the manifest cannot drift if
+  // one thing writes both in one pass.
+  //
+  // The FILE is authoritative if they ever do disagree. Deleting an organisation
+  // file by hand would leave a stale entry here and nothing detects it. A season
+  // this run produced no bucket for keeps whatever it already had, so a scoped
+  // run cannot blank the seasons it did not cover.
+  // storage_ingestion_design.md §6.1a.
+  nextCore.manifest = core.manifest.map((m) =>
+    seasonPhases.has(m.seasonId) ? { ...m, phases: seasonPhases.get(m.seasonId) } : m);
 
   // Record which organisation files actually exist. Without it the dashboard
   // has to guess from the manifest, and an organisation that is configured but
@@ -293,7 +373,10 @@ function save(data, scope) {
 
   fs.writeFileSync(CORE_PATH, JSON.stringify(nextCore, null, 2), 'utf8');
 
-  return { written, skipped, emptied, unplaced, rolledOver };
+  return {
+    written, skipped, emptied, unplaced, rolledOver,
+    seasonPhases: [...seasonPhases].map(([seasonId, p]) => ({ seasonId, ...p })),
+  };
 }
 
 /**
@@ -329,8 +412,21 @@ function report(result, label) {
   const parts = [`${result.written.length} file(s) written`];
   if (result.skipped) parts.push(`${result.skipped} outside scope, untouched`);
   if (result.emptied.length) parts.push(`${result.emptied.length} EMPTIED`);
-  console.log(`[${label || 'store'}] ${parts.join(', ')}`);
+  // The version is printed on every run so a stale copy in a log is
+  // distinguishable from a real failure. Without it the two look identical.
+  console.log(`[${label || 'store'} ${STORE_VERSION}] ${parts.join(', ')}`);
   for (const f of result.written) console.log(`  wrote ${f}`);
+  // Per-season completeness, so the log shows what was actually recorded
+  // rather than only that something was.
+  for (const s of result.seasonPhases || []) {
+    console.log(
+      `  season ${s.seasonId}: results=${s.results} (${s.matches} matches), ` +
+      `players=${s.players} (${s.players_n} players)`
+    );
+  }
+  for (const r of result.rolledOver || []) {
+    console.log(`  rolled over to archive: ${r.comp} (season ${r.seasonId})`);
+  }
   if (result.emptied.length) {
     console.warn('  WARNING: these files were covered by this run but received no records:');
     for (const f of result.emptied) console.warn(`    ${f}`);
