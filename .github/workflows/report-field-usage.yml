@@ -1,0 +1,48 @@
+# .github/workflows/report-field-usage.yml
+name: Report field usage
+
+# READ-ONLY. Scans every producer and consumer of stored data and reports which
+# files reference each field. Commits nothing.
+#
+# Run this BEFORE removing or renaming any stored field. It exists because on
+# 2026-08-11 hLogo and aLogo were removed from match records after verifying that
+# index.html did not need them — which was true, and still wrong, because
+# build-club-index.js derived every club identity from them. The dependency was
+# recorded in two design documents and in that file's own header and was still
+# missed, because the check was aimed at one consumer instead of all of them.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: report-field-usage
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Map fields to files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Report field usage
+        run: node scripts/report-field-usage.js
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: field-usage-report
+          path: field-usage-report.json
+          if-no-files-found: warn
+          retention-days: 30
