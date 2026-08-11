@@ -96,7 +96,14 @@ function listOrgFiles() {
 
 // Which organisation files hold the given competitions. Null scope means every
 // file present, which is what a full run wants.
-function filesForScope(core, scope) {
+//
+// existingOnly distinguishes the two callers, and getting it wrong silently
+// destroyed records. load() wants files that exist, because it can only read
+// those. save() wants every file the scope COVERS, existing or not — a backfill
+// scoped to a retired season needs to CREATE that organisation's -archive.json,
+// and filtering it out here meant the bucket was dropped and the run still
+// reported success.
+function filesForScope(core, scope, existingOnly) {
   if (!scope) return listOrgFiles().map((f) => path.join(ORGS_DIR, f));
   const idx = compIndex(core);
   const wanted = new Set();
@@ -109,7 +116,7 @@ function filesForScope(core, scope) {
     wanted.add(orgFilePath(e.org, 'archive'));
     wanted.add(orgFilePath(e.org, 'current'));
   }
-  return [...wanted].filter((p) => fs.existsSync(p));
+  return existingOnly ? [...wanted].filter((p) => fs.existsSync(p)) : [...wanted];
 }
 
 /**
@@ -124,7 +131,7 @@ function load(scope) {
   for (const k of CORE_KEYS) if (core[k] !== undefined) data[k] = core[k];
   for (const k of TIMESTAMP_KEYS) if (core[k] !== undefined) data[k] = core[k];
 
-  const files = filesForScope(core, scopeSet);
+  const files = filesForScope(core, scopeSet, true);
   for (const p of files) {
     const payload = readJson(p, null);
     if (!payload) continue;
@@ -196,7 +203,10 @@ function save(data, scope) {
   // Which files this save is allowed to touch. Anything outside the scope keeps
   // whatever it already holds — that is the property that makes a VIP-only run
   // safe by construction.
-  const allowed = scopeSet ? new Set(filesForScope(core, scopeSet)) : null;
+  const allowed = scopeSet ? new Set(filesForScope(core, scopeSet, false)) : null;
+  // Recorded before writing, so "emptied" means a file that HAD content and now
+  // has none — not one that never existed.
+  const existedBefore = new Set(listOrgFiles().map((f) => path.join(ORGS_DIR, f)));
 
   fs.mkdirSync(ORGS_DIR, { recursive: true });
   const written = [];
@@ -204,7 +214,9 @@ function save(data, scope) {
 
   for (const b of buckets.values()) {
     const p = orgFilePath(b.org, b.kind);
-    if (allowed && !allowed.has(p) && !fs.existsSync(p)) { skipped++; continue; }
+    // One guard, on scope membership alone. The old second guard also skipped
+    // when the file did not exist, which made creating a new organisation or
+    // archive file impossible from a scoped run.
     if (allowed && !allowed.has(p)) { skipped++; continue; }
 
     const payload = {
@@ -233,8 +245,35 @@ function save(data, scope) {
   if (allowed) {
     for (const p of allowed) {
       const rel = path.relative(ROOT, p);
-      if (!written.includes(rel) && fs.existsSync(p)) emptied.push(rel);
+      if (!written.includes(rel) && existedBefore.has(p)) emptied.push(rel);
     }
+  }
+
+  // A save that cannot prove it kept everything is not a save. Count what came
+  // in against what went to a bucket; anything skipped or unplaced is a record
+  // that will not be on disk. This is the check that would have caught the
+  // scoped-save file-creation bug, which discarded records while reporting
+  // success.
+  const bucketed = {};
+  for (const k of ARRAY_KEYS) bucketed[k] = 0;
+  for (const b of buckets.values()) {
+    const p = orgFilePath(b.org, b.kind);
+    if (allowed && !allowed.has(p)) continue;
+    for (const k of ARRAY_KEYS) bucketed[k] += b[k].length;
+  }
+  const lost = {};
+  for (const k of ARRAY_KEYS) {
+    const inCount = (data[k] || []).length;
+    if (bucketed[k] !== inCount) lost[k] = { loaded: inCount, written: bucketed[k] };
+  }
+  if (Object.keys(lost).length) {
+    const detail = Object.entries(lost)
+      .map(([k, v]) => `${k}: loaded ${v.loaded}, written ${v.written}`).join('; ');
+    throw new Error(
+      `store.save would lose records — ${detail}. ` +
+      `Nothing outside the written files has been changed. This means a bucket ` +
+      `fell outside the scope, or a competition is missing from the manifest.`
+    );
   }
 
   const nextCore = { ...core };
