@@ -2,7 +2,7 @@
 <!-- org-discovery.html -->
 <!-- Standalone viewer for data/org-discovery.json, written by -->
 <!-- scripts/discover-orgs.js. Separate from index.html and separately -->
-<!-- versioned — this is Beta 0.2 and has nothing to do with the -->
+<!-- versioned — this is Beta 0.3 and has nothing to do with the -->
 <!-- dashboard's version badge. -->
 <html lang="en">
 <head>
@@ -65,13 +65,15 @@
   .err { color: var(--error); }
   .src-clubs { color: var(--accent); }
   .src-none { color: var(--dim); }
+  .src-ambiguous { color: var(--dormant); }
+  .src-own-foreign { color: var(--none); }
   .count { color: var(--dim); margin-left: auto; font-size: 12px; }
   #status { padding: 20px; color: var(--dim); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Organisation discovery <span class="meta">Beta 0.2</span></h1>
+  <h1>Organisation discovery <span class="meta">Beta 0.3</span></h1>
   <div class="meta" id="generated">loading…</div>
 </header>
 
@@ -104,6 +106,12 @@
       <option value="yes">Has address</option>
       <option value="no">No address</option>
     </select>
+    <select id="fResolved">
+      <option value="">Location: any</option>
+      <option value="no">Location unknown</option>
+      <option value="clubs">Derived from clubs</option>
+      <option value="ambiguous">Clubs disagreed</option>
+    </select>
     <span class="count" id="count"></span>
   </div>
 
@@ -118,6 +126,7 @@
         <th data-k="activity">Activity</th>
         <th data-k="nComps">Comps</th>
         <th data-k="nSeasons">Seasons</th>
+        <th data-k="clubCount">Clubs</th>
         <th data-k="latestEnd">Latest end</th>
         <th>Seasons</th>
       </tr>
@@ -166,6 +175,7 @@
       card(totals.error, 'Errored') +
       card(vic, 'VIC by own address') +
       card(vicEff, 'VIC active, incl. club-derived') +
+      card(ROWS.filter(function (r) { return !r.effectiveState; }).length, 'Location unknown') +
       card((x.noAddress && x.noAddress.active) || 0, 'No address, active');
 
     el('xtab').innerHTML = ['hasAddress', 'noAddress'].map(function (b) {
@@ -188,12 +198,16 @@
   function filtered() {
     var q = el('q').value.trim().toLowerCase();
     var fs = el('fState').value, fa = el('fActivity').value, fd = el('fAddress').value;
+    var fr = el('fResolved').value;
     return ROWS.filter(function (r) {
       if (q && (r.name + ' ' + r.code).toLowerCase().indexOf(q) === -1) return false;
       if (fs && (r.effectiveState || '(unresolved)') !== fs) return false;
       if (fa && r.activity !== fa) return false;
       if (fd === 'yes' && !r.hasAddress) return false;
       if (fd === 'no' && r.hasAddress) return false;
+      if (fr === 'no' && r.effectiveState) return false;
+      if (fr === 'clubs' && r.stateSource !== 'clubs') return false;
+      if (fr === 'ambiguous' && r.stateSource !== 'ambiguous') return false;
       return true;
     });
   }
@@ -202,14 +216,27 @@
     var c = r.clubResolution;
     if (!c) return '';
     if (c.resolution !== 'resolved') {
-      return '<div class="seasons">State could not be derived from clubs: ' + esc(c.resolution) + '</div>';
+      return '<div class="seasons">State could not be derived from clubs: ' + esc(c.resolution) +
+        (typeof c.clubs === 'number' ? ' (' + c.clubs + ' clubs)' : '') + '</div>' + clubTable(c);
     }
     var dist = Object.keys(c.distribution || {}).map(function (k) {
       return esc(k) + ' ' + c.distribution[k];
     }).join(' \u00b7 ');
-    return '<div class="seasons">Derived from ' + c.clubs + ' member clubs (' +
+    return '<div class="seasons">' + c.clubs + ' member clubs (' +
       c.clubsWithState + ' with an address, ' + c.clubsWithoutState + ' without) in season ' +
-      esc(c.seasonUsed) + ' \u2014 ' + dist + '</div>';
+      esc(c.seasonUsed) + ' \u2014 ' + dist +
+      (r.inferredAmbiguous ? ' \u2014 <span class="err">clubs disagreed, state NOT applied</span>' : '') +
+      '</div>' + clubTable(c);
+  }
+
+  function clubTable(c) {
+    var list = c.clubList || [];
+    if (!list.length) return '';
+    return '<table><thead><tr><th>Club</th><th>Code</th><th>State</th></tr></thead><tbody>' +
+      list.map(function (x) {
+        return '<tr><td>' + esc(x.name || '(unnamed)') + '</td><td><code>' + esc(x.code) +
+          '</code></td><td>' + esc(x.state || x.stateRaw || '\u2014') + '</td></tr>';
+      }).join('') + '</tbody></table>';
   }
 
   function seasonTable(r) {
@@ -250,19 +277,20 @@
         '<td><span class="pill a-' + r.activity + '">' + esc(r.activity) + '</span></td>' +
         '<td>' + r.nComps + '</td>' +
         '<td>' + r.nSeasons + '</td>' +
+        '<td>' + (r.clubCount || 0) + '</td>' +
         '<td>' + esc(r.latestEnd || '') + '</td>' +
         '<td><span class="expand" data-code="' + esc(r.code) + '">' +
         (open[r.code] ? 'hide' : 'show') + '</span></td></tr>'
       );
       if (open[r.code]) {
-        html.push('<tr class="detail"><td colspan="10">' + clubEvidence(r) + seasonTable(r) + '</td></tr>');
+        html.push('<tr class="detail"><td colspan="11">' + clubEvidence(r) + seasonTable(r) + '</td></tr>');
       }
     });
     el('rows').innerHTML = html.join('');
   }
 
   function wire() {
-    ['q', 'fState', 'fActivity', 'fAddress'].forEach(function (id) {
+    ['q', 'fState', 'fActivity', 'fAddress', 'fResolved'].forEach(function (id) {
       el(id).addEventListener('input', render);
       el(id).addEventListener('change', render);
     });
