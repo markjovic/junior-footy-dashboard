@@ -240,6 +240,18 @@ function save(data, scope) {
   const nextCore = { ...core };
   for (const k of CORE_KEYS) if (data[k] !== undefined) nextCore[k] = data[k];
   for (const k of TIMESTAMP_KEYS) if (data[k] !== undefined) nextCore[k] = data[k];
+
+  // Record which organisation files actually exist. Without it the dashboard
+  // has to guess from the manifest, and an organisation that is configured but
+  // never fetched costs every visitor a 404 — twelve of them, currently.
+  // Rebuilt from the directory rather than accumulated, so a deleted file
+  // disappears from the index instead of lingering.
+  nextCore.orgFiles = listOrgFiles().sort().map((f) => {
+    const full = path.join(ORGS_DIR, f);
+    const [org, kindExt] = f.split('-');
+    return { file: `data/orgs/${f}`, org, kind: kindExt.replace('.json', ''), bytes: fs.statSync(full).size };
+  });
+
   fs.writeFileSync(CORE_PATH, JSON.stringify(nextCore, null, 2), 'utf8');
 
   return { written, skipped, emptied, unplaced, rolledOver };
@@ -257,6 +269,11 @@ function saveCore(data) {
   const next = { ...core };
   for (const k of CORE_KEYS) if (data[k] !== undefined) next[k] = data[k];
   for (const k of TIMESTAMP_KEYS) if (data[k] !== undefined) next[k] = data[k];
+  next.orgFiles = listOrgFiles().sort().map((f) => {
+    const full = path.join(ORGS_DIR, f);
+    const [org, kindExt] = f.split('-');
+    return { file: `data/orgs/${f}`, org, kind: kindExt.replace('.json', ''), bytes: fs.statSync(full).size };
+  });
   fs.writeFileSync(CORE_PATH, JSON.stringify(next, null, 2), 'utf8');
   return { written: ['data/core.json'], skipped: 0, emptied: [], unplaced: {}, rolledOver: [] };
 }
