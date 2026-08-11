@@ -1,12 +1,17 @@
 # .github/workflows/verify-store.yml
 #
-# Runs scripts/verify-store.js against the committed scripts/lib/store.js.
-# Touches nothing: the verification builds its own fixture in a temp directory
-# and never opens data/. There is no commit step and nothing to roll back.
+# Runs both storage-layer verifications. Same filename as before so it replaces
+# the previous version cleanly; the display name changed because it now covers
+# discover-seasons.js as well.
 #
-# Run this BEFORE any writer runs on a new store.js, and after any change to it.
+# Touches nothing. Both verifications build their own fixtures in temp
+# directories and never open data/ or config.json. There is no commit step and
+# nothing to roll back.
+#
+# Run this BEFORE any writer runs on a changed store.js or discover-seasons.js,
+# and after any change to either.
 
-name: Verify store.js
+name: Verify storage layer
 
 on:
   workflow_dispatch:
@@ -23,11 +28,18 @@ jobs:
       - name: Syntax check
         run: |
           node --check scripts/lib/store.js
+          node --check scripts/discover-seasons.js
           node --check scripts/verify-store.js
-          echo "both files parse"
+          node --check scripts/verify-discover-seasons.js
+          echo "all four files parse"
 
-      # No `set +e` here. Unlike the fetch workflows, a failure must fail the
-      # job — a verification that reports green when it failed is worse than
-      # having no verification at all.
-      - name: Run verification
+      # No `set +e` in either step. Unlike the fetch workflows, a failure must
+      # fail the job — a verification that reports green when it failed is worse
+      # than having no verification at all.
+      - name: Verify store.js
         run: node scripts/verify-store.js
+
+      # Runs the real discover-seasons.js as a child process with only
+      # scripts/lib/playhq.js stubbed, so it makes no network calls.
+      - name: Verify discover-seasons.js
+        run: node scripts/verify-discover-seasons.js
