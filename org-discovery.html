@@ -2,7 +2,7 @@
 <!-- org-discovery.html -->
 <!-- Standalone viewer for data/org-discovery.json, written by -->
 <!-- scripts/discover-orgs.js. Separate from index.html and separately -->
-<!-- versioned — this is Beta 0.1 and has nothing to do with the -->
+<!-- versioned — this is Beta 0.2 and has nothing to do with the -->
 <!-- dashboard's version badge. -->
 <html lang="en">
 <head>
@@ -63,13 +63,15 @@
   .detail table { width: auto; margin: 4px 0 8px; }
   .detail th, .detail td { border-bottom: 1px solid #232a35; padding: 3px 10px; }
   .err { color: var(--error); }
+  .src-clubs { color: var(--accent); }
+  .src-none { color: var(--dim); }
   .count { color: var(--dim); margin-left: auto; font-size: 12px; }
   #status { padding: 20px; color: var(--dim); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Organisation discovery <span class="meta">Beta 0.1</span></h1>
+  <h1>Organisation discovery <span class="meta">Beta 0.2</span></h1>
   <div class="meta" id="generated">loading…</div>
 </header>
 
@@ -110,7 +112,8 @@
       <tr>
         <th data-k="name">Organisation</th>
         <th data-k="code">Code</th>
-        <th data-k="state">State</th>
+        <th data-k="effectiveState">State</th>
+        <th data-k="stateSource">Source</th>
         <th data-k="suburb">Suburb</th>
         <th data-k="activity">Activity</th>
         <th data-k="nComps">Comps</th>
@@ -149,8 +152,11 @@
       Object.keys(totals).forEach(function (k) { totals[k] += (x[b] && x[b][k]) || 0; });
     });
 
-    var vic = 0;
-    ROWS.forEach(function (r) { if (r.state === 'VIC') vic++; });
+    var vic = 0, vicEff = 0;
+    ROWS.forEach(function (r) {
+      if (r.state === 'VIC') vic++;
+      if (r.effectiveState === 'VIC' && r.activity === 'active') vicEff++;
+    });
 
     el('cards').innerHTML =
       card(s.totalOrganisations || 0, 'Organisations') +
@@ -158,7 +164,8 @@
       card(totals.dormant, 'Dormant') +
       card(totals.noSeasons, 'No seasons') +
       card(totals.error, 'Errored') +
-      card(vic, 'State = VIC') +
+      card(vic, 'VIC by own address') +
+      card(vicEff, 'VIC active, incl. club-derived') +
       card((x.noAddress && x.noAddress.active) || 0, 'No address, active');
 
     el('xtab').innerHTML = ['hasAddress', 'noAddress'].map(function (b) {
@@ -170,7 +177,7 @@
     }).join('');
 
     var states = {};
-    ROWS.forEach(function (r) { states[r.state || (r.stateRaw ? r.stateRaw : '(none)')] = 1; });
+    ROWS.forEach(function (r) { states[r.effectiveState || '(unresolved)'] = 1; });
     var opts = ['<option value="">All states</option>'];
     Object.keys(states).sort().forEach(function (k) {
       opts.push('<option value="' + esc(k) + '">' + esc(k) + '</option>');
@@ -183,12 +190,26 @@
     var fs = el('fState').value, fa = el('fActivity').value, fd = el('fAddress').value;
     return ROWS.filter(function (r) {
       if (q && (r.name + ' ' + r.code).toLowerCase().indexOf(q) === -1) return false;
-      if (fs && (r.state || r.stateRaw || '(none)') !== fs) return false;
+      if (fs && (r.effectiveState || '(unresolved)') !== fs) return false;
       if (fa && r.activity !== fa) return false;
       if (fd === 'yes' && !r.hasAddress) return false;
       if (fd === 'no' && r.hasAddress) return false;
       return true;
     });
+  }
+
+  function clubEvidence(r) {
+    var c = r.clubResolution;
+    if (!c) return '';
+    if (c.resolution !== 'resolved') {
+      return '<div class="seasons">State could not be derived from clubs: ' + esc(c.resolution) + '</div>';
+    }
+    var dist = Object.keys(c.distribution || {}).map(function (k) {
+      return esc(k) + ' ' + c.distribution[k];
+    }).join(' \u00b7 ');
+    return '<div class="seasons">Derived from ' + c.clubs + ' member clubs (' +
+      c.clubsWithState + ' with an address, ' + c.clubsWithoutState + ' without) in season ' +
+      esc(c.seasonUsed) + ' \u2014 ' + dist + '</div>';
   }
 
   function seasonTable(r) {
@@ -223,7 +244,8 @@
       html.push(
         '<tr><td>' + esc(r.name) + '</td>' +
         '<td><code>' + esc(r.code) + '</code></td>' +
-        '<td>' + esc(r.state || r.stateRaw || '') + '</td>' +
+        '<td>' + esc(r.effectiveState || r.stateRaw || '') + '</td>' +
+        '<td class="src-' + esc(r.stateSource) + '">' + esc(r.stateSource === 'clubs' ? 'clubs ' + Math.round((r.inferredShare || 0) * 100) + '%' : r.stateSource) + '</td>' +
         '<td>' + esc(r.suburb || '') + '</td>' +
         '<td><span class="pill a-' + r.activity + '">' + esc(r.activity) + '</span></td>' +
         '<td>' + r.nComps + '</td>' +
@@ -233,7 +255,7 @@
         (open[r.code] ? 'hide' : 'show') + '</span></td></tr>'
       );
       if (open[r.code]) {
-        html.push('<tr class="detail"><td colspan="9">' + seasonTable(r) + '</td></tr>');
+        html.push('<tr class="detail"><td colspan="10">' + clubEvidence(r) + seasonTable(r) + '</td></tr>');
       }
     });
     el('rows').innerHTML = html.join('');
