@@ -932,6 +932,100 @@ async function main() {
     log(`\n>>> organisation on a team is the CLUB, not the league: ${active.distinctOrganisations} distinct organisations in one EFNL season.`);
   }
 
+  // -------------------------------------------------------------------------
+  // R — can historic player statistics be fetched at all?
+  // The two-phase backfill in storage_ingestion_design.md §6.1 assumes both of
+  // these work for a COMPLETED season. Neither has been verified, and the
+  // reference already records other calls that degrade on completed seasons
+  // (publicProfileTeams returns a null grade). Chains from the season id so it
+  // needs nothing hardcoded beyond EFNL's seasons.
+  // -------------------------------------------------------------------------
+
+  const SEASON_GRADES_QUERY =
+    'query gradeListDiscoverSeason($id: String!) {\n' +
+    '  discoverSeason(seasonID: $id) {\n' +
+    '    id name status { value }\n' +
+    '    grades { id name age { name value } gender { name value } }\n' +
+    '  }\n' +
+    '}\n';
+
+  const GRADE_STATS_QUERY =
+    'query publicGradeStatistics($gradeID: ID!, $filter: GradePlayerStatisticsFilter) {\n' +
+    '  gradePlayerStatistics(gradeID: $gradeID, filter: $filter) {\n' +
+    '    meta { page totalPages totalRecords }\n' +
+    '    results { profile { id firstName lastName } team { name } statistics { count details { value } } }\n' +
+    '  }\n' +
+    '}\n';
+
+  REPORT.historicStats = {};
+
+  for (const s of seasonsToTest) {
+    const rec = { seasonId: s.id, note: s.note };
+
+    const gr = await gql({
+      tenant: 'afl',
+      operationName: 'gradeListDiscoverSeason',
+      query: SEASON_GRADES_QUERY,
+      variables: { id: s.id },
+      expect: null,
+    });
+
+    const season = gr.data && gr.data.discoverSeason;
+    const grades = (season && season.grades) || [];
+    rec.discoverSeasonKind = gr.kind;
+    rec.discoverSeasonErrors = gr.errors || null;
+    rec.seasonStatus = season && season.status && season.status.value;
+    rec.gradeCount = grades.length;
+
+    log(`\n[R-${s.label}] discoverSeason grades for ${s.note}`);
+    log(`  kind=${gr.kind} status=${rec.seasonStatus || '?'} grades=${grades.length}`);
+    if (gr.errors) for (const e of gr.errors) log(`  error: ${e.message}`);
+
+    // Only worth asking for player stats if a grade came back to ask about.
+    if (grades.length) {
+      const g = grades[0];
+      rec.sampleGrade = { id: g.id, name: g.name };
+      log(`  sample grade: ${g.name} (${g.id})`);
+
+      const ps = await gql({
+        tenant: 'afl',
+        operationName: 'publicGradeStatistics',
+        query: GRADE_STATS_QUERY,
+        variables: { gradeID: g.id, filter: { pagination: { page: 1, limit: 50 } } },
+        expect: null,
+      });
+
+      const gps = ps.data && ps.data.gradePlayerStatistics;
+      rec.gradeStatsKind = ps.kind;
+      rec.gradeStatsErrors = ps.errors || null;
+      rec.gradeStatsMeta = (gps && gps.meta) || null;
+      rec.gradeStatsReturned = (gps && gps.results ? gps.results.length : 0);
+      rec.gradeStatsSample = (gps && gps.results ? gps.results : []).slice(0, 3).map((r) => ({
+        name: r.profile ? `${r.profile.firstName} ${r.profile.lastName}` : '(private)',
+        team: r.team && r.team.name,
+      }));
+
+      log(`  gradePlayerStatistics: kind=${ps.kind} meta=${JSON.stringify(rec.gradeStatsMeta)} returned=${rec.gradeStatsReturned}`);
+      if (ps.errors) for (const e of ps.errors) log(`  error: ${e.message}`);
+      for (const x of rec.gradeStatsSample) log(`    ${x.name} | ${x.team}`);
+      await sleep(500);
+    } else {
+      log('  no grades returned — cannot ask for player statistics');
+    }
+
+    REPORT.historicStats[s.label] = rec;
+    await sleep(500);
+  }
+
+  const hist = Object.values(REPORT.historicStats).filter((r) => /COMPLETED/.test(r.note));
+  const gradesOk = hist.every((r) => r.gradeCount > 0);
+  const statsOk = hist.every((r) => r.gradeStatsReturned > 0);
+  log(`\n>>> Historic player statistics reachable: grades=${gradesOk} stats=${statsOk}`);
+  if (!gradesOk || !statsOk) {
+    log('>>> Phase B of the backfill is NOT possible as designed. Do not build it.');
+  }
+  REPORT.historicStatsUsable = { gradesOk, statsOk };
+
   REPORT.finishedAt = new Date().toISOString();
   fs.writeFileSync(REPORT_PATH, JSON.stringify(REPORT, null, 2));
   log(`\nReport written to ${REPORT_PATH}`);
