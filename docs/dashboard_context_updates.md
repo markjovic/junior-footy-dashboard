@@ -130,7 +130,25 @@ figure in a context file is worse than an obviously old one.
 
 ---
 
-## 9. `data.json` is MINIFIED — the file is wrong in two places
+## 9. "Known broken" — one to add, already fixed
+
+Add to the **Known broken, not fixed** list, marked as resolved:
+
+> - ~~**A VIP-only stats run deleted every other competition's players.**~~
+>   **Fixed 2026-08-11.** `fetch-stats.js` ended with `data.players = players`,
+>   where `players` was built only from the grades that run covered. EFNL is the
+>   only `vip: true` competition, so every VIP-only stats run replaced the whole
+>   player list with EFNL's alone, and the next all-competition run put the
+>   others back. It now merges per competition — the same fix `fetch-results.js`
+>   already carries for `grades.json` and `gradeMeta`.
+>
+>   This is the third instance of one defect, which is worth stating as a rule in
+>   its own right: **anything derived from a filtered grade list must merge per
+>   competition rather than replace.**
+
+---
+
+## 10. `data.json` is MINIFIED — the file is wrong in two places
 
 Resolved 2026-08-11 by reading `fetch-results.js` line 1154:
 

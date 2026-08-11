@@ -3,38 +3,46 @@
 
 <!-- Repo-specific. Do NOT copy into another project — several rules here are -->
 <!-- the OPPOSITE of the sports-players-stats conventions. -->
-<!-- Revision: 2026-08-10 -->
+<!-- Revision: 2026-08-11 -->
 
 Read alongside `working_practice.md` (portable) and `playhq_api_reference.md`
 (PlayHQ behaviour). This file covers only what is true of **this** repository.
 
-`docs/team_registry_design.md` is awaiting approval and leads the work queue —
-read it before starting anything, because it changes how teams, grades and clubs
-are identified.
+Two design documents lead the work queue: `storage_ingestion_design.md`
+(approved, partly built) and `team_registry_design.md` (approved, not started).
 
 ---
 
 ## Reading the repo
 
 Claude can fetch any file here, but only from a URL already present in the
-conversation — a constructed URL is refused, and folder pages are robots-blocked
-so `docs/` cannot be browsed. Paste this block to unlock every file:
+conversation — a constructed URL is refused, folder pages are robots-blocked,
+and `raw.githubusercontent` is refused. **The GitHub blob view truncates at
+1,000 lines**, so anything longer must be uploaded rather than fetched.
 
 ```
 https://github.com/markjovic/junior-footy-dashboard/blob/main/README.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/dashboard_context.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/working_practice.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/playhq_api_reference.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/storage_ingestion_design.md
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/team_registry_design.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/finals_support.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/OUTSTANDING_TASKS.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/project_setup.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/index.html
+https://github.com/markjovic/junior-footy-dashboard/blob/main/org-discovery.html
+https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/playhq.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/store.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-results.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-stats.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/fetch-fixtures.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-club-index.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/discover-seasons.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/discover-orgs.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/split-data.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/workers/footy-cron.js
-https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
 ```
 
 ---
@@ -43,54 +51,133 @@ https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
 
 **Repo:** `markjovic/junior-footy-dashboard` (public)
 **Live:** `https://markjovic.github.io/junior-footy-dashboard/`
-**Version:** read it from the badge in `index.html` — this document is edited far
-less often than the code and any number written here will be stale. As at
-2026-08-10 it was Beta 0.131, but check rather than quote that.
+**Version:** read the badge in `index.html`. It was Beta 0.132 on 2026-08-11;
+check rather than quote. `org-discovery.html` is versioned **separately** — Beta
+0.3 — and has nothing to do with the dashboard badge.
 
-A single-file HTML dashboard for AFL results, fetched from PlayHQ into a
-committed `data.json` and served from GitHub Pages. No build step, no framework,
-no server. `index.html` contains all HTML, CSS and JavaScript.
+A single-file HTML dashboard for AFL results, fetched from PlayHQ and served
+from GitHub Pages. No build step, no framework, no server.
 
-Five competitions in 2026: EFNL, WFNL, SEJ, SER, YJFL. **EFNL is the only
-`vip: true` competition**, which matters more than it looks — a VIP-only run
-discovers only EFNL's grades, so anything derived from the grade list must merge
-per competition rather than replace.
+Five competitions currently fetched: EFNL, WFNL, SEJ, SER, YJFL. **EFNL is the
+only `vip: true` competition**, which matters more than it looks — see the
+merge-per-competition rule below.
+
+---
+
+## ⚠️ Storage layout changed on 2026-08-11
+
+**`data/data.json` is no longer written and no longer read.** It is left in place
+as a rollback path and should be deleted once the split layout is trusted.
+
+```
+data/
+  core.json                     manifest + cross-organisation keys (~450 KB)
+  orgs/
+    <orgCode>-current.json      live seasons for one organisation
+    <orgCode>-archive.json      retired seasons for one organisation
+  grades.json                   current-season grade cache
+  org-discovery.json            all 1,175 AFL associations (2.13 MB)
+```
+
+As at 2026-08-11: five organisation files, 25.88 MB total, largest 9.88 MB
+(EFNL) — a tenth of GitHub's 100 MB per-file limit.
+
+**Every writer goes through `scripts/lib/store.js`.** `store.load(scope)` returns
+the shape `data.json` had, so writer logic is unchanged; `store.save(data, scope)`
+distributes it back. **A scoped save rewrites only the organisation files in
+scope**, which is what makes a VIP-only run safe by construction.
+
+`core.json` holds the keys that cannot be split, each for a stated reason:
+`clubs`, `teamClub`, `teamOrg`, `compLogos`, `teamLogos`, `gotwFlags`,
+`lastRound`, plus the `manifest` and an `orgFiles` index of which files exist.
+
+**A season retires 30 days after it completes** — status `COMPLETED` *and*
+`endDate` + 30 days in the past. Its records then move from `-current` to
+`-archive` on the next run. **This path has never executed against real data.**
+Force a dry run before November rather than discovering it in the off-season.
 
 ---
 
 ## Ownership — which script writes what
 
-| Writer | Owns |
-|---|---|
-| `fetch-results.js` | `matches` (played), `roster`, `gradeMeta`, `lastRound`, `teamLogos`, `compLogos`, `grades.json` |
-| `fetch-fixtures.js` | `matches` where `scheduled: true` — purges and rewrites them every run |
-| `fetch-stats.js` | `players` |
-| `build-club-index.js` | `clubs`, `teamClub`, `clubs.json` |
-
 Never cross-write. Two writers disagreeing about a record's key silently produce
 duplicates.
+
+| Writer | Owns |
+|---|---|
+| `fetch-results.js` | `matches` (played), `roster`, `gradeMeta`, `lastRound`, `teamLogos`, `teamOrg`, `compLogos`, `grades.json` |
+| `fetch-fixtures.js` | `matches` where `scheduled: true` — purges and rewrites them, scoped to the competitions it covers |
+| `fetch-stats.js` | `players` |
+| `build-club-index.js` | `clubs`, `teamClub`, `clubs.json` — writes via `store.saveCore()` only |
+| `discover-seasons.js` | `manifest`, `organisations` in `core.json` |
+| `discover-orgs.js` | `data/org-discovery.json` |
+| `split-data.js` | one-time migration; writes `data/orgs/*` and merges core keys |
+
+---
+
+## ⚠️ THE RULE THIS REPO KEEPS BREAKING
+
+**Anything derived from a filtered grade list must merge per competition rather
+than replace.** EFNL is the only VIP competition, so a VIP-only run covers one
+competition and any wholesale assignment deletes the other four.
+
+This has been fixed **four separate times**, in four writers:
+
+| Writer | What it wiped | Fixed |
+|---|---|---|
+| `fetch-results.js` | `grades.json`, `gradeMeta` | earlier |
+| `fetch-stats.js` | `players` | 2026-08-11 |
+| `fetch-fixtures.js` | scheduled records | 2026-08-11 |
+| `build-club-index.js` | `teamClub` on a full run | guarded 2026-08-11 |
+
+`store.save(data, scope)` now makes it structural: a scoped save never opens the
+other organisations' files. **Any new writer must use a scope.**
+
+---
+
+## ⚠️ Before removing or renaming ANY stored field
+
+**Run `scripts/report-field-usage.js` first.** It scans every writer,
+`index.html` and `org-discovery.html`, and reports which files reference each
+field.
+
+On 2026-08-11 `hLogo`/`aLogo` were removed from match records after confirming
+`index.html` rendered crests from `teamLogos`. That check was correct and the
+conclusion was still wrong: `build-club-index.js` derived every club identity by
+scanning those fields, and the next full run would have replaced `teamClub` with
+an empty object. The dependency was documented in three places and still missed,
+because the check was aimed at one consumer instead of all of them.
+
+Fields touched by more than one writer, from that scan: `matches`, `roster`,
+`gotwFlags`, `teamOrg`, `clubs`, `home`/`away`, `age`/`compName`,
+`isBye`/`isPartial`/`provisional`, `venue`/`vSuburb`/`venueUrl`, `seasonID`.
+
+The tool's own blind spot is the `SOURCES` and `FIELDS` lists at the top of it —
+a file or field missing from those is invisible. Update them when either changes.
 
 ---
 
 ## Conventions specific to this repo
 
-These differ from `sports-players-stats`. Applying that repo's rules here creates
-two conventions in one codebase.
+These differ from `sports-players-stats`.
 
 - **`actions/setup-node` IS used here** (v4, node 20; node 22 for fixtures) and
   works fine against `api.playhq.com`. The "never use setup-node" rule is a
   basketball-repo rule and does not apply.
-- **Git pattern is:** `git add <explicit paths>` →
-  `git diff --staged --quiet || git commit -m "<what>: $(date +'%A %-d %B %Y') (run #N)"` →
-  `git pull --rebase -X theirs` → `git push`. No retry loop, no `--shortstat`.
-  Rebase is used here.
-- **`data.json` is pretty-printed** with `JSON.stringify(x, null, 2)`. The
-  minified-player-file rule is basketball's.
-- **Exit codes:** `0` = changed, commit. `2` = no changes, skip commit. `1` =
-  fatal. The workflow captures the code with `set +e` and commits only on `0` —
-  which means a fatal error currently shows as a green run with no commit.
-- **The repo is small.** `git add -A` is not the hazard it is in the basketball
-  repo, though explicit paths are still used.
+- **Git pattern:** `git add -A data/` → `git diff --staged --quiet || git commit`
+  → `git pull --rebase -X theirs` → `git push`. **Do not name root-level
+  `data.json`, `grades.json` or `clubs.json` in the pathspec** — they were moved
+  into `data/` and `git add` fails with exit 128 on an unmatched pathspec. That
+  broke a run on 2026-08-11.
+- **Organisation files are written MINIFIED**, `JSON.stringify(payload)`.
+  `core.json` and `grades.json` are pretty-printed with `null, 2`. All writers
+  must agree or the next run re-inflates and produces a whole-file diff.
+- **Exit codes:** `0` = changed, commit. `2` = no change, skip commit. `1` =
+  fatal. All four writers follow this; `fetch-fixtures.js` only since 2026-08-11.
+  The older workflows treat exit 1 as green with no commit; newer ones fail.
+- **Session and transport live in `scripts/lib/playhq.js`.** All three cookies in
+  the order `phq_tier; phq_session; phq_sub`, ten attempts, refresh on age and on
+  403, and typed failures. Never write a local `getSession()` again.
 
 ---
 
@@ -98,104 +185,76 @@ two conventions in one codebase.
 
 - **`FINAL` already means "completed game"** (`status.value === 'FINAL'`). Never
   name a finals-related field `isFinal`.
-- **Finals rounds restart numbering at 1.** Any code comparing round numbers
-  across the home-and-away/finals boundary is wrong. Order by position in
-  `roundList`, or by the two-key sort `(isFinals, round)`.
-- **`cleanTeam` strips the grade's age from team names**, deliberately, for
-  display. It means `"Norwood U12 Purple"` and `"Norwood U14 Purple"` both become
+- **Finals rounds restart numbering at 1.** Order by position in `roundList`, or
+  by the two-key sort `(isFinals, round)`.
+- **`cleanTeam` strips the grade's age from team names**, so
+  `"Norwood U12 Purple"` and `"Norwood U14 Purple"` both become
   `"Norwood Purple"`. Any key built from a team name must include age.
-- **Never derive a club from a team name.** `"Norwood Gold/Heathmont"` is a
-  merged team; Templestowe fields separate senior and junior organisations.
-  Use `teamClub`.
-- **The club field on a team is `organisation`, not `club`.** A probe asked for
-  `club { id name }` on `DiscoverTeam`, got a validation error, and the club
-  index was built on logo-URL derivation instead. `club` exists only on
-  `publicProfileStatistics`. Whether `organisation` on a team returns the club or
-  the league is unverified — see "Next up" below.
-- **`excludeGrades` shifts grade ranks.** Excluded grades are filtered before
-  discovery and do not consume a rank slot. Empty in all five competitions —
-  keep it that way unless the consequence is accepted.
-- **`S.selRound` holds a round *key*, not a number.** `parseInt('F:GF')` is
-  `NaN`, and every `<=` against `NaN` is false. Use `ladderCutoff()`.
-- **The dashboard is scoped to one `S.selectedAge`.** `computeLadder`,
-  `getGOTWMatch`, `getTopScorers` and `renderResults` all assume it. Anything
-  cross-age needs its own view, not an "All ages" option.
-- **`parseGradeName` collapses 17 grades into 5 keys** across EFNL U8, YJFL U10,
-  WFNL U10 and SEJ U10. That key is the match id prefix, so those grades share an
-  id namespace and can overwrite each other. All U8/U10, hidden by default. See
-  `OUTSTANDING_TASKS.md` item 6 — do not patch it without a migration, because
-  changing the function changes every match id.
+- **Never derive a club from a team name.** Use `teamClub`, or `teamOrg` which
+  `fetch-results.js` captures at fetch time from the logo URL.
+- **`organisation` on a team IS the club — verified 2026-08-11.** One EFNL season
+  returns 60 distinct organisations; the league would be one. The id is the
+  8-character form.
+- **`compName` is half of every stored key.** Match ids are
+  `compName|age|rawGrade|roundToken|teams`, and `roster` and `gradeMeta` keys
+  start with it. Change how it is composed and every stored record is orphaned.
+  It is derived as `config.name + " " + season.name`.
+- **`excludeGrades` shifts grade ranks.** Empty in all five competitions.
+- **`S.selRound` holds a round *key*, not a number.** Use `ladderCutoff()`.
+- **The dashboard is scoped to one `S.selectedAge` and one `S.selComp`.**
 - **Provisional records must never reach** `rebuildRoster`, `allTeamsForAge`,
-  `teamLogos`, the team dropdown, or the ladder. `S.matches` excludes scheduled
-  records, which is what keeps them out.
+  `teamLogos`, the team dropdown, or the ladder.
+- **`hLogo`/`aLogo` survive only on `provisional` records** (69 of 13,181).
+  Everything else renders crests from `teamLogos`.
 
 ---
 
 ## Known broken, not fixed
 
-- **`lastRound` is dead in the dashboard.** It reads
-  `S.lastRound["comp|age|grade"]`; `fetch-results.js` writes `"age|grade"` with
-  no competition prefix. The round label on the ladder grade tabs has never
-  rendered.
+- **`parseGradeName` collapses 17 grades into 5 keys.** Confirmed live
+  2026-08-11 by `buildGradeMeta`'s collision warnings: EFNL U8 four grades, YJFL
+  U10 six, WFNL U10 three, SEJ U10 Blue two, SEJ U10 Red two. It also produces
+  six roster warnings of the form `X (U10 Girls) in both grade  and A in R1`,
+  so `currentGrade()` can return a grade a team is not in. `rawGrade` is part of
+  every match id, so fixing it needs a migration. See `team_registry_design.md`.
 - **`logoKey()` colour stripping does not work.**
   `new RegExp('\s+' + c + '\s*$')` uses a plain string, so `\s` collapses to a
-  literal `s`. Unnoticed because `teamLogos` usually hits on the full name.
-- **Team identity is derived from a cleaned display name, not the PlayHQ team
-  `id`** — which both fetchers request and discard. Root cause of the club-name
-  heuristics in `fetch-stats.js`. Deferred to the multi-season work.
-- **A fatal script error does not fail the workflow run** (see exit codes above).
+  literal `s`. Masked because `teamLogos` usually hits on the full name.
+- **`lastRound` and `gotwFlags` keys omit the competition.** `lastRound` is
+  `age|rawGrade`, `gotwFlags` is `age|roundKey`. Both collide across
+  competitions. Moving them into the per-organisation files fixes it by
+  construction; they are currently still in `core.json`.
+- **Session acquisition takes three attempts on every run**, with two 403s
+  first. Present before 2026-08-11 but invisible, because the old `getSession()`
+  logged nothing unless all attempts failed. `playhq.js` now classifies the
+  failure as CloudFront or application; the cause is not yet established.
 
 ---
 
-## Current state
+## Current state — 2026-08-11
 
-Finals support is complete and deployed — see `finals_support.md` for the
-implementation, and `README.md` for user-facing behaviour. The finals view has
-three modes: by age group, by club, and winners.
+**Done this session.** Shared session and transport layer across all four
+writers. Per-match logo URLs removed (−3.82 MB) with club identity captured at
+fetch time into `teamOrg`. Unread player fields removed (−6.62 MB). `data.json`
+went 36.57 MB → 26.24 MB before the split. Organisation discovery
+(`discover-orgs.js` + `org-discovery.html`), season discovery
+(`discover-seasons.js`), the one-time split (`split-data.js`), and the cutover
+to the per-organisation layout with `index.html` at Beta 0.132.
 
-**Next up is `team_registry_design.md`, not the multi-season work below.** It
-proposes capturing the PlayHQ team id on match records and building a per-season
-registry from `discoverTeams(filter:{seasonID})`, which addresses three problems
-at once: non-member clubs polluting a competition, `parseGradeName` collapsing 17
-grades into 5 keys, and club identity being derived from logo URLs. Four open
-questions in its §4 need answering before any code is written.
+**`config.json`** carries the original `competitions[]` plus an
+`organisationCodes[]` array of 17 codes. It has **not** been migrated to the
+`organisations[]` shape — the writers still read `competitions`. Migrating needs
+the twelve new organisations' short names decided first, because each becomes
+half of every match id under that competition.
 
-**Repo state.** 30 files, 37.8 MB as at 2026-08-10 — down from 163 files and
-65 MB. `data/data.json` is 36.6 MB of it. Machine-written JSON lives in `data/`,
-documentation in `docs/`, the Cloudflare Worker in `workers/`. The fixture generator's leftover club images
-were removed (~10.7 MB), along with the superseded `extract-finals-data` script.
-`2024.html` and `fetch-u10-2024.js` went in the same pass and should be restored
-from git history when multi-season work begins.
+**Manifest:** 17 organisations, 65 seasons, 17 live and 48 retired. Only 13
+seasons carry a resolved `compName` — the five proven against existing config.
+The other twelve organisations have `compName: null` until their names are
+chosen.
 
-**Open lead worth an hour: does `DiscoverTeam.organisation` return the club?**
-The API reference documents `organisation { id name }` on `DiscoverTeam`. If it
-is the club, both fetchers can capture the club id at fetch time and
-`build-club-index.js` becomes unnecessary — it would also cover any team with no
-logo. Verify before building anything on it; on `discoverCompetitions` the
-equivalent field is the league, not the club.
-
-**`data.json` is written with `JSON.stringify(merged, null, 2)`.** Minifying
-reduced a 53 MB file to 36.6 MB — 31% on the real data. Applied 2026-08-10
-across all four writers; all must agree or the next run re-inflates it.
-
-**Next up: multi-season support.** The groundwork established so far:
-
-- `discoverCompetitions(organisationID)` returns every season an organisation
-  has played, with `id`, `name`, `startDate`, `endDate` and `status` — which
-  removes the need to hand-maintain `seasonID` in `config.json`. One call per
-  organisation. A probe attempt returned "There was an error, please try again
-  later", most likely rate limiting rather than a wrong query, since the same
-  call works from a browser.
-- Exactly one season per year per organisation, which the `startDate`/`endDate`
-  pair confirms.
-- **Organisation ids appear stable across seasons; team ids appear
-  season-scoped.** This needs verifying before anything is built on it — query
-  `discoverTeams` for a club against the 2025 season and check whether any team
-  id matches 2026.
-- The identity question is the same question: what identifies a team across
-  years. Re-keying match ids would touch every record plus `gotwFlags`, `roster`
-  and `teamLogos`, so it should be decided once, in a design document, not
-  incrementally.
+**Next:** Phase A backfill — results and ladders for the five current
+organisations across their retired seasons. It needs no naming decision and it
+exercises the archive path, which is the untested half of the new layout.
 
 ---
 
@@ -207,3 +266,9 @@ across all four writers; all must agree or the next run re-inflates it.
 | Player panel proxy | Cloudflare Worker `solitary-snowflake-cb3e.insanoflash.workers.dev` — CORS bypass for `publicProfileStatistics` |
 | Hosting | GitHub Pages, main branch, root |
 | Tenant | `afl` (basketball uses `basketball-victoria`) |
+
+**Workflows.** `fetch-results.yml` holds three jobs — results, stats, fixtures —
+gated by a `fetch` input whose value `both` means results **and stats only**, not
+fixtures. Separate workflows: `discover-orgs.yml`, `discover-seasons.yml`,
+`split-data.yml`, `report-data-size.yml`, `report-field-usage.yml`,
+`probe-search.yml`.

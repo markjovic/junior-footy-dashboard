@@ -2,7 +2,9 @@
 # Team Registry and Identity — Design Document
 
 **Repo:** `markjovic/junior-footy-dashboard`
-**Status:** DRAFT FOR APPROVAL. Nothing is built until this is approved.
+**Status:** APPROVED, NOT STARTED. All four §4/§5 questions are answered.
+Blocked on nothing — this is the next design-led piece of work after the
+Phase A backfill in `storage_ingestion_design.md`.
 **Revision:** 2026-08-11. Supersedes the 2026-08-10 draft, which was wrong about
 `discoverCompetitions` and consequently ruled out work that is achievable.
 **Evidence:** `scripts/probe-search.js` and `scripts/discover-orgs.js`, run on
@@ -77,6 +79,18 @@ name instead of read from the API.**
 
 - **`parseGradeName` collapses 17 grades into 5 keys** (`OUTSTANDING_TASKS` item
   6), so four U8 grades share one match-id namespace.
+
+  **Confirmed live 2026-08-11** by `buildGradeMeta`'s own collision warnings in a
+  full run — EFNL U8 four grades, YJFL U10 six, WFNL U10 three, SEJ U10 Blue two,
+  SEJ U10 Red two. Seventeen into five, matching the figure exactly.
+
+  **And it reaches further than the match-id namespace.** The same run logged six
+  roster warnings of the form `X (U10 Girls) in both grade  and A in R1 —
+  keeping A`: two real grades parse to one key, so a team appears in both, and
+  `rebuildRoster` breaks the tie by preferring the non-empty grade. Those teams
+  then resolve through `currentGrade()` to a grade they may not be in. The
+  registry fixes this at the source by keying on the PlayHQ grade id; a fix
+  confined to match ids would not.
 - **27 non-member clubs sit in `data.json` as EFNL**, appearing in the team
   dropdown, roster, `teamClub` and the finals view's club list.
 - **Club identity is derived from Cloudinary logo URLs**, a workaround for a
@@ -139,14 +153,36 @@ VIP-only run cannot delete the other four.
 
 ### 3.3 Season discovery
 
-New script `discover-seasons.js`, one `discoverCompetitions` call per
-organisation, writing the competitions and seasons for the organisations named in
-`config.json`.
+**Approved 2026-08-11.** New script `discover-seasons.js`, one
+`discoverCompetitions` call per organisation, writing a manifest of competitions
+and seasons for the organisations named in `config.json`.
 
 `config.json` stops carrying `seasonID` and carries the 8-character organisation
-code instead. The current season is the one whose status is `ACTIVE`, with
-`UPCOMING` taking over at the turn of the year. Past seasons become available as
-a by-product, which is what the multi-season work needs.
+code instead:
+
+```json
+{
+  "organisations": [
+    { "code": "383836bb", "name": "EFNL", "vip": true, "excludeGrades": [] }
+  ]
+}
+```
+
+The current season is the one whose status is `ACTIVE`, with `UPCOMING` taking
+over at the turn of the year. Past seasons become available as a by-product,
+which is what the multi-season work needs.
+
+**⚠️ `compName` must keep producing byte-identical strings.** It is a component
+of every match id, every `roster` key and every `gradeMeta` key, and match ids
+are what `gotwFlags` points at. It is therefore derived as
+`` `${config.name} ${season.name}` ``: the probe run confirms
+`discoverCompetitions` returns season names `2026`, `2025` and `2024`, so
+`"EFNL"` plus `"2026"` reproduces `"EFNL 2026"` exactly. **The `name` field in
+`config.json` is half of a stored key, not a label.**
+
+Where the manifest lives and how a stale one heals is
+`storage_ingestion_design.md` §6.4. The two documents describe one change and
+must be read together.
 
 This is the smallest possible use of §1.1. It deliberately does not enumerate
 every organisation — see §8.
