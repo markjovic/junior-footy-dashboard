@@ -101,7 +101,7 @@ async function fetchOrganisation(code) {
       postcode: (o.address && o.address.postcode) || null,
     };
   } catch (e) {
-    console.warn(`  ${code}: discoverOrganisation failed — ${e.message}`);
+    log(`  ${code}: discoverOrganisation failed — ${e.message}`);
     return null;
   }
 }
@@ -157,7 +157,7 @@ async function main() {
     try {
       comps = await fetchCompetitions(code);
     } catch (e) {
-      console.warn(`  ${code}: FAILED — ${e.message}`);
+      log(`  ${code}: FAILED — ${e.message}`);
       failures.push({ code, error: e.message });
       await sleep(200);
       continue;
@@ -243,8 +243,8 @@ async function main() {
   }
 
   if (unmatched.length) {
-    console.warn(`\n  WARNING: ${unmatched.length} configured competition(s) could not be matched:`);
-    for (const u of unmatched) console.warn(`    ${u.name} seasonID=${u.seasonID}${u.note ? ' — ' + u.note : ''}`);
+    log(`\n  WARNING: ${unmatched.length} configured competition(s) could not be matched:`);
+    for (const u of unmatched) log(`    ${u.name} seasonID=${u.seasonID}${u.note ? ' — ' + u.note : ''}`);
 
     // Don't just report the problem — find the answer. discover-orgs.js already
     // recorded every AFL organisation's seasons, so an unmatched seasonID can be
@@ -253,12 +253,12 @@ async function main() {
     let sweep = null;
     if (fs.existsSync(ORG_DISCOVERY_PATH)) {
       try { sweep = JSON.parse(fs.readFileSync(ORG_DISCOVERY_PATH, 'utf8')); }
-      catch (e) { console.warn(`  (could not parse org-discovery.json: ${e.message})`); }
+      catch (e) { log(`  (could not parse org-discovery.json: ${e.message})`); }
     }
 
     if (!sweep) {
-      console.warn('  data/org-discovery.json is absent, so the owning organisation could not');
-      console.warn('  be traced. Run the "Discover organisations" workflow and try again.');
+      log('  data/org-discovery.json is absent, so the owning organisation could not');
+      log('  be traced. Run the "Discover organisations" workflow and try again.');
     } else {
       const owners = new Map();
       for (const o of sweep.organisations || []) {
@@ -266,29 +266,29 @@ async function main() {
           if (!owners.has(s.id)) owners.set(s.id, { code: o.code, name: o.name, season: s.name, state: o.effectiveState || o.state });
         }
       }
-      console.warn('\n  Traced against data/org-discovery.json:');
+      log('\n  Traced against data/org-discovery.json:');
       for (const u of unmatched) {
         const hit = owners.get(u.seasonID);
         if (hit) {
-          console.warn(
+          log(
             `    ${u.name} (season ${u.seasonID}) belongs to ${hit.code} — ` +
             `"${hit.name}"${hit.state ? ` [${hit.state}]` : ''}, season "${hit.season}"`
           );
           const suffix = ' ' + hit.season;
           const short = u.name.endsWith(suffix) ? u.name.slice(0, -suffix.length) : null;
-          console.warn(
+          log(
             `      -> add "${hit.code}" to organisationCodes` +
             (short ? `; its short name will resolve to "${short}"` : '')
           );
         } else {
-          console.warn(`    ${u.name} (season ${u.seasonID}) — not found in org-discovery.json either.`);
-          console.warn('      That sweep only covers type ASSOCIATION under tenantSlug afl, so a');
-          console.warn('      season belonging to a CLUB-type organisation would not appear.');
+          log(`    ${u.name} (season ${u.seasonID}) — not found in org-discovery.json either.`);
+          log('      That sweep only covers type ASSOCIATION under tenantSlug afl, so a');
+          log('      season belonging to a CLUB-type organisation would not appear.');
         }
       }
     }
-    console.warn('\n  Do not migrate config.json until these are resolved — an unmatched');
-    console.warn('  competition means compName would change and orphan every stored match id.');
+    log('\n  Do not migrate config.json until these are resolved — an unmatched');
+    log('  competition means compName would change and orphan every stored match id.');
   }
 
   // Attach the resolved short name and flags, then build the flat manifest.
@@ -381,7 +381,7 @@ async function main() {
   let core = {};
   if (fs.existsSync(CORE_PATH)) {
     try { core = JSON.parse(fs.readFileSync(CORE_PATH, 'utf8')); }
-    catch (e) { console.warn('Could not parse core.json — starting fresh'); }
+    catch (e) { log('Could not parse core.json — starting fresh'); }
   }
 
   const next = { ...core, organisations, manifest, lastSeasonDiscovery: new Date().toISOString() };
