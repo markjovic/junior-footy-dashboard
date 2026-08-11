@@ -42,6 +42,10 @@ const ORG_DISCOVERY_PATH = path.join(ROOT, 'data', 'org-discovery.json');
 // amended finals results.
 const RETIRE_AFTER_DAYS = 30;
 
+// Bump on every change. Printed at the top of every run so a stale copy in an
+// Actions log is distinguishable from a real failure.
+const VERSION = 'v2 2026-08-12 carry-forward-phases';
+
 // seasons takes a required organisationID argument, and organisationID must be
 // the 8-character organisation code rather than the UUID. Both verified
 // 2026-08-11 by controlled comparison — see playhq_api_reference.md.
@@ -141,7 +145,7 @@ async function main() {
   const vipByCode = new Map(newShape ? cfg.organisations.map((o) => [o.code, !!o.vip]) : []);
   const excludeByCode = new Map(newShape ? cfg.organisations.map((o) => [o.code, o.excludeGrades || []]) : []);
 
-  log(`=== season discovery ===`);
+  log(`=== season discovery === ${VERSION}`);
   log(`today: ${TODAY}`);
   log(`organisations: ${codes.length}`);
   log(`config shape: ${newShape ? 'organisations[]' : 'competitions[] + organisationCodes[]'}`);
@@ -291,6 +295,27 @@ async function main() {
     log('  competition means compName would change and orphan every stored match id.');
   }
 
+  // ── Read the existing core.json BEFORE building the manifest ──────────────
+  // It used to be read only at the point of writing, which was fine when the
+  // manifest was rebuilt from nothing every run. It no longer is: the per-season
+  // completeness flags are written by store.save() as each phase lands, and
+  // rebuilding them as false would erase what the backfill recorded.
+  // storage_ingestion_design.md §6.1a.
+  let core = {};
+  if (fs.existsSync(CORE_PATH)) {
+    try { core = JSON.parse(fs.readFileSync(CORE_PATH, 'utf8')); }
+    catch (e) { log('Could not parse core.json — starting fresh'); }
+  }
+
+  // seasonId -> phases, from whatever the manifest already holds. This script
+  // only PRESERVES the signal; it never sets it true. store.save() derives it
+  // from the records it actually wrote, and that stays the only writer.
+  const priorPhases = new Map();
+  for (const m of core.manifest || []) {
+    if (m.seasonId && m.phases) priorPhases.set(m.seasonId, m.phases);
+  }
+  log(`carried-forward phase records: ${priorPhases.size}`);
+
   // Attach the resolved short name and flags, then build the flat manifest.
   for (const code of Object.keys(organisations)) {
     const o = organisations[code];
@@ -315,10 +340,12 @@ async function main() {
         endDate: s.endDate,
         retired: s.retired,
         file: `data/orgs/${code}-${s.retired ? 'archive' : 'current'}.json`,
-        // Filled in by the writers as each phase lands. Absent is not the same
-        // as empty: a season awaiting the player backfill must be
-        // distinguishable from one whose players are genuinely missing.
-        phases: { results: false, players: false },
+        // Written by store.save() as each phase lands, and only preserved here.
+        // Absent is not the same as empty: a season awaiting the player backfill
+        // must be distinguishable from one whose players are genuinely missing.
+        // A season this script has not seen before starts false, which is
+        // accurate — nothing has been fetched for it yet.
+        phases: priorPhases.get(s.id) || { results: false, players: false },
       });
     }
   }
@@ -378,11 +405,7 @@ async function main() {
   }
 
   // ── Write core.json, preserving keys this script does not own ─────────────
-  let core = {};
-  if (fs.existsSync(CORE_PATH)) {
-    try { core = JSON.parse(fs.readFileSync(CORE_PATH, 'utf8')); }
-    catch (e) { log('Could not parse core.json — starting fresh'); }
-  }
+  // `core` was read above, before the manifest was built.
 
   const next = { ...core, organisations, manifest, lastSeasonDiscovery: new Date().toISOString() };
 
