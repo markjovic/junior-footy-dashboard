@@ -365,7 +365,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.131</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.132</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -686,7 +686,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.131</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.132</span>
         </div>
 
 
@@ -3515,6 +3515,69 @@ async function generateHash() {
 
 
 // ═══════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════
+// Data is stored per organisation: data/core.json holds the manifest and the
+// cross-organisation keys, and data/orgs/<code>-current.json holds one
+// organisation's live seasons. This reassembles them into the single object the
+// rest of the dashboard already expects, so no render path changes.
+//
+// It still falls back to data/data.json. That file is no longer written, but an
+// older deployment or a rolled-back commit will still have one, and a dashboard
+// that shows nothing is worse than one showing stale data.
+async function loadStoredData() {
+  let core = null;
+  try {
+    const r = await fetch('data/core.json');
+    if (r.ok) core = await r.json();
+  } catch (e) { /* fall through to the legacy path */ }
+
+  if (!core || !Array.isArray(core.manifest)) {
+    const r = await fetch('data/data.json');
+    if (!r.ok) return null;
+    console.warn('core.json unavailable — loaded legacy data.json');
+    return await r.json();
+  }
+
+  // Which organisations have live seasons, and which have only retired ones.
+  // Between seasons every season is retired, and showing nothing at all would be
+  // worse than showing the season just gone — so an organisation with no live
+  // season falls back to its archive.
+  const live = new Set(), retired = new Set();
+  for (const m of core.manifest) (m.retired ? retired : live).add(m.org);
+  const files = [...live].map(o => `data/orgs/${o}-current.json`);
+  for (const o of retired) if (!live.has(o)) files.push(`data/orgs/${o}-archive.json`);
+
+  const parts = await Promise.all(files.map(async f => {
+    try {
+      const r = await fetch(f);
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  }));
+
+  const d = { matches: [], players: [], roster: {}, gradeMeta: {} };
+  let loaded = 0;
+  for (const p of parts) {
+    if (!p) continue;
+    loaded++;
+    if (Array.isArray(p.matches)) d.matches.push(...p.matches);
+    if (Array.isArray(p.players)) d.players.push(...p.players);
+    Object.assign(d.roster, p.roster || {});
+    Object.assign(d.gradeMeta, p.gradeMeta || {});
+  }
+
+  // Cross-organisation keys and the freshness timestamps live in core.json.
+  for (const k of ['clubs','teamClub','teamOrg','compLogos','teamLogos','gotwFlags','lastRound',
+                   'lastUpdated','lastResultsFetch','lastStatsFetch','lastFixtureFetch','lastClubIndex']) {
+    if (core[k] !== undefined) d[k] = core[k];
+  }
+
+  console.log(`Loaded ${loaded}/${files.length} organisation file(s): ${d.matches.length} matches, ${d.players.length} players`);
+  if (!loaded) console.warn('No organisation files loaded — the dashboard will be empty.');
+  return d;
+}
+
+// ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
 async function init() {
@@ -3538,9 +3601,8 @@ async function init() {
   // If running on a server (GitHub Pages), also try data.json and prefer it
   if (location.protocol !== 'file:') {
     try {
-      const r = await fetch('data/data.json');
-      if (r.ok) {
-        const d = await r.json();
+      const d = await loadStoredData();
+      if (d) {
         // Load roster first — _valid/_grade pre-computation depends on it
         if (d.roster && Object.keys(d.roster).length) S.roster = d.roster;
         if (d.matches?.length) {
@@ -3582,7 +3644,7 @@ async function init() {
           if (sEl) sEl.textContent = fmtTime(d.lastStatsFetch);
         }
       }
-    } catch(e) {}
+    } catch(e) { console.warn('Data load failed:', e); }
   }
 
   if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
