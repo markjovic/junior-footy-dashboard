@@ -141,21 +141,77 @@ function main() {
   }
   const largestComp = compRows.length ? compRows[0][2] : 0;
 
-  // ── Field cost inside a match record ───────────────────────────────────────
-  console.log('\n=== bytes per field across all match records ===');
-  const fieldBytes = {};
-  const fieldCount = {};
-  for (const m of matches) {
-    for (const k of Object.keys(m)) {
-      fieldBytes[k] = (fieldBytes[k] || 0) + pairBytes(k, m[k]);
-      fieldCount[k] = (fieldCount[k] || 0) + 1;
+  // ── Field cost inside a record ─────────────────────────────────────────────
+  // Nested arrays of objects are measured separately, because in player records
+  // the appearances array repeats the same fields again and is where the
+  // duplication actually accumulates.
+  function fieldReport(label, records, nestedKey) {
+    console.log(`\n=== bytes per field across all ${label} records (${records.length}) ===`);
+    const fieldBytes = {};
+    const fieldCount = {};
+    const nestedBytes = {};
+    const nestedCount = {};
+    let nestedRows = 0;
+
+    for (const rec of records) {
+      for (const k of Object.keys(rec)) {
+        fieldBytes[k] = (fieldBytes[k] || 0) + pairBytes(k, rec[k]);
+        fieldCount[k] = (fieldCount[k] || 0) + 1;
+      }
+      if (nestedKey && Array.isArray(rec[nestedKey])) {
+        for (const sub of rec[nestedKey]) {
+          nestedRows++;
+          for (const k of Object.keys(sub)) {
+            nestedBytes[k] = (nestedBytes[k] || 0) + pairBytes(k, sub[k]);
+            nestedCount[k] = (nestedCount[k] || 0) + 1;
+          }
+        }
+      }
     }
+
+    const total = Object.values(fieldBytes).reduce((a, b) => a + b, 0);
+    console.log(`  ${pad('field', 16)} ${padL('bytes', 12)} ${padL('share', 8)} ${padL('present', 9)}`);
+    for (const [k, b] of Object.entries(fieldBytes).sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${pad(k, 16)} ${padL(human(b), 12)} ${padL(pct(b, total), 8)} ${padL(fieldCount[k], 9)}`);
+    }
+
+    if (nestedRows) {
+      const nTotal = Object.values(nestedBytes).reduce((a, b) => a + b, 0);
+      console.log(`\n  --- within ${nestedKey}[] (${nestedRows} rows, ${human(nTotal)} total) ---`);
+      console.log(`  ${pad('field', 16)} ${padL('bytes', 12)} ${padL('share', 8)} ${padL('present', 9)}`);
+      for (const [k, b] of Object.entries(nestedBytes).sort((a, b) => b[1] - a[1])) {
+        console.log(`  ${pad(k, 16)} ${padL(human(b), 12)} ${padL(pct(b, nTotal), 8)} ${padL(nestedCount[k], 9)}`);
+      }
+    }
+
+    return { fieldBytes, fieldCount, nestedBytes, nestedCount, nestedRows, total };
   }
+
+  const matchFields = fieldReport('match', matches, null);
+  const fieldBytes = matchFields.fieldBytes;
   report.matchFieldBytes = fieldBytes;
-  const totalMatchBytes = Object.values(fieldBytes).reduce((a, b) => a + b, 0);
-  console.log(`  ${pad('field', 16)} ${padL('bytes', 12)} ${padL('share', 8)} ${padL('present', 9)}`);
-  for (const [k, b] of Object.entries(fieldBytes).sort((a, b) => b[1] - a[1])) {
-    console.log(`  ${pad(k, 16)} ${padL(human(b), 12)} ${padL(pct(b, totalMatchBytes), 8)} ${padL(fieldCount[k], 9)}`);
+
+  const players = Array.isArray(data.players) ? data.players : [];
+  const playerFields = players.length ? fieldReport('player', players, 'appearances') : null;
+  if (playerFields) {
+    report.playerFieldBytes = playerFields.fieldBytes;
+    report.playerAppearanceFieldBytes = playerFields.nestedBytes;
+    report.playerAppearanceRows = playerFields.nestedRows;
+
+    // Fields that can be recomputed from something else already stored.
+    // name  = firstName + lastName
+    // team  = toClubName(teamRaw)
+    // gradeName / rawGrade / age / compName all follow from gradeID via grades.json
+    const derivableTop = ['name', 'team', 'gradeName', 'rawGrade', 'age', 'compName'];
+    const derivableNested = ['team', 'gradeName', 'rawGrade'];
+    const topSaving = derivableTop.reduce((a, k) => a + (playerFields.fieldBytes[k] || 0), 0);
+    const nestedSaving = derivableNested.reduce((a, k) => a + (playerFields.nestedBytes[k] || 0), 0);
+    report.playerDerivableBytes = { top: topSaving, nested: nestedSaving, total: topSaving + nestedSaving };
+
+    console.log('\n  --- derivable player fields (recomputable, not lost if dropped) ---');
+    console.log(`  top level  ${padL(human(topSaving), 12)}   ${derivableTop.join(', ')}`);
+    console.log(`  appearances${padL(human(nestedSaving), 12)}   ${derivableNested.join(', ')}`);
+    console.log(`  combined   ${padL(human(topSaving + nestedSaving), 12)}   ${pct(topSaving + nestedSaving, rawBytes)} of data.json`);
   }
 
   // ── Logo redundancy ────────────────────────────────────────────────────────
@@ -191,8 +247,13 @@ function main() {
     sixteenCompetitionsCurrentSeason: Math.round(perComp * 16),
     githubFileLimit: 100 * 1024 * 1024,
   };
+  const playerSaving = report.playerDerivableBytes ? report.playerDerivableBytes.total : 0;
+  report.projections.playerDerivableBytes = playerSaving;
+  report.projections.withoutRedundancy = withoutLogos - playerSaving - (fieldBytes.id || 0);
   console.log(`  data.json now                       ${padL(human(rawBytes), 12)}`);
   console.log(`  without per-match logos             ${padL(human(withoutLogos), 12)}  (${pct(logoBytes, rawBytes)} saved)`);
+  console.log(`  without derivable player fields     ${padL(human(rawBytes - playerSaving), 12)}  (${pct(playerSaving, rawBytes)} saved)`);
+  console.log(`  without logos, player dupes and id  ${padL(human(report.projections.withoutRedundancy), 12)}  (${pct(rawBytes - report.projections.withoutRedundancy, rawBytes)} saved)`);
   console.log(`  largest single competition          ${padL(human(largestComp), 12)}`);
   console.log(`  mean competition                    ${padL(human(perComp), 12)}`);
   console.log(`  16 competitions, current season     ${padL(human(perComp * 16), 12)}  (one file each, so the`);
