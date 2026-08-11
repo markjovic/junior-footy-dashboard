@@ -1,0 +1,42 @@
+# .github/workflows/probe-search.yml
+name: Probe PlayHQ search
+
+# Diagnostic only. Commits nothing, so contents:read is enough and there is no
+# git step at all. The exit-code convention (0 changed / 2 no change / 1 fatal)
+# does not apply here because nothing is ever written to the repo.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-search
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Run search probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run probe
+        run: node scripts/probe-search.js
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-search-report
+          path: probe-search-report.json
+          if-no-files-found: warn
+          retention-days: 7
