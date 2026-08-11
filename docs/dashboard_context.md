@@ -8,6 +8,10 @@
 Read alongside `working_practice.md` (portable) and `playhq_api_reference.md`
 (PlayHQ behaviour). This file covers only what is true of **this** repository.
 
+`docs/team_registry_design.md` is awaiting approval and leads the work queue —
+read it before starting anything, because it changes how teams, grades and clubs
+are identified.
+
 ---
 
 ## Reading the repo
@@ -39,7 +43,9 @@ https://github.com/markjovic/junior-footy-dashboard/blob/main/config.json
 
 **Repo:** `markjovic/junior-footy-dashboard` (public)
 **Live:** `https://markjovic.github.io/junior-footy-dashboard/`
-**Current version:** Beta 0.124
+**Version:** read it from the badge in `index.html` — this document is edited far
+less often than the code and any number written here will be stale. As at
+2026-08-10 it was Beta 0.131, but check rather than quote that.
 
 A single-file HTML dashboard for AFL results, fetched from PlayHQ into a
 committed `data.json` and served from GitHub Pages. No build step, no framework,
@@ -144,7 +150,15 @@ two conventions in one codebase.
 ## Current state
 
 Finals support is complete and deployed — see `finals_support.md` for the
-implementation, and `README.md` for user-facing behaviour.
+implementation, and `README.md` for user-facing behaviour. The finals view has
+three modes: by age group, by club, and winners.
+
+**Next up is `team_registry_design.md`, not the multi-season work below.** It
+proposes capturing the PlayHQ team id on match records and building a per-season
+registry from `discoverTeams(filter:{seasonID})`, which addresses three problems
+at once: non-member clubs polluting a competition, `parseGradeName` collapsing 17
+grades into 5 keys, and club identity being derived from logo URLs. Four open
+questions in its §4 need answering before any code is written.
 
 **Repo state.** 30 files, 37.8 MB as at 2026-08-10 — down from 163 files and
 65 MB. `data/data.json` is 36.6 MB of it. Machine-written JSON lives in `data/`,

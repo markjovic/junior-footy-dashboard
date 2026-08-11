@@ -2,8 +2,11 @@
 # Finals Support — Implementation Notes
 
 **Repo:** `markjovic/junior-footy-dashboard`
-**Shipped:** dashboard Beta 0.124; `fetch-results.js`, `fetch-fixtures.js` updated;
-`build-club-index.js` added.
+**Shipped:** finals ingestion and display landed across Beta 0.116–0.124;
+`fetch-results.js` and `fetch-fixtures.js` updated, `build-club-index.js` added.
+The finals view gained club aggregates, sorting, filters and a winners mode
+through 0.131. These are the versions the work shipped in, not the current
+version — read that from `index.html`.
 **Written:** 2026-08-10. Supersedes `finals_design.md`, which was the pre-build
 specification.
 
