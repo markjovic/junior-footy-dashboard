@@ -1,0 +1,65 @@
+# .github/workflows/split-data.yml
+name: Split data by organisation
+
+# One-time migration. Writes data/orgs/<code>-current.json and
+# data/orgs/<code>-archive.json from data/data.json, using the manifest in
+# data/core.json.
+#
+# NON-DESTRUCTIVE: data.json is not modified or deleted, and nothing reads the
+# new files yet. The split is committed so it can be inspected, and the writers
+# and dashboard are pointed at it only once it has been verified.
+#
+# The script verifies itself by reassembling the split files and comparing them
+# against the source. A mismatch exits 1 and fails the run rather than committing
+# a split that lost records.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: split-data
+  cancel-in-progress: false
+
+jobs:
+  split:
+    name: Split data.json by organisation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Split
+        id: split
+        # A 36 MB minified JSON expands considerably once parsed, and this holds
+        # both the source and the reassembled copy in memory to compare them.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          set +e
+          node scripts/split-data.js
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "1" ]; then
+            echo "Split failed verification or hit a fatal error."
+            exit 1
+          fi
+          exit 0
+
+      - name: Commit
+        if: steps.split.outputs.code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          git diff --staged --quiet || git commit -m "split data by organisation: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
