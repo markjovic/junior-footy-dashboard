@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v3 2026-08-12 capture-gradeId';
+const ENGINE_VERSION = 'v4 2026-08-12 export-queries';
 
 'use strict';
 
@@ -1298,5 +1298,12 @@ module.exports = {
   rebuildRoster,
   parseGradeName,
   cleanTeam,
+  // Exported for scripts/migrate-grade-ids.js pass 3, which has to reproduce a
+  // stored match id from a live fixture. Exported rather than copied: a second
+  // copy of a query drifts, and the working practice is explicit that queries
+  // come from something continuously exercised.
+  Q_GRADE_ROUNDS,
+  Q_FIXTURE,
+  roundToken,
   ENGINE_VERSION,
 };
