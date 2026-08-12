@@ -24,8 +24,12 @@
 const fs = require('fs');
 const path = require('path');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
+// The engine's OWN parseGradeName and cleanTeam. Reproducing them here is how v1
+// went wrong: its age regex only recognised U-ages, so every senior grade keyed
+// as an empty string and 36% of teams looked unmatched when they were not.
+const { parseGradeName, cleanTeam } = require('./lib/results-engine');
 
-const VERSION = 'probe-team-join v1 2026-08-12';
+const VERSION = 'probe-team-join v3 2026-08-12 per-age';
 const ROOT = path.resolve(__dirname, '..');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
 const ORGS = path.join(ROOT, 'data', 'orgs');
@@ -59,21 +63,6 @@ const TEAMS_QUERY_EXTRA =
   '  }\n' +
   '}\n';
 
-// ── cleanTeam, copied from scripts/lib/results-engine.js ─────────────────────
-// Stored names have already been through this, so registry names must go through
-// exactly the same transformation or nothing will match. Copied rather than
-// imported because importing the engine pulls in its store and config loading.
-function cleanTeam(name, gradeAge) {
-  if (gradeAge) {
-    const ageNum = gradeAge.match(/^(U\d+(?:\.\d+)?)/i)?.[1];
-    if (ageNum) {
-      return name.replace(new RegExp('\\s+' + ageNum.replace('.', '\\.') + '\\b\\s*', 'gi'), ' ')
-        .replace(/\s+$/, '').trim();
-    }
-  }
-  return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/, '').trim();
-}
-
 const log = (m) => console.log(m);
 
 function readJson(p) {
@@ -88,6 +77,13 @@ async function main() {
     console.error('FATAL: data/core.json has no manifest.');
     process.exit(1);
   }
+
+  const gradesJson = readJson(path.join(ROOT, 'data', 'grades.json')) || [];
+  if (!gradesJson.length) {
+    console.error('FATAL: data/grades.json is empty — the join goes through it.');
+    process.exit(1);
+  }
+  log(`grades.json: ${gradesJson.length} grade(s) across all seasons`);
 
   const wanted = (process.env.PROBE_SEASONS || '75d8a232,ca9cc98b')
     .split(',').map(s => s.trim()).filter(Boolean);
@@ -111,8 +107,11 @@ async function main() {
     }
     log(`registry: ${teams.length} team(s), ${teams.filter(t => t.grade && t.grade.id).length} with a grade`);
 
-    // Does the richer query work? Asked once per season, reported, never relied on.
-    try {
+    // ANSWERED 2026-08-12: age and gender are NOT fields on DiscoverTeam.
+    //   Cannot query field "age" on type "DiscoverTeam". Did you mean "name"?
+    // Kept only behind an env flag, because asking again costs four retries —
+    // playhq.js classifies a 400 validation error as transient and retries it.
+    if (process.env.PROBE_ASK_AGE === 'true') try {
       const r2 = await gqlPost(TEAMS_QUERY_EXTRA, { seasonId }, 'discoverTeamsBySeason');
       const t2 = (r2 && r2.data && r2.data.discoverTeams) || [];
       if (r2 && r2.errors && r2.errors.length) {
@@ -151,33 +150,64 @@ async function main() {
     // ── 3. The join ──────────────────────────────────────────────────────────
     // Registry names go through the same cleanTeam the fetchers applied, using
     // the grade name as the age source, so both sides are in the same shape.
+    // The join goes through the GRADE ID, not through a parsed name.
+    // grades.json already holds, per grade id, the ageName and genderName the
+    // API returned, which are exactly what parseGradeName consumed when the
+    // record was stored. So the stored age is reproduced rather than guessed.
+    const gradeById = new Map();
+    for (const g of gradesJson) {
+      if (g.seasonID === seasonId && g.id) gradeById.set(g.id, g);
+    }
+    log(`grades.json: ${gradeById.size} grade(s) for this season`);
+
     const registryKey = new Map();   // "age|cleanName" -> [team, ...]
     const noGrade = [];
+    const gradeNotInJson = [];
     for (const t of teams) {
-      if (!t.grade || !t.grade.name) { noGrade.push(t.name); continue; }
-      // Grade names come back verbatim, e.g. "U8 - West", so the age is the
-      // leading token.
-      const age = (t.grade.name.match(/^(U\d+(?:\.\d+)?(?:\s+Girls)?)/i) || [])[1] || '';
+      if (!t.grade || !t.grade.id) { noGrade.push(t.name); continue; }
+      const g = gradeById.get(t.grade.id);
+      if (!g) {
+        if (gradeNotInJson.length < EXAMPLES) {
+          gradeNotInJson.push(`${t.grade.id} "${t.grade.name}" (team "${t.name}")`);
+        }
+        continue;
+      }
+      const { age } = parseGradeName(g.name, g.ageName, g.genderName);
       const clean = cleanTeam(t.name, age);
       const k = `${age}|${clean}`;
       if (!registryKey.has(k)) registryKey.set(k, []);
       registryKey.get(k).push(t);
     }
+    if (gradeNotInJson.length) {
+      log(`\n  registry grades absent from grades.json, examples:`);
+      for (const e of gradeNotInJson) log(`    ${e}`);
+    }
 
     let matched = 0, ambiguous = 0, unmatched = 0;
     const exMatched = [], exAmbiguous = [], exUnmatched = [];
+    // Counted per age as well as in total. A whole age group failing is the
+    // failure mode this probe has already hit once — v1's regex broke every
+    // senior grade, and that was only visible because the examples happened to
+    // be senior teams. A category should be obvious from the counts, not
+    // inferred from eight sampled lines.
+    const perAge = new Map();   // age -> { matched, ambiguous, unmatched }
+    const cell = (age) => {
+      if (!perAge.has(age)) perAge.set(age, { matched: 0, ambiguous: 0, unmatched: 0 });
+      return perAge.get(age);
+    };
     for (const [k, n] of storedPairs) {
+      const age = k.slice(0, k.indexOf('|'));
       const hit = registryKey.get(k);
       if (!hit) {
-        unmatched++;
+        unmatched++; cell(age).unmatched++;
         if (exUnmatched.length < EXAMPLES) exUnmatched.push(`${k}  (${n} appearances)`);
       } else if (hit.length > 1) {
-        ambiguous++;
+        ambiguous++; cell(age).ambiguous++;
         if (exAmbiguous.length < EXAMPLES) {
           exAmbiguous.push(`${k} -> ${hit.length} teams: ${hit.map(t => `${t.id} "${t.name}" [${t.grade.name}]`).join(' | ')}`);
         }
       } else {
-        matched++;
+        matched++; cell(age).matched++;
         if (exMatched.length < EXAMPLES) exMatched.push(`${k} -> ${hit[0].id} "${hit[0].name}" [${hit[0].grade.name}]`);
       }
     }
@@ -190,10 +220,42 @@ async function main() {
     log(`  no registry team at all     : ${unmatched} (${pct(unmatched)})`);
     log(`  registry teams with no grade: ${noGrade.length} (excluded from the join)`);
 
+    // Per age, worst first, so anything systematically broken is the first
+    // thing on the screen.
+    const ageNum = (s) => { const m = String(s).match(/(\d+)/); return m ? +m[1] : 9999; };
+    const ageRows = [...perAge.entries()]
+      .sort((a, b) => (b[1].unmatched + b[1].ambiguous) - (a[1].unmatched + a[1].ambiguous)
+                   || ageNum(a[0]) - ageNum(b[0]));
+    const aw = Math.max(12, ...ageRows.map(([a]) => a.length)) + 2;
+    log(`\n  per age (worst first)`);
+    log('    ' + 'age'.padEnd(aw) + 'matched'.padStart(9) + 'ambiguous'.padStart(11) + 'unmatched'.padStart(11));
+    for (const [age, c] of ageRows) {
+      const flag = (c.unmatched || c.ambiguous) ? '  <--' : '';
+      log('    ' + String(age || '(empty)').padEnd(aw) +
+        String(c.matched).padStart(9) + String(c.ambiguous).padStart(11) +
+        String(c.unmatched).padStart(11) + flag);
+    }
+
     log(`\n  matched, examples:`);
     for (const e of exMatched) log(`    ${e}`);
     if (exAmbiguous.length) { log(`\n  AMBIGUOUS, examples — these cannot be resolved by name:`); for (const e of exAmbiguous) log(`    ${e}`); }
-    if (exUnmatched.length) { log(`\n  UNMATCHED, examples:`); for (const e of exUnmatched) log(`    ${e}`); }
+    if (exUnmatched.length) {
+      // One example per age before a second from any age, so a sample of eight
+      // cannot be eight rows of the same problem.
+      const byAgeEx = new Map();
+      for (const [k, n] of storedPairs) {
+        if (registryKey.get(k)) continue;
+        const age = k.slice(0, k.indexOf('|'));
+        if (!byAgeEx.has(age)) byAgeEx.set(age, []);
+        byAgeEx.get(age).push(`${k}  (${n} appearances)`);
+      }
+      log(`\n  UNMATCHED, one example per age:`);
+      let shown = 0;
+      for (const [age, list] of byAgeEx) {
+        log(`    ${list[0]}${list.length > 1 ? `   [+${list.length - 1} more in ${age}]` : ''}`);
+        if (++shown >= EXAMPLES * 2) { log(`    ... ${byAgeEx.size - shown} further age group(s)`); break; }
+      }
+    }
     if (noGrade.length) log(`\n  registry teams with no grade, examples: ${noGrade.slice(0, 5).join(', ')}`);
 
     await sleep(1000);
