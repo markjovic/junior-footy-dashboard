@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v1 2026-08-12';
+const ENGINE_VERSION = 'v2 2026-08-12 errored-grades';
 
 'use strict';
 
@@ -957,7 +957,8 @@ function ensureDataDir() {
  * @param {boolean}  [o.writeLastRound]   default true; false leaves lastRound alone.
  * @param {string}   [o.label]            log prefix.
  * @returns {Promise<{exitCode:number,newCount:number,updatedCount:number,
- *                    gradeMetaChanged:boolean,total:number,failedGrades:string[]}>}
+ *                    gradeMetaChanged:boolean,total:number,
+ *                    failedGrades:string[],erroredGrades:string[]}>}
  *          Never calls process.exit — the caller owns the exit code.
  */
 async function run(o) {
@@ -1062,6 +1063,13 @@ async function run(o) {
   // A grade whose fetch threw. Counted rather than lost: a backfill across
   // thirteen seasons must not report success having silently skipped grades.
   const failedGrades = [];
+  // A grade whose gradeRounds call errored. That path returns an empty grade
+  // with hit403 set, which is indistinguishable from a grade that genuinely has
+  // no rounds unless it is recorded here. The scheduled run tolerates it because
+  // the next run retries; a backfill has no next run, so it must be able to see
+  // the difference. Found 2026-08-12 by a verification whose forced failure went
+  // down this path instead of the one it was aimed at.
+  const erroredGrades = [];
 
   for (const grade of grades) {
     resultsGradeIdx++;
@@ -1073,6 +1081,7 @@ async function run(o) {
     }
     const { matches, hit403, logos, teamOrgs, failed } = await fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnded);
     if (failed) failedGrades.push(`${grade.compName} — ${grade.name}`);
+    if (hit403) erroredGrades.push(`${grade.compName} — ${grade.name}`);
     Object.assign(fetchedLogos, logos);
     Object.assign(fetchedTeamOrgs, teamOrgs);
     if (hit403) {
@@ -1255,6 +1264,10 @@ async function run(o) {
     console.error(`\n  WARNING: ${failedGrades.length} grade(s) failed and returned nothing:`);
     for (const g of failedGrades) console.error(`    ${g}`);
   }
+  if (erroredGrades.length) {
+    console.error(`\n  WARNING: ${erroredGrades.length} grade(s) could not fetch a round list:`);
+    for (const g of erroredGrades) console.error(`    ${g}`);
+  }
 
   // The caller owns the exit code. An engine that called process.exit could not
   // be tested, and a backfill wants to treat a failed grade as fatal where the
@@ -1266,7 +1279,8 @@ async function run(o) {
   } else if (newCount === 0 && updatedCount === 0) {
     console.log('No match changes, but grade metadata changed');
   }
-  return { exitCode, newCount, updatedCount, gradeMetaChanged, total: byId.size, failedGrades };
+  return { exitCode, newCount, updatedCount, gradeMetaChanged, total: byId.size,
+           failedGrades, erroredGrades };
 }
 module.exports = {
   run,
