@@ -33,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'audit-data v3 2026-08-12 breakdown';
+const VERSION = 'audit-data v4 2026-08-12 breakdown';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -338,19 +338,8 @@ if (ORG) {
     const ageNum = (s) => { const m = String(s).match(/(\d+)/); return m ? +m[1] : 9999; };
     const ages = [...byAge.keys()].sort((x, y) => ageNum(x) - ageNum(y) || String(x).localeCompare(String(y)));
 
-    const cw = Math.max(11, ...seasons.map(s => s.length + 2));
-    const head = '  ' + 'age'.padEnd(10) + seasons.map(s => s.padStart(cw)).join('');
     const fmt = (c) => c ? `${c.matches}/${c.grades.size}/${c.teams.size}` : '·';
 
-    console.log('  matches / grades / teams');
-    console.log(head);
-    console.log('  ' + '-'.repeat(10 + seasons.length * cw));
-    for (const age of ages) {
-      const row = byAge.get(age);
-      console.log('  ' + String(age).padEnd(10) +
-        seasons.map(s => fmt(row.get(s)).padStart(cw)).join(''));
-    }
-    console.log('  ' + '-'.repeat(10 + seasons.length * cw));
     const totals = seasons.map(s => {
       let m = 0; const g = new Set(), t = new Set();
       for (const [age, row] of byAge) {
@@ -364,7 +353,28 @@ if (ORG) {
       }
       return `${m}/${g.size}/${t.size}`;
     });
-    console.log('  ' + 'TOTAL'.padEnd(10) + totals.map((v, i) => v.padStart(cw)).join(''));
+
+    // ONE width for every row, from the widest thing that has to fit in a
+    // column — including the totals, which are the widest cells in the table.
+    // Sizing on the heading alone ran them together; sizing the totals
+    // separately broke the grid instead.
+    const cells = [];
+    for (const age of ages) for (const s of seasons) cells.push(fmt(byAge.get(age).get(s)));
+    const aw = Math.max(6, ...ages.map(x => String(x).length)) + 2;
+    const cw = Math.max(...seasons.map(s => s.length), ...cells.map(c => c.length),
+                        ...totals.map(v => v.length)) + 2;
+    const head = '  ' + 'age'.padEnd(aw) + seasons.map(s => s.padStart(cw)).join('');
+
+    console.log('  matches / grades / teams');
+    console.log(head);
+    console.log('  ' + '-'.repeat(aw + seasons.length * cw));
+    for (const age of ages) {
+      const row = byAge.get(age);
+      console.log('  ' + String(age).padEnd(aw) +
+        seasons.map(s => fmt(row.get(s)).padStart(cw)).join(''));
+    }
+    console.log('  ' + '-'.repeat(aw + seasons.length * cw));
+    console.log('  ' + 'TOTAL'.padEnd(aw) + totals.map(v => v.padStart(cw)).join(''));
 
     // An age present in an earlier season and absent from the latest is the
     // thing the round-coverage check cannot see.
@@ -374,7 +384,7 @@ if (ORG) {
       console.log(`\n  present earlier but ABSENT from ${latest}: ${dropped.join(', ')}`);
       for (const a of dropped) {
         const had = [...byAge.get(a).keys()].sort();
-        console.log(`    ${String(a).padEnd(8)} last seen ${had[had.length - 1]}` +
+        console.log(`    ${String(a).padEnd(aw)} last seen ${had[had.length - 1]}` +
           ` (${byAge.get(a).get(had[had.length - 1]).matches} matches)`);
       }
     } else {
