@@ -220,6 +220,11 @@ ok('a column per season', /2025\s+2026/.test(LAST.out));
 ok('a row per age', /U9/.test(LAST.out) && /U12/.test(LAST.out));
 ok('counts read matches/grades/teams',
   /U12\s+2\/1\/3\s+2\/1\/3/.test(LAST.out), 'U12 has 2 matches, 1 grade, 3 teams in each season');
+// The totals row deduplicates grades on age AND grade. U12 A and U9 B are two
+// grades, not one — deduplicating on the letter alone understated every total.
+ok('the totals row counts grades across ages',
+  /TOTAL\s+3\/2\/4\s+2\/1\/3/.test(LAST.out),
+  '2025 has 3 matches in 2 grades (U12 A, U9 B) and 4 teams');
 ok('the dropped age group is named',
   /present earlier but ABSENT from 2026: U9/.test(LAST.out), 'this is what round coverage cannot see');
 ok('and when to says when it was last seen', /U9\s+last seen 2025 \(1 matches\)/.test(LAST.out));

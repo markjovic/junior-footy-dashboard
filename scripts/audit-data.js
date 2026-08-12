@@ -33,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'audit-data v2 2026-08-12 breakdown';
+const VERSION = 'audit-data v3 2026-08-12 breakdown';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -353,11 +353,13 @@ if (ORG) {
     console.log('  ' + '-'.repeat(10 + seasons.length * cw));
     const totals = seasons.map(s => {
       let m = 0; const g = new Set(), t = new Set();
-      for (const row of byAge.values()) {
+      for (const [age, row] of byAge) {
         const c = row.get(s);
         if (!c) continue;
         m += c.matches;
-        for (const x of c.grades) g.add(s + x);
+        // Deduplicate on age AND grade. Deduplicating on the grade letter alone
+        // collapsed U8 A and U12 A into one and understated every total.
+        for (const x of c.grades) g.add(age + '|' + x);
         for (const x of c.teams) t.add(x);
       }
       return `${m}/${g.size}/${t.size}`;
