@@ -20,6 +20,11 @@
 //   AUDIT_STRICT=true   treat warnings as errors too.
 //   AUDIT_ROOT=<path>   audit a different tree. Used by scripts/verify-audit.js;
 //                       leave unset to audit this repository.
+//   AUDIT_ORG=<code>    also print a season-by-season breakdown for one
+//                       organisation, by age group. Answers "where did the games
+//                       go" — a whole age group disappearing is invisible to the
+//                       round-coverage check, because a grade that was never
+//                       fetched leaves no gap to find.
 //
 // Run: node scripts/audit-data.js
 
@@ -28,7 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'audit-data v1 2026-08-12';
+const VERSION = 'audit-data v2 2026-08-12 breakdown';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -291,6 +296,87 @@ if (!fs.existsSync(GRADES_PATH)) {
     if (!seasonsInGrades.has(m.seasonId)) {
       warn(`${m.compName} has ${b.matches} matches but no grades in grades.json — ` +
            `its archive cannot be resolved to a grade list`);
+    }
+  }
+}
+
+// ── 6. Per-organisation breakdown by age ─────────────────────────────────────
+const ORG = (process.env.AUDIT_ORG || '').trim();
+if (ORG) {
+  const seasonOf = new Map();     // compName -> seasonName
+  const orgComps = [];
+  for (const m of core.manifest) {
+    if (m.org === ORG && m.compName) { seasonOf.set(m.compName, String(m.seasonName)); orgComps.push(m); }
+  }
+  console.log(`\n6  Breakdown for ${ORG}` +
+    (orgComps.length ? ` (${orgComps[0].orgName || ''})` : ''));
+
+  if (!orgComps.length) {
+    warn(`AUDIT_ORG=${ORG} has no manifest entries — nothing to break down`);
+  } else {
+    const seasons = [...new Set(orgComps.map(m => String(m.seasonName)))].sort();
+    // age -> season -> { matches, grades:Set, teams:Set }
+    const byAge = new Map();
+    for (const [f, { org, payload }] of Object.entries(files)) {
+      if (org !== ORG) continue;
+      for (const rec of payload.matches || []) {
+        const season = seasonOf.get(rec.compName);
+        if (!season) continue;
+        const age = rec.age || '(none)';
+        if (!byAge.has(age)) byAge.set(age, new Map());
+        const perSeason = byAge.get(age);
+        if (!perSeason.has(season)) perSeason.set(season, { matches: 0, grades: new Set(), teams: new Set() });
+        const cell = perSeason.get(season);
+        cell.matches++;
+        cell.grades.add(String(rec.rawGrade));
+        if (rec.home) cell.teams.add(rec.home);
+        if (rec.away) cell.teams.add(rec.away);
+      }
+    }
+
+    // U8 before U10 before U17, and anything non-numeric last.
+    const ageNum = (s) => { const m = String(s).match(/(\d+)/); return m ? +m[1] : 9999; };
+    const ages = [...byAge.keys()].sort((x, y) => ageNum(x) - ageNum(y) || String(x).localeCompare(String(y)));
+
+    const cw = Math.max(11, ...seasons.map(s => s.length + 2));
+    const head = '  ' + 'age'.padEnd(10) + seasons.map(s => s.padStart(cw)).join('');
+    const fmt = (c) => c ? `${c.matches}/${c.grades.size}/${c.teams.size}` : '·';
+
+    console.log('  matches / grades / teams');
+    console.log(head);
+    console.log('  ' + '-'.repeat(10 + seasons.length * cw));
+    for (const age of ages) {
+      const row = byAge.get(age);
+      console.log('  ' + String(age).padEnd(10) +
+        seasons.map(s => fmt(row.get(s)).padStart(cw)).join(''));
+    }
+    console.log('  ' + '-'.repeat(10 + seasons.length * cw));
+    const totals = seasons.map(s => {
+      let m = 0; const g = new Set(), t = new Set();
+      for (const row of byAge.values()) {
+        const c = row.get(s);
+        if (!c) continue;
+        m += c.matches;
+        for (const x of c.grades) g.add(s + x);
+        for (const x of c.teams) t.add(x);
+      }
+      return `${m}/${g.size}/${t.size}`;
+    });
+    console.log('  ' + 'TOTAL'.padEnd(10) + totals.map((v, i) => v.padStart(cw)).join(''));
+
+    // An age present in an earlier season and absent from the latest is the
+    // thing the round-coverage check cannot see.
+    const latest = seasons[seasons.length - 1];
+    const dropped = ages.filter(a => byAge.get(a).size && !byAge.get(a).has(latest));
+    if (dropped.length) {
+      console.log(`\n  present earlier but ABSENT from ${latest}: ${dropped.join(', ')}`);
+      for (const a of dropped) {
+        const had = [...byAge.get(a).keys()].sort();
+        console.log(`    ${String(a).padEnd(8)} last seen ${had[had.length - 1]}` +
+          ` (${byAge.get(a).get(had[had.length - 1]).matches} matches)`);
+      }
+    } else {
+      console.log(`\n  no age group present earlier is missing from ${latest}`);
     }
   }
 }

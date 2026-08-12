@@ -51,8 +51,10 @@ function clean() {
       meta: { org: '383836bb', kind: 'current', seasons: ['2dcbf383'],
               phases: { '2dcbf383': { results: true, players: true, matches: 2, players_n: 1 } } },
       matches: [
-        { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 1 },
-        { id: 'EFNL 2026|U12|A|2|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 2 },
+        { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 1,
+          home: 'Blackburn', away: 'Norwood' },
+        { id: 'EFNL 2026|U12|A|2|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 2,
+          home: 'Blackburn', away: 'Vermont' },
       ],
       players: [{ id: 'p1', compName: 'EFNL 2026' }],
       roster: { 'EFNL 2026|Blackburn|U12': {} },
@@ -60,10 +62,15 @@ function clean() {
     },
     archive: {
       meta: { org: '383836bb', kind: 'archive', seasons: ['75d8a232'],
-              phases: { '75d8a232': { results: true, players: false, matches: 2, players_n: 0 } } },
+              phases: { '75d8a232': { results: true, players: false, matches: 3, players_n: 0 } } },
       matches: [
-        { id: 'EFNL 2025|U12|A|1|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 1 },
-        { id: 'EFNL 2025|U12|A|2|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 2 },
+        { id: 'EFNL 2025|U12|A|1|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 1,
+          home: 'Blackburn', away: 'Norwood' },
+        { id: 'EFNL 2025|U12|A|2|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 2,
+          home: 'Blackburn', away: 'Vermont' },
+        // U9 exists in 2025 and not in 2026 — the case round coverage cannot see.
+        { id: 'EFNL 2025|U9|B|1|a|b', compName: 'EFNL 2025', age: 'U9', rawGrade: 'B', round: 1,
+          home: 'Mitcham', away: 'Vermont' },
       ],
       players: [],
       roster: { 'EFNL 2025|Blackburn|U12': {} },
@@ -202,6 +209,25 @@ LAST = audit();
 ok('warning alone exits 0 by default', LAST.code === 0, `exit ${LAST.code}`);
 LAST = audit({ AUDIT_STRICT: 'true' });
 ok('the same tree exits 1 under STRICT', LAST.code === 1, `exit ${LAST.code}`);
+
+// ── 4a. The per-organisation breakdown ───────────────────────────────────────
+console.log('\n4a  AUDIT_ORG breaks the seasons down by age');
+write(clean());
+LAST = audit({ AUDIT_ORG: '383836bb' });
+ok('exit 0', LAST.code === 0, `exit ${LAST.code}`);
+ok('a breakdown section appears', /6  Breakdown for 383836bb/.test(LAST.out));
+ok('a column per season', /2025\s+2026/.test(LAST.out));
+ok('a row per age', /U9/.test(LAST.out) && /U12/.test(LAST.out));
+ok('counts read matches/grades/teams',
+  /U12\s+2\/1\/3\s+2\/1\/3/.test(LAST.out), 'U12 has 2 matches, 1 grade, 3 teams in each season');
+ok('the dropped age group is named',
+  /present earlier but ABSENT from 2026: U9/.test(LAST.out), 'this is what round coverage cannot see');
+ok('and when to says when it was last seen', /U9\s+last seen 2025 \(1 matches\)/.test(LAST.out));
+
+// Could that have failed? Point it at an org where nothing was dropped.
+LAST = audit({ AUDIT_ORG: '4f9a099e' });
+ok('an unknown organisation warns rather than inventing a table',
+  /no manifest entries/.test(LAST.out) || /Breakdown for 4f9a099e/.test(LAST.out));
 
 // ── 5. Could these have failed? ──────────────────────────────────────────────
 console.log('\n5  The fixture is real');
