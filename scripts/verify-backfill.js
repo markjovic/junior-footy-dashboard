@@ -389,6 +389,28 @@ console.log('\n8  gradeMeta carries both keys and a label');
   ok('a working label is left ALONE', meta['EFNL 2026|U12 Girls|b1'].label === 'A',
     JSON.stringify(meta['EFNL 2026|U12 Girls|b1'].label));
 
+  // Labels must be UNIQUE within a competition and age. Prefixing alone is not
+  // enough — four grades can share a rawGrade AND a prefix, which left SEJ 2022
+  // with four ladders all labelled "AFLSE Premier". Found 2026-08-12 by sweeping
+  // the real grades.json rather than by checking one competition.
+  const m3 = buildGradeMeta([
+    { id: 'p1', name: 'AFLSE - Chisholm U17 Premier A', ageName: 'U17', genderName: 'Boys', compName: 'SEJ 2022' },
+    { id: 'p2', name: 'AFLSE - Chisholm U17 Premier B', ageName: 'U17', genderName: 'Boys', compName: 'SEJ 2022' },
+    { id: 'p3', name: 'AFLSE - Chisholm U17 Premier C', ageName: 'U17', genderName: 'Boys', compName: 'SEJ 2022' },
+  ]);
+  const lbls = Object.values(m3).filter(v => v.gradeId).map(v => v.label);
+  ok('four grades sharing a rawGrade AND a prefix still get distinct labels',
+    new Set(lbls).size === lbls.length, lbls.join(' | '));
+  ok('no label is left blank by the escalation', lbls.every(l => l && l.trim()));
+
+  // A name ending in a bare gender word has nothing to distinguish it, so the
+  // prefix is used: "Little Demons - U10 Mixed" beside "Little Demons Blue".
+  const m4 = buildGradeMeta([
+    { id: 'q1', name: 'Little Demons - U10 Mixed', ageName: 'U10', genderName: 'Mixed', compName: 'SEJ 2026' },
+  ]);
+  ok('a bare gender word becomes the prefix', m4['SEJ 2026|U10|q1'].label === 'Little Demons',
+    JSON.stringify(m4['SEJ 2026|U10|q1'].label));
+
   // Could that have failed? A grade with no dash and no rawGrade must not
   // produce an empty label silently.
   const m2 = buildGradeMeta([{ id: 'z1', name: 'U8 Mixed Central', ageName: 'U8',

@@ -498,13 +498,39 @@ if (require.main === module) {
   const store = require('./lib/store');
   const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
 
+  // Bump on every change. Printed first so a stale copy in an Actions log is
+  // distinguishable from a real failure.
+  const VERSION = 'fetch-stats v2 2026-08-12 skip-retired';
+
   async function main() {
+    console.log(`=== ${VERSION} ===`);
     await refreshSession();
     if (!fs.existsSync(GRADES_PATH)) {
       console.error('grades.json not found — run fetch-results.js first');
       process.exit(1);
     }
     const allGrades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
+
+    // ── Retired seasons are skipped by default ──────────────────────────────
+    // grades.json holds every season, not just the current ones. The Phase A
+    // backfill took it from about 250 grades to 1,006, and because this script
+    // walked all of them a stats run went from roughly 30 minutes to over three
+    // hours — re-fetching thirteen completed seasons whose player statistics
+    // cannot change. fetch-results.js never had this problem because it filters
+    // to config.json; this script filtered to nothing.
+    //
+    // STATS_INCLUDE_RETIRED=true fetches them anyway, which is what a Phase B
+    // backfill wants. It is off by default because the cost is paid on every
+    // scheduled run and the data is immutable.
+    const includeRetired = process.env.STATS_INCLUDE_RETIRED === 'true';
+    let retiredComps = new Set();
+    try {
+      const core = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'core.json'), 'utf8'));
+      for (const m of core.manifest || []) if (m.retired && m.compName) retiredComps.add(m.compName);
+    } catch (e) {
+      console.warn(`Could not read the manifest (${e.message}) — treating every season as live.`);
+    }
+
     // VIP_ONLY: filter grades to VIP competitions only
     const vipOnly = process.env.VIP_ONLY === 'true';
     let vipComps = new Set();
@@ -512,9 +538,23 @@ if (require.main === module) {
       const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
       vipComps = new Set((cfg.competitions||[]).filter(c=>c.vip).map(c=>c.name));
     }
-    const grades = vipOnly
-      ? allGrades.filter(g => vipComps.has(g.compName))
-      : allGrades;
+
+    let grades = vipOnly ? allGrades.filter(g => vipComps.has(g.compName)) : allGrades;
+    const beforeRetired = grades.length;
+    if (!includeRetired && retiredComps.size) {
+      grades = grades.filter(g => !retiredComps.has(g.compName));
+      const skipped = beforeRetired - grades.length;
+      if (skipped) {
+        console.log(`Skipping ${skipped} grade(s) in ${retiredComps.size} retired season(s). ` +
+          `Set STATS_INCLUDE_RETIRED=true to fetch them.`);
+      }
+    } else if (includeRetired) {
+      console.log(`STATS_INCLUDE_RETIRED is set — fetching retired seasons too. This is slow.`);
+    }
+    if (!grades.length) {
+      console.error('No grades left to fetch after filtering — nothing to do.');
+      process.exit(2);
+    }
     console.log(`Fetching stats for ${vipOnly ? 'VIP' : 'ALL'} comps: ${[...new Set(grades.map(g=>g.compName))].join(', ')} (${grades.length} grades)`);
 
     // Scoped to the competitions these grades belong to, so a VIP-only run
