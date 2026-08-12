@@ -251,20 +251,48 @@ the grade the match was played in.
 Eighteen API calls for every season stored. Not a fixture re-crawl.
 
 The join from a stored team name to a registry team is by `age` plus the cleaned
-name, and it goes through the grade id rather than a parsed grade name.
-**Measured 2026-08-12 by `scripts/probe-team-join.js` against EFNL 2025 and 2024:
-zero ambiguity in both seasons** — no stored team name resolved to two registry
-teams. That was the risk and it is not present. The first run also reported 36%
-unmatched, which was a defect in the probe's own age handling and not in the
-data; v3 joins through the grade id and that figure needs re-measuring before
-this pass is built on.
+name, and it goes through the grade id rather than a parsed grade name: the
+registry gives a team its grade id, `grades.json` gives that grade its `ageName`
+and `genderName`, and `parseGradeName` reproduces the stored `age` exactly rather
+than re-deriving it from the grade's display name.
 
-Two cases Pass 2 cannot settle, both of which fall through to Pass 3:
+**Measured 2026-08-12 by `scripts/probe-team-join.js` v3 against EFNL 2025, 678
+distinct (age, team) pairs:**
 
-- A team that appears in more than one grade in a season, which grading rounds
-  produce by design.
-- A registry team with no grade at all — 60 of 725 in EFNL 2025, 23 of 641 in
-  2024.
+| | |
+|---|---|
+| matched to exactly one team | 665 (98.1%) |
+| ambiguous, several teams | **0 (0.0%)** |
+| no registry team at all | 13 (1.9%) |
+
+Zero ambiguity is the result that makes this approach viable, and it holds across
+every age group — the per-age table shows no age with a single ambiguous pair.
+
+**The 13 unmatched are not missing from the registry; they are in it with no
+grade.** `Ringwood U11`, `East Ringwood U12`, `Fairpark U14 Girls` and
+`Kilsyth U16` appear both in the unmatched list and in the registry's 60
+ungraded teams. So the residual is one cause, not several.
+
+An earlier v1 run reported 36% unmatched, all of them senior grades. That was a
+defect in the probe's own age handling — its regex recognised only `U`-prefixed
+ages — and not in the data. Recorded because the corrected figure would otherwise
+look like an unexplained improvement.
+
+### Pass 2 resolves per MATCH, not per team
+
+A match needs only **one** of its two teams to carry a grade. If either resolves,
+the match's grade is known. Requiring both to agree would discard information for
+nothing, and it is what makes the 1.9% residual smaller still at record level: a
+match is only unresolvable when *both* its teams are ungraded in the registry.
+
+Where both teams resolve and disagree — which grading rounds produce by design,
+since a team plays across grades before placement — the match falls through to
+Pass 3 rather than being guessed. The disagreement is itself the signal.
+
+**How many matches that leaves is not yet measured.** 1.9% of team pairs is not
+1.9% of records, and the arithmetic between them depends on how ungraded teams
+are distributed across fixtures. Pass 3 must be sized from a dry run, not from
+this figure.
 
 ### Pass 3 — targeted re-fetch, and only for what is left
 
@@ -321,11 +349,13 @@ caught, confirm a clean tree passes.
    settled. §3.1.
 2. **Measure Pass 1 coverage** — how many stored records sit in a colliding key.
    Read-only, offline, an extension to `audit-data.js`. §7 Q1 depends on it.
-3. **Re-run `probe-team-join.js` v3** and record the unmatched figure with the
-   grade-id join in place.
-4. **Capture `gradeId` on new records** in `fetch-results.js` and
-   `fetch-fixtures.js`. Inert — the field is written and unused — and it stops
-   the problem growing while the rest is built.
+3. ~~Re-run `probe-team-join.js` v3~~ — **done 2026-08-12: 98.1% matched, 0%
+   ambiguous.** §4 Pass 2.
+4. ~~Capture `gradeId` on new records~~ — **done 2026-08-12.** Written by
+   `results-engine.js` v3 at all three record-construction sites including the
+   bye and partial sentinels, and by `fetch-fixtures.js` v2 on scheduled records.
+   Inert: written and unread. Records stored before this date do not carry it,
+   which is what Passes 1 to 3 exist to fix.
 5. **The migration script and its verification**, dry run first.
 6. **`index.html` reads `gradeId`** for grouping and for `currentGrade()`.
    The first visible change.
