@@ -358,6 +358,45 @@ ok('the failed season is NOT on disk',
 // ── 9. Could these have failed? ──────────────────────────────────────────────
 // A suite that passes against an empty fixture proves nothing. Assert the
 // fixture really contains what the tests claim to check.
+// ── 8. gradeMeta is dual-keyed, with a display label ────────────────────────
+// Identity moves to the grade id; the rawGrade key stays until index.html reads
+// the id. Writing the new shape before the reader understands it is what
+// duplicated records earlier today.
+console.log('\n8  gradeMeta carries both keys and a label');
+{
+  const { buildGradeMeta } = require(path.join(TMP, 'scripts', 'lib', 'results-engine.js'));
+  const meta = buildGradeMeta([
+    { id: 'a1', name: 'U8 - Eastern', ageName: 'U8', genderName: 'Mixed', compName: 'EFNL 2026' },
+    { id: 'a2', name: 'U8 - West', ageName: 'U8', genderName: 'Mixed', compName: 'EFNL 2026' },
+    { id: 'b1', name: 'U12 Girls A', ageName: 'U12', genderName: 'Girls', compName: 'EFNL 2026' },
+    { id: 'c1', name: 'U10 Mixed - Pool 3', ageName: 'U10', genderName: 'Mixed', compName: 'YJFL 2026' },
+  ]);
+  ok('the grade-id key exists for every grade',
+    ['EFNL 2026|U8|a1', 'EFNL 2026|U8|a2', 'EFNL 2026|U12 Girls|b1', 'YJFL 2026|U10|c1']
+      .every(k => meta[k]));
+  ok('the old rawGrade key still exists — index.html is untouched',
+    !!meta['EFNL 2026|U12 Girls|A'] && !!meta['EFNL 2026|U8|']);
+  ok('the old key keeps its exact shape', 
+    JSON.stringify(Object.keys(meta['EFNL 2026|U12 Girls|A']).sort()) === '["g","lvl","r"]',
+    JSON.stringify(meta['EFNL 2026|U12 Girls|A']));
+  ok('two collapsed grades get DISTINCT id keys',
+    meta['EFNL 2026|U8|a1'].r !== meta['EFNL 2026|U8|a2'].r,
+    'ranks ' + meta['EFNL 2026|U8|a1'].r + ' and ' + meta['EFNL 2026|U8|a2'].r);
+  ok('a blank rawGrade gets a real label', meta['EFNL 2026|U8|a2'].label === 'West',
+    JSON.stringify(meta['EFNL 2026|U8|a2'].label));
+  ok('a pool name survives', meta['YJFL 2026|U10|c1'].label === 'Pool 3',
+    JSON.stringify(meta['YJFL 2026|U10|c1'].label));
+  ok('a working label is left ALONE', meta['EFNL 2026|U12 Girls|b1'].label === 'A',
+    JSON.stringify(meta['EFNL 2026|U12 Girls|b1'].label));
+
+  // Could that have failed? A grade with no dash and no rawGrade must not
+  // produce an empty label silently.
+  const m2 = buildGradeMeta([{ id: 'z1', name: 'U8 Mixed Central', ageName: 'U8',
+    genderName: 'Mixed', compName: 'YJFL 2026' }]);
+  ok('a name with no dash still yields a label',
+    !!(m2['YJFL 2026|U8|z1'] || {}).label, JSON.stringify((m2['YJFL 2026|U8|z1'] || {}).label));
+}
+
 console.log('\n7  The fixture is real');
 reset();
 ok('core seeded with two compLogos', Object.keys(read(CORE).compLogos).length === 2);
