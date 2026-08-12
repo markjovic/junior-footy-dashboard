@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v4 2026-08-12 export-queries';
+const ENGINE_VERSION = 'v5 2026-08-12 gradeId-in-ids';
 
 'use strict';
 
@@ -423,7 +423,11 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
   const { id, name, ageName = '', genderName = '' } = grade;
   const { age, rawGrade } = parseGradeName(name, ageName, genderName);
   const today = todayAEST();
-  const gradeKey     = `${grade.compName}|${age}|${rawGrade}`;
+  // Keyed on the grade id, not the parsed rawGrade. Four EFNL U8 grades shared
+  // one rawGrade and therefore one round counter, so a round fetched in one
+  // counted as fetched in all four. Measured 2026-08-12: 62 keys across the
+  // stored seasons had two or more grades collapsing this way.
+  const gradeKey     = `${grade.compName}|${age}|${id}`;
   const highestKnown = knownRounds.get(gradeKey) || 0;
   // Finals are tracked by abbreviation, not by number. Their numbers restart at
   // 1 and carry no ordering information relative to home-and-away rounds.
@@ -534,7 +538,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
   const firstRoundNumber = parseInt(firstHARound?.number, 10) || 1;
   if (firstRoundNumber > 1 && highestKnown < firstRoundNumber - 1) {
     for (let r = Math.max(1, highestKnown + 1); r < firstRoundNumber; r++) {
-      const byeKey = `${grade.compName}|${age}|${rawGrade}|${r}|__bye__`;
+      const byeKey = `${grade.compName}|${age}|${id}|${r}|__bye__`;
       if (!byId.has(byeKey)) {
         console.log(`    R${r} ... implied bye (grade starts at R${firstRoundNumber})`);
         allMatches.push({ id: byeKey, age, rawGrade, round: r, compName: grade.compName,
@@ -625,7 +629,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
     }
 
     // Skip fixture fetch if this round is already stored as a bye sentinel
-    const byeKey = `${grade.compName}|${age}|${rawGrade}|${rToken}|__bye__`;
+    const byeKey = `${grade.compName}|${age}|${id}|${rToken}|__bye__`;
     if (byId.has(byeKey)) {
       // Already know it's a bye — push sentinel and continue without API call
       allMatches.push(byId.get(byeKey));
@@ -660,7 +664,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
     if (games.length === 0) {
       // No games — bye round. Push a sentinel so knownRounds advances past it.
       console.log(`bye — continuing`);
-      allMatches.push({ id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__bye__`,
+      allMatches.push({ id: `${grade.compName}|${age}|${id}|${rToken}|__bye__`,
         age, rawGrade, gradeId: id, round: number, compName: grade.compName,
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__bye__', away: '__bye__',
@@ -697,7 +701,12 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       const venueUrl = vLat && vLng ? `https://maps.google.com/?q=${vLat},${vLng}` : '';
 
       // Dedup key — same as dashboard
-      const matchId = `${grade.compName}|${age}|${rawGrade}|${rToken}|${[homeName, awayName].sort().join('|')}`;
+      // The third segment is the GRADE ID, matching what migrate-grade-ids.js
+      // wrote to every stored record on 2026-08-12. Building it from rawGrade
+      // instead meant a re-fetched round no longer matched the record already on
+      // disk, so every re-fetch added a duplicate — proven by execution before
+      // this change: one game, two records.
+      const matchId = `${grade.compName}|${age}|${id}|${rToken}|${[homeName, awayName].sort().join('|')}`;
 
       matches.push({
         // gradeId is PlayHQ's own grade identity, captured because rawGrade
@@ -735,7 +744,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       console.log(`${matches.length} result(s) (PARTIAL — ${games.length - finalGames.length} game(s) not yet final)`);
       // Store a partial sentinel so this round is re-fetched next run
       allMatches.push({
-        id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__partial__`,
+        id: `${grade.compName}|${age}|${id}|${rToken}|__partial__`,
         age, rawGrade, gradeId: id, round: number, compName: grade.compName,
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__partial__', away: '__partial__',
@@ -1021,7 +1030,11 @@ async function run(o) {
     // they have no scores and would cause fetch-results to skip real rounds
     if (m.scheduled) return;
     // Key by compName|age|rawGrade to keep competitions separate
-    const key = `${m.compName || ''}|${m.age}|${m.rawGrade}`;
+    // Records migrated on 2026-08-12 carry gradeId. The 49 that could not be
+    // placed — all ambiguous bye sentinels — fall into a key no grade matches,
+    // so they are ignored for round tracking and their round is simply
+    // re-fetched, which replaces them with a properly keyed sentinel.
+    const key = `${m.compName || ''}|${m.age}|${m.gradeId || m.rawGrade}`;
     if (m.isFinals) {
       const ab = m.finalsAbbrev || String(m.round);
       if (!finalsByGrade.has(key)) finalsByGrade.set(key, new Set());
@@ -1103,7 +1116,7 @@ async function run(o) {
 
     for (const m of matches) {
       if (!m.isPartial) {
-        const partialKey = `${m.compName}|${m.age}|${m.rawGrade}|${tokenOfMatch(m)}|__partial__`;
+        const partialKey = `${m.compName}|${m.age}|${m.gradeId || m.rawGrade}|${tokenOfMatch(m)}|__partial__`;
         byId.delete(partialKey);
       }
       if (byId.has(m.id)) {
