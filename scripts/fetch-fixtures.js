@@ -186,7 +186,12 @@ function ensureDataDir() {
   }
 }
 
+// Bump on every change. Printed at the top of every run so a stale copy in an
+// Actions log is distinguishable from a real failure.
+const VERSION = 'fetch-fixtures v2 2026-08-12 capture-gradeId';
+
 async function main() {
+  console.log(`=== ${VERSION} ===`);
   ensureDataDir();
   await refreshSession();
 
@@ -347,7 +352,13 @@ async function main() {
         const vLat = game.allocation?.court?.venue?.latitude || '';
         const vLng = game.allocation?.court?.venue?.longitude || '';
         records.push({
-          id: matchId, age, rawGrade, round: number,
+          // gradeId is PlayHQ's own grade identity. rawGrade cannot carry it:
+          // 62 keys across the stored seasons have two or more grades reducing
+          // to one age|rawGrade. Captured here so scheduled records match what
+          // results-engine.js v3 writes for played ones — a scheduled record is
+          // overwritten by a played one and the two must agree on their fields.
+          // Written and not yet read. grade_identity_migration.md step 4.
+          id: matchId, age, rawGrade, gradeId: grade.id, round: number,
           ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
           ...(provisional ? { provisional: true } : {}),
           compName: grade.compName,

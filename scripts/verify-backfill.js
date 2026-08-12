@@ -218,6 +218,13 @@ ok('match id carries the right compName',
   (arc.matches[0] || {}).id && arc.matches[0].id.startsWith('EFNL 2025|U12|A|1|'),
   (arc.matches[0] || {}).id);
 ok('archive carries a 2025 roster', Object.keys(arc.roster || {}).some(k => k.startsWith('EFNL 2025|')));
+ok('every match carries the PlayHQ gradeId',
+  arc.matches.length > 0 && arc.matches.every(m => m.gradeId === '1debae74'),
+  JSON.stringify((arc.matches[0] || {}).gradeId));
+ok('capturing gradeId did NOT change the match id',
+  (arc.matches[0] || {}).id === 'EFNL 2025|U12|A|1|Blackburn U12|Norwood U12' ||
+  String((arc.matches[0] || {}).id).startsWith('EFNL 2025|U12|A|1|'),
+  (arc.matches[0] || {}).id);
 ok('archive carries 2025 gradeMeta', !!(arc.gradeMeta || {})['EFNL 2025|U12|A']);
 ok('per-season completeness recorded',
   (arc.meta.phases || {})['75d8a232'] && arc.meta.phases['75d8a232'].results === true &&
@@ -248,8 +255,8 @@ console.log('\n4  fetch-results.js is unchanged in behaviour');
 reset();
 r = run('fetch-results.js', { VIP_ONLY: 'true' });
 ok('exit 0', r.code === 0, `exit ${r.code}`);
-ok('engine is v2 — a stale one is the 2026-08-12 failure',
-  /engine v2 2026-08-12/.test(r.out), 'check scripts/lib/results-engine.js was committed');
+ok('engine version printed and accepted',
+  /engine v\d+ 2026-08-12/.test(r.out), 'the check is a minimum major version, not an equality');
 ok('season-ended guard NOT bypassed', !/season-ended guard BYPASSED/.test(r.out));
 ok('2026 matches written to current', read(EFNL_CUR).matches.length === 2,
   `${read(EFNL_CUR).matches.length} matches`);

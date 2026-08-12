@@ -52,14 +52,17 @@ function fail(msg) {
 // TypeError AFTER the season has been saved, so the files look right and the job
 // goes red for no stated reason. That happened on 2026-08-12 because
 // ENGINE_VERSION was not bumped when erroredGrades was added.
-const REQUIRED_ENGINE = 'v2';
+const MIN_ENGINE_MAJOR = 2;
 
 async function main() {
   console.log(`=== ${VERSION} (engine ${engine.ENGINE_VERSION}) ===`);
-  if (!String(engine.ENGINE_VERSION || '').startsWith(REQUIRED_ENGINE)) {
-    fail(`scripts/lib/results-engine.js is stale. This script needs engine ` +
-         `${REQUIRED_ENGINE} and found "${engine.ENGINE_VERSION}". Commit the ` +
-         `current results-engine.js before running the backfill.`);
+  // A MINIMUM, not an equality. Written as startsWith('v2') first, which then
+  // rejected engine v3 — a guard that fails on the thing it was meant to permit.
+  const major = parseInt((String(engine.ENGINE_VERSION || '').match(/^v(\d+)/) || [])[1], 10);
+  if (!(major >= MIN_ENGINE_MAJOR)) {
+    fail(`scripts/lib/results-engine.js is stale or unrecognised. This script needs ` +
+         `engine v${MIN_ENGINE_MAJOR} or later and found "${engine.ENGINE_VERSION}". ` +
+         `Commit the current results-engine.js before running the backfill.`);
   }
 
   const org = (process.env.BACKFILL_ORG || '').trim();
