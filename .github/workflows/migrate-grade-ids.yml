@@ -37,6 +37,12 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      pass3:
+        description: 'Run pass 3 — re-fetch the grades and rounds still unresolved after pass 2'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   migrate:
@@ -63,6 +69,7 @@ jobs:
           MIGRATE_ORG: ${{ github.event.inputs.org }}
           MIGRATE_DRY_RUN: ${{ github.event.inputs.dry_run }}
           MIGRATE_SKIP_PASS2: ${{ github.event.inputs.skip_pass2 }}
+          MIGRATE_PASS3: ${{ github.event.inputs.pass3 }}
         run: |
           set +e
           node scripts/migrate-grade-ids.js
