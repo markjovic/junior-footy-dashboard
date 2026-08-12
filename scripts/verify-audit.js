@@ -246,7 +246,7 @@ ok('an unknown organisation warns rather than inventing a table',
 console.log('\n4b  Section 7 classifies records against the grade list');
 write(clean());
 LAST = audit();
-ok('section 7 ran', /7  Grade identity coverage/.test(LAST.out));
+ok('section 7 ran', /7  Grade identity/.test(LAST.out));
 ok('the two U12 records resolve offline',
   /EFNL 2026\s+2\s+2\s+0\s+0/.test(LAST.out.replace(/\s+/g, ' ').replace(/ /g, ' ')) ||
   /EFNL 2026/.test(LAST.out), 'a unique age|rawGrade needs no API call');
@@ -271,6 +271,32 @@ write(fx8);
 LAST = audit();
 ok('an unplaceable record is warned about',
   /no grade in grades\.json reduces to/.test(LAST.out), 'neither pass can resolve it');
+
+// ── 4c. Migration state ──────────────────────────────────────────────────────
+// Section 7 measures whether a record carries its grade id, which is a different
+// question from whether its key collides. Conflating the two is what made the
+// first post-migration audit read as though nothing had happened.
+console.log('\n4c  Section 7 reports migration state');
+const fxMig = clean();
+// A migrated record: the id's third segment IS the grade id, and gradeId agrees.
+fxMig.current.matches[0] = { id: 'EFNL 2026|U12|g1|1|a|b', compName: 'EFNL 2026',
+  age: 'U12', rawGrade: 'A', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
+write(fxMig);
+LAST = audit();
+ok('a migrated record is counted as migrated', /1 of 5 record\(s\) carry their PlayHQ grade id/.test(LAST.out),
+  (LAST.out.match(/\d+ of \d+ record\(s\) carry[^.]*\./) || ['not reported'])[0]);
+ok('unmigrated records are still counted', /could be migrated offline right now/.test(LAST.out));
+
+// Could that have failed? A half-done record — gradeId set but the id not
+// rewritten — must NOT count as migrated.
+const fxHalf = clean();
+fxHalf.current.matches[0] = { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026',
+  age: 'U12', rawGrade: 'A', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
+write(fxHalf);
+LAST = audit();
+ok('a gradeId with an unmigrated id does NOT count as done',
+  /0 of 5 record\(s\) carry their PlayHQ grade id/.test(LAST.out),
+  (LAST.out.match(/\d+ of \d+ record\(s\) carry[^.]*\./) || ['not reported'])[0]);
 
 // ── 5. Could these have failed? ──────────────────────────────────────────────
 console.log('\n5  The fixture is real');

@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v5 2026-08-12 grade-coverage';
+const VERSION = 'audit-data v6 2026-08-12 migration-state';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -284,8 +284,10 @@ if (gradesWithGaps > gapExamples.length) {
   warn(`${gradesWithGaps - gapExamples.length} further grade(s) with gaps, not listed`);
 }
 for (const [c, n] of emptyGrade) {
-  warn(`${c}: ${n} grade key(s) have an empty rawGrade — parseGradeName collapsed them, ` +
-       `so games in different grades share a match id and one overwrites the other`);
+  warn(`${c}: ${n} grade key(s) have an empty rawGrade — parseGradeName collapsed them. ` +
+       `Match ids are no longer affected once a record is migrated, but index.html still ` +
+       `groups ladders by rawGrade, so these grades share a ladder until ` +
+       `grade_identity_migration.md build-order step 6`);
 }
 
 // ── 5. grades.json coverage ──────────────────────────────────────────────────
@@ -408,7 +410,7 @@ if (ORG) {
 //
 // Offline. No API calls. Every figure is from running the real parseGradeName
 // over the real grade names, and counting the real records.
-console.log('\n7  Grade identity coverage (grade_identity_migration.md §7 Q1)');
+console.log('\n7  Grade identity (grade_identity_migration.md)');
 if (!parseGradeName) {
   // An ERROR, not a warning. Silently skipping the measurement and still
   // reporting "0 errors" is how a clean-looking audit hides a gap.
@@ -437,19 +439,26 @@ if (!parseGradeName) {
 
   const rows = [];
   const hotKeys = [];     // colliding keys, by how many records they hold
-  let tMatches = 0, tOne = 0, tColl = 0, tNone = 0;
+  let tMatches = 0, tDone = 0, tOne = 0, tColl = 0, tNone = 0;
 
   for (const m of core.manifest) {
     if (!m.compName) continue;
     const seasonId = m.seasonId;
     const km = keyToGrades.get(seasonId);
-    let matches = 0, one = 0, coll = 0, none = 0;
+    let matches = 0, done = 0, one = 0, coll = 0, none = 0;
     const perKey = new Map();
 
     for (const [f, { payload }] of Object.entries(files)) {
       for (const rec of payload.matches || []) {
         if (rec.compName !== m.compName) continue;
         matches++;
+        // Migrated means the id's third segment IS the grade id, not the parsed
+        // rawGrade. Both are checked: a gradeId field with an unmigrated id is a
+        // half-done record and must not count as done.
+        const seg = String(rec.id).split('|')[2];
+        if (rec.gradeId && seg === rec.gradeId) { done++; continue; }
+
+        // Not migrated. Why not?
         const k = `${rec.age}|${rec.rawGrade}`;
         const ids = km && km.get(k);
         if (!ids) none++;
@@ -461,30 +470,35 @@ if (!parseGradeName) {
       }
     }
     if (!matches) continue;
-    tMatches += matches; tOne += one; tColl += coll; tNone += none;
-    rows.push([m.compName, matches, one, coll, none,
-               matches ? ((coll / matches) * 100).toFixed(1) + '%' : '-']);
+    tMatches += matches; tDone += done; tOne += one; tColl += coll; tNone += none;
+    rows.push([m.compName, matches, done, one, coll, none]);
     for (const [k, n] of perKey) hotKeys.push([m.compName, k, n, (km.get(k) || []).length]);
   }
 
-  const w = [14, 10, 12, 12, 10, 14];
-  const hdr = ['season', 'matches', 'pass 1 ok', 'colliding', 'unknown', '% colliding'];
+  const w = [14, 10, 11, 12, 14, 10];
+  const hdr = ['season', 'matches', 'migrated', 'pass 1 can', 'needs pass 2', 'unknown'];
   console.log('  ' + hdr.map((h, i) => i === 0 ? h.padEnd(w[0]) : h.padStart(w[i])).join(''));
   console.log('  ' + '-'.repeat(w.reduce((x, y) => x + y, 0)));
   for (const r of rows.sort()) {
     console.log('  ' + r.map((c, i) => i === 0 ? String(c).padEnd(w[0]) : String(c).padStart(w[i])).join(''));
   }
   console.log('  ' + '-'.repeat(w.reduce((x, y) => x + y, 0)));
-  console.log('  ' + ['TOTAL', tMatches, tOne, tColl, tNone,
-    tMatches ? ((tColl / tMatches) * 100).toFixed(1) + '%' : '-']
+  console.log('  ' + ['TOTAL', tMatches, tDone, tOne, tColl, tNone]
     .map((c, i) => i === 0 ? String(c).padEnd(w[0]) : String(c).padStart(w[i])).join(''));
 
-  console.log(`\n  pass 1 ok   resolvable offline from grades.json, no API call needed`);
-  console.log(`  colliding   needs the season team registry — one API call per season`);
-  console.log(`  unknown     no grade in grades.json reduces to this record's age|rawGrade`);
+  const donePct = tMatches ? ((tDone / tMatches) * 100).toFixed(2) : '0.00';
+  console.log(`\n  ${tDone} of ${tMatches} record(s) carry their PlayHQ grade id — ${donePct}%.`);
+  console.log(`  migrated      the id's third segment is the grade id, and gradeId agrees`);
+  console.log(`  pass 1 can    not migrated, but resolvable offline — run the migration`);
+  console.log(`  needs pass 2  not migrated, and needs the season team registry`);
+  console.log(`  unknown       no grade in grades.json reduces to this record's age|rawGrade`);
+  if (tOne) {
+    warn(`${tOne} record(s) could be migrated offline right now and have not been — ` +
+         `run "Migrate grade ids"`);
+  }
 
   if (hotKeys.length) {
-    console.log(`\n  the colliding keys holding the most records:`);
+    console.log(`\n  UNMIGRATED records by colliding key — pass 3's worklist:`);
     hotKeys.sort((x, y) => y[2] - x[2]);
     for (const [comp, k, n, g] of hotKeys.slice(0, 15)) {
       console.log(`    ${comp.padEnd(12)} "${k}"`.padEnd(46) + `${String(n).padStart(6)} records across ${g} grades`);
