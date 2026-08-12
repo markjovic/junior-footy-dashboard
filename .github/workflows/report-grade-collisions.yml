@@ -1,0 +1,50 @@
+# .github/workflows/report-grade-collisions.yml
+#
+# Lists every case where two or more PlayHQ grades collapse onto one
+# `age|rawGrade` key. READ ONLY — reads data/grades.json, calls nothing, commits
+# nothing. contents:read is enough and there is no git step.
+#
+# The exit-code convention (0 changed / 2 no change / 1 fatal) does not apply:
+# nothing is written, and a collision is a known defect rather than a reason to
+# fail a job. It exits 0 unless grades.json is missing or unparseable.
+#
+# This is the input to any re-key of stored match ids — it names exactly which
+# grades have to move and which seasons can be skipped.
+
+name: Report grade collisions
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Optional single season, e.g. "EFNL 2025". Blank reports all.'
+        required: false
+        default: ''
+        type: string
+      quiet:
+        description: 'Summary table only, no per-key detail'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/report-grade-collisions.js
+
+      - name: Report
+        env:
+          COLLISION_COMP: ${{ github.event.inputs.comp }}
+          COLLISION_QUIET: ${{ github.event.inputs.quiet }}
+        run: node scripts/report-grade-collisions.js
