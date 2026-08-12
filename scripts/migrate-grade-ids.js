@@ -32,6 +32,12 @@
 //   MIGRATE_DRY_RUN        "false" to write. Anything else, including unset, is
 //                          a dry run.
 //   MIGRATE_SKIP_PASS2     "true" to resolve offline only, no API calls.
+//   MIGRATE_PASS3          "true" to run pass 3 — re-fetch the specific grades
+//                          and rounds still unresolved after pass 2 and read the
+//                          grade straight from the fixture. Off by default,
+//                          because it is the only part that costs more than
+//                          eighteen API calls. A dry run reports the exact call
+//                          count before any of them are made.
 //
 // Exit codes: 0 = changed, commit. 2 = no change, skip commit. 1 = fatal.
 
@@ -40,16 +46,18 @@
 const fs = require('fs');
 const path = require('path');
 const store = require('./lib/store');
-const { parseGradeName, cleanTeam } = require('./lib/results-engine');
+const { parseGradeName, cleanTeam, roundToken, Q_GRADE_ROUNDS, Q_FIXTURE } =
+  require('./lib/results-engine');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'migrate-grade-ids v2 2026-08-12 all-orgs';
+const VERSION = 'migrate-grade-ids v3 2026-08-12 pass3';
 const ROOT = path.resolve(__dirname, '..');
 const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 
 const ORG = (process.env.MIGRATE_ORG || '').trim();
 const DRY = process.env.MIGRATE_DRY_RUN !== 'false';
 const SKIP_PASS2 = process.env.MIGRATE_SKIP_PASS2 === 'true';
+const PASS3 = process.env.MIGRATE_PASS3 === 'true';
 
 // Copied verbatim from scripts/probe-team-join.js, which ran against these exact
 // seasons on 2026-08-12. Never written fresh.
@@ -88,6 +96,7 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
   // ── Pass 1 ────────────────────────────────────────────────────────────────
   const resolved = new Map();      // old id -> gradeId
   const pending = [];              // records needing pass 2
+  const pendingByOldId = new Map();// old id -> { seasonId, candidates }, for pass 3
   const unplaceable = [];          // no grade reduces to this key at all
   let alreadyDone = 0;
   const inScope = new Set(scope);
@@ -102,7 +111,11 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
     const ids = km && km.get(`${rec.age}|${rec.rawGrade}`);
     if (!ids) unplaceable.push(rec);
     else if (ids.length === 1) resolved.set(rec.id, ids[0]);
-    else pending.push({ rec, seasonId, candidates: ids });
+    else {
+      const p = { rec, seasonId, candidates: ids };
+      pending.push(p);
+      pendingByOldId.set(rec.id, p);
+    }
   }
   console.log(`PASS 1  offline, no API calls`);
   console.log(`  already migrated : ${alreadyDone}`);
@@ -165,6 +178,102 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
     for (const p of pending) disagreed.push({ rec: p.rec, found: [] });
   }
 
+  // ── Pass 3 ────────────────────────────────────────────────────────────────
+  // Read the grade straight from the fixture. For every record pass 2 could not
+  // place, fetch its candidate grades' rounds and match on round token plus the
+  // two team names — the same three components the id is built from.
+  //
+  // Targeted by construction: only the candidate grades of unresolved records,
+  // and within those only the rounds those records actually sit in. A season is
+  // never re-crawled.
+  let pass3Resolved = 0;
+  const stillUnresolved = [];
+  if (disagreed.length && PASS3) {
+    // seasonId -> gradeId -> Set(roundToken) still needed
+    const want = new Map();
+    for (const d of disagreed) {
+      const p = pendingByOldId.get(d.rec.id);
+      if (!p) continue;
+      const tok = String(d.rec.id).split('|')[3];
+      if (!want.has(p.seasonId)) want.set(p.seasonId, new Map());
+      const g = want.get(p.seasonId);
+      for (const gid of p.candidates) {
+        if (!g.has(gid)) g.set(gid, new Set());
+        g.get(gid).add(tok);
+      }
+    }
+
+    let plannedGrades = 0, plannedRounds = 0;
+    for (const g of want.values()) for (const toks of g.values()) { plannedGrades++; plannedRounds += toks.size; }
+    console.log(`\nPASS 3  re-fetch the unresolved grades and rounds`);
+    console.log(`  ${plannedGrades} grade(s) to list, up to ${plannedRounds} round fixture(s) to fetch`);
+    console.log(`  worst case ${plannedGrades + plannedRounds} API call(s)`);
+
+    if (DRY) {
+      console.log(`  DRY RUN — no calls made.`);
+      for (const d of disagreed) stillUnresolved.push(d);
+    } else {
+      await refreshSession();
+      // "roundToken|teamA|teamB" -> gradeId, built from live fixtures.
+      const fromFixture = new Map();
+      for (const [seasonId, gradeMap] of want) {
+        for (const [gid, toks] of gradeMap) {
+          const g = (gradeById.get(seasonId) || new Map()).get(gid);
+          if (!g) continue;
+          const { age } = parseGradeName(g.name, g.ageName, g.genderName);
+
+          let rounds = [];
+          try {
+            const r = await gqlPost(Q_GRADE_ROUNDS, { gradeID: gid }, 'gradeRounds');
+            rounds = (r && r.data && r.data.discoverGrade && r.data.discoverGrade.rounds) || [];
+          } catch (e) {
+            console.error(`    grade ${gid} round list failed: ${e.message} — skipping it`);
+            continue;
+          }
+          await sleep(300);
+
+          for (const round of rounds) {
+            const num = parseInt(round.number, 10) || 0;
+            const ab = round.isFinalsRound === true ? (round.abbreviatedName || String(num)) : '';
+            const tok = roundToken(num, ab);
+            if (!toks.has(tok)) continue;      // this is the targeting
+            let games = [];
+            try {
+              const fr = await gqlPost(Q_FIXTURE, { roundID: round.id }, 'discoverFixtureByRound');
+              games = (fr && fr.data && fr.data.discoverFixtureByRound && fr.data.discoverFixtureByRound.games) || [];
+            } catch (e) {
+              console.error(`    grade ${gid} ${tok} fixture failed: ${e.message}`);
+              continue;
+            }
+            await sleep(300);
+            for (const game of games) {
+              const h = cleanTeam((game.home && game.home.name) || '', age);
+              const a = cleanTeam((game.away && game.away.name) || '', age);
+              if (!h || !a) continue;
+              fromFixture.set(`${tok}|${[h, a].sort().join('|')}`, gid);
+            }
+          }
+          console.log(`    grade ${gid} (${g.name}): ${toks.size} round(s) checked`);
+        }
+      }
+
+      for (const d of disagreed) {
+        const parts = String(d.rec.id).split('|');
+        const k = `${parts[3]}|${parts.slice(4).join('|')}`;
+        const gid = fromFixture.get(k);
+        if (gid) { resolved.set(d.rec.id, gid); pass3Resolved++; }
+        else stillUnresolved.push(d);
+      }
+      console.log(`  resolved by fixture : ${pass3Resolved}`);
+      console.log(`  still unresolved    : ${stillUnresolved.length}`);
+    }
+  } else {
+    for (const d of disagreed) stillUnresolved.push(d);
+    if (disagreed.length) {
+      console.log(`\nPASS 3 not run — set MIGRATE_PASS3=true to resolve the remaining ${disagreed.length}`);
+    }
+  }
+
   // ── Integrity, before anything is written ─────────────────────────────────
   const newIds = new Map();        // new id -> old id
   const rewritten = [];
@@ -181,7 +290,7 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
     rewritten.push({ rec, nid, gradeId });
   }
 
-  const unresolvedTotal = disagreed.length + unplaceable.length;
+  const unresolvedTotal = stillUnresolved.length + unplaceable.length;
   console.log(`\nPLAN`);
   console.log(`  records to rewrite : ${rewritten.length}`);
   console.log(`  left on the old id : ${unresolvedTotal}`);
@@ -192,7 +301,7 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
     console.log(`\n  UNRESOLVED — these keep their current id and rawGrade.`);
     console.log(`  They are pass 3 in grade_identity_migration.md §4, which is not built.`);
     const byKey = new Map();
-    for (const { rec } of disagreed) {
+    for (const { rec } of stillUnresolved) {
       const k = `${rec.compName}|${rec.age}|${rec.rawGrade}`;
       byKey.set(k, (byKey.get(k) || 0) + 1);
     }

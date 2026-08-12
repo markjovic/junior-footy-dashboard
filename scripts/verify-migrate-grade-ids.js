@@ -54,9 +54,21 @@ const TEAMS = [
   { id: 't5', name: 'Nowhere U8 Grey',    grade: null },
   { id: 't6', name: 'Nobody U8 Black',    grade: null },
 ];
+// Round 3 of grade gS holds the match pass 2 could not place, because both its
+// teams are ungraded in the registry. Pass 3 reads the grade from the fixture.
+const ROUNDS = { gN: [{ id: 'rN3', number: '3', isFinalsRound: false }],
+                 gS: [{ id: 'rS3', number: '3', isFinalsRound: false }] };
+const FIXTURES = {
+  rN3: [],
+  rS3: [{ home: { name: 'Nobody U8 Black' }, away: { name: 'Nowhere U8 Grey' } }],
+};
 module.exports = {
-  gqlPost: async () => {
+  gqlPost: async (query, vars) => {
     if (process.env.STUB_FAIL === 'true') throw new Error('stub: forced registry failure');
+    if (/gradeRounds/.test(query)) return { data: { discoverGrade: { rounds: ROUNDS[vars.gradeID] || [] } } };
+    if (/discoverFixtureByRound/.test(query)) {
+      return { data: { discoverFixtureByRound: { games: FIXTURES[vars.roundID] || [] } } };
+    }
     return { data: { discoverTeams: TEAMS } };
   },
   refreshSession: async () => {}, sleep: async () => {}, logSummary: () => {},
@@ -253,6 +265,34 @@ ok('each organisation reported its own totals', /written: 383836bb, 4f9a099e/.te
 // Could that have failed? A second all-run must find nothing to do.
 LAST = run({ MIGRATE_ORG: 'all', MIGRATE_DRY_RUN: 'false' });
 ok('a second all-run exits 2', LAST.code === 2, `exit ${LAST.code}`);
+
+// ── 5b. Pass 3 ───────────────────────────────────────────────────────────────
+console.log('\n5b  Pass 3 reads the grade from the fixture');
+write(base());
+LAST = run({ MIGRATE_PASS3: 'true' });
+ok('a dry run reports the call count and makes none',
+  /worst case \d+ API call\(s\)/.test(LAST.out) && /DRY RUN — no calls made/.test(LAST.out));
+ok('and is still targeted, not a season crawl', /grade\(s\) to list/.test(LAST.out));
+
+LAST = run({ MIGRATE_PASS3: 'true', MIGRATE_DRY_RUN: 'false' });
+ok('exit 0', LAST.code === 0, `exit ${LAST.code}`);
+ok('the record pass 2 could not place is now resolved',
+  /resolved by fixture : 1/.test(LAST.out),
+  (LAST.out.match(/resolved by fixture : \d+/) || ['not reported'])[0]);
+ok('nothing left unresolved', /still unresolved    : 0/.test(LAST.out));
+const arc3 = read(ARC);
+ok('it went to the grade the FIXTURE said, not a guess',
+  arc3.matches.some(m => m.id === 'EFNL 2025|U8|gS|3|Nobody Black|Nowhere Grey'),
+  (arc3.matches.find(m => m.home === 'Nobody Black') || {}).id);
+ok('all four records migrated', arc3.matches.every(m => m.gradeId), 
+  arc3.matches.filter(m => !m.gradeId).length + ' without a gradeId');
+
+// Could that have failed? Without pass 3 the same record stays behind.
+write(base());
+LAST = run({ MIGRATE_DRY_RUN: 'false' });
+ok('without pass 3 the record is left alone',
+  read(ARC).matches.some(m => m.id === 'EFNL 2025|U8||3|Nobody Black|Nowhere Grey'));
+ok('and the run says how to resolve it', /set MIGRATE_PASS3=true/.test(LAST.out));
 
 // ── 6. Could these have failed? ──────────────────────────────────────────────
 console.log('\n6  The fixture is real');
