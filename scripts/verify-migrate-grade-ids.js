@@ -56,11 +56,22 @@ const TEAMS = [
 ];
 // Round 3 of grade gS holds the match pass 2 could not place, because both its
 // teams are ungraded in the registry. Pass 3 reads the grade from the fixture.
-const ROUNDS = { gN: [{ id: 'rN3', number: '3', isFinalsRound: false }],
-                 gS: [{ id: 'rS3', number: '3', isFinalsRound: false }] };
+const ROUNDS = {
+  gN: [{ id: 'rN3', number: '3', isFinalsRound: false },
+       { id: 'rN4', number: '4', isFinalsRound: false },
+       { id: 'rN5', number: '5', isFinalsRound: false }],
+  gS: [{ id: 'rS3', number: '3', isFinalsRound: false },
+       { id: 'rS4', number: '4', isFinalsRound: false },
+       { id: 'rS5', number: '5', isFinalsRound: false }],
+};
 const FIXTURES = {
   rN3: [],
   rS3: [{ home: { name: 'Nobody U8 Black' }, away: { name: 'Nowhere U8 Grey' } }],
+  // Round 4: gN played, gS did not — so a bye in round 4 is gS's.
+  rN4: [{ home: { name: 'Bayswater U8 Gold' }, away: { name: 'Boronia U8 Brown' } }],
+  rS4: [],
+  // Round 5: neither played. A bye here cannot be attributed to either.
+  rN5: [], rS5: [],
 };
 module.exports = {
   gqlPost: async (query, vars) => {
@@ -103,7 +114,11 @@ function base() {
     archive: [
       M('EFNL 2025', 'U8', '', 1, 'Bayswater Gold', 'Boronia Brown'),   // pass 2 -> gN
       M('EFNL 2025', 'U8', '', 2, 'Mitcham Red', 'Vermont Blue'),       // pass 2 -> gS
-      M('EFNL 2025', 'U8', '', 3, 'Nobody Black', 'Nowhere Grey'),      // unresolvable
+      M('EFNL 2025', 'U8', '', 3, 'Nobody Black', 'Nowhere Grey'),      // pass 3 -> gS
+      // A bye sentinel. No fixture can match it; only elimination can place it.
+      M('EFNL 2025', 'U8', '', 4, '__bye__', '__bye__', { isBye: true }),
+      // A bye in a round where NEITHER candidate played — must stay unresolved.
+      M('EFNL 2025', 'U8', '', 5, '__bye__', '__bye__', { isBye: true }),
       M('EFNL 2025', 'Senior Men', 'Premier', 1, 'Balwyn Seniors', 'Norwood Seniors'), // pass 1
     ],
   };
@@ -161,7 +176,8 @@ ok('says DRY RUN', /DRY RUN/.test(LAST.out));
 ok('archive byte-identical', fs.readFileSync(ARC, 'utf8') === beforeArc);
 ok('reports the plan', /records to rewrite\s*:\s*3/.test(LAST.out),
   '1 by pass 1, 2 by pass 2');
-ok('reports what it cannot do', /left on the old id\s*:\s*1/.test(LAST.out));
+ok('reports what it cannot do without pass 3', /left on the old id\s*:\s*3/.test(LAST.out),
+  '1 game plus 2 bye sentinels, none placeable without a fixture');
 
 // ── 2. The real run ──────────────────────────────────────────────────────────
 console.log('\n2  Applying the migration');
@@ -183,7 +199,7 @@ ok('rawGrade KEPT for display', (byHome('Bayswater Gold') || {}).rawGrade === ''
 ok('the unresolvable record keeps its old id',
   (byHome('Nobody Black') || {}).id === 'EFNL 2025|U8||3|Nobody Black|Nowhere Grey',
   (byHome('Nobody Black') || {}).id);
-ok('no record lost', arc.matches.length === 4, `${arc.matches.length} records`);
+ok('no record lost', arc.matches.length === 6, `${arc.matches.length} records`);
 
 const core2 = read(CORE);
 ok('gotwFlags VALUE remapped',
@@ -199,7 +215,7 @@ console.log('\n3  Re-running changes nothing');
 LAST = run({ MIGRATE_DRY_RUN: 'false' });
 ok('exit 2, nothing to do', LAST.code === 2, `exit ${LAST.code}`);
 ok('already-migrated records counted', /already migrated\s*:\s*3/.test(LAST.out));
-ok('still 4 records', read(ARC).matches.length === 4);
+ok('still 6 records', read(ARC).matches.length === 6);
 
 // ── 4. Failure paths ─────────────────────────────────────────────────────────
 console.log('\n4  Guards must refuse rather than produce something wrong');
@@ -243,7 +259,8 @@ ok('exit 0', LAST.code === 0, `exit ${LAST.code}`);
 ok('only the pass 1 record was rewritten',
   read(ARC).matches.filter(m => String(m.id).split('|')[2] && m.gradeId).length === 1);
 ok('the U8 records were left alone',
-  read(ARC).matches.filter(m => m.id.startsWith('EFNL 2025|U8||')).length === 3);
+  read(ARC).matches.filter(m => m.id.startsWith('EFNL 2025|U8||')).length === 5,
+  '2 games plus 1 pass-3 game plus 2 byes');
 
 // ── 5a. MIGRATE_ORG=all ──────────────────────────────────────────────────────
 console.log('\n5a  MIGRATE_ORG=all does every organisation in one run');
@@ -279,12 +296,15 @@ ok('exit 0', LAST.code === 0, `exit ${LAST.code}`);
 ok('the record pass 2 could not place is now resolved',
   /resolved by fixture : 1/.test(LAST.out),
   (LAST.out.match(/resolved by fixture : \d+/) || ['not reported'])[0]);
-ok('nothing left unresolved', /still unresolved    : 0/.test(LAST.out));
+ok('only the deliberately ambiguous bye is left',
+  /still unresolved    : 1/.test(LAST.out),
+  'the round-5 bye, where neither candidate grade played');
 const arc3 = read(ARC);
 ok('it went to the grade the FIXTURE said, not a guess',
   arc3.matches.some(m => m.id === 'EFNL 2025|U8|gS|3|Nobody Black|Nowhere Grey'),
   (arc3.matches.find(m => m.home === 'Nobody Black') || {}).id);
-ok('all four records migrated', arc3.matches.every(m => m.gradeId), 
+ok('five of six migrated, the ambiguous bye excepted',
+  arc3.matches.filter(m => m.gradeId).length === 5,
   arc3.matches.filter(m => !m.gradeId).length + ' without a gradeId');
 
 // Could that have failed? Without pass 3 the same record stays behind.
@@ -294,11 +314,28 @@ ok('without pass 3 the record is left alone',
   read(ARC).matches.some(m => m.id === 'EFNL 2025|U8||3|Nobody Black|Nowhere Grey'));
 ok('and the run says how to resolve it', /set MIGRATE_PASS3=true/.test(LAST.out));
 
+// ── 5c. Bye sentinels ────────────────────────────────────────────────────────
+console.log('\n5c  Bye sentinels are placed by elimination, or left alone');
+write(base());
+LAST = run({ MIGRATE_PASS3: 'true', MIGRATE_DRY_RUN: 'false' });
+ok('exit 0', LAST.code === 0, `exit ${LAST.code}`);
+ok('the unambiguous bye was resolved', /resolved as a bye   : 1/.test(LAST.out),
+  (LAST.out.match(/resolved as a bye   : \d+/) || ['not reported'])[0]);
+const arcB = read(ARC);
+ok('it went to the grade that did NOT play that round',
+  arcB.matches.some(m => m.id === 'EFNL 2025|U8|gS|4|__bye__|__bye__'),
+  (arcB.matches.find(m => m.round === 4) || {}).id);
+ok('the ambiguous bye was left alone — not guessed',
+  arcB.matches.some(m => m.id === 'EFNL 2025|U8||5|__bye__|__bye__'),
+  (arcB.matches.find(m => m.round === 5) || {}).id);
+ok('and the reason is reported', /1 ambiguous bye/.test(LAST.out),
+  (LAST.out.match(/\(\d+ ambiguous bye[^)]*\)/) || ['not reported'])[0]);
+
 // ── 6. Could these have failed? ──────────────────────────────────────────────
 console.log('\n6  The fixture is real');
 write(base());
 ok('fixture has a genuine collision', GRADES.filter(g => g.name.startsWith('U8 -')).length === 2);
-ok('fixture has records in it', read(ARC).matches.length === 4);
+ok('fixture has records in it', read(ARC).matches.length === 6);
 ok('fixture gotwFlags points at a real record',
   read(ARC).matches.some(m => m.id === read(CORE).gotwFlags['U8|1']));
 

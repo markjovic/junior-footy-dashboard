@@ -50,7 +50,7 @@ const { parseGradeName, cleanTeam, roundToken, Q_GRADE_ROUNDS, Q_FIXTURE } =
   require('./lib/results-engine');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'migrate-grade-ids v4 2026-08-12 pass3';
+const VERSION = 'migrate-grade-ids v5 2026-08-12 pass3-byes';
 const ROOT = path.resolve(__dirname, '..');
 const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 
@@ -216,6 +216,12 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
       await refreshSession();
       // "roundToken|teamA|teamB" -> gradeId, built from live fixtures.
       const fromFixture = new Map();
+      // "roundToken" -> Set(gradeId) for rounds that returned NO games. That is
+      // exactly what a bye is, and a bye sentinel can never be matched against a
+      // fixture because there is no fixture to match. Found 2026-08-12: YJFL
+      // left 50 records after pass 3 and the fixture lookup could not have
+      // placed any sentinel among them.
+      const byeAt = new Map();
       for (const [seasonId, gradeMap] of want) {
         for (const [gid, toks] of gradeMap) {
           const g = (gradeById.get(seasonId) || new Map()).get(gid);
@@ -246,6 +252,10 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
               continue;
             }
             await sleep(300);
+            if (!games.length) {
+              if (!byeAt.has(tok)) byeAt.set(tok, new Set());
+              byeAt.get(tok).add(gid);
+            }
             for (const game of games) {
               const h = cleanTeam((game.home && game.home.name) || '', age);
               const a = cleanTeam((game.away && game.away.name) || '', age);
@@ -257,15 +267,38 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
         }
       }
 
+      let byResolved = 0;
+      const why = { bye: 0, partial: 0, notFound: 0 };
       for (const d of disagreed) {
         const parts = String(d.rec.id).split('|');
-        const k = `${parts[3]}|${parts.slice(4).join('|')}`;
+        const tok = parts[3];
+        const k = `${tok}|${parts.slice(4).join('|')}`;
         const gid = fromFixture.get(k);
-        if (gid) { resolved.set(d.rec.id, gid); pass3Resolved++; }
-        else stillUnresolved.push(d);
+        if (gid) { resolved.set(d.rec.id, gid); pass3Resolved++; continue; }
+
+        // A bye sentinel is placed by elimination: of its candidate grades,
+        // which one had no games in that round. Only when exactly one did —
+        // two grades with a bye in the same round are genuinely ambiguous and
+        // are left alone rather than guessed.
+        if (d.rec.isBye) {
+          const p = pendingByOldId.get(d.rec.id);
+          const cands = (p ? p.candidates : []).filter(c => (byeAt.get(tok) || new Set()).has(c));
+          if (cands.length === 1) { resolved.set(d.rec.id, cands[0]); byResolved++; continue; }
+          why.bye++;
+        } else if (d.rec.isPartial) {
+          why.partial++;
+        } else {
+          why.notFound++;
+        }
+        stillUnresolved.push(d);
       }
       console.log(`  resolved by fixture : ${pass3Resolved}`);
-      console.log(`  still unresolved    : ${stillUnresolved.length}`);
+      console.log(`  resolved as a bye   : ${byResolved}`);
+      console.log(`  still unresolved    : ${stillUnresolved.length}` +
+        (stillUnresolved.length
+          ? `  (${why.bye} ambiguous bye, ${why.partial} partial sentinel, ${why.notFound} game not in any candidate grade)`
+          : ''));
+      pass3Resolved += byResolved;
     }
   } else {
     for (const d of disagreed) stillUnresolved.push(d);
