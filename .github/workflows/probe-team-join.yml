@@ -1,0 +1,56 @@
+# .github/workflows/probe-team-join.yml
+#
+# Diagnostic only. Reads data/ and calls PlayHQ, writes nothing, commits nothing.
+# contents:read is enough and there is no git step at all. The exit-code
+# convention (0 changed / 2 no change / 1 fatal) does not apply — nothing is ever
+# written to the repo.
+#
+# It answers one question: can stored match records be joined to a PlayHQ season
+# team registry by team name? Every stored record was written by a fetcher that
+# discards the team id, so that join is the only way to attach ids to 41.81 MB of
+# existing data without re-fetching every round of every season.
+#
+# Two API calls per season. Default is EFNL 2025 and 2024.
+
+name: Probe team join
+
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: 'Comma-separated season ids. Default is EFNL 2025 and 2024.'
+        required: false
+        default: '75d8a232,ca9cc98b'
+        type: string
+      examples:
+        description: 'How many examples of each category to print'
+        required: false
+        default: '8'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-team-join
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Measure the name join
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: node --check scripts/probe-team-join.js
+
+      - name: Run probe
+        env:
+          PROBE_SEASONS: ${{ github.event.inputs.seasons }}
+          PROBE_EXAMPLES: ${{ github.event.inputs.examples }}
+        run: node scripts/probe-team-join.js
