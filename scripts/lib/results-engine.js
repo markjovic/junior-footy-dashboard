@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v5 2026-08-12 gradeId-in-ids';
+const ENGINE_VERSION = 'v6 2026-08-12 gradeMeta-dual-key';
 
 'use strict';
 
@@ -849,6 +849,33 @@ function buildGradeMeta(grades) {
     return /\b(girls|women)\b/i.test(`${parsedAge || ''} ${rawGrade || ''}`) ? 'F' : 'M';
   };
 
+  // DISPLAY LABEL. Identity is the grade id; this is only what the chip shows.
+  //
+  // rawGrade is kept wherever it is non-empty, so every chip that reads
+  // correctly today is byte-identical. It is empty for 83 grades across the
+  // stored seasons — the four EFNL U8s, YJFL's pools, WFNL's session splits —
+  // and those are the ones that would otherwise become four blank ladders once
+  // grouping moves to the grade id.
+  //
+  // For those, the distinguishing tail of the PlayHQ name is used: the verbatim
+  // name with the leading age token and any sponsor prefix removed.
+  //   "U8 - West"                     -> "West"
+  //   "U10 Mixed - Pool 3"            -> "Pool 3"
+  //   "U9 Round Robin - Spotswood ..." -> "Spotswood Morning Session"
+  // A label is never a key, so a poor one is cosmetic and cannot orphan a record.
+  const labelOf = (name, age, rawGrade) => {
+    if (rawGrade) return rawGrade;
+    let n = String(name || '').replace(/^\*\s*/, '').trim();
+    // Everything before the last " - " is prefix: age, sponsor, or both.
+    const dash = n.lastIndexOf(' - ');
+    if (dash > 0) n = n.slice(dash + 3).trim();
+    // Strip a leading age token and a gender word if they survived.
+    n = n.replace(/^U\d+(?:\.\d+)?\s*/i, '')
+         .replace(/^(Mixed|Boys|Girls|Men|Women)\s+/i, '')
+         .trim();
+    return n || rawGrade;
+  };
+
   for (const g of grades) {
     const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
     // Grading is a pre-season sorting pool, not a competitive tier. It would
@@ -860,17 +887,31 @@ function buildGradeMeta(grades) {
     const r = (next.get(ageKey) || 0) + 1;
     next.set(ageKey, r);
 
-    // Two PlayHQ grades parsing to one key would silently overwrite each other
-    // and corrupt the ranking. Report it rather than let it pass.
-    if (meta[key]) {
-      console.warn(`  WARNING: two grades resolve to "${key}" — ranks ${meta[key].r} and ${r}; keeping ${meta[key].r}`);
-      continue;
-    }
-    meta[key] = {
+    const entry = {
       r,
       lvl: levelOf(g.ageName, age),
       g:   genderOf(g.genderName, age, rawGrade),
     };
+
+    // DUAL KEYED during the transition. The grade-id key is the real one and is
+    // always written; the rawGrade key is written too so index.html keeps
+    // working unchanged until it is switched over. Writing the new shape before
+    // the reader understands it is the mistake that duplicated records earlier
+    // today, and this is how it is avoided.
+    //
+    // gradeMeta is derived and rebuilt in full on every run, so the two keys
+    // cannot drift. The rawGrade key comes out once index.html reads the id.
+    meta[`${g.compName}|${age}|${g.id}`] = { ...entry, label: labelOf(g.name, age, rawGrade), gradeId: g.id };
+
+    // Two PlayHQ grades parsing to one rawGrade key overwrite each other. That
+    // is the collapse this whole migration exists to fix; the id key above is
+    // unaffected, so the warning now records a display-only casualty.
+    if (meta[key]) {
+      console.warn(`  WARNING: two grades resolve to "${key}" — ranks ${meta[key].r} and ${r}; ` +
+        `keeping ${meta[key].r}. The grade-id keys are both present and correct.`);
+      continue;
+    }
+    meta[key] = entry;
   }
   return meta;
 }
@@ -896,13 +937,16 @@ function rebuildRoster(matches) {
 
   matches.forEach(m => {
     [
-      { name: m.home, grade: m.rawGrade, age: m.age, round: m.round, compName: m.compName || '' },
-      { name: m.away, grade: m.rawGrade, age: m.age, round: m.round, compName: m.compName || '' },
-    ].forEach(({ name, grade, age, round, compName }) => {
+      { name: m.home, grade: m.rawGrade, gradeId: m.gradeId || '', age: m.age, round: m.round, compName: m.compName || '' },
+      { name: m.away, grade: m.rawGrade, gradeId: m.gradeId || '', age: m.age, round: m.round, compName: m.compName || '' },
+    ].forEach(({ name, grade, gradeId, age, round, compName }) => {
       const key = `${compName}|${name}|${age}`;
       const prev = latest.get(key);
       if (!prev || round > prev.round) {
-        latest.set(key, { grade, age, round, compName });
+        // gradeId is stored alongside grade, not instead of it. index.html reads
+        // `grade` today; it reads `gradeId` after step 6, and both are present
+        // through the changeover.
+        latest.set(key, { grade, gradeId, age, round, compName });
       } else if (round === prev.round && grade !== prev.grade) {
         // Same team, same age, same round, different grades
         // Prefer non-empty grade, then alphabetically earlier (A < B < C < D)
@@ -918,8 +962,8 @@ function rebuildRoster(matches) {
   // Return roster keyed by "teamName|age": { grade, age }
   // Dashboard currentGrade() must look up by this same key
   const roster = {};
-  latest.forEach(({ grade, age, compName }, key) => {
-    roster[key] = { grade, age, compName };
+  latest.forEach(({ grade, gradeId, age, compName }, key) => {
+    roster[key] = { grade, age, compName, ...(gradeId ? { gradeId } : {}) };
   });
   return roster;
 }
