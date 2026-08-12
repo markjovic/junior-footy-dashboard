@@ -999,7 +999,7 @@
         "results": true,
         "players": true,
         "matches": 1969,
-        "players_n": 6757
+        "players_n": 6756
       }
     },
     {
@@ -1016,9 +1016,9 @@
       "file": "data/orgs/0f20da4f-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 2050,
-        "players_n": 0
+        "players_n": 6724
       }
     },
     {
@@ -1105,9 +1105,9 @@
       "file": "data/orgs/1cf85e52-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 759,
-        "players_n": 0
+        "players_n": 2059
       }
     },
     {
@@ -1124,9 +1124,9 @@
       "file": "data/orgs/1cf85e52-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3425,
-        "players_n": 0
+        "players_n": 11438
       }
     },
     {
@@ -1143,9 +1143,9 @@
       "file": "data/orgs/1cf85e52-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3315,
-        "players_n": 0
+        "players_n": 10466
       }
     },
     {
@@ -1162,9 +1162,9 @@
       "file": "data/orgs/1cf85e52-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3071,
-        "players_n": 0
+        "players_n": 9614
       }
     },
     {
@@ -1404,9 +1404,9 @@
       "file": "data/orgs/383836bb-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 5035,
-        "players_n": 0
+        "players_n": 17567
       }
     },
     {
@@ -1423,9 +1423,9 @@
       "file": "data/orgs/383836bb-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 4633,
-        "players_n": 0
+        "players_n": 17425
       }
     },
     {
@@ -1495,7 +1495,7 @@
         "results": true,
         "players": true,
         "matches": 2100,
-        "players_n": 8761
+        "players_n": 8762
       }
     },
     {
@@ -1512,9 +1512,9 @@
       "file": "data/orgs/4c8b472e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 2544,
-        "players_n": 0
+        "players_n": 8899
       }
     },
     {
@@ -1531,9 +1531,9 @@
       "file": "data/orgs/4c8b472e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 2362,
-        "players_n": 0
+        "players_n": 8944
       }
     },
     {
@@ -1569,9 +1569,9 @@
       "file": "data/orgs/4f9a099e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3071,
-        "players_n": 0
+        "players_n": 9590
       }
     },
     {
@@ -1588,9 +1588,9 @@
       "file": "data/orgs/4f9a099e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3104,
-        "players_n": 0
+        "players_n": 10596
       }
     },
     {
@@ -1607,9 +1607,9 @@
       "file": "data/orgs/4f9a099e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3273,
-        "players_n": 0
+        "players_n": 10425
       }
     },
     {
@@ -1626,9 +1626,9 @@
       "file": "data/orgs/4f9a099e-archive.json",
       "phases": {
         "results": true,
-        "players": false,
+        "players": true,
         "matches": 3722,
-        "players_n": 0
+        "players_n": 10986
       }
     },
     {
@@ -7762,19 +7762,19 @@
       "file": "data/orgs/0f20da4f-archive.json",
       "org": "0f20da4f",
       "kind": "archive",
-      "bytes": 924590
+      "bytes": 4814866
     },
     {
       "file": "data/orgs/0f20da4f-current.json",
       "org": "0f20da4f",
       "kind": "current",
-      "bytes": 4662817
+      "bytes": 4662383
     },
     {
       "file": "data/orgs/1cf85e52-archive.json",
       "org": "1cf85e52",
       "kind": "archive",
-      "bytes": 4935783
+      "bytes": 21404301
     },
     {
       "file": "data/orgs/1cf85e52-current.json",
@@ -7786,31 +7786,31 @@
       "file": "data/orgs/383836bb-archive.json",
       "org": "383836bb",
       "kind": "archive",
-      "bytes": 4152497
+      "bytes": 19529153
     },
     {
       "file": "data/orgs/383836bb-current.json",
       "org": "383836bb",
       "kind": "current",
-      "bytes": 10522367
+      "bytes": 10522366
     },
     {
       "file": "data/orgs/4c8b472e-archive.json",
       "org": "4c8b472e",
       "kind": "archive",
-      "bytes": 2264559
+      "bytes": 10821346
     },
     {
       "file": "data/orgs/4c8b472e-current.json",
       "org": "4c8b472e",
       "kind": "current",
-      "bytes": 4893119
+      "bytes": 4893580
     },
     {
       "file": "data/orgs/4f9a099e-archive.json",
       "org": "4f9a099e",
       "kind": "archive",
-      "bytes": 5571816
+      "bytes": 26178051
     },
     {
       "file": "data/orgs/4f9a099e-current.json",
@@ -14885,5 +14885,5 @@
   },
   "lastUpdated": "2026-08-12T14:41:01.583Z",
   "lastResultsFetch": "2026-08-12T14:41:01.583Z",
-  "lastStatsFetch": "2026-08-11T13:16:37.308Z"
+  "lastStatsFetch": "2026-08-12T17:35:06.918Z"
 }
