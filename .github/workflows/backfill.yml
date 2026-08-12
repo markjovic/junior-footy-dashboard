@@ -3,8 +3,13 @@
 # Phase A historic backfill — results and ladders for completed seasons.
 # storage_ingestion_design.md §6.1.
 #
-# Run it one organisation and one season at a time. It is idempotent, so a
-# re-run after a failure is safe and will not duplicate anything.
+# season "all" does every RETIRED season for one organisation, oldest first, with
+# a wait between each. Each season is saved before the next starts, so a block
+# part-way through leaves the earlier seasons written. It is idempotent, so a
+# re-run after a failure is safe and skips what is already done.
+#
+# Actions jobs are capped at six hours. At roughly 26 minutes a season plus the
+# delay, four seasons is comfortable and anything much larger is not.
 #
 # BEFORE THE FIRST REAL RUN: set dry_run to true. It resolves the season from the
 # manifest, prints what it would fetch, and stops without calling PlayHQ.
@@ -39,6 +44,11 @@ on:
         default: 'true'
         type: choice
         options: ['true', 'false']
+      season_delay:
+        description: 'Minutes to wait between seasons. Only used when season is "all".'
+        required: false
+        default: '5'
+        type: string
 
 jobs:
   backfill:
@@ -56,6 +66,7 @@ jobs:
           BACKFILL_SEASON: ${{ github.event.inputs.season }}
           BACKFILL_PHASE: ${{ github.event.inputs.phase }}
           BACKFILL_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          BACKFILL_SEASON_DELAY_MIN: ${{ github.event.inputs.season_delay }}
         run: |
           set +e
           node scripts/backfill.js
