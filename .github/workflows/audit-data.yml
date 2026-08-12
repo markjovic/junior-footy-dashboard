@@ -23,6 +23,11 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      org:
+        description: 'Optional 8-character organisation code — also print a season-by-season breakdown by age group'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   audit:
@@ -46,4 +51,5 @@ jobs:
       - name: Audit the data
         env:
           AUDIT_STRICT: ${{ github.event.inputs.strict }}
+          AUDIT_ORG: ${{ github.event.inputs.org }}
         run: node scripts/audit-data.js
