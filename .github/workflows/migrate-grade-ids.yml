@@ -1,0 +1,83 @@
+# .github/workflows/migrate-grade-ids.yml
+#
+# Rewrites stored match ids to carry PlayHQ's grade id instead of the parsed
+# rawGrade. grade_identity_migration.md.
+#
+# It verifies itself before running. A migration that cannot prove it lost
+# nothing is not a migration, so the first step seeds a fixture where two records
+# would merge into one id and confirms the run refuses.
+#
+# DEFAULTS TO A DRY RUN. Leave dry_run true until the plan reads correctly, then
+# set it false. Run one organisation at a time — a scoped save cannot reach the
+# others, and one organisation at a time keeps the diff reviewable.
+#
+#   383836bb EFNL   4f9a099e YJFL   4c8b472e WFNL   1cf85e52 SEJ   0f20da4f SER
+
+name: Migrate grade ids
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: '8-character organisation code'
+        required: true
+        type: string
+      dry_run:
+        description: 'Report the plan and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      skip_pass2:
+        description: 'Resolve offline only — no API calls, leaves colliding records alone'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check scripts/migrate-grade-ids.js
+          node --check scripts/verify-migrate-grade-ids.js
+          echo "both files parse"
+
+      # Prove the guards fire before trusting a run that reports success.
+      - name: Verify the migration
+        run: node scripts/verify-migrate-grade-ids.js
+
+      - name: Migrate
+        id: migrate
+        env:
+          MIGRATE_ORG: ${{ github.event.inputs.org }}
+          MIGRATE_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          MIGRATE_SKIP_PASS2: ${{ github.event.inputs.skip_pass2 }}
+        run: |
+          set +e
+          node scripts/migrate-grade-ids.js
+          CODE=$?
+          echo "exit_code=$CODE" >> $GITHUB_OUTPUT
+          set -e
+          # 0 = changed, 2 = nothing to do. Anything else is a real failure.
+          if [ "$CODE" != "0" ] && [ "$CODE" != "2" ]; then
+            echo "migrate-grade-ids.js exited $CODE — failing the job"
+            exit "$CODE"
+          fi
+
+      - name: Commit
+        if: steps.migrate.outputs.exit_code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          git diff --staged --quiet || git commit -m "migrate grade ids: ${{ github.event.inputs.org }} (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
