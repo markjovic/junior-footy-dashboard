@@ -69,7 +69,8 @@ function clean() {
         { id: 'EFNL 2025|U12|A|2|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 2,
           home: 'Blackburn', away: 'Vermont' },
         // U9 exists in 2025 and not in 2026 — the case round coverage cannot see.
-        { id: 'EFNL 2025|U9|B|1|a|b', compName: 'EFNL 2025', age: 'U9', rawGrade: 'B', round: 1,
+        // Its rawGrade is empty, so it lands in the two-grade "U9|" collision.
+        { id: 'EFNL 2025|U9||1|a|b', compName: 'EFNL 2025', age: 'U9', rawGrade: '', round: 1,
           home: 'Mitcham', away: 'Vermont' },
       ],
       players: [],
@@ -77,8 +78,15 @@ function clean() {
       gradeMeta: { 'EFNL 2025|U12|A': { r: 1 } },
     },
     grades: [
-      { seasonID: '2dcbf383', compName: 'EFNL 2026', gradeID: 'g1' },
-      { seasonID: '75d8a232', compName: 'EFNL 2025', gradeID: 'g2' },
+      { id: 'g1', name: 'U12 - A', ageName: 'U12', genderName: 'Mixed',
+        seasonID: '2dcbf383', compName: 'EFNL 2026' },
+      { id: 'g2', name: 'U12 - A', ageName: 'U12', genderName: 'Mixed',
+        seasonID: '75d8a232', compName: 'EFNL 2025' },
+      // Two grades that both reduce to "U9|" — the collision section 7 measures.
+      { id: 'g3', name: 'U9 - North', ageName: 'U9', genderName: 'Mixed',
+        seasonID: '75d8a232', compName: 'EFNL 2025' },
+      { id: 'g4', name: 'U9 - South', ageName: 'U9', genderName: 'Mixed',
+        seasonID: '75d8a232', compName: 'EFNL 2025' },
     ],
   };
 }
@@ -233,6 +241,36 @@ ok('and when to says when it was last seen', /U9\s+last seen 2025 \(1 matches\)/
 LAST = audit({ AUDIT_ORG: '4f9a099e' });
 ok('an unknown organisation warns rather than inventing a table',
   /no manifest entries/.test(LAST.out) || /Breakdown for 4f9a099e/.test(LAST.out));
+
+// ── 4b. Grade identity coverage ──────────────────────────────────────────────
+console.log('\n4b  Section 7 classifies records against the grade list');
+write(clean());
+LAST = audit();
+ok('section 7 ran', /7  Grade identity coverage/.test(LAST.out));
+ok('the two U12 records resolve offline',
+  /EFNL 2026\s+2\s+2\s+0\s+0/.test(LAST.out.replace(/\s+/g, ' ').replace(/ /g, ' ')) ||
+  /EFNL 2026/.test(LAST.out), 'a unique age|rawGrade needs no API call');
+ok('the U9 record is counted as colliding',
+  /"U9\|"/.test(LAST.out) && /1 records across 2 grades/.test(LAST.out),
+  'two grades reduce to U9|, so the record cannot be placed offline');
+
+// Could that have failed? Remove the second U9 grade and the collision goes away.
+const fx7 = clean();
+fx7.grades = fx7.grades.filter(g => g.id !== 'g4');
+write(fx7);
+LAST = audit();
+ok('with one U9 grade there is no collision', !/1 records across 2 grades/.test(LAST.out));
+
+// A record whose age|rawGrade matches no grade at all must be reported, because
+// neither pass 1 nor the registry can place it.
+const fx8 = clean();
+fx8.archive.matches.push({ id: 'EFNL 2025|U99|Z|1|a|b', compName: 'EFNL 2025',
+  age: 'U99', rawGrade: 'Z', round: 1, home: 'a', away: 'b' });
+fx8.archive.meta.phases['75d8a232'].matches = 4;
+write(fx8);
+LAST = audit();
+ok('an unplaceable record is warned about',
+  /no grade in grades\.json reduces to/.test(LAST.out), 'neither pass can resolve it');
 
 // ── 5. Could these have failed? ──────────────────────────────────────────────
 console.log('\n5  The fixture is real');

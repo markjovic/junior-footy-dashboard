@@ -32,8 +32,15 @@
 
 const fs = require('fs');
 const path = require('path');
+// The engine's own parser, so section 7 reproduces the stored age and rawGrade
+// rather than re-deriving them. Required lazily below so the rest of the audit
+// still runs if the engine is missing.
+let parseGradeName = null;
+let engineLoadError = null;
+try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
+catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v4 2026-08-12 breakdown';
+const VERSION = 'audit-data v5 2026-08-12 grade-coverage';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -390,6 +397,103 @@ if (ORG) {
     } else {
       console.log(`\n  no age group present earlier is missing from ${latest}`);
     }
+  }
+}
+
+// ── 7. Grade identity coverage ───────────────────────────────────────────────
+// Answers grade_identity_migration.md §7 Q1: how many stored RECORDS sit in a
+// colliding grade key. 121 of 1,006 grades are shadowed, but grades vary
+// enormously in size and the affected ones skew small, so the grade count does
+// not bound the record count in either direction.
+//
+// Offline. No API calls. Every figure is from running the real parseGradeName
+// over the real grade names, and counting the real records.
+console.log('\n7  Grade identity coverage (grade_identity_migration.md §7 Q1)');
+if (!parseGradeName) {
+  // An ERROR, not a warning. Silently skipping the measurement and still
+  // reporting "0 errors" is how a clean-looking audit hides a gap.
+  err(`could not load scripts/lib/results-engine.js, so grade coverage was NOT ` +
+      `measured — ${engineLoadError}`);
+} else if (!fs.existsSync(GRADES_PATH)) {
+  warn('data/grades.json is missing — grade coverage not measured');
+} else {
+  const grades = readJson(GRADES_PATH) || [];
+
+  // season id -> "age|rawGrade" -> [gradeId, ...]
+  const keyToGrades = new Map();
+  for (const g of grades) {
+    if (!g.seasonID || !g.id) continue;
+    if (!keyToGrades.has(g.seasonID)) keyToGrades.set(g.seasonID, new Map());
+    const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
+    const k = `${age}|${rawGrade}`;
+    const m = keyToGrades.get(g.seasonID);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(g.id);
+  }
+
+  // compName -> seasonId, so a stored record can find its season's grade list.
+  const seasonOfComp = new Map();
+  for (const m of core.manifest) if (m.compName && m.seasonId) seasonOfComp.set(m.compName, m.seasonId);
+
+  const rows = [];
+  const hotKeys = [];     // colliding keys, by how many records they hold
+  let tMatches = 0, tOne = 0, tColl = 0, tNone = 0;
+
+  for (const m of core.manifest) {
+    if (!m.compName) continue;
+    const seasonId = m.seasonId;
+    const km = keyToGrades.get(seasonId);
+    let matches = 0, one = 0, coll = 0, none = 0;
+    const perKey = new Map();
+
+    for (const [f, { payload }] of Object.entries(files)) {
+      for (const rec of payload.matches || []) {
+        if (rec.compName !== m.compName) continue;
+        matches++;
+        const k = `${rec.age}|${rec.rawGrade}`;
+        const ids = km && km.get(k);
+        if (!ids) none++;
+        else if (ids.length === 1) one++;
+        else {
+          coll++;
+          perKey.set(k, (perKey.get(k) || 0) + 1);
+        }
+      }
+    }
+    if (!matches) continue;
+    tMatches += matches; tOne += one; tColl += coll; tNone += none;
+    rows.push([m.compName, matches, one, coll, none,
+               matches ? ((coll / matches) * 100).toFixed(1) + '%' : '-']);
+    for (const [k, n] of perKey) hotKeys.push([m.compName, k, n, (km.get(k) || []).length]);
+  }
+
+  const w = [14, 10, 12, 12, 10, 14];
+  const hdr = ['season', 'matches', 'pass 1 ok', 'colliding', 'unknown', '% colliding'];
+  console.log('  ' + hdr.map((h, i) => i === 0 ? h.padEnd(w[0]) : h.padStart(w[i])).join(''));
+  console.log('  ' + '-'.repeat(w.reduce((x, y) => x + y, 0)));
+  for (const r of rows.sort()) {
+    console.log('  ' + r.map((c, i) => i === 0 ? String(c).padEnd(w[0]) : String(c).padStart(w[i])).join(''));
+  }
+  console.log('  ' + '-'.repeat(w.reduce((x, y) => x + y, 0)));
+  console.log('  ' + ['TOTAL', tMatches, tOne, tColl, tNone,
+    tMatches ? ((tColl / tMatches) * 100).toFixed(1) + '%' : '-']
+    .map((c, i) => i === 0 ? String(c).padEnd(w[0]) : String(c).padStart(w[i])).join(''));
+
+  console.log(`\n  pass 1 ok   resolvable offline from grades.json, no API call needed`);
+  console.log(`  colliding   needs the season team registry — one API call per season`);
+  console.log(`  unknown     no grade in grades.json reduces to this record's age|rawGrade`);
+
+  if (hotKeys.length) {
+    console.log(`\n  the colliding keys holding the most records:`);
+    hotKeys.sort((x, y) => y[2] - x[2]);
+    for (const [comp, k, n, g] of hotKeys.slice(0, 15)) {
+      console.log(`    ${comp.padEnd(12)} "${k}"`.padEnd(46) + `${String(n).padStart(6)} records across ${g} grades`);
+    }
+    if (hotKeys.length > 15) console.log(`    ... ${hotKeys.length - 15} further colliding key(s)`);
+  }
+  if (tNone) {
+    warn(`${tNone} stored record(s) have an age|rawGrade that no grade in grades.json ` +
+         `reduces to — they cannot be resolved offline OR by the registry`);
   }
 }
 
