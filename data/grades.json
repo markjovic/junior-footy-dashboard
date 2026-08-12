@@ -6253,5 +6253,365 @@
     "seasonID": "d6ed597a",
     "compName": "YJFL 2023",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "34d3471c",
+    "name": "GYG - Regional U13 Mixed GRADING",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2a691bec",
+    "name": "GYG - Regional U13 Mixed Premier Division",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6006f503",
+    "name": "GYG - Regional U13 Mixed Blue",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ede89baf",
+    "name": "GYG - Regional U13 Mixed Gold",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1218f616",
+    "name": "GYG - Regional U13 Mixed Navy",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "bce46a36",
+    "name": "GYG - Regional U13 Mixed Orange",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2f475a85",
+    "name": "GYG - Regional U14 Girls GRADING",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "800a54f6",
+    "name": "GYG - Regional U14 Girls Premier Division",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "315ec007",
+    "name": "GYG - Regional U14 Girls Blue",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0f974d86",
+    "name": "GYG - Regional U14 Girls Gold",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "b1ed13b9",
+    "name": "GYG - Regional U14 Girls Navy",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ad954758",
+    "name": "GYG - Regional U14 Girls Orange",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "da55fbf6",
+    "name": "GYG - Regional U14 Girls Pink",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "587b941a",
+    "name": "GYG - Regional U14 Mixed GRADING",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fccd92ee",
+    "name": "GYG - Regional U14 Mixed Premier Division",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "73c01e1f",
+    "name": "GYG - Regional U14 Mixed Blue",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fa7d3900",
+    "name": "GYG - Regional U14 Mixed Gold",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "856eb804",
+    "name": "GYG - Regional U14 Mixed Navy",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "759073c3",
+    "name": "GYG - Regional U15 Boys GRADING",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d749778c",
+    "name": "GYG - Regional U15 Boys Premier Division",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d83200d1",
+    "name": "GYG - Regional U15 Boys Blue",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "66d15d2b",
+    "name": "GYG - Regional U15 Boys Gold",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a3ed4287",
+    "name": "GYG - Regional U15 Boys Navy",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "c553b430",
+    "name": "GYG - Regional U15 Boys Orange",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "794e71c7",
+    "name": "GYG - Regional U16 Boys GRADING",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "66f01ee6",
+    "name": "GYG - Regional U16 Boys Premier Division",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d2c85cf5",
+    "name": "GYG - Regional U16 Boys Blue",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "43f5304e",
+    "name": "GYG - Regional U16 Boys Gold",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "c701cbe1",
+    "name": "GYG - Regional U16 Boys Navy",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "47a404a7",
+    "name": "GYG - Regional U16 Girls GRADING",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "20176401",
+    "name": "GYG - Regional U16 Girls Premier Division",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cf50b19a",
+    "name": "GYG - Regional U16 Girls Blue",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "80a2a592",
+    "name": "GYG - Regional U16 Girls Gold",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "51d1da99",
+    "name": "GYG - Regional U16 Girls Navy",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d18b4596",
+    "name": "GYG - Regional U17 Boys GRADING",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e650eaf4",
+    "name": "GYG - Regional U17 Boys Premier Division",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5a7c378d",
+    "name": "GYG - Regional U17 Boys Blue",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9a1cafaf",
+    "name": "GYG - Regional U17 Boys Gold",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ce37faa9",
+    "name": "GYG - Regional U17 Boys Navy",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e7466838",
+    "name": "GYG - Regional U18 Girls Premier Division",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "8c46e153",
+    "compName": "SER 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
   }
 ]
