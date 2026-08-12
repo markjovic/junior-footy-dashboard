@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v7 2026-08-12 unique-labels';
+const ENGINE_VERSION = 'v9 2026-08-12 labels-unique';
 
 'use strict';
 
@@ -830,6 +830,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
 function buildGradeMeta(grades) {
   const meta = {};
   const next = new Map(); // "comp|age" -> rank counter
+  let rawCollapsed = 0;   // grades that lost their rawGrade key to another
 
   // PlayHQ age values: U7..U23, JUNIOR, INTERMEDIATE, SENIOR, OPEN, MASTER,
   // MASTERS_35S.., UNSPECIFIED. Intermediate is treated as junior because it is
@@ -869,10 +870,17 @@ function buildGradeMeta(grades) {
     // Everything before the last " - " is prefix: age, sponsor, or both.
     const dash = n.lastIndexOf(' - ');
     if (dash > 0) n = n.slice(dash + 3).trim();
+    const prefix = dash > 0 ? String(name).replace(/^\*\s*/, '').slice(0, dash).trim()
+                                .replace(/\s*U\d+(?:\.\d+)?.*$/i, '').trim() : '';
     // Strip a leading age token and a gender word if they survived.
     n = n.replace(/^U\d+(?:\.\d+)?\s*/i, '')
          .replace(/^(Mixed|Boys|Girls|Men|Women)\s+/i, '')
          .trim();
+    // A name ending in a bare gender word leaves nothing to distinguish it —
+    // "Little Demons - U10 Mixed" reduced to "Mixed", sitting beside its own
+    // siblings "Little Demons Blue" and "Little Demons Red". The prefix is the
+    // distinguishing part, so use that instead. Found on screen 2026-08-12.
+    if (/^(Mixed|Boys|Girls|Men|Women)$/i.test(n) && prefix) return prefix;
     return n || rawGrade;
   };
 
@@ -905,12 +913,9 @@ function buildGradeMeta(grades) {
 
     // Two PlayHQ grades parsing to one rawGrade key overwrite each other. That
     // is the collapse this whole migration exists to fix; the id key above is
-    // unaffected, so the warning now records a display-only casualty.
-    if (meta[key]) {
-      console.warn(`  WARNING: two grades resolve to "${key}" — ranks ${meta[key].r} and ${r}; ` +
-        `keeping ${meta[key].r}. The grade-id keys are both present and correct.`);
-      continue;
-    }
+    // unaffected, so this is now a display-only casualty and counted rather
+    // than warned about 130 times a run.
+    if (meta[key]) { rawCollapsed++; continue; }
     meta[key] = entry;
   }
 
@@ -923,31 +928,62 @@ function buildGradeMeta(grades) {
   // Where a label repeats, the prefix that distinguishes the PlayHQ names is
   // prepended. Only the colliding labels change, so every unique label — which
   // is the overwhelming majority — is left exactly as it was.
-  const byAgeLabel = new Map();   // "comp|age|label" -> [gradeId, ...]
+  if (rawCollapsed) {
+    console.log(`  ${rawCollapsed} grade(s) share a rawGrade key with another and did not get ` +
+      `one. Expected: the grade-id keys are all present, and rawGrade is display-only.`);
+  }
+
   const nameOf = new Map();       // gradeId -> verbatim PlayHQ name
   for (const g of grades) nameOf.set(g.id, g.name);
-  for (const [k, v] of Object.entries(meta)) {
-    if (!v.gradeId) continue;     // rawGrade keys carry no label
-    const comp = k.slice(0, k.indexOf('|'));
-    const age = k.slice(comp.length + 1, k.lastIndexOf('|'));
-    const lk = `${comp}|${age}|${v.label}`;
-    if (!byAgeLabel.has(lk)) byAgeLabel.set(lk, []);
-    byAgeLabel.get(lk).push(k);
-  }
-  for (const [lk, keys] of byAgeLabel) {
-    if (keys.length < 2) continue;
-    for (const k of keys) {
-      const v = meta[k];
-      const name = String(nameOf.get(v.gradeId) || '').replace(/^\*\s*/, '').trim();
-      // The prefix is everything before the last " - ", with any age token
-      // stripped. "F&DJFL - U08 Mixed A" -> "F&DJFL".
-      const dash = name.lastIndexOf(' - ');
-      let prefix = dash > 0 ? name.slice(0, dash).trim() : '';
-      prefix = prefix.replace(/\s*U\d+(?:\.\d+)?.*$/i, '').trim();
-      v.label = prefix ? `${prefix} ${v.label}`.trim() : `${v.label} (${v.gradeId.slice(0, 4)})`;
+
+  // Escalating, and it ends in something that cannot collide. Prefixing alone
+  // is not enough: SEJ 2022's four U17 grades are all
+  // "AFLSE - Chisholm U17 Premier A/B/C/D", so they share both a rawGrade and a
+  // prefix, and one-shot prefixing left all four labelled "AFLSE Premier".
+  // Four identically labelled ladders is the exact failure this exists to
+  // remove, so the last step appends the grade id and therefore terminates.
+  const cleanName = (id) => String(nameOf.get(id) || '').replace(/^\*\s*/, '')
+    .replace(/\bU\d+(?:\.\d+)?\b\s*/gi, '').replace(/\s*-\s*/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  const prefixOf = (id) => {
+    const name = String(nameOf.get(id) || '').replace(/^\*\s*/, '').trim();
+    const dash = name.lastIndexOf(' - ');
+    return dash > 0 ? name.slice(0, dash).trim().replace(/\s*U\d+(?:\.\d+)?.*$/i, '').trim() : '';
+  };
+  const dupeGroups = () => {
+    const g = new Map();
+    for (const [k, v] of Object.entries(meta)) {
+      if (!v.gradeId) continue;   // rawGrade keys carry no label
+      const comp = k.slice(0, k.indexOf('|'));
+      const age = k.slice(comp.length + 1, k.lastIndexOf('|'));
+      const lk = `${comp}|${age}|${v.label}`;
+      if (!g.has(lk)) g.set(lk, []);
+      g.get(lk).push(k);
     }
-    console.warn(`  label collision on "${lk}" across ${keys.length} grades — ` +
-      `disambiguated to: ${keys.map(k => meta[k].label).join(', ')}`);
+    return [...g].filter(([, keys]) => keys.length > 1);
+  };
+
+  let firstRound = null;
+  for (const step of [1, 2, 3]) {
+    const dupes = dupeGroups();
+    if (!dupes.length) break;
+    if (step === 1) firstRound = dupes.map(([lk]) => lk);
+    for (const [, keys] of dupes) {
+      for (const k of keys) {
+        const v = meta[k];
+        if (step === 1) { const p = prefixOf(v.gradeId); if (p) v.label = `${p} ${v.label}`.trim(); }
+        else if (step === 2) v.label = cleanName(v.gradeId) || v.label;
+        else v.label = `${v.label} ${v.gradeId.slice(0, 4)}`.trim();
+      }
+    }
+  }
+  for (const lk of (firstRound || [])) console.log(`  label collision on "${lk}" — disambiguated`);
+
+  // A duplicate here means two ladders sharing a name. Step 3 appends the grade
+  // id so it cannot happen, and if it somehow does it must be loud.
+  for (const [lk, keys] of dupeGroups()) {
+    console.error(`  ERROR: ${keys.length} grades still share the label "${lk}". ` +
+      `Two ladders will be indistinguishable.`);
   }
 
   return meta;
