@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v2 2026-08-12 errored-grades';
+const ENGINE_VERSION = 'v3 2026-08-12 capture-gradeId';
 
 'use strict';
 
@@ -661,7 +661,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       // No games — bye round. Push a sentinel so knownRounds advances past it.
       console.log(`bye — continuing`);
       allMatches.push({ id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__bye__`,
-        age, rawGrade, round: number, compName: grade.compName,
+        age, rawGrade, gradeId: id, round: number, compName: grade.compName,
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__bye__', away: '__bye__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
@@ -700,7 +700,13 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       const matchId = `${grade.compName}|${age}|${rawGrade}|${rToken}|${[homeName, awayName].sort().join('|')}`;
 
       matches.push({
-        id: matchId, age, rawGrade, round: number,
+        // gradeId is PlayHQ's own grade identity, captured because rawGrade
+        // cannot carry it: 62 keys across the stored seasons have two or more
+        // grades reducing to one age|rawGrade, and 18.5% of records sit in one.
+        // Written and not yet read — grade_identity_migration.md build order
+        // step 4 — so that the problem stops growing while the migration is
+        // built. Records written before 2026-08-12 do not have it.
+        id: matchId, age, rawGrade, gradeId: id, round: number,
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         compName: grade.compName,
         home: homeName, away: awayName,
@@ -730,7 +736,7 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       // Store a partial sentinel so this round is re-fetched next run
       allMatches.push({
         id: `${grade.compName}|${age}|${rawGrade}|${rToken}|__partial__`,
-        age, rawGrade, round: number, compName: grade.compName,
+        age, rawGrade, gradeId: id, round: number, compName: grade.compName,
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: '__partial__', away: '__partial__',
         hScore:0, hG:0, hB:0, aScore:0, aG:0, aB:0,
