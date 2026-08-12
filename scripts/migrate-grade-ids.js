@@ -24,9 +24,11 @@
 // writes nothing unless MIGRATE_DRY_RUN=false.
 //
 // Env:
-//   MIGRATE_ORG=<code>     8-character organisation code. Required — migrate one
-//                          organisation at a time so a scoped save cannot reach
-//                          the others.
+//   MIGRATE_ORG=<code>     8-character organisation code, or "all". Required.
+//                          "all" loops every organisation in the manifest, each
+//                          with its own scoped load and save, so one scope still
+//                          cannot reach another organisation's files. A failure
+//                          part-way leaves the earlier organisations written.
 //   MIGRATE_DRY_RUN        "false" to write. Anything else, including unset, is
 //                          a dry run.
 //   MIGRATE_SKIP_PASS2     "true" to resolve offline only, no API calls.
@@ -41,7 +43,7 @@ const store = require('./lib/store');
 const { parseGradeName, cleanTeam } = require('./lib/results-engine');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'migrate-grade-ids v1 2026-08-12';
+const VERSION = 'migrate-grade-ids v2 2026-08-12 all-orgs';
 const ROOT = path.resolve(__dirname, '..');
 const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 
@@ -72,40 +74,13 @@ function rewriteId(oldId, gradeId) {
   return parts.join('|');
 }
 
-async function main() {
-  console.log(`=== ${VERSION} ===`);
-  console.log(DRY ? 'DRY RUN — nothing will be written.\n' : '*** WRITING ***\n');
-
-  if (!/^[0-9a-f]{8}$/i.test(ORG)) fail(`MIGRATE_ORG must be an 8-character organisation code, got "${ORG}".`);
-  if (!fs.existsSync(GRADES_PATH)) fail('data/grades.json not found — pass 1 reads it.');
-
-  let grades;
-  try { grades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8')); }
-  catch (e) { fail(`could not parse grades.json: ${e.message}`); }
-
-  const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
+async function migrateOrg(ORG, keyToGrades, gradeById, core) {
   const forOrg = (core.manifest || []).filter(m => m.org === ORG && m.compName);
   if (!forOrg.length) fail(`no manifest entries with a compName for organisation "${ORG}".`);
 
   const scope = forOrg.map(m => m.compName);
   const seasonOfComp = new Map(forOrg.map(m => [m.compName, m.seasonId]));
-  console.log(`organisation ${ORG} — ${forOrg.length} season(s): ${scope.join(', ')}\n`);
-
-  // ── Pass 1 tables, built once ─────────────────────────────────────────────
-  // seasonId -> "age|rawGrade" -> [gradeId, ...]
-  const keyToGrades = new Map();
-  // seasonId -> gradeId -> grade record, for the pass 2 registry join
-  const gradeById = new Map();
-  for (const g of grades) {
-    if (!g.seasonID || !g.id) continue;
-    if (!keyToGrades.has(g.seasonID)) { keyToGrades.set(g.seasonID, new Map()); gradeById.set(g.seasonID, new Map()); }
-    const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
-    const k = `${age}|${rawGrade}`;
-    const m = keyToGrades.get(g.seasonID);
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(g.id);
-    gradeById.get(g.seasonID).set(g.id, g);
-  }
+  console.log(`\n${'='.repeat(66)}\norganisation ${ORG} — ${forOrg.length} season(s): ${scope.join(', ')}\n${'='.repeat(66)}`);
 
   const data = store.load(scope);
   console.log(`loaded ${data.matches.length} match record(s) in scope\n`);
@@ -141,7 +116,7 @@ async function main() {
   if (pending.length && !SKIP_PASS2) {
     const seasons = [...new Set(pending.map(p => p.seasonId))];
     console.log(`\nPASS 2  season team registry — ${seasons.length} API call(s)`);
-    await refreshSession();
+    await refreshSession();   // idempotent; a no-op if a session is already held
 
     for (const seasonId of seasons) {
       let teams = [];
@@ -232,13 +207,12 @@ async function main() {
   }
 
   if (DRY) {
-    console.log(`\nDRY RUN — nothing written. Set MIGRATE_DRY_RUN=false to apply.`);
-    logSummary('migrate-grade-ids');
-    process.exit(2);
+    console.log(`\n  DRY RUN — nothing written for ${ORG}.`);
+    return { changed: false, rewritten: rewritten.length, unresolved: unresolvedTotal };
   }
   if (!rewritten.length) {
-    console.log(`\nNothing to rewrite.`);
-    process.exit(2);
+    console.log(`\n  Nothing to rewrite for ${ORG}.`);
+    return { changed: false, rewritten: 0, unresolved: unresolvedTotal };
   }
 
   // ── Apply ─────────────────────────────────────────────────────────────────
@@ -267,10 +241,66 @@ async function main() {
     fail(`${data.matches.length - ids.size} duplicate id(s) after rewrite. Nothing saved.`);
   }
 
-  store.report(store.save(data, scope), 'migrate-grade-ids');
+  store.report(store.save(data, scope), `migrate ${ORG}`);
+  console.log(`\n  ${ORG}: ${rewritten.length} record(s) rewritten, ${unresolvedTotal} left.`);
+  return { changed: true, rewritten: rewritten.length, unresolved: unresolvedTotal };
+}
+
+async function main() {
+  console.log(`=== ${VERSION} ===`);
+  console.log(DRY ? 'DRY RUN — nothing will be written.' : '*** WRITING ***');
+
+  const ALL = ORG.toLowerCase() === 'all';
+  if (!ALL && !/^[0-9a-f]{8}$/i.test(ORG)) {
+    fail(`MIGRATE_ORG must be an 8-character organisation code or "all", got "${ORG}".`);
+  }
+  if (!fs.existsSync(GRADES_PATH)) fail('data/grades.json not found — pass 1 reads it.');
+
+  let grades;
+  try { grades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8')); }
+  catch (e) { fail(`could not parse grades.json: ${e.message}`); }
+
+  const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
+
+  // Built once and shared. seasonId -> "age|rawGrade" -> [gradeId, ...], and
+  // seasonId -> gradeId -> grade record for the pass 2 registry join.
+  const keyToGrades = new Map();
+  const gradeById = new Map();
+  for (const g of grades) {
+    if (!g.seasonID || !g.id) continue;
+    if (!keyToGrades.has(g.seasonID)) { keyToGrades.set(g.seasonID, new Map()); gradeById.set(g.seasonID, new Map()); }
+    const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
+    const k = `${age}|${rawGrade}`;
+    const mm = keyToGrades.get(g.seasonID);
+    if (!mm.has(k)) mm.set(k, []);
+    mm.get(k).push(g.id);
+    gradeById.get(g.seasonID).set(g.id, g);
+  }
+
+  const orgs = ALL
+    ? [...new Set((core.manifest || []).filter(m => m.compName).map(m => m.org))].sort()
+    : [ORG];
+  if (!orgs.length) fail('no organisations in the manifest have a compName.');
+  console.log(`${orgs.length} organisation(s): ${orgs.join(', ')}`);
+
+  let anyChanged = false, totRewritten = 0, totUnresolved = 0;
+  const done = [];
+  for (const o of orgs) {
+    // Each organisation gets its own scoped load and save, so a failure
+    // part-way leaves the earlier ones written rather than losing the lot.
+    const r = await migrateOrg(o, keyToGrades, gradeById, core);
+    if (r.changed) { anyChanged = true; done.push(o); }
+    totRewritten += r.rewritten;
+    totUnresolved += r.unresolved;
+  }
+
+  console.log(`\n${'='.repeat(66)}`);
+  console.log(`${VERSION}: ${totRewritten} record(s) ${DRY ? 'would be' : ''} rewritten, ` +
+    `${totUnresolved} left on the old id.`);
+  if (done.length) console.log(`written: ${done.join(', ')}`);
   logSummary('migrate-grade-ids');
-  console.log(`\n${VERSION}: ${rewritten.length} record(s) rewritten, ${unresolvedTotal} left.`);
-  process.exit(0);
+  if (DRY) console.log(`\nDRY RUN — nothing written. Set MIGRATE_DRY_RUN=false to apply.`);
+  process.exit(anyChanged ? 0 : 2);
 }
 
 main().catch(e => {

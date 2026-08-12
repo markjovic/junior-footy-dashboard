@@ -233,6 +233,27 @@ ok('only the pass 1 record was rewritten',
 ok('the U8 records were left alone',
   read(ARC).matches.filter(m => m.id.startsWith('EFNL 2025|U8||')).length === 3);
 
+// ── 5a. MIGRATE_ORG=all ──────────────────────────────────────────────────────
+console.log('\n5a  MIGRATE_ORG=all does every organisation in one run');
+write(base());
+LAST = run({ MIGRATE_ORG: 'all' });
+ok('dry run exits 2', LAST.code === 2, `exit ${LAST.code}`);
+ok('both organisations reported', /2 organisation\(s\)/.test(LAST.out) &&
+  /organisation 383836bb/.test(LAST.out) && /organisation 4f9a099e/.test(LAST.out));
+ok('nothing written', read(YJFL).matches[0].id === 'YJFL 2026|U14|A|1|Ivanhoe|Kew');
+
+LAST = run({ MIGRATE_ORG: 'all', MIGRATE_DRY_RUN: 'false' });
+ok('real run exits 0', LAST.code === 0, `exit ${LAST.code}`);
+ok('EFNL migrated', read(ARC).matches.some(m => m.id === 'EFNL 2025|U8|gN|1|Bayswater Gold|Boronia Brown'));
+ok('YJFL migrated too — not just the first organisation',
+  read(YJFL).matches[0].id === 'YJFL 2026|U14|gY|1|Ivanhoe|Kew',
+  read(YJFL).matches[0].id);
+ok('each organisation reported its own totals', /written: 383836bb, 4f9a099e/.test(LAST.out));
+
+// Could that have failed? A second all-run must find nothing to do.
+LAST = run({ MIGRATE_ORG: 'all', MIGRATE_DRY_RUN: 'false' });
+ok('a second all-run exits 2', LAST.code === 2, `exit ${LAST.code}`);
+
 // ── 6. Could these have failed? ──────────────────────────────────────────────
 console.log('\n6  The fixture is real');
 write(base());
