@@ -2239,5 +2239,761 @@
     "seasonID": "263ca13b",
     "compName": "SER 2026",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1debae74",
+    "name": "* Premier - Eastland Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d221fe4e",
+    "name": "* Premier - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a75646bc",
+    "name": "* Premier - U19.5",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "68bd5391",
+    "name": "Division 1 - Eastland Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d2350e1f",
+    "name": "Division 1 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f1abf44d",
+    "name": "Division 1 - U19.5",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6d680b34",
+    "name": "Division 2 - Eastland Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "657ea396",
+    "name": "Division 2 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5d7ae46b",
+    "name": "Division 2 - U19.5",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6970ddd1",
+    "name": "Division 3 - Eastland Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c5406ca4",
+    "name": "Division 3 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6f8049a0",
+    "name": "Division 3 - U19.5",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c7dc3cc2",
+    "name": "Division 4 - Eastland Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "279b44a4",
+    "name": "Division 4 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a6dd9dd5",
+    "name": "Division 4 - U19.5",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5b7a7dd6",
+    "name": "Deakin Uni Senior Women - Premier Division",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "df7b268e",
+    "name": "Deakin Uni Women - Division 1",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "dca85601",
+    "name": "Deakin Uni Women - Division 2",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5c25e58d",
+    "name": "Deakin Uni Women - Division 3",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "03324e0e",
+    "name": "Deakin Uni Women - Division 4",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "71a549bf",
+    "name": "Deakin Uni Women - Division 5",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "910f5b6b",
+    "name": "Veterans - Women",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "00ac8b88",
+    "name": "U8 Girls",
+    "ageName": "U8",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "23b5e832",
+    "name": "U8 - Eastern",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cbecc12b",
+    "name": "U8 - North",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "34aa08ed",
+    "name": "U8 - South",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "66db4127",
+    "name": "U8 - West",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "77556b86",
+    "name": "U9 - Black",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "078cccb0",
+    "name": "U9 - Blue",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f1871d3f",
+    "name": "U9 - Gold",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c0a54f58",
+    "name": "U9 - Red",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7d9b04a6",
+    "name": "U9 - White",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "67f4feac",
+    "name": "U10 Girls - Black",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "0d090086",
+    "name": "U10 Girls - Red",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "19a1bd05",
+    "name": "U10 - Black",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cce0b825",
+    "name": "U10 - Blue",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c495fbf5",
+    "name": "U10 - Red",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cf5b8367",
+    "name": "U10 - White",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "07193f7a",
+    "name": "U11 - A",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a53bfc56",
+    "name": "U11 - B",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "4fd4f2cf",
+    "name": "U11 - C",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "feaa4f40",
+    "name": "U11 - D1",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d3f0c121",
+    "name": "U11 - D2",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c7b9c0b8",
+    "name": "U12 Girls",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "3654418d",
+    "name": "U12 Girls - A",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "89a992cc",
+    "name": "U12 Girls - B",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2466d6e0",
+    "name": "U12 Girls - C",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2866e7e1",
+    "name": "U12 - A",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6146be1d",
+    "name": "U12 - B",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6e1f62ba",
+    "name": "U12 - C",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "707e6279",
+    "name": "U12 - D",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "08df12de",
+    "name": "U13 - A",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "33ddf887",
+    "name": "U13 - B",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d435835f",
+    "name": "U13 - C",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "79be93e6",
+    "name": "U13 - D",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "d2b75ea5",
+    "name": "U14 Girls",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "afe3f4b7",
+    "name": "U14 Girls - A",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "49bad18a",
+    "name": "U14 Girls - B",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7b20f8e6",
+    "name": "U14 Girls - C",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a2bbe46e",
+    "name": "U14 Girls - D",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5e1a8436",
+    "name": "U14 - A",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a7bab954",
+    "name": "U14 - B",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a477aa01",
+    "name": "U14 - C",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "6ab3958d",
+    "name": "U14 - D",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "ca5a2269",
+    "name": "U15 - A",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "36147f1d",
+    "name": "U15 - B",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "813d76d8",
+    "name": "U15 - C",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "5e8aa2fa",
+    "name": "U15 - D",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "f97b14b0",
+    "name": "U16 - A",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "271bf38a",
+    "name": "U16 - B",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "cabcb1af",
+    "name": "U16 - C",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c840468d",
+    "name": "U16 - D",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "619af2f6",
+    "name": "Deakin Uni - U16 Girls",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "faff916c",
+    "name": "Deakin Uni U16 Girls - A",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "2b4a975f",
+    "name": "Deakin Uni U16 Girls - B",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "088545f4",
+    "name": "Deakin Uni U16 Girls - C",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "a47b3338",
+    "name": "Deakin Uni U16 Girls - D",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "7510e1be",
+    "name": "U17.5 - A",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "fb9e02fa",
+    "name": "U17.5 - B",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "dcf952d4",
+    "name": "U17.5 - C",
+    "ageName": "U17",
+    "genderName": "Boys",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "445659fb",
+    "name": "Deakin Uni - U18 Girls",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "1c68bfa2",
+    "name": "Deakin Uni U18 Girls - A",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "c66d4451",
+    "name": "Deakin Uni U18 Girls - B",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "1d0ce0c4",
+    "name": "Veterans - Mens",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "75d8a232",
+    "compName": "EFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   }
 ]
