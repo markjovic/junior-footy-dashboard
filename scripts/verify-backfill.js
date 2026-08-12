@@ -171,19 +171,33 @@ function reset(manifest) {
 }
 const CONFIG = () => path.join(TMP, 'config.json');
 
+let LAST = null;   // the most recent child run, dumped when an assertion fails
 function run(script, env) {
   const r = spawnSync(process.execPath, [`scripts/${script}`], {
     cwd: TMP, encoding: 'utf8', env: { ...process.env, ...env },
   });
   if (r.error) throw r.error;
-  return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+  LAST = { script, env, code: r.status, out: (r.stdout || '') + (r.stderr || '') };
+  return { code: r.status, out: LAST.out };
+}
+
+// Printed once, on the first failure. Without it a red job says which assertion
+// failed and nothing about why — the child's own error is invisible.
+let dumped = false;
+function dumpLast() {
+  if (dumped || !LAST) return;
+  dumped = true;
+  console.log(`\n--- output of the last child run (scripts/${LAST.script}, exit ${LAST.code}) ---`);
+  const lines = LAST.out.split('\n');
+  for (const l of lines.slice(-60)) console.log(`  | ${l}`);
+  console.log('--- end ---\n');
 }
 const read = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
   if (cond) { pass++; console.log(`  PASS  ${name}${detail ? ' — ' + detail : ''}`); }
-  else { fail++; console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); }
+  else { fail++; console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); dumpLast(); }
 }
 
 // ── 1. The backfill writes a completed season into the archive ───────────────
@@ -234,7 +248,8 @@ console.log('\n4  fetch-results.js is unchanged in behaviour');
 reset();
 r = run('fetch-results.js', { VIP_ONLY: 'true' });
 ok('exit 0', r.code === 0, `exit ${r.code}`);
-ok('engine version printed', /engine v1 2026-08-12/.test(r.out));
+ok('engine is v2 — a stale one is the 2026-08-12 failure',
+  /engine v2 2026-08-12/.test(r.out), 'check scripts/lib/results-engine.js was committed');
 ok('season-ended guard NOT bypassed', !/season-ended guard BYPASSED/.test(r.out));
 ok('2026 matches written to current', read(EFNL_CUR).matches.length === 2,
   `${read(EFNL_CUR).matches.length} matches`);
@@ -307,7 +322,9 @@ const arcAll = read(EFNL_ARC);
 ok('archive holds both seasons',
   arcAll.meta.seasons.length === 2, JSON.stringify(arcAll.meta.seasons));
 ok('both seasons have completeness recorded',
-  arcAll.meta.phases['75d8a232'].results === true && arcAll.meta.phases['ca9cc98b'].results === true);
+  (arcAll.meta.phases || {})['75d8a232']?.results === true &&
+  (arcAll.meta.phases || {})['ca9cc98b']?.results === true,
+  JSON.stringify(arcAll.meta.phases));
 ok('the live season file is untouched — backfill never fetches it',
   read(EFNL_CUR).matches.length === 0, `${read(EFNL_CUR).matches.length} matches`);
 ok('no archived record leaked into current',

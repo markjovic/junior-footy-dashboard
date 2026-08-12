@@ -47,8 +47,20 @@ function fail(msg) {
   process.exit(1);
 }
 
+// backfill.js v2 needs engine v2 — it reads r.erroredGrades, which v1 does not
+// return. Without this check a stale engine spreads `undefined` and throws a
+// TypeError AFTER the season has been saved, so the files look right and the job
+// goes red for no stated reason. That happened on 2026-08-12 because
+// ENGINE_VERSION was not bumped when erroredGrades was added.
+const REQUIRED_ENGINE = 'v2';
+
 async function main() {
   console.log(`=== ${VERSION} (engine ${engine.ENGINE_VERSION}) ===`);
+  if (!String(engine.ENGINE_VERSION || '').startsWith(REQUIRED_ENGINE)) {
+    fail(`scripts/lib/results-engine.js is stale. This script needs engine ` +
+         `${REQUIRED_ENGINE} and found "${engine.ENGINE_VERSION}". Commit the ` +
+         `current results-engine.js before running the backfill.`);
+  }
 
   const org = (process.env.BACKFILL_ORG || '').trim();
   const seasonInput = (process.env.BACKFILL_SEASON || '').trim();
