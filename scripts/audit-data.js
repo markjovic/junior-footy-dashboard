@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v6 2026-08-12 migration-state';
+const VERSION = 'audit-data v7 2026-08-12 rounds-per-gradeId';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -164,7 +164,10 @@ for (const [f, { payload }] of Object.entries(files)) {
     // Round coverage per grade, home-and-away only. Finals restart at 1 and
     // would corrupt the scan.
     if (!rec.isFinals && !rec.scheduled && typeof rec.round === 'number') {
-      const key = `${c}|${rec.age}|${rec.rawGrade}`;
+      // Keyed exactly as results-engine.js keys knownRounds. Grouping on
+      // rawGrade instead measures the union of every collapsed grade and hides
+      // the per-grade gaps that drive re-fetching.
+      const key = `${c}|${rec.age}|${rec.gradeId || rec.rawGrade}`;
       if (!b.rounds.has(key)) b.rounds.set(key, new Set());
       b.rounds.get(key).add(rec.round);
     }
@@ -257,7 +260,7 @@ for (const r of rows.sort()) console.log(line(r));
 // The strongest check available: a grade holding rounds 1,2,3,5,6 lost round 4.
 // Re-running the backfill repairs it, because the consecutive scan stops at the
 // gap.
-console.log('\n4  Round coverage');
+console.log('\n4  Round coverage, per grade id — what the fetcher re-walks every run');
 let gradesChecked = 0, gradesWithGaps = 0;
 const gapExamples = [];
 const emptyGrade = new Map();
@@ -279,6 +282,24 @@ for (const [c, b] of byComp) {
   }
 }
 console.log(`  ${gradesChecked} grade(s) checked, ${gradesWithGaps} with a missing round`);
+// A gap means the consecutive scan in results-engine.js stops there, so every
+// round above it is re-fetched on EVERY run rather than once. Before 2026-08-12
+// round tracking keyed on rawGrade, so collapsed grades shared one counter and
+// their gaps were invisible — and unpaid for.
+if (gradesWithGaps) {
+  let wasted = 0;
+  for (const [, b] of byComp) {
+    for (const [, rounds] of b.rounds) {
+      const mx = Math.max(...rounds);
+      let consec = 0;
+      for (let r = 1; rounds.has(r); r++) consec = r;
+      if (consec < mx) wasted += (mx - consec);
+    }
+  }
+  console.log(`  ~${wasted} round fixture call(s) re-fetched on EVERY full run because of them`);
+  warn(`${gradesWithGaps} grade(s) have a round gap, costing roughly ${wasted} repeated ` +
+       `fixture call(s) per full run — the consecutive scan restarts at each gap`);
+}
 for (const g of gapExamples) warn(`round gap — ${g}`);
 if (gradesWithGaps > gapExamples.length) {
   warn(`${gradesWithGaps - gapExamples.length} further grade(s) with gaps, not listed`);
