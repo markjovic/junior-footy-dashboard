@@ -365,7 +365,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.132</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.133</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -686,7 +686,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.132</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.133</span>
         </div>
 
 
@@ -1129,12 +1129,24 @@ function mergePlayers(existing, incoming) {
 // ═══════════════════════════════════════
 // Returns the current grade for a team name from the roster,
 // falling back to the grade from match data if not in roster.
+// The IDENTITY of a grade, used for grouping — the PlayHQ grade id where the
+// record has one, and the parsed rawGrade for records written before
+// 2026-08-12. Never displayed: gradeLabelOf() turns it into text.
+//
+// Grouping on rawGrade merged 62 sets of grades into one ladder each, because
+// parseGradeName collapses names like "U8 - Eastern" and "U8 - West" to the
+// same empty string. 53,496 of 53,545 records now carry the id.
+function rosterGrade(entry, rawGrade) {
+  if (!entry) return rawGrade;
+  return entry.gradeId || entry.grade || rawGrade;
+}
+
 function currentGrade(teamName, age, rawGrade, compName) {
   // Roster is keyed by "compName|teamName|age".
   // Try exact name first, then colour-stripped name as fallback.
   const compPrefix = compName || '';
   const exactKey = `${compPrefix}|${teamName}|${age}`;
-  if (S.roster[exactKey]) return S.roster[exactKey].grade || rawGrade;
+  if (S.roster[exactKey]) return rosterGrade(S.roster[exactKey], rawGrade);
 
   // Strip trailing colour word and retry
   let stripped = teamName;
@@ -1143,11 +1155,11 @@ function currentGrade(teamName, age, rawGrade, compName) {
   });
   if (stripped !== teamName) {
     const strippedKey = `${compPrefix}|${stripped}|${age}`;
-    if (S.roster[strippedKey]) return S.roster[strippedKey].grade || rawGrade;
+    if (S.roster[strippedKey]) return rosterGrade(S.roster[strippedKey], rawGrade);
   }
 
   // Legacy fallback: old-style unkeyed roster entry
-  if (S.roster[`${teamName}|${age}`]) return S.roster[`${teamName}|${age}`].grade || rawGrade;
+  if (S.roster[`${teamName}|${age}`]) return rosterGrade(S.roster[`${teamName}|${age}`], rawGrade);
 
   return rawGrade;
 }
@@ -1163,7 +1175,53 @@ function matchIsValid(m) {
 
 // The grade a match counts towards (from the roster)
 function matchGrade(m) {
-  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.rawGrade, m.compName);
+  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.gradeId || m.rawGrade, m.compName);
+}
+
+// ── Display ────────────────────────────────────────────────────────────────
+// A grouping key is an opaque id. Everything shown to a person goes through
+// here, and everything that sorts or colours by grade uses the result.
+// gradeMeta is keyed by BOTH the grade id and the old rawGrade during the
+// changeover, so a key of either shape resolves.
+function gradeLabelOf(comp, age, key) {
+  const meta = gradeMetaOf(comp, age, key);
+  if (meta && meta.label) return meta.label;
+  return key || '';   // pre-2026-08-12 records: the key already IS the label
+}
+
+// The label for a match, from the grade it counts towards.
+function matchGradeLabel(m) {
+  return gradeLabelOf(m.compName, m.age, matchGrade(m));
+}
+
+// gradeId -> label, rebuilt whenever gradeMeta loads. PlayHQ grade ids are
+// unique across every competition and season, so a label needs no other
+// context, and every display site becomes a one-word change rather than
+// threading two more arguments through twenty-five call sites.
+//
+// A key that is not an id — every record written before 2026-08-12 — falls
+// through unchanged, because for those the key already IS the label.
+function rebuildGradeLabels() {
+  const idx = {};
+  for (const [k, v] of Object.entries(S.gradeMeta || {})) {
+    if (v && v.gradeId && v.label) idx[v.gradeId] = v.label;
+  }
+  S.gradeLabelById = idx;
+}
+
+function gLabel(key) {
+  if (!key) return key || '';
+  return (S.gradeLabelById && S.gradeLabelById[key]) || key;
+}
+
+// Sort position for a grade within its competition and age. PlayHQ's own
+// ordering (rank 1 = strongest) is preferred; GRADE_ORDER on the label is the
+// fallback for grades with no metadata yet.
+function gradeSortPos(comp, age, key) {
+  const r = gradeRankOf(comp, age, key);
+  if (r) return r;
+  const i = GRADE_ORDER.indexOf(gradeLabelOf(comp, age, key));
+  return i >= 0 ? 100 + i : 999;
 }
 
 // ═══════════════════════════════════════
@@ -1362,7 +1420,7 @@ function getNominees(matches) {
     if (!byGrade[g] || marginPct(m) < marginPct(byGrade[g])) byGrade[g] = m;
   });
   return Object.values(byGrade).sort((a,b) =>
-    GRADE_ORDER.indexOf(matchGrade(a)) - GRADE_ORDER.indexOf(matchGrade(b))
+    GRADE_ORDER.indexOf(gLabel(matchGrade(a))) - GRADE_ORDER.indexOf(gLabel(matchGrade(b)))
   );
 }
 
@@ -1433,8 +1491,13 @@ function getAges() {
 
 function gradesForAge(age) {
   const gs = new Set();
-  S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>gs.add(matchGrade(m)));
-  return [...gs].sort((a,b)=>GRADE_ORDER.indexOf(a)-GRADE_ORDER.indexOf(b));
+  let comp = '';
+  S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>{
+    gs.add(matchGrade(m));
+    if (!comp) comp = m.compName || '';
+  });
+  // Sorted by rank, not by the key. The key is an id and sorts meaninglessly.
+  return [...gs].sort((a,b)=>gradeSortPos(comp,age,a)-gradeSortPos(comp,age,b));
 }
 
 function activGrades(age) {
@@ -1521,7 +1584,7 @@ function renderSidebarFilters(age) {
   const grades = gradesForAge(age);
   document.getElementById('grade-filters').innerHTML = grades.map(g =>
     `<button class="fchip${S.selGrades.has(g)?' on':''}" onclick="toggleGrade('${g}')">
-      <span class="gdot" style="background:${GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#888'}"></span>${abbrevGrade(g)}
+      <span class="gdot" style="background:${GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#888'}"></span>${abbrevGrade(gLabel(g))}
     </button>`
   ).join('');
 
@@ -1564,8 +1627,8 @@ function renderLadder(age) {
     const lr = S.lastRound[key];
     // Renamed from roundLabel to avoid shadowing the global roundLabel() helper.
     const lrTag = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
-    return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#fff'}`:''}"
-      onclick="selLdrGrade('${g}')">${abbrevGrade(g||'Premier')}${lrTag}</button>`;
+    return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#fff'}`:''}"
+      onclick="selLdrGrade('${g}')">${abbrevGrade(gLabel(g)||'Premier')}${lrTag}</button>`;
   }).join('');
 
   document.getElementById('ldr-bodies').innerHTML = grades.map(g => {
@@ -1643,12 +1706,12 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta"><span class="gtag gtag-${grade.replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(grade)}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
+    <div class="gotw-meta"><span class="gtag gtag-${abbrevGrade(gLabel(grade)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(gLabel(grade))}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
         <div style="display:flex;align-items:center;gap:5px">
-          <span class="gtag gtag-${ng.replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(ng)}</span>
+          <span class="gtag gtag-${abbrevGrade(gLabel(ng)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(gLabel(ng))}</span>
           <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
         </div>
         <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
@@ -1703,13 +1766,13 @@ function renderFixtures(age) {
   body.innerHTML = rounds.map(r => {
     const rows = byRound[r].map(m => {
       const g = m.rawGrade || '';
-      const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
+      const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
       const dateParts = m.date ? m.date.split('-') : null;
       const dateStr = dateParts ? `${dateParts[2]}/${dateParts[1]}` : 'TBC';
       const timeStr = m.time ? m.time.slice(0,5) : '';
       return `<div class="match-row">
         <div class="mr-grade">
-          <span class="gtag ${gc}">${abbrevGrade(g)}</span>
+          <span class="gtag ${gc}">${abbrevGrade(gLabel(g))}</span>
         </div>
         <div class="mr-left">
           ${m.provisional && !m.hLogo ? '' : crestHTML(m.home, 16, 'mr-logo')}
@@ -1752,7 +1815,7 @@ function renderScorers(age) {
     // Use teamRaw for roster lookup (includes colour word, matches roster key)
     const lookupTeam = p.teamRaw || p.team;
     const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) || p.rawGrade || '';
-    const gc = `gtag-${teamGrade.replace(/[^A-Za-z0-9]/g,'')}`;
+    const gc = `gtag-${abbrevGrade(gLabel(teamGrade)).replace(/[^A-Za-z0-9]/g,'')}`;
     // Display name: use teamRaw stripped of age suffix for readability
     const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
     // Scorers always show current (canonical) club — green XFER with in-arrow
@@ -1769,7 +1832,7 @@ function renderScorers(age) {
         <div class="s-name"><span onclick="openPlayerPanel('${p.uuid}')" style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${toProperCase(p.name)}</span>${transferBadge}</div>
         <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\\'")}','${teamGrade}','${p.age}')">${displayTeam}</div>
       </div>
-      <span class="gtag ${gc}">${abbrevGrade(teamGrade)}</span>
+      <span class="gtag ${gc}">${abbrevGrade(gLabel(teamGrade))}</span>
       <div class="s-gp">${p.gp}</div>
       <div class="s-g">${p.goals}</div>
       <div class="s-gpg" style="text-align:right">${gpg}</div>
@@ -1792,7 +1855,7 @@ function renderResults(age) {
     if (S.selRound && roundKey(m) !== S.selRound) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
     return true;
-  }).sort((a,b)=>-cmpRound(a,b)||(GRADE_ORDER.indexOf(matchGrade(a))-GRADE_ORDER.indexOf(matchGrade(b))));
+  }).sort((a,b)=>-cmpRound(a,b)||(GRADE_ORDER.indexOf(gLabel(matchGrade(a)))-GRADE_ORDER.indexOf(gLabel(matchGrade(b)))));
 
   const el = document.getElementById('results-body');
   document.getElementById('results-meta').textContent = `${matches.length} match${matches.length!==1?'es':''}`;
@@ -1809,13 +1872,13 @@ function renderResults(age) {
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
       const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
-      const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
+      const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
       const valid = matchIsValid(m);
       const gotwKey = `${age}|${roundKey(m)}`;
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
-          <span class="gtag gtag-${g.replace(/[^A-Za-z0-9]/g,'')}">${abbrevGrade(g)}</span>
+          <span class="gtag ${gc}">${abbrevGrade(gLabel(g))}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
           ${m.isFinals?`<span style="font-size:7px;color:var(--gold);letter-spacing:.5px;line-height:1.2">${m.finalsAbbrev||'F'}</span>`:''}
           ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
@@ -2074,7 +2137,8 @@ function renderFinalsByAge(pool) {
     const byGrade = {};
     byAge[age].forEach(m => { const g = m.rawGrade || ''; (byGrade[g] = byGrade[g] || []).push(m); });
     const grades = Object.keys(byGrade).sort((a,b) =>
-      (GRADE_ORDER.indexOf(a) + 1 || 99) - (GRADE_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
+      (GRADE_ORDER.indexOf(gLabel(a)) + 1 || 99) - (GRADE_ORDER.indexOf(gLabel(b)) + 1 || 99) ||
+      gLabel(a).localeCompare(gLabel(b)));
 
     const teamCount = new Set();
     byAge[age].forEach(m => finalsTeams(m).forEach(t => teamCount.add(`${m.rawGrade}|${t}`)));
@@ -2091,7 +2155,7 @@ function renderFinalsByAge(pool) {
         <span></span>${keys.map(k => `<span class="fv-hdr">${roundLabel(byKey[k][0])}</span>`).join('')}</div>`;
 
       const body = `<div class="fv-row" style="${cols}">
-        <span class="gtag gtag-${String(g).replace(/[^A-Za-z0-9]/g,'')}" style="align-self:start">${abbrevGrade(g)}</span>
+        <span class="gtag gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}" style="align-self:start">${abbrevGrade(gLabel(g))}</span>
         ${keys.map(k => `<div class="fv-cell">${
           byKey[k].sort((x,y)=>(x.date||'').localeCompare(y.date||'')).map(m =>
             `<div style="margin-bottom:6px">${fvSide(m,'h')}${fvSide(m,'a')}` +
@@ -2195,7 +2259,7 @@ function renderFinalsWinners(pool) {
       const games = byGrade[g];
       const m = games.find(isPlayed) || games[0];
       const rank = gradeRankOf(m.compName, age, g);
-      const tag = `<span class="fv-tag"${rank===1?' style="color:var(--gold);border-color:rgba(240,192,64,.35)"':''}>${abbrevGrade(g)}</span>`;
+      const tag = `<span class="fv-tag"${rank===1?' style="color:var(--gold);border-color:rgba(240,192,64,.35)"':''}>${abbrevGrade(gLabel(g))}</span>`;
 
       // Venue and time share the last column. Both may be absent on an old record.
       const where = [
@@ -2349,7 +2413,7 @@ function renderFinalsByClub(pool) {
               title="Grade ${rank} of ${tiers} in ${t.age}">${rank===1?'TOP':rank+'/'+tiers}</span>`
       : '';
     return `<div style="display:grid;grid-template-columns:96px 40px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px">
-      <span class="fv-tag" style="justify-self:start">${t.age} ${abbrevGrade(t.grade)}</span>
+      <span class="fv-tag" style="justify-self:start">${t.age} ${abbrevGrade(gLabel(t.grade))}</span>
       <span style="justify-self:start">${rankTag}</span>
       <span>${path}${out ? ' <span class="fv-out">&middot; out</span>' : ''}</span>
     </div>`;
@@ -2537,7 +2601,7 @@ function openSidebarIfMobile() {
 
 function selLdrGrade(g) {
   S.selLdrGrade=g;
-  document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[g]||GRADE_COL[abbrevGrade(g)]||'#fff'):'';});
+  document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#fff'):'';});
   document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
 }
 
@@ -2571,7 +2635,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
 
   // Render modal
-  document.getElementById('tm-title').textContent = `${teamName} — ${abbrevGrade(grade)}`;
+  document.getElementById('tm-title').textContent = `${teamName} — ${abbrevGrade(gLabel(grade))}`;
   document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
 
   document.getElementById('tm-stats').innerHTML = [
@@ -2604,13 +2668,13 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
     const valid = matchIsValid(m);
     const g = valid ? matchGrade(m) : m.rawGrade;
-    const gc = `gtag-${g.replace(/[^A-Za-z0-9]/g,'')}`;
+    const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
     const haText = isHome ? 'Home' : 'Away';
     const gotwKey = `${age}|${roundKey(m)}`;
     const isGotw = S.gotwFlags[gotwKey] === m.id;
     return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
-      <span class="gtag ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(g)}</span>
+      <span class="gtag ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(gLabel(g))}</span>
       <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
       <span style="font-size:10px;color:var(--tx3);text-align:center">${isHome?'🏠':'✈'}</span>
       <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
@@ -3085,7 +3149,7 @@ function onPlayerSearch(val) {
   res.style.display = 'flex';
   res.innerHTML = matches.map(p => {
     const teamDisplay = stripAge(p.teamRaw || p.team);
-    const grade = abbrevGrade(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName));
+    const grade = abbrevGrade(gLabel(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName)));
     return `<div class="player-result" onclick="openPlayerPanel('${p.uuid}');clearSearch()">
       ${crestHTML(teamDisplay, 16, 'tlogo')}
       <div style="flex:1;min-width:0">
@@ -3445,7 +3509,7 @@ function renderGotwPicker() {
         return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px;${i===0?'color:var(--gold)':''}">
           <input type="radio" name="gotw-pick" value="${m.id}" ${m.id===flaggedId?'checked':''}>
           <span style="flex:1">${m.home} ${m.hScore}–${m.aScore} ${m.away}</span>
-          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${abbrevGrade(g)} &middot; ${pct}%</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${abbrevGrade(gLabel(g))} &middot; ${pct}%</span>
         </label>`;
       }).join('') + `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px">
         <input type="radio" name="gotw-pick" value="" ${!flaggedId?'checked':''}> Auto (closest margin)
@@ -3602,7 +3666,7 @@ async function init() {
       const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
       const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
       m._valid = (hg === ag && hg !== null && hg !== undefined);
-      m._grade = hg || m.rawGrade;
+      m._grade = hg || m.gradeId || m.rawGrade;
     });
   }
   if (players) S.players=players;
@@ -3623,7 +3687,7 @@ async function init() {
             const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
             const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
             m._valid = (hg === ag && hg !== null && hg !== undefined);
-            m._grade = hg || m.rawGrade;
+            m._grade = hg || m.gradeId || m.rawGrade;
           });
         }
         if (d.players?.length) S.players = d.players;
@@ -3631,7 +3695,7 @@ async function init() {
         if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
         if (d.teamLogos && Object.keys(d.teamLogos).length) S.teamLogos = d.teamLogos;
-        if (d.gradeMeta && Object.keys(d.gradeMeta).length) S.gradeMeta = d.gradeMeta;
+        if (d.gradeMeta && Object.keys(d.gradeMeta).length) { S.gradeMeta = d.gradeMeta; rebuildGradeLabels(); }
         if (d.clubs && Object.keys(d.clubs).length) S.clubs = d.clubs;
         if (d.teamClub && Object.keys(d.teamClub).length) S.teamClub = d.teamClub;
         // Freshness timestamps
