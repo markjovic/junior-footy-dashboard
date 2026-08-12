@@ -17,6 +17,12 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      include_retired:
+        description: 'Stats: also fetch retired seasons (slow — only for a Phase B backfill)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   fetch-results:
@@ -129,6 +135,10 @@ jobs:
         id: stats
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
+          # Retired seasons are skipped unless this is set. grades.json holds
+          # every season since the Phase A backfill, and re-fetching thirteen
+          # completed ones took a stats run past three hours.
+          STATS_INCLUDE_RETIRED: ${{ github.event.inputs.include_retired }}
         run: |
           set +e
           node scripts/fetch-stats.js
