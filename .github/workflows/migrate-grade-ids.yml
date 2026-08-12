@@ -8,8 +8,11 @@
 # would merge into one id and confirms the run refuses.
 #
 # DEFAULTS TO A DRY RUN. Leave dry_run true until the plan reads correctly, then
-# set it false. Run one organisation at a time — a scoped save cannot reach the
-# others, and one organisation at a time keeps the diff reviewable.
+# set it false.
+#
+# org accepts "all", which loops every organisation in the manifest. Each still
+# gets its own scoped load and save, so one scope cannot reach another
+# organisation's files, and a failure part-way leaves the earlier ones written.
 #
 #   383836bb EFNL   4f9a099e YJFL   4c8b472e WFNL   1cf85e52 SEJ   0f20da4f SER
 
@@ -19,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       org:
-        description: '8-character organisation code'
+        description: '8-character organisation code, or "all" for every organisation'
         required: true
         type: string
       dry_run:
