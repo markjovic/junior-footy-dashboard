@@ -6613,5 +6613,833 @@
     "seasonID": "8c46e153",
     "compName": "SER 2025",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/0f20da4f-6958-4b96-904a-3cd78a107a28/1733971175830/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "48da58c6",
+    "name": "*2024 TIV Division 1 Seniors Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6b0c3c51",
+    "name": "2024 Division 2 Seniors Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "77f0cffb",
+    "name": "Division 1 Reserves Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fcd69f80",
+    "name": "Division 2 Reserves Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cdd7a76f",
+    "name": "St Vincent's Private Hospital Werribee Senior Women's",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "35acf804",
+    "name": "Thirds",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "b23b880d",
+    "name": "U18 Men Division 1",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f99b599a",
+    "name": "U18 Men Division 2",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ff0f9abf",
+    "name": "U18 Women",
+    "ageName": "U18",
+    "genderName": "Women",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "23228967",
+    "name": "Western Bulldogs U16 Girls",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cd7af24d",
+    "name": "SEDA U16 Boys Division 1",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3ecb9dd9",
+    "name": "SEDA U16 Boys Division 2",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "53c8e124",
+    "name": "SEDA U16 Boys Division 3",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "dc6ecf34",
+    "name": "Western Bulldogs U14 Girls Division 1",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "909f2516",
+    "name": "Western Bulldogs U14 Girls Division 2",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "865691a6",
+    "name": "Western Bulldogs U14 Mixed Division 1",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5fa2464c",
+    "name": "Western Bulldogs U14 Mixed Division 2",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "711a498a",
+    "name": "Western Bulldogs U14 Mixed Division 3",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a8b7bab6",
+    "name": "Western Bulldogs U14 Mixed Division 4",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "efc86164",
+    "name": "Western Bulldogs U14 Mixed Division 5",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "30046359",
+    "name": "Western Bulldogs U12 Girls Division 1",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3f873fb9",
+    "name": "Western Bulldogs U12 Girls Division 2",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "019f2a22",
+    "name": "Western Bulldogs U12 Mixed Division 1",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2afb52e9",
+    "name": "Western Bulldogs U12 Mixed Division 2",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a465cfd0",
+    "name": "Western Bulldogs U12 Mixed Division 3",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a9bcbc6b",
+    "name": "Western Bulldogs U12 Mixed Division 4",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6a4c840e",
+    "name": "Western Bulldogs U12 Mixed Division 5",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "51376184",
+    "name": "Western Bulldogs U12 Mixed Division 6",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cd3ed2d8",
+    "name": "Western Bulldogs U10 Girls",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "11cfd5e2",
+    "name": "Western Bulldogs U10 Mixed Blue",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3b5bfb9c",
+    "name": "Western Bulldogs U10 Mixed Orange",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2eec3b86",
+    "name": "Western Bulldogs U10 Mixed Red",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f4735cb6",
+    "name": "Western Bulldogs U10 Mixed White",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3e347a9c",
+    "name": "Western Bulldogs U9 Mixed Blue",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "06d149ec",
+    "name": "Western Bulldogs U9 Mixed Orange",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "46f24a67",
+    "name": "Western Bulldogs U9 Mixed Red",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "380dd6f9",
+    "name": "Western Bulldogs U9 Mixed White",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "45e99a51",
+    "name": "Western Bulldogs U8 Mixed Blue",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "357f9e57",
+    "name": "Western Bulldogs U8 Mixed Red",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ae117e0b",
+    "name": "Western Bulldogs U8 Mixed White",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fe07ff40",
+    "name": "U8 Round Robin - D'Ambrosio Group (Morning Session)",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4a4d8400",
+    "name": "U9 Round Robin - Hoskin-Elliott Group (1:00 pm Session)",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9d51f4af",
+    "name": "U9 Round Robin - Xerri Group (9:00 am Session)",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "521c3562",
+    "name": "U10 Lightning Cup",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "c8e95577",
+    "compName": "WFNL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "79ed7724",
+    "name": "TIV Division 1 - Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9a624f54",
+    "name": "TIV Division 1 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "47e7937f",
+    "name": "Division 1 - Under 18 Men",
+    "ageName": "U18",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "10a03be2",
+    "name": "Division 2 - Senior Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9c577db3",
+    "name": "Division 2 - Reserve Men",
+    "ageName": "Senior",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fe6659f3",
+    "name": "Division 2 - Under 18 Men",
+    "ageName": "U18",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6763c932",
+    "name": "St Vincent's Private Hospital Werribee Senior Women",
+    "ageName": "Senior",
+    "genderName": "Women",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1286d5d5",
+    "name": "Thirds",
+    "ageName": "Open",
+    "genderName": "Men",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4a0aa925",
+    "name": "SEDA College U16 Girls",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2e1339ea",
+    "name": "SEDA College U16 Boys Division 1",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0c9345f2",
+    "name": "SEDA College U16 Boys Division 2",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d5e12dee",
+    "name": "SEDA College U16 Boys Division 3",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5f639631",
+    "name": "SEDA College U16 Boys Division 4",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1fbef3e4",
+    "name": "SEDA College U16 Boys Grading",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4c33dc28",
+    "name": "Western Bulldogs U14 Girls Division 1",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2733a5c7",
+    "name": "Western Bulldogs U14 Girls Division 2",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fab5b6f4",
+    "name": "Western Bulldogs U14 Girls Grading",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "938f2821",
+    "name": "Western Bulldogs U14 Mixed Division 1",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1eb4a11c",
+    "name": "Western Bulldogs U14 Mixed Division 2",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6c0de1b4",
+    "name": "Western Bulldogs U14 Mixed Division 3",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "3de15d57",
+    "name": "Western Bulldogs U14 Mixed Division 4",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e3ef4b5f",
+    "name": "Western Bulldogs U14 Mixed Division 5",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "45359006",
+    "name": "Western Bulldogs U14 Mixed Grading",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d660017c",
+    "name": "Western Bulldogs U12 Girls",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2fc55c0f",
+    "name": "Western Bulldogs U12 Mixed Division 1",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "8e376cba",
+    "name": "Western Bulldogs U12 Mixed Division 2",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "070a42c6",
+    "name": "Western Bulldogs U12 Mixed Division 3",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "36dcbefd",
+    "name": "Western Bulldogs U12 Mixed Division 4",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2d009510",
+    "name": "Western Bulldogs U12 Mixed Division 5",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "bb9fc226",
+    "name": "Western Bulldogs U12 Mixed Division 6",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "743cbe10",
+    "name": "Western Bulldogs U12 Mixed Grading",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5900491c",
+    "name": "Western Bulldogs U10 Girls",
+    "ageName": "U10",
+    "genderName": "Girls",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "fe987cdf",
+    "name": "Western Bulldogs U10 Mixed Blue",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9d293248",
+    "name": "Western Bulldogs U10 Mixed Red",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "16c31ab4",
+    "name": "Western Bulldogs U10 Mixed White",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "04f37be9",
+    "name": "Western Bulldogs U9 Mixed Blue",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0faa48fd",
+    "name": "Western Bulldogs U9 Mixed Red",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f055ab18",
+    "name": "Western Bulldogs U9 Mixed White",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "45b45f6d",
+    "name": "Western Bulldogs U8 Mixed Blue",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "57f9934c",
+    "name": "Western Bulldogs U8 Mixed Red",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2fcbe677",
+    "name": "U8 Round Robin Carnival - Spotswood Afternoon Session",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5807c6ee",
+    "name": "U8 Round Robin Carnival - Spotswood Morning Session",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5003cdf2",
+    "name": "U9 Round Robin Carnival - Spotswood Afternoon Session",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "b1381871",
+    "name": "U9 Round Robin Carnival - Spotswood Morning Session",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4dad4fa5",
+    "name": "U9 Round Robin Carnival - Wyndhamvale Afternoon Session",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0137fbac",
+    "name": "U9 Round Robin Carnival - Wyndhamvale Morning Session",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7b1c5eaa",
+    "name": "U10 Lightning Cup - Spotswood",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d4c16ae8",
+    "name": "U10 Lightning Cup - Truganina",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "5488f6a0",
+    "compName": "WFNL 2025",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4c8b472e-8351-44db-9e85-be4291688ce0/1709600034186/logo.png?_a=BAMAMifg0"
   }
 ]
