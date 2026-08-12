@@ -188,7 +188,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'fetch-fixtures v2 2026-08-12 capture-gradeId';
+const VERSION = 'fetch-fixtures v3 2026-08-12 gradeId-in-ids';
 
 async function main() {
   console.log(`=== ${VERSION} ===`);
@@ -302,7 +302,8 @@ async function main() {
       // wrong entry in roundList.
       const storedRounds = new Set(
         (data.matches || [])
-          .filter(m => !m.scheduled && !m.isFinals && m.compName === grade.compName && m.age === age && m.rawGrade === rawGrade)
+          .filter(m => !m.scheduled && !m.isFinals && m.compName === grade.compName && m.age === age &&
+                       ((m.gradeId || m.rawGrade) === grade.id || (!m.gradeId && m.rawGrade === rawGrade)))
           .map(m => m.round)
       );
       if (storedRounds.size > 0) {
@@ -346,7 +347,11 @@ async function main() {
         const awayName = awayProv ? game.away.name.trim() : cleanTeam(game.away?.name || '', age);
         if (!homeName || !awayName) continue;
 
-        const matchId = `${grade.compName}|${age}|${rawGrade}|${rToken}|${[homeName, awayName].sort().join('|')}`;
+        // The third segment is the GRADE ID, matching results-engine.js v5 and
+        // every record migrate-grade-ids.js rewrote on 2026-08-12. A scheduled
+        // record is overwritten by a played one, so the two must build the same
+        // id or a fixture and its result become two records instead of one.
+        const matchId = `${grade.compName}|${age}|${grade.id}|${rToken}|${[homeName, awayName].sort().join('|')}`;
         if (byId.has(matchId) && !byId.get(matchId).scheduled) continue;
 
         const vLat = game.allocation?.court?.venue?.latitude || '';

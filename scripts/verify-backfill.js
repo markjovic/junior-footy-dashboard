@@ -214,17 +214,21 @@ const arc = fs.existsSync(EFNL_ARC) ? read(EFNL_ARC) : { matches: [], meta: {} }
 ok('archive holds the 2025 matches',
   arc.matches.length === 2 && arc.matches.every(m => m.compName === 'EFNL 2025'),
   `${arc.matches.length} matches`);
-ok('match id carries the right compName',
-  (arc.matches[0] || {}).id && arc.matches[0].id.startsWith('EFNL 2025|U12|A|1|'),
+ok('match id carries the right compName AND the grade id',
+  (arc.matches[0] || {}).id && arc.matches[0].id.startsWith('EFNL 2025|U12|1debae74|1|'),
   (arc.matches[0] || {}).id);
 ok('archive carries a 2025 roster', Object.keys(arc.roster || {}).some(k => k.startsWith('EFNL 2025|')));
 ok('every match carries the PlayHQ gradeId',
   arc.matches.length > 0 && arc.matches.every(m => m.gradeId === '1debae74'),
   JSON.stringify((arc.matches[0] || {}).gradeId));
-ok('capturing gradeId did NOT change the match id',
-  (arc.matches[0] || {}).id === 'EFNL 2025|U12|A|1|Blackburn U12|Norwood U12' ||
-  String((arc.matches[0] || {}).id).startsWith('EFNL 2025|U12|A|1|'),
-  (arc.matches[0] || {}).id);
+// The id's third segment must BE the grade id, not the parsed rawGrade. Built
+// from rawGrade, a re-fetched round no longer matches the record already stored
+// and every re-fetch adds a duplicate — proven by execution on 2026-08-12.
+ok('the id segment IS the grade id, not rawGrade',
+  String((arc.matches[0] || {}).id).split('|')[2] === '1debae74',
+  String((arc.matches[0] || {}).id).split('|')[2]);
+ok('rawGrade is still on the record for display',
+  (arc.matches[0] || {}).rawGrade === 'A', JSON.stringify((arc.matches[0] || {}).rawGrade));
 ok('archive carries 2025 gradeMeta', !!(arc.gradeMeta || {})['EFNL 2025|U12|A']);
 ok('per-season completeness recorded',
   (arc.meta.phases || {})['75d8a232'] && arc.meta.phases['75d8a232'].results === true &&
