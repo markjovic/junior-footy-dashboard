@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v6 2026-08-12 gradeMeta-dual-key';
+const ENGINE_VERSION = 'v7 2026-08-12 unique-labels';
 
 'use strict';
 
@@ -913,6 +913,43 @@ function buildGradeMeta(grades) {
     }
     meta[key] = entry;
   }
+
+  // ── Labels must be unique within a competition and age ────────────────────
+  // Grouping is on the grade id, so a duplicate label cannot merge two ladders
+  // — but it would show two tabs both reading "A", which is no more use than one
+  // merged ladder. Two leagues inside one season produce exactly that:
+  //   SEJ 2024  "F&DJFL - U08 Mixed A"  and  "SEJ - U08 Mixed A"  -> both "A"
+  //
+  // Where a label repeats, the prefix that distinguishes the PlayHQ names is
+  // prepended. Only the colliding labels change, so every unique label — which
+  // is the overwhelming majority — is left exactly as it was.
+  const byAgeLabel = new Map();   // "comp|age|label" -> [gradeId, ...]
+  const nameOf = new Map();       // gradeId -> verbatim PlayHQ name
+  for (const g of grades) nameOf.set(g.id, g.name);
+  for (const [k, v] of Object.entries(meta)) {
+    if (!v.gradeId) continue;     // rawGrade keys carry no label
+    const comp = k.slice(0, k.indexOf('|'));
+    const age = k.slice(comp.length + 1, k.lastIndexOf('|'));
+    const lk = `${comp}|${age}|${v.label}`;
+    if (!byAgeLabel.has(lk)) byAgeLabel.set(lk, []);
+    byAgeLabel.get(lk).push(k);
+  }
+  for (const [lk, keys] of byAgeLabel) {
+    if (keys.length < 2) continue;
+    for (const k of keys) {
+      const v = meta[k];
+      const name = String(nameOf.get(v.gradeId) || '').replace(/^\*\s*/, '').trim();
+      // The prefix is everything before the last " - ", with any age token
+      // stripped. "F&DJFL - U08 Mixed A" -> "F&DJFL".
+      const dash = name.lastIndexOf(' - ');
+      let prefix = dash > 0 ? name.slice(0, dash).trim() : '';
+      prefix = prefix.replace(/\s*U\d+(?:\.\d+)?.*$/i, '').trim();
+      v.label = prefix ? `${prefix} ${v.label}`.trim() : `${v.label} (${v.gradeId.slice(0, 4)})`;
+    }
+    console.warn(`  label collision on "${lk}" across ${keys.length} grades — ` +
+      `disambiguated to: ${keys.map(k => meta[k].label).join(', ')}`);
+  }
+
   return meta;
 }
 
