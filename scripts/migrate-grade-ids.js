@@ -50,7 +50,7 @@ const { parseGradeName, cleanTeam, roundToken, Q_GRADE_ROUNDS, Q_FIXTURE } =
   require('./lib/results-engine');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'migrate-grade-ids v3 2026-08-12 pass3';
+const VERSION = 'migrate-grade-ids v4 2026-08-12 pass3';
 const ROOT = path.resolve(__dirname, '..');
 const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 
@@ -299,7 +299,9 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
 
   if (unresolvedTotal) {
     console.log(`\n  UNRESOLVED — these keep their current id and rawGrade.`);
-    console.log(`  They are pass 3 in grade_identity_migration.md §4, which is not built.`);
+    console.log(PASS3
+      ? `  Pass 3 ran and could not place them. Re-running will not change that.`
+      : `  Set MIGRATE_PASS3=true to resolve them from the fixtures.`);
     const byKey = new Map();
     for (const { rec } of stillUnresolved) {
       const k = `${rec.compName}|${rec.age}|${rec.rawGrade}`;
