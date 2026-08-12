@@ -58,6 +58,7 @@ fs.writeFileSync(path.join(TMP, 'scripts', 'lib', 'playhq.js'), `
 'use strict';
 const SEASONS = {
   '75d8a232': { year: '2025', gradeId: '1debae74', dates: ['2025-04','2025-08'], current: false },
+  'ca9cc98b': { year: '2024', gradeId: '25a4f589', dates: ['2024-04','2024-08'], current: false },
   '2dcbf383': { year: '2026', gradeId: '6f964e7b', dates: ['2026-04','2026-08'], current: true  },
   'cda2f0ec': { year: '2026', gradeId: '9a9a9a9a', dates: ['2026-04','2026-08'], current: true  },
 };
@@ -87,6 +88,10 @@ async function gqlPost(query, vars) {
   if (query.includes('gradeRounds')) {
     const g = byGrade[vars.gradeID];
     if (!g) throw new Error('stub: unknown gradeID ' + vars.gradeID);
+    // Lets a test drive a mid-loop failure without touching the real code.
+    if (process.env.STUB_FAIL_SEASON && process.env.STUB_FAIL_SEASON === g.sid) {
+      throw new Error('stub: forced failure for season ' + g.sid);
+    }
     return { data: { discoverGrade: { id: vars.gradeID, name: 'U12 Mixed A', dates: g.dates,
       rounds: [{ id: 'r1-' + g.gradeId, name: 'Round 1', abbreviatedName: null, number: '1',
                  current: g.current, isFinalsRound: false, provisionalDates: [] }] } } };
@@ -121,6 +126,9 @@ const MANIFEST = () => ([
     file: 'data/orgs/383836bb-current.json', phases: { results: false, players: false } },
   { org: '383836bb', orgName: 'EFNL', seasonId: '75d8a232', seasonName: '2025',
     compName: 'EFNL 2025', status: 'COMPLETED', retired: true, endDate: '2025-09-30',
+    file: 'data/orgs/383836bb-archive.json', phases: { results: false, players: false } },
+  { org: '383836bb', orgName: 'EFNL', seasonId: 'ca9cc98b', seasonName: '2024',
+    compName: 'EFNL 2024', status: 'COMPLETED', retired: true, endDate: '2024-10-13',
     file: 'data/orgs/383836bb-archive.json', phases: { results: false, players: false } },
   { org: '4f9a099e', orgName: 'YJFL', seasonId: 'cda2f0ec', seasonName: '2026',
     compName: 'YJFL 2026', status: 'ACTIVE', retired: false, endDate: '2026-09-30',
@@ -183,7 +191,7 @@ console.log('\n1  Backfilling EFNL 2025 creates the archive');
 reset();
 let r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: '2025' });
 ok('exit 0 (changed)', r.code === 0, `exit ${r.code}`);
-ok('version line printed', /backfill v1 2026-08-12/.test(r.out));
+ok('version line printed', /backfill v2 2026-08-12/.test(r.out));
 ok('season-ended guard reported as bypassed', /season-ended guard BYPASSED/.test(r.out));
 ok('the completed season was fetched anyway',
   /fetching anyway \(backfill\)/.test(r.out), 'the guard would have skipped it');
@@ -285,6 +293,39 @@ r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: '2025', BACK
 ok('exit 2', r.code === 2, `exit ${r.code}`);
 ok('reported the season it would fetch', /EFNL 2025/.test(r.out));
 ok('wrote nothing', !fs.existsSync(EFNL_ARC));
+
+// ── 8. season: all ───────────────────────────────────────────────────────────
+console.log('\n8  season "all" does every RETIRED season and skips the live one');
+reset();
+r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: 'all',
+                         BACKFILL_SEASON_DELAY_MIN: '0' });
+ok('exit 0', r.code === 0, `exit ${r.code}`);
+ok('two seasons attempted, not three', /season 1\/2/.test(r.out) && /season 2\/2/.test(r.out),
+  'the ACTIVE 2026 season must be excluded');
+ok('oldest first', r.out.indexOf('season 1/2: EFNL 2024') < r.out.indexOf('season 2/2: EFNL 2025'));
+const arcAll = read(EFNL_ARC);
+ok('archive holds both seasons',
+  arcAll.meta.seasons.length === 2, JSON.stringify(arcAll.meta.seasons));
+ok('both seasons have completeness recorded',
+  arcAll.meta.phases['75d8a232'].results === true && arcAll.meta.phases['ca9cc98b'].results === true);
+ok('the live season file is untouched — backfill never fetches it',
+  read(EFNL_CUR).matches.length === 0, `${read(EFNL_CUR).matches.length} matches`);
+ok('no archived record leaked into current',
+  !read(EFNL_CUR).matches.some(m => String(m.compName).match(/202[45]/)));
+ok('lastRound still untouched', read(CORE).lastRound['U12|A'] === 14);
+
+// ── 8a. A failure part-way through stops and keeps what was written ──────────
+console.log('\n8a  A season failing mid-loop stops, and earlier seasons survive');
+reset();
+r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: 'all',
+                         BACKFILL_SEASON_DELAY_MIN: '0', STUB_FAIL_SEASON: '75d8a232' });
+ok('exit 1', r.code === 1, `exit ${r.code}`);
+ok('named the season that failed', /in EFNL 2025/.test(r.out));
+ok('reported what is already safe', /Already written and safe: EFNL 2024/.test(r.out));
+ok('the earlier season IS on disk',
+  fs.existsSync(EFNL_ARC) && read(EFNL_ARC).matches.some(m => m.compName === 'EFNL 2024'));
+ok('the failed season is NOT on disk',
+  !read(EFNL_ARC).matches.some(m => m.compName === 'EFNL 2025'));
 
 // ── 9. Could these have failed? ──────────────────────────────────────────────
 // A suite that passes against an empty fixture proves nothing. Assert the
