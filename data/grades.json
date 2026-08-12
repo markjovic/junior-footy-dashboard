@@ -4417,5 +4417,662 @@
     "seasonID": "fbe5e275",
     "compName": "YJFL 2025",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "44143d71",
+    "name": "U8 Mixed Central",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9dc216c5",
+    "name": "U8 Mixed East",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7efe9399",
+    "name": "U8 Mixed North (1)",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f5dc9bb9",
+    "name": "U8 Mixed North (2)",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0dbf9719",
+    "name": "U8 Mixed South East (1)",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d2623d3d",
+    "name": "U8 Mixed South East (2)",
+    "ageName": "U8",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7916c6f9",
+    "name": "U9 Girls",
+    "ageName": "U9",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9bbebabb",
+    "name": "U9 Mixed Central",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2a9067a8",
+    "name": "U9 Mixed East",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "306dea3a",
+    "name": "U9 Mixed North (1)",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5628861e",
+    "name": "U9 Mixed North (2)",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d0cbc312",
+    "name": "U9 Mixed South East (1)",
+    "ageName": "U9",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "458ae40d",
+    "name": "U10 Mixed Zone 1",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d8c5767e",
+    "name": "U10 Mixed Zone 2",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ea30e7f7",
+    "name": "U10 Mixed Zone 3",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "0b1ca419",
+    "name": "U10 Mixed Zone 4",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "53375273",
+    "name": "U10 Mixed Zone 5",
+    "ageName": "U10",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5b2232d0",
+    "name": "U10/11 Girls Grading",
+    "ageName": "U11",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4d41eee6",
+    "name": "U11 Girls",
+    "ageName": "U11",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "c7116d6e",
+    "name": "U11 Mixed (1)",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4431b5e7",
+    "name": "U11 Mixed (2)",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f525f998",
+    "name": "U11 Mixed (3)",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "db18bed6",
+    "name": "U11 Mixed (4)",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "bddc68b8",
+    "name": "U11 Mixed Grading",
+    "ageName": "U11",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "03bfe506",
+    "name": "U11/12 Girls (1)",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "43abfdd2",
+    "name": "U11/12 Girls (2)",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "19565631",
+    "name": "U11/12 Girls Grading",
+    "ageName": "U12",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "5f4942e4",
+    "name": "U12 Mixed (1)",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "afaae7c8",
+    "name": "U12 Mixed (2)",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ec2bd3de",
+    "name": "U12 Mixed (3)",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "22adee3b",
+    "name": "U12 Mixed (4)",
+    "ageName": "U12",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "47446899",
+    "name": "U13 Girls (1)",
+    "ageName": "U13",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "43f8e501",
+    "name": "U13 Girls (2)",
+    "ageName": "U13",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "acafb7c5",
+    "name": "U13 Girls Grading",
+    "ageName": "U13",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2273f97d",
+    "name": "U13 Mixed (1)",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a56c9754",
+    "name": "U13 Mixed (2)",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "31aa4b45",
+    "name": "U13 Mixed (3)",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f6ab58f0",
+    "name": "U13 Mixed (4)",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "897e17fb",
+    "name": "U13 Mixed Grading",
+    "ageName": "U13",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "7cc0ce21",
+    "name": "U14 Girls (1)",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "15274ea8",
+    "name": "U14 Girls (2)",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "70330541",
+    "name": "U14 Girls (3)",
+    "ageName": "U14",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "6f9f8f8e",
+    "name": "U14 Mixed (1)",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "bc8f32e7",
+    "name": "U14 Mixed (2)",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a7103c2c",
+    "name": "U14 Mixed (3)",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a9b8da6d",
+    "name": "U14 Mixed (4)",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "78420456",
+    "name": "U14 Mixed (5)",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e1e04a30",
+    "name": "U14 Mixed Grading",
+    "ageName": "U14",
+    "genderName": "Mixed",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4a22b896",
+    "name": "U15 Boys (1)",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e1b994ee",
+    "name": "U15 Boys (2)",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "cf951de9",
+    "name": "U15 Boys (3)",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "2094cae2",
+    "name": "U15 Boys (4)",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9bb215b1",
+    "name": "U15 Boys Grading",
+    "ageName": "U15",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "06b3c85e",
+    "name": "U14 & U15 Girls Grading",
+    "ageName": "U15",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "a2e8e1f0",
+    "name": "U15 Girls (1)",
+    "ageName": "U15",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "1a50f34a",
+    "name": "U15 Girls (2)",
+    "ageName": "U15",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f0da8339",
+    "name": "U15 Girls (3)",
+    "ageName": "U15",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "823ee525",
+    "name": "U16 Boys (1)",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "9809883f",
+    "name": "U16 Boys (2)",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "970f7955",
+    "name": "U16 Boys (3)",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "06793082",
+    "name": "U16 Boys (4)",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "494e3d4c",
+    "name": "U16 Boys Grading",
+    "ageName": "U16",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "4e35879e",
+    "name": "U16 Girls (1)",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "f4eda2e5",
+    "name": "U16 Girls (2)",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "146dc1bd",
+    "name": "U16 Girls Grading",
+    "ageName": "U16",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "e8febb08",
+    "name": "Youth Boys (1)",
+    "ageName": "U18",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "ac15024a",
+    "name": "Youth Boys (2)",
+    "ageName": "U18",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "57757b5b",
+    "name": "Youth Boys (3)",
+    "ageName": "U18",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "53189531",
+    "name": "Youth Boys (4)",
+    "ageName": "U18",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "794ae217",
+    "name": "Youth Boys Grading",
+    "ageName": "U18",
+    "genderName": "Boys",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "d18e63c3",
+    "name": "Youth Girls (1)",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "60a887d2",
+    "name": "Youth Girls (2)",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
+  },
+  {
+    "id": "71e2203f",
+    "name": "Youth Girls Grading",
+    "ageName": "U18",
+    "genderName": "Girls",
+    "seasonID": "3733598c",
+    "compName": "YJFL 2024",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/4f9a099e-c2e6-4761-a8f9-29ae080b1bd8/1633574659296/logo.png?_a=BAMAMifg0"
   }
 ]
