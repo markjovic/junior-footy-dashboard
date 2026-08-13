@@ -571,5 +571,42 @@ console.log('\n13  Finals by club: premierships first, results aligned');
     order[2] === 'eight GFs, none', order.join(' > '));
 }
 
+// ── 14. The finals sort control matches the sorts that exist ────────────────
+// The composite ordering was added to FINALS_SORTS and made the default, but no
+// <option> was added for it — so it could not be chosen, and the select showed
+// an invalid value. Checking the two lists against each other catches that for
+// every sort, not just this one.
+console.log('\n14  Every finals sort is reachable from the dropdown');
+{
+  const body = html.slice(html.indexOf('<body'));
+  const keys = [...body.matchAll(/^  (\w+):\s*(?:\{|null)/gm)]
+    .map(m => m[1])
+    .filter(k => /^(premiership|teams|remaining|gf|premiers|name)$/.test(k));
+  const sel = body.slice(body.indexOf('id="fv-sort"'));
+  const opts = [...sel.slice(0, sel.indexOf('</select>')).matchAll(/value="(\w+)"/g)].map(m => m[1]);
+  ok('the dropdown offers every sort that exists',
+    keys.every(k => opts.includes(k)),
+    `sorts: ${keys.join(',')} | options: ${opts.join(',')}`);
+  ok('and the default is among them', opts.includes('premiership'));
+
+  // A saved choice from before the composite existed must not win. Everyone who
+  // had opened the finals view had 'name' stored, so the new default could never
+  // take effect.
+  ok('a pre-2026-08-12 saved sort is ignored', /f\.sortV === 2 && f\.finalsSort/.test(body));
+  ok('and the marker is written back on save', /sortV: 2/.test(body));
+  ok('the weighting restore is guarded the same way, ONCE',
+    (body.match(/typeof f\.finalsWeighted === 'boolean'/g) || []).length === 1,
+    'an unguarded second restore would override the guarded one');
+
+  // The opponent is half of what a finals result means.
+  ok('each result cell names the opponent on screen',
+    /const oppLine =/.test(body) && /\$\{oppLine\}/.test(body),
+    'it was in a title attribute, which is not readable at a glance');
+  ok('and an unplayed fixture still names it too',
+    /fv-prov">v<\/span>\$\{oppLine\}/.test(body));
+  ok('rows align to the top, since cells are now two lines',
+    /align-items:start/.test(body));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
