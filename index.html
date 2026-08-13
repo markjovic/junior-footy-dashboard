@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.145</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.147</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -703,7 +703,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.145</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.147</span>
         </div>
 
 
@@ -843,8 +843,8 @@ let S = {
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age' | 'club' | 'winners'
-  finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
-  finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
+  finalsSort: 'premiership', // which measure to order by — see FINALS_SORTS
+  finalsWeighted: true, // use the grade tier as the tiebreak at each level
   finalsGender: 'all',  // 'all' | 'M' | 'F'
   finalsLevel:  'all',  // 'all' | 'junior' | 'senior'
   selClub:    '',       // club filter, finals view only
@@ -2090,6 +2090,13 @@ function syncViewTabs() {
 // `flat` reads the plain count; `tiers` names the per-rank breakdown to compare
 // when weighting is on.
 const FINALS_SORTS = {
+  // The default. A club's finals season is judged premierships first, then
+  // grand finals reached, then teams that made finals at all — each with the
+  // grade tier as the tiebreak, so a flag in the top grade outranks one in the
+  // fifth. Picking a single measure could not express that: sorting by
+  // premierships alone put a club with one flag above a club with none and
+  // eight grand finals, which is not how anyone reads a season.
+  premiership: { label: 'premiership season', composite: true, tiers: 'tiersPremiers' },
   teams:     { label: 'teams in finals', flat: e => e.teams.length, tiers: 'tiersAll' },
   remaining: { label: 'remaining',       flat: e => e.remaining,    tiers: 'tiersRemaining' },
   gf:        { label: 'GF appearances',  flat: e => e.inGF,         tiers: 'tiersGF' },
@@ -2190,6 +2197,19 @@ function clubIdOf(compName, teamName, age) {
 }
 function clubNameOf(id) {
   return (S.clubs || {})[id]?.name || '';
+}
+
+// PlayHQ returns an organisation type, and not every organisation a team points
+// at is a club: SEJ's own association id (1cf85e52) appears among them, so
+// "South East Juniors" showed up in the by-club view as though it were a club.
+// build-club-index.js already reports this and keeps such entries cached so they
+// are not re-fetched; the filtering has to happen here.
+//
+// An entry with NO type is treated as a club: 165 were cached before the type
+// was recorded, and excluding them would empty the view.
+function isClubOrg(id) {
+  const t = (S.clubs || {})[id]?.type;
+  return t === undefined || t === null || t === '' || t === 'CLUB';
 }
 
 // Grade metadata comes from PlayHQ via fetch-results.js: strength rank, level
@@ -2507,7 +2527,10 @@ function renderFinalsByClub(pool) {
   const orphans = [];
   for (const t of teams.values()) {
     t.matches.sort(cmpRound);
-    if (!t.clubId) { orphans.push(t); continue; }
+    // An organisation that is not a CLUB is not a club. A team can point at its
+    // own association — SEJ's id appears among them — and grouping on it put
+    // "South East Juniors" in the view as though it were a club.
+    if (!t.clubId || !isClubOrg(t.clubId)) { orphans.push(t); continue; }
     if (!clubs.has(t.clubId)) clubs.set(t.clubId, []);
     clubs.get(t.clubId).push(t);
   }
@@ -2540,8 +2563,39 @@ function renderFinalsByClub(pool) {
     };
   });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
+  // The best age a club reached on a given measure, as the last tiebreak.
+  // ageSort puts seniors first, so a premiership in Senior Men outranks one in
+  // U8 when everything above is level.
+  const bestAge = (e, pred) => {
+    const ages = e.teams.filter(t => !pred || pred(t)).map(t => t.age);
+    // teams.values() all carry .status, but a predicate reading it must not
+    // throw if that ever stops being true.
+    return ages.length ? ages.slice().sort(ageSort)[0] : null;
+  };
+  const cmpAge = (a, b, pred) => {
+    const aa = bestAge(a, pred), bb = bestAge(b, pred);
+    if (aa && bb) return ageSort(aa, bb);
+    return aa ? -1 : bb ? 1 : 0;
+  };
+
   if (S.finalsSort === 'name') {
     entries.sort((a,b) => a.name.localeCompare(b.name));
+  } else if (FINALS_SORTS[S.finalsSort] && FINALS_SORTS[S.finalsSort].composite) {
+    // Premierships, then grand finals, then finals appearances. At each level:
+    // the count, then the grade tier, then the age. BY GRADE turns the tier
+    // comparison on and off; without it the levels fall straight through to age.
+    const tier = (at, bt) => (S.finalsWeighted ? cmpTiers(at, bt) : 0);
+    entries.sort((a,b) =>
+      (b.premiers - a.premiers) ||
+      tier(a.tiersPremiers, b.tiersPremiers) ||
+      (a.premiers ? cmpAge(a, b, t => (t.status || {}).wonGF) : 0) ||
+      (b.inGF - a.inGF) ||
+      tier(a.tiersGF, b.tiersGF) ||
+      (a.inGF ? cmpAge(a, b, t => (t.status || {}).inGF) : 0) ||
+      (b.teams.length - a.teams.length) ||
+      tier(a.tiersAll, b.tiersAll) ||
+      cmpAge(a, b, null) ||
+      a.name.localeCompare(b.name));
   } else {
     const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
     // Weighted compares the chosen measure tier by tier; flat compares totals.
@@ -2557,18 +2611,47 @@ function renderFinalsByClub(pool) {
       a.name.localeCompare(b.name));
   }
 
+  // ── One column per finals round ───────────────────────────────────────────
+  // The path used to be a joined string, so a team that played two finals and a
+  // team that played four produced rows of different shapes and nothing lined
+  // up between them. The columns come from the DATA — every finals round in the
+  // pool, ordered by cmpRound — rather than from a hardcoded EF/QF/SF/PF/GF,
+  // because a competition that runs a different series would silently lose a
+  // column.
+  const roundCols = (() => {
+    const seen = new Map();     // abbrev -> a representative match, for ordering
+    for (const m of pool) {
+      const a = m.finalsAbbrev || 'F';
+      if (!seen.has(a)) seen.set(a, m);
+    }
+    return [...seen.entries()].sort((x, y) => cmpRound(x[1], y[1])).map(([a]) => a);
+  })();
+  const colCount = Math.max(roundCols.length, 1);
+
   const teamRow = t => {
-    const out = (t.status || teamStatus(t, pool)).out;
-    const path = t.matches.map(m => {
-      const opp = m.home === t.team ? m.away : m.home;
+    const st = t.status || teamStatus(t, pool);
+    const byRound = new Map();
+    for (const m of t.matches) byRound.set(m.finalsAbbrev || 'F', m);
+
+    const cells = roundCols.map(ab => {
+      const m = byRound.get(ab);
+      if (!m) return `<span style="color:var(--b2)">·</span>`;
+      const opp  = m.home === t.team ? m.away : m.home;
       const mine = m.home === t.team ? m.hScore : m.aScore;
       const thrs = m.home === t.team ? m.aScore : m.hScore;
-      if (!isPlayed(m)) return `<span class="fv-tag">${m.finalsAbbrev||'F'}</span> <span class="fv-prov">v ${opp}</span> <span class="fv-date" style="display:inline">${fmtDate(m)}</span>`;
-      const res = mine > thrs ? '<span style="color:var(--gold);font-weight:600">W</span>'
+      if (!isPlayed(m)) {
+        return `<span class="fv-prov" title="v ${opp}, ${fmtDate(m)}">v ${opp}</span>`;
+      }
+      const winner = mine > thrs;
+      // A grand final win is the result of the season, so it is marked as such
+      // rather than reading as one more W among four.
+      const isFlag = winner && ab === 'GF';
+      const res = isFlag ? '<span style="color:var(--gold);font-weight:700">★ W</span>'
+                : winner ? '<span style="color:var(--gold);font-weight:600">W</span>'
                 : mine < thrs ? '<span style="color:#ef4444;font-weight:600">L</span>'
                 : '<span style="color:var(--tx2);font-weight:600">D</span>';
-      return `<span class="fv-tag">${m.finalsAbbrev||'F'}</span> ${res} ${mine}–${thrs} v ${opp}`;
-    }).join('<span style="color:var(--tx3)"> &middot; </span>');
+      return `<span title="${ab} v ${opp}">${res} ${mine}–${thrs}</span>`;
+    }).join('');
 
     const rank  = gradeRankOf(t.comp, t.age, t.grade);
     const tiers = gradeTierCount(t.comp, t.age);
@@ -2576,12 +2659,26 @@ function renderFinalsByClub(pool) {
       ? `<span class="fv-tag" style="${rank===1?'color:var(--gold);border-color:rgba(240,192,64,.35)':''}"
               title="Grade ${rank} of ${tiers} in ${t.age}">${rank===1?'TOP':rank+'/'+tiers}</span>`
       : '';
-    return `<div style="display:grid;grid-template-columns:96px 40px 1fr;gap:10px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px">
-      <span class="fv-tag" style="justify-self:start">${t.age} ${abbrevGrade(gLabel(t.grade))}</span>
+    // The grade name carries the premiership, so a flag is visible from the left
+    // edge of the row without reading across to the last column.
+    const gradeStyle = st.wonGF
+      ? 'justify-self:start;color:var(--gold);border-color:rgba(240,192,64,.55);background:rgba(240,192,64,.12);font-weight:700'
+      : 'justify-self:start';
+    // Knocked out: dimmed, so a finished campaign is distinguishable at a glance
+    // from one still running without needing a word in a column.
+    const rowStyle = st.out ? 'opacity:.55' : '';
+    const rowTitle = st.wonGF ? 'Premiers' : st.out ? 'Out of the finals' : 'Still alive';
+    return `<div title="${rowTitle}" style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px;${rowStyle}">
+      <span class="fv-tag" style="${gradeStyle}">${t.age} ${abbrevGrade(gLabel(t.grade))}</span>
       <span style="justify-self:start">${rankTag}</span>
-      <span>${path}${out ? ' <span class="fv-out">&middot; out</span>' : ''}</span>
+      ${cells}
     </div>`;
   };
+
+  // A header row, or the columns are unlabelled and the alignment is pointless.
+  const colHeader = `<div style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:2px 0 5px;border-bottom:1px solid var(--b2);font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);font-family:'DM Mono',monospace">
+    <span>grade</span><span></span>${roundCols.map(a => `<span>${a}</span>`).join('')}
+  </div>`;
 
   const blocks = entries.map(e => {
     e.teams.sort((a,b) => ageSort(a.age, b.age) || String(a.grade).localeCompare(String(b.grade)));
@@ -2598,7 +2695,7 @@ function renderFinalsByClub(pool) {
           e.premiers  ? `<span style="color:var(--gold)">${e.premiers} premier${e.premiers!==1?'s':''}</span>` : '',
         ].filter(Boolean).join(' &middot; ')}</span>
       </div>
-      ${e.teams.map(teamRow).join('')}
+      ${colHeader}${e.teams.map(teamRow).join('')}
     </div>`;
   }).join('');
 
@@ -2607,7 +2704,7 @@ function renderFinalsByClub(pool) {
         <span style="flex:1"></span><span style="font-size:11px;color:var(--tx3)">${orphans.length} team${orphans.length!==1?'s':''}</span></div>
         <div style="font-size:11px;color:var(--tx3);padding:8px 0">
           No club could be resolved for these teams. Run the Build Club Index workflow.</div>
-        ${orphans.map(teamRow).join('')}</div>`
+        ${colHeader}${orphans.map(teamRow).join('')}</div>`
     : '';
 
   return blocks + orphanNote;
