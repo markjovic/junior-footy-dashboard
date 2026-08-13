@@ -226,6 +226,50 @@ console.log('\n7c  A results-shaped run touches only core files');
     `${read(sPlayers('2dcbf383')).players.length} players`);
 }
 
+// ── 7d. A save can never blank a populated player file by accident ──────────
+// This happened for real on 2026-08-12. load() marks the object with a
+// NON-ENUMERABLE __hadPlayers, and every writer does `{ ...existing, matches }`
+// — a spread drops non-enumerable properties. save() therefore believed players
+// had been loaded, and wrote an empty array over five seasons: ~44,900 records.
+//
+// The fix is two-layered: callers pass { players: false } explicitly, and this
+// guard refuses regardless, because an explicit argument can be forgotten too.
+console.log('\n7d  Blanking a populated player file is refused');
+{
+  const before = read(sPlayers('2dcbf383')).players.length;
+  ok('the fixture has players to lose', before > 0, `${before} players`);
+
+  const d = store.load(['EFNL 2026'], { players: false });
+  const merged = { ...d, matches: d.matches };   // the spread that caused it
+  ok('the spread really does drop the marker', merged.__hadPlayers === undefined);
+
+  let threw = null;
+  try { store.save(merged, ['EFNL 2026']); } catch (e) { threw = e.message; }
+  ok('save refused', !!threw, threw ? threw.split('.')[0] : 'DID NOT THROW');
+  ok('and the players are still on disk',
+    read(sPlayers('2dcbf383')).players.length === before,
+    `${read(sPlayers('2dcbf383')).players.length} of ${before}`);
+
+  // Explicit players:false is the correct call and must work.
+  const d2 = store.load(['EFNL 2026'], { players: false });
+  const m2 = { ...d2, matches: d2.matches };
+  const r = store.save(m2, ['EFNL 2026'], { players: false });
+  ok('passing players:false explicitly is accepted',
+    !r.written.some(f => f.includes('players')), r.written.join(', ') || '(nothing)');
+  ok('players untouched by that too', read(sPlayers('2dcbf383')).players.length === before);
+
+  // A season that genuinely has no players must still be writable, deliberately.
+  const d3 = store.load(['EFNL 2026']);
+  d3.players = [];
+  const r3 = store.save(d3, ['EFNL 2026'], { allowEmptyPlayers: true });
+  ok('allowEmptyPlayers lets a caller mean it',
+    read(sPlayers('2dcbf383')).players.length === 0, 'deliberate, not accidental');
+  // Rebuild the fixture, so a test that deliberately empties a file does not
+  // leave the next one asserting against it.
+  writeOldLayout();
+  migrate({ SPLIT_DRY_RUN: 'false' });
+}
+
 // ── 8. Could these have failed? ──────────────────────────────────────────────
 console.log('\n8  The fixture is real');
 {

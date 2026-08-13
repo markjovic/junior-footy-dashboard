@@ -188,7 +188,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'fetch-fixtures v4 2026-08-12 skip-players-on-load';
+const VERSION = 'fetch-fixtures v5 2026-08-12 explicit-no-players';
 
 async function main() {
   console.log(`=== ${VERSION} ===`);
@@ -406,7 +406,8 @@ async function main() {
   // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
-  store.report(store.save(data, storeScope), 'fetch-fixtures');
+  // Explicit rather than relying on the marker load() leaves on the object.
+  store.report(store.save(data, storeScope, { players: false }), 'fetch-fixtures');
   console.log(`\nFixtures: ${newCount} new scheduled records written`);
   console.log('Wrote data.json');
   logSummary('fetch-fixtures');
