@@ -36,7 +36,6 @@ jobs:
                    scripts/backfill.js \
                    scripts/migrate-grade-ids.js \
                    scripts/audit-data.js \
-                   scripts/verify-store.js \
                    scripts/verify-discover-seasons.js \
                    scripts/verify-backfill.js \
                    scripts/verify-migrate-grade-ids.js \
@@ -58,7 +57,11 @@ jobs:
           # exact failure the summary exists to prevent. Turned off explicitly so
           # every suite runs and one run gives the whole picture.
           set +e
-          SUITES="verify-store verify-discover-seasons verify-backfill \
+          # verify-store.js was retired on 2026-08-12: it tested the
+          # per-organisation layout — creating a missing -archive.json, rollover
+          # between files — and none of those concepts exist any more.
+          # verify-per-season.js covers store.js.
+          SUITES="verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades \
                   verify-rebuild-grade-meta verify-per-season verify-audit"
           FAILED=0
