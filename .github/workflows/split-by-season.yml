@@ -1,0 +1,76 @@
+# .github/workflows/split-by-season.yml
+#
+# One-time migration from the per-organisation layout to the per-season one.
+# per_season_storage_design.md §3.
+#
+#   from  data/orgs/<org>-current.json and <org>-archive.json
+#   to    data/seasons/<seasonId>-core.json and <seasonId>-players.json
+#
+# OFFLINE — no PlayHQ call is made.
+#
+# It does NOT delete data/orgs. Those files stay as a rollback path until a full
+# weekend of scheduled runs has passed on the new layout.
+#
+# DEFAULTS TO A DRY RUN, which reports the per-season split and the size of a
+# ladders-only read before anything is written.
+#
+# ⚠️ scripts/lib/store.js must already be the per-season version, or the writers
+# will not find the files this creates. The verification step below checks that.
+
+name: Split storage by season
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report the split and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check scripts/lib/store.js
+          node --check scripts/split-by-season.js
+          node --check scripts/verify-per-season.js
+          echo "all three parse"
+
+      # Prove the guards fire before trusting a run that reports success.
+      - name: Verify the store and the migration
+        run: node scripts/verify-per-season.js
+
+      - name: Split
+        id: split
+        env:
+          SPLIT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set +e
+          node scripts/split-by-season.js
+          CODE=$?
+          echo "exit_code=$CODE" >> $GITHUB_OUTPUT
+          set -e
+          # 0 = written, 2 = dry run or nothing to do. Anything else is a failure.
+          if [ "$CODE" != "0" ] && [ "$CODE" != "2" ]; then
+            echo "split-by-season.js exited $CODE — failing the job"
+            exit "$CODE"
+          fi
+
+      - name: Commit
+        if: steps.split.outputs.exit_code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          git diff --staged --quiet || git commit -m "split storage by season (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
