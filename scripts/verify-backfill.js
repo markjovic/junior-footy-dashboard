@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v2 2026-08-13 lastround-rekey';
+const VERSION = 'verify-backfill v3 2026-08-13 placeholder-round';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -112,11 +112,37 @@ async function gqlPost(query, vars) {
     if (process.env.STUB_FAIL_SEASON && process.env.STUB_FAIL_SEASON === g.sid) {
       throw new Error('stub: forced failure for season ' + g.sid);
     }
+    // One round per grade by default, which is every existing test's expectation.
+    // STUB_ROUNDS=3 serves a three-round sequence so the round WALK can be
+    // exercised — with one round the loop runs once and cannot demonstrate
+    // stopping or continuing at all.
+    const mk = (n) => ({ id: 'r' + n + '-' + g.gradeId, name: 'Round ' + n,
+      abbreviatedName: null, number: String(n),
+      current: g.current && n === (process.env.STUB_ROUNDS === '3' ? 3 : 1),
+      isFinalsRound: false, provisionalDates: [] });
+    const rounds = process.env.STUB_ROUNDS === '3' ? [mk(1), mk(2), mk(3)] : [mk(1)];
     return { data: { discoverGrade: { id: vars.gradeID, name: 'U12 Mixed A', dates: g.dates,
-      rounds: [{ id: 'r1-' + g.gradeId, name: 'Round 1', abbreviatedName: null, number: '1',
-                 current: g.current, isFinalsRound: false, provisionalDates: [] }] } } };
+      rounds } } };
   }
   if (query.includes('discoverFixtureByRound')) {
+    // Round 2 is the round under test. STUB_R2 selects its shape:
+    //   placeholder  one PENDING game dated in the PAST — the SEJ dummy fixture
+    //   future       one PENDING game dated far ahead — genuinely not played
+    //   undated      one PENDING game with no date at all
+    //   empty        no games — a bye, which already has its own handling
+    const r2 = process.env.STUB_R2 || '';
+    if (r2 && /^r2-/.test(String(vars.roundID))) {
+      if (r2 === 'empty') return { data: { discoverFixtureByRound: { games: [] } } };
+      const date = r2 === 'placeholder' ? '2020-01-05'
+                 : r2 === 'future'      ? '2099-01-05'
+                 : null;
+      return { data: { discoverFixtureByRound: { games: [
+        { id: 'dummy', home: team('Dummy 1', 'aaaa1111'), away: team('Dummy 2', 'bbbb2222'),
+          result: { home: stats(0, 0, 0), away: stats(0, 0, 0) },
+          status: { value: 'PENDING' }, date,
+          allocation: { court: { venue: null } } },
+      ] } } };
+    }
     return { data: { discoverFixtureByRound: { games: [
       { id: 'g1', home: team('Blackburn U12', '383836bb'), away: team('Norwood U12', 'aaaa1111'),
         result: { home: stats(10, 5, 65), away: stats(8, 3, 51) },
@@ -543,6 +569,90 @@ console.log('\n9  Roster conflicts are detected on the grade id');
   r = rebuildRoster([R('Norwood', 'A1', 'A', 'gA', 1), R('Norwood', 'B1', 'B', 'gB', 5)]);
   ok('a later round supersedes an earlier grade', r['EFNL 2026|Norwood|U8'].gradeId === 'gB',
     JSON.stringify(r['EFNL 2026|Norwood|U8']));
+}
+
+// ── 11. A past-dated round with no results must not stop the walk ───────────
+// unplayed_round_blocker_design.md. fetchGrade() used to break on the first round
+// with games and no final result, on the assumption it was the leading edge of
+// the season. A PLACEHOLDER breaks that assumption: SEJ 2026 round 10 of
+// cb7b3db3 is one PENDING game, "Dummy U10 Girls 1 v Dummy U10 Girls 2", venue
+// TBC, dated 2026-07-12 — the week a Lightning Premiership round robin replaced
+// the fixture. It will never become final, so the walk stopped there permanently
+// and rounds 11 to 14 were never fetched. Four rounds, eight real games.
+//
+// The stub serves three rounds and STUB_R2 sets what round 2 looks like. The
+// existing tests all run with one round, which is why none of them exercised the
+// walk at all.
+console.log('\n11  A placeholder round does not stop the round walk');
+{
+  const R = (n) => `EFNL 2026|U12|6f964e7b|${n}|`;
+  const roundsIn = (p) => (read(p).matches || [])
+    .filter(m => !m.isBye && !m.isPartial)
+    .map(m => String(m.id).split('|')[3])
+    .filter((v, i, a) => a.indexOf(v) === i).sort();
+
+  // PAST-DATED placeholder at round 2. Round 3 must still be reached.
+  reset();
+  let r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'placeholder' });
+  ok('exit 0', r.code === 0, `exit ${r.code}`);
+  ok('the placeholder is recognised by its date',
+    /dated 2020-01-05 in the past — placeholder or abandoned, continuing/.test(r.out),
+    'this is the branch the whole change adds');
+  ok('round 3 WAS fetched despite round 2 having no results',
+    roundsIn(EFNL_CUR).includes('3'), JSON.stringify(roundsIn(EFNL_CUR)));
+  ok('round 1 is still there', roundsIn(EFNL_CUR).includes('1'));
+  ok('the placeholder round itself stored NOTHING',
+    !roundsIn(EFNL_CUR).includes('2'), JSON.stringify(roundsIn(EFNL_CUR)));
+  // Not a bye. A bye asserts the grade had no game that week; it did play, in
+  // another grade. Writing one would hide the gap from the audit.
+  ok('and no bye sentinel was invented for it',
+    !(read(EFNL_CUR).matches || []).some(m => m.isBye && String(m.id).includes('|2|')),
+    'a bye would assert something false and hide the gap');
+  // The consecutive scan must still stop at 1, because round 2 is genuinely
+  // absent. That is what makes the branch run again next time.
+  ok('the gap is left visible rather than papered over',
+    roundsIn(EFNL_CUR).join(',') === '1,3', roundsIn(EFNL_CUR).join(','));
+
+  // FUTURE-DATED. This is the behaviour being PRESERVED. Without this assertion
+  // the fix could pass by simply never stopping, which would walk every unplayed
+  // round of every grade on every run.
+  reset();
+  r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'future' });
+  ok('a future-dated round still STOPS the walk',
+    /scheduled, not yet played \(2099-01-05\) — stopping/.test(r.out));
+  ok('so round 3 was NOT fetched',
+    !roundsIn(EFNL_CUR).includes('3'), JSON.stringify(roundsIn(EFNL_CUR)));
+
+  // UNDATED. No date is no evidence, and the safe reading of no evidence is the
+  // behaviour that was already there.
+  reset();
+  r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'undated' });
+  ok('an undated round falls back to stopping',
+    /scheduled, not yet played — stopping/.test(r.out) &&
+    !/dated .* in the past/.test(r.out));
+  ok('and round 3 was NOT fetched', !roundsIn(EFNL_CUR).includes('3'));
+
+  // A bye is a different thing again and already had its own handling. Asserted
+  // so this change cannot have altered it.
+  reset();
+  r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'empty' });
+  ok('a round with NO games is still a bye, not a placeholder',
+    /bye — continuing/.test(r.out) && !/placeholder or abandoned/.test(r.out));
+  ok('and a bye sentinel IS written for it',
+    (read(EFNL_CUR).matches || []).some(m => m.isBye && String(m.id).includes('|2|')));
+  ok('a bye does not stop the walk either', roundsIn(EFNL_CUR).includes('3'));
+
+  // IDEMPOTENCY. A second run over a stored placeholder must add nothing.
+  reset();
+  run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'placeholder' });
+  const before = (read(EFNL_CUR).matches || []).length;
+  r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_ROUNDS: '3', STUB_R2: 'placeholder' });
+  ok('a second run duplicates nothing',
+    (read(EFNL_CUR).matches || []).length === before,
+    `${before} then ${(read(EFNL_CUR).matches || []).length}`);
+  ok('and it walks past the placeholder again',
+    /placeholder or abandoned, continuing/.test(r.out),
+    'the gap is permanent, so this costs one call per run — by design');
 }
 
 // ── 10. lastRoundKey resolves through the ROSTER, not the record ─────────────
