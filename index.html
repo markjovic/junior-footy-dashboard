@@ -365,7 +365,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.133</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.135</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -686,7 +686,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.133</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.135</span>
         </div>
 
 
@@ -1173,9 +1173,18 @@ function matchIsValid(m) {
   return hGrade === aGrade && hGrade !== null && hGrade !== undefined;
 }
 
-// The grade a match counts towards (from the roster)
+// The grade a match COUNTS TOWARDS, which is the team's current grade — not the
+// grade the match was played in.
+//
+// A team appears on exactly one ladder. A team promoted from B to A has all its
+// matches counted on the A ladder; its earlier B results still SHOW, they just
+// do not count anywhere else. That is the rule in team_registry_design.md §3.4
+// and it is deliberate.
+//
+// A brief attempt at returning m.gradeId here was reverted on 2026-08-12: it
+// split a promoted team across two ladders, which is not the design.
 function matchGrade(m) {
-  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.gradeId || m.rawGrade, m.compName);
+  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.rawGrade, m.compName);
 }
 
 // ── Display ────────────────────────────────────────────────────────────────
@@ -3663,10 +3672,12 @@ async function init() {
   if (matches) {
     S.matches=matches.filter(m => !m.isBye);
     S.matches.forEach(m => {
+      // Must agree with matchGrade() and matchIsValid() above, or this cached
+      // value silently wins over them.
       const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
       const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
       m._valid = (hg === ag && hg !== null && hg !== undefined);
-      m._grade = hg || m.gradeId || m.rawGrade;
+      m._grade = hg || m.rawGrade;
     });
   }
   if (players) S.players=players;
@@ -3684,10 +3695,12 @@ async function init() {
           S.matches  = d.matches.filter(m => !m.isBye && !m.scheduled);
           // Pre-compute validity on all matches once (roster must be loaded first)
           S.matches.forEach(m => {
+            // Must agree with matchGrade() and matchIsValid() above, or this cached
+            // value silently wins over them.
             const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
             const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
             m._valid = (hg === ag && hg !== null && hg !== undefined);
-            m._grade = hg || m.gradeId || m.rawGrade;
+            m._grade = hg || m.rawGrade;
           });
         }
         if (d.players?.length) S.players = d.players;
