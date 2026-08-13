@@ -1,7 +1,7 @@
 # Outstanding Tasks
 
 **Repo:** `markjovic/junior-footy-dashboard`  
-**Last updated:** 2026-08-13 (Beta 0.164)
+**Last updated:** 2026-08-13 (Beta 0.165)
 
 This document is the single place for anything that needs a decision, an action
 from you, or work from me. Read top to bottom; the order is priority.
@@ -10,16 +10,13 @@ from you, or work from me. Read top to bottom; the order is priority.
 
 ## YOUR ACTIONS — do these now
 
-### 1. Run Repo Tidy to remove dead files
+### 1. Delete `probe-ser-logos.js` and its workflow by hand
 
-**Workflow:** Repo Tidy  
-**Inputs:** `groups: storage2026,probes,historic`, `apply: false` (dry run first)
+Repo Tidy ran and applied on 2026-08-13, removing 18 files (164K). These two are
+in no tidy group, so delete them through the GitHub web UI:
 
-The 2026-08-12 dry run confirmed 17 items. `probe-ser-logos.js` and its
-workflow should also be added to the `probes` group in `repo-tidy.js` before
-running — add the two entries, then include `probes` in the groups.
-
-Read the dry run output, then re-run with `apply: true`.
+- `scripts/probe-ser-logos.js`
+- `.github/workflows/probe-ser-logos.yml`
 
 ### 2. Delete `data/orgs` (after a clean weekend)
 
@@ -33,17 +30,28 @@ it's gone.
 The rollback path from the 2026-08-11 per-organisation split. Nothing reads
 or writes it.
 
-### 4. Commit `results-engine.js` v13
+### 4. Run a full, non-VIP Fetch Results, then Audit Data
 
-Delivered 2026-08-13. Adds `organisation { id }` to the fixture query so club
-identity is read directly from PlayHQ. The next scheduled results run after
-committing this will write `teamOrg` entries for teams whose rounds were
-previously skipped. Then run **Build Club Index** (no filter) to pick them up.
+This is the run that rebuilds `lastRound` under the new `compName|age|gradeId`
+key and drops the legacy two-segment ones. The log will report both counts:
 
-### 5. Add `probe-ser-logos.js` to repo-tidy's probes group
+```
+lastRound: dropped N pre-v14 key(s) that no reader could match
+lastRound: N rebuilt for 5 covered competition(s), N kept
+```
 
-The probe answered its question (2026-08-13). Add to `repo-tidy.js` probes
-group and remove via tidy run.
+Then **Audit Data**. Section 9 should report 0 wrong-shape keys for both
+`lastRound` and `gotwFlags`.
+
+Then look at the ladder grade tabs. The small round number should appear for the
+first time since Beta 0.133. No verification suite can judge that — it is a
+look-at-the-screen check.
+
+### 5. Run Build Club Index after the next results run
+
+`results-engine.js` v13 writes `teamOrg` directly from PlayHQ for teams whose
+rounds were previously skipped. Run **Build Club Index** with no filter once a
+results run has landed, to pick them up.
 
 ---
 
@@ -60,14 +68,6 @@ Lightning Premiership grades currently don't appear.
 - Add a tab within the age group to switch between them
 
 **Decision needed before any code is written.**
-
-### D2. `lastRound` and `gotwFlags` keying collision
-
-Both keys use `age|rawGrade` with no competition component. When two
-competitions share an age/grade name, the values collide. This causes incorrect
-behaviour for affected grades.
-
-**The fix requires a data migration.** If yes, I'll write the design first.
 
 ### D3. URL state / deep linking
 
@@ -96,21 +96,22 @@ short name becomes half of every match id.
 
 ## ACTIONS FOR ME — ready when you say go
 
-### A1. Update `report-field-usage.js` SOURCES list (HIGH)
+### A1. Fix `repo-tidy.js`'s reference classifier (HIGH)
 
-Missing five writers added on 2026-08-12: `results-engine.js`,
-`migrate-grade-ids.js`, `rebuild-grade-meta.js`, `split-by-season.js`,
-`cleanup-obsolete.js`. Also missing the `gradeId` field. Without these it
-under-reports field usage — the tool that was supposed to prevent the next
-`hLogo` incident is partially blind.
+`repo-tidy.js` reports a mention in a `.yml` workflow or a `.js` script as
+"Mentioned in documentation only". It is matching on filename, not on whether the
+mention is live code. On 2026-08-13 it classified `.github/workflows/verify-store.yml`
+and `scripts/probe-team-join.js` that way. Both turned out to be comments, so the
+verdict was right twice by luck — a real `require()` would have read identically
+and the REFUSED guard would not have fired.
 
-Upload `scripts/report-field-usage.js` and say "go".
+Upload `scripts/repo-tidy.js` and say "go".
 
-### A2. Fix the two stale audit warnings
+### A2. Fix the stale empty-`rawGrade` audit warning
 
-- The empty `rawGrade` warning says "until build-order step 6" — step 6 is
-  done since Beta 0.133.
-- The `data/orgs` INFO resolves itself once you delete the directory.
+The warning says the affected grades share a ladder "until build-order step 6".
+Step 6 is done — ladders group by `gradeId` — so the sentence is wrong. The
+`data/orgs` INFO resolves itself once you delete the directory (action 2).
 
 Small change, low priority.
 
@@ -124,12 +125,7 @@ player's seasons; opening one fetches that season's player file only.
 When new organisations are added (D5), they need a backfill run with
 `STATS_INCLUDE_RETIRED=true`. Standard procedure once the orgs are configured.
 
-### A5. Fix `lastRound`/`gotwFlags` keying collision
-
-If D2 approved: design first, then implement. Requires changes to `store.js`,
-`results-engine.js`, `fetch-results.js`, and `index.html`.
-
-### A6. Concurrent competitions
+### A5. Concurrent competitions
 
 If D1 decided: design first, then implement.
 
@@ -148,7 +144,10 @@ If D1 decided: design first, then implement.
 ### Probe scripts
 
 `probe-team-join.js` and `probe-finals-rounds.js` are kept as reusable
-diagnostics. `probe-ser-logos.js` answered its question and should be removed.
+diagnostics. `probe-team-join.js` was rewritten on 2026-08-13 to read through
+`store.load` — it was still walking the retired `data/orgs` layout and would have
+reported "nothing stored" and exited 0 once that directory is deleted.
+`probe-ser-logos.js` answered its question — see action 1.
 
 ### `team_registry_design.md` open questions
 
@@ -168,6 +167,28 @@ Self-healing YJFL bye sentinels. No action needed unless the count grows.
 
 ## WHAT CHANGED ON 2026-08-13
 
+- **`lastRound` and `gotwFlags` re-keyed** (Beta 0.165, engine v14). Recorded as
+  one defect needing a migration; it was two defects needing none. `lastRound`
+  was never read at all — writer `age|rawGrade`, reader `compName|age|gradeId` —
+  so the round number on the ladder grade tabs was blank from Beta 0.133.
+  `gotwFlags` was `age|roundKey`, colliding across competitions AND seasons, but
+  no pick had ever been made anywhere so there was nothing to migrate. Both keys
+  now carry the competition. `writeLastRound` retired.
+  `docs/lastround_gotw_keying_design.md`.
+- **`report-field-usage.js` v2 and its first workflow.** SOURCES went from 8 files
+  to 18: `lib/store.js`, `lib/results-engine.js` and `backfill.js` were all
+  absent, and `backfill.js` is a writer. `gradeId` and the per-season file
+  structure are now tracked. **There was no workflow at all**, so the tool built
+  to prevent the next `hLogo` incident had never been runnable. Its first run
+  found that `OUTSTANDING_TASKS.md` A5 named `fetch-results.js`, which references
+  neither key, and omitted `migrate-grade-ids.js`, which does.
+- **Repo Tidy applied**: 18 files, 164K.
+- **`probe-team-join.js` v4**: reads through `store.load` instead of walking
+  `data/orgs`. It would have exited 0 reporting "nothing stored" once that
+  directory is deleted — confirmed by running the committed v3 against a fixture
+  with the directory absent.
+- **Verification**: 8 suites now total 401 assertions (was 302).
+  `verify-backfill` 75→94, `verify-dashboard-grades` 77→88, `verify-audit` 43→52.
 - **Finals by-club view** (Beta 0.162–0.164): global grade round index, so
   teams from different clubs in the same grade share one column scheme. Correct
   `finalsAbbrev` labels (QF/EF/GF) rather than round names. Column placement

@@ -1,7 +1,7 @@
 # Junior Footy Dashboard — Context Document
 
 **Repo:** `markjovic/junior-footy-dashboard`  
-**Dashboard:** Beta 0.164, served from GitHub Pages  
+**Dashboard:** Beta 0.165, served from GitHub Pages  
 **Last updated:** 2026-08-13  
 
 ---
@@ -99,7 +99,7 @@ round-keyed identifiers; they self-heal when the next results run touches them.
 
 ### 4.1 Library (`scripts/lib/`)
 
-**`lib/store.js`** — v5  
+**`lib/store.js`** — v6  
 The per-season storage layer. All five writers go through this.  
 - `store.load(scope, { players: false })` — loads data in the shape
   `data.json` had. `scope` is a list of compNames or null for everything.
@@ -119,13 +119,20 @@ Session management and transport for all PlayHQ API calls. Manages the three
 cookies PlayHQ requires (`phq_tier`, `phq_session`, `phq_sub`) in the
 documented order. All writers use this — never write a local `getSession()`.
 
-**`lib/results-engine.js`** — v13  
+**`lib/results-engine.js`** — v14  
 Core match processing. Called by `fetch-results.js` and `backfill.js`.  
 Key functions: `processGrade()`, `buildGradeMeta()`, `parseGradeName()`.  
 The grade identity migration pass 1/2/3 logic lives here.  
 v13 (2026-08-13): added `organisation { id }` to the fixture query so club
 identity is read directly from PlayHQ rather than parsed from a Cloudinary
 URL. The URL fallback is kept for records fetched before this change.
+v14 (2026-08-13): `lastRound` re-keyed to `compName|age|gradeId`, merged per
+competition, and legacy two-segment keys dropped by segment count. The grade
+token is resolved through the roster — `entry.gradeId || entry.grade ||
+rawGrade`, the same expression the page uses — because for a promoted team that
+differs from `m.gradeId`. Exported as `lastRoundKey()` so the promoted case can
+be unit-tested. The `writeLastRound` option is GONE: it existed only because the
+key had no competition, and both callers stopped passing it.
 
 ### 4.2 Writers
 
@@ -194,11 +201,12 @@ One-off migration (2026-08-12): moved data from `data/orgs/` to
 
 ### 4.3 Diagnostics and reporting
 
-**`audit-data.js`** — v10  
+**`audit-data.js`** — v11  
 Read-only. Reads `data/seasons` and reports: file sizes and the core/players
 split, per-season record counts, round gap analysis (live vs retired),
-`grades.json` coverage, grade identity migration state, and a sized estimate
-of what a cross-season player search index would cost. Exits non-zero if
+`grades.json` coverage, grade identity migration state, a sized estimate
+of what a cross-season player search index would cost, and (v11) the shape of
+the `lastRound` and `gotwFlags` keys in `core.json`. Exits non-zero if
 `AUDIT_STRICT=true` and any warnings are present. Run this after any major
 data change.
 
@@ -249,12 +257,12 @@ test is exactly the committed code.
 |---|---|---|
 | `verify-store.yml` *(umbrella)* | — | runs all 7 suites; fires on every push |
 | `verify-per-season.js` | 53 | `store.js` and `split-by-season.js` |
-| `verify-backfill.js` | 75 | `backfill.js` |
+| `verify-backfill.js` | 94 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
 | `verify-discover-seasons.js` | 20 | `discover-seasons.js` |
 | `verify-migrate-grade-ids.js` | 54 | `migrate-grade-ids.js` |
-| `verify-dashboard-grades.js` | 77 | `index.html` silent failures |
+| `verify-dashboard-grades.js` | 88 | `index.html` silent failures |
 | `verify-rebuild-grade-meta.js` | 22 | `rebuild-grade-meta.js` |
-| `verify-audit.js` | 43 | `audit-data.js` |
+| `verify-audit.js` | 52 | `audit-data.js` |
 
 `verify-dashboard-grades.js` covers only things that **fail silently**: a
 promoted team appearing on two ladders, a scorer filtered out because their
@@ -294,7 +302,7 @@ All workflows use `workflow_dispatch` unless noted.
 
 ---
 
-## 6. The dashboard (`index.html`) — Beta 0.164
+## 6. The dashboard (`index.html`) — Beta 0.165
 
 ### 6.1 Data loading
 
@@ -318,6 +326,18 @@ A promoted team counts on one ladder only — the grade its roster entry
 currently says it is in. `precomputeMatches()` runs on every batch of new
 records (load, backfill load, year-switch load) and must run after the roster
 is merged in.
+
+### 6.2a Game of the Week key
+
+`gotwFlags` is keyed `compName|age|roundKey` and built in one place,
+`gotwKeyFor(comp, age, rKey)`. There are five call sites — the admin picker
+writes and four readers look up — and they must agree, because a divergence shows
+the automatic closest-margin pick and looks entirely normal. The competition comes
+from the match record, not `S.selComp`: the admin picker has its own competition
+dropdown independent of the sidebar filter.
+
+Picks are written to browser storage only. Nothing pushes them to the repo, and
+`core.json` wins on load when its `gotwFlags` is non-empty.
 
 ### 6.3 Season selector
 
@@ -389,7 +409,10 @@ name ("Finals Round 1"), not the game type — the abbreviation is what matters.
   type (QF, EF, GF); `finalsName` is the round name (Finals Round 1) — these
   are different things.
 - `discoverTeams(filter:{seasonID})` works without an organisation.
-- `discoverCompetitions` requires `organisationID` (UUID form).
+- `discoverCompetitions` requires `organisationID` — the **8-character code**,
+  not the UUID, and it works from a guest session. The earlier note here saying
+  UUID, and the 2026-08-10 note saying it fails from a guest session, are both
+  retracted. See `docs/playhq_api_reference.md`.
 - PlayHQ issues three session cookies (`phq_tier`, `phq_session`, `phq_sub`)
   in a specific order. `lib/playhq.js` handles this.
 - `organisation { id }` on `DiscoverTeam` returns the club's 8-character code
@@ -402,11 +425,34 @@ name ("Finals Round 1"), not the game type — the abbreviation is what matters.
 
 ## 9. Known defects and limitations
 
-### 9.1 `lastRound` and `gotwFlags` keying collision
+### 9.1 `lastRound` and `gotwFlags` keying — FIXED 2026-08-13
 
-Both are keyed `age|rawGrade` with no competition component. When two
-competitions share an age/grade combination, they collide. The real fix
-requires a data migration. Recorded; not yet actioned.
+Recorded here until Beta 0.165 as a single defect: both keyed `age|rawGrade`,
+colliding when two competitions share an age and grade name, fixable only with a
+data migration. **All three parts of that were wrong.** There were two unrelated
+defects, they had different shapes, and neither needed a migration.
+
+`lastRound` was never colliding — it was never read at all. The writer built
+`age|rawGrade` (two segments, a parsed grade name); the reader built
+`compName|age|gradeId` (three segments, a PlayHQ UUID). They could never match,
+so the round number on each ladder grade tab rendered as an empty string from
+Beta 0.133 until 0.165. The reader was moved to the grade-id key during the grade
+identity migration and the writer was not: `migrate-grade-ids.js` recorded the
+re-keying as deferred to build-order step 6, and step 6 was done on the page side
+only. No migration was needed because `lastRound` is rebuilt from scratch on
+every full run.
+
+`gotwFlags` was keyed `age|roundKey` — no competition, no season, and no grade —
+so any two competitions sharing an age group collided on every round, and so did
+one competition across two seasons. The symptom would have been an
+administrator's pick silently disappearing, not a wrong game on screen:
+`getGOTWMatch()` checks the flagged id is in the current round and falls through
+to the automatic pick. No migration was needed because `core.json` held
+`gotwFlags: {}` and `localStorage` held no key containing `gotw` — no pick had
+ever been made.
+
+Both keys now carry the competition, and `compName` carries the season with it.
+Design and evidence: `docs/lastround_gotw_keying_design.md`.
 
 ### 9.2 Concurrent competitions (SEJ 2026 U10)
 
@@ -450,4 +496,5 @@ Cosmetic only after grade identity migration.
 | `docs/grade_identity_migration.md` | Grade id migration design and build order |
 | `docs/team_registry_design.md` | Team registry design (open questions remain) |
 | `docs/finals_support.md` | Finals view design |
+| `docs/lastround_gotw_keying_design.md` | lastRound / gotwFlags keying (built 2026-08-13) |
 | `docs/OUTSTANDING_TASKS.md` | Actions, questions, and decisions needed |
