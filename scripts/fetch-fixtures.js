@@ -188,7 +188,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'fetch-fixtures v3 2026-08-12 gradeId-in-ids';
+const VERSION = 'fetch-fixtures v4 2026-08-12 skip-players-on-load';
 
 async function main() {
   console.log(`=== ${VERSION} ===`);
@@ -218,7 +218,8 @@ async function main() {
   const storeScope = [...new Set(grades.map(g => g.compName).filter(Boolean))];
   let data;
   try {
-    data = store.load(storeScope);
+    // Fixtures never touch player records. See results-engine.js.
+    data = store.load(storeScope, { players: false });
   } catch (e) {
     console.error(`FATAL: ${e.message}`);
     process.exit(1);

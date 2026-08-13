@@ -162,7 +162,11 @@ console.log('\n6  A run that skips players leaves them alone');
     !d.__filesRead.some(f => f.includes('players')), d.__filesRead.join(', '));
   const r = store.save(d, ['EFNL 2026']);
   ok('the player file is untouched', fs.readFileSync(sPlayers('2dcbf383'), 'utf8') === before);
-  ok('only the core file was written', r.written.length === 1, r.written.join(', '));
+  // Nothing changed, so nothing is written — the core file's phases now carry
+  // the player counts forward rather than being overwritten with zeros, which
+  // used to make every results run rewrite every core file.
+  ok('no player file was written', !r.written.some(f => f.includes('players')), r.written.join(', ') || '(nothing)');
+  ok('and nothing at all, since nothing changed', r.written.length === 0, r.written.join(', ') || '(nothing)');
   ok('the log says untouched, not zero',
     (r.seasonPhases[0] || {}).playersUntouched === true);
   ok('and the manifest does NOT claim players are missing',
@@ -179,6 +183,47 @@ console.log('\n7  A record with no manifest entry throws before writing');
   try { store.save(d, ['EFNL 2026']); } catch (e) { threw = e.message; }
   ok('it threw', !!threw, threw ? threw.split('.')[0] : 'DID NOT THROW');
   ok('and wrote nothing', fs.readFileSync(sCore('2dcbf383'), 'utf8') === before);
+}
+
+// ── 7a. Unchanged files are not rewritten ───────────────────────────────────
+// Every run used to rewrite all 36 files even when it changed half of them: a
+// results run touches matches and never players, a stats run the reverse. Doing
+// the comparison in store.save means a new writer is protected without being
+// told, rather than each one having to declare what it skips.
+console.log('\n7a  A save that changes nothing rewrites nothing');
+{
+  const before = fs.statSync(sCore('2dcbf383')).mtimeMs;
+  const d = store.load(['EFNL 2026']);
+  const r = store.save(d, ['EFNL 2026']);          // load and save, no change
+  ok('no file written', r.written.length === 0, r.written.join(', ') || '(none)');
+  ok('it is counted as unchanged, not skipped', r.untouched === 2, `untouched=${r.untouched}`);
+  ok('the file on disk was not touched at all',
+    fs.statSync(sCore('2dcbf383')).mtimeMs === before);
+  ok('and it is NOT reported as emptied', r.emptied.length === 0, r.emptied.join(', '));
+}
+
+// Could that have failed? Change one record and the file must be written.
+console.log('\n7b  A real change still writes');
+{
+  const d = store.load(['EFNL 2026']);
+  d.matches.push(M('EFNL 2026', 1234));
+  const r = store.save(d, ['EFNL 2026']);
+  ok('the core file was written', r.written.some(f => f.includes('2dcbf383-core')), r.written.join(', '));
+  ok('the players file was NOT — nothing about it changed',
+    !r.written.some(f => f.includes('2dcbf383-players')), r.written.join(', '));
+  ok('the new record is on disk', read(sCore('2dcbf383')).matches.some(m => m.round === 1234));
+}
+
+// A results-shaped run: no players loaded, so no player file is even considered.
+console.log('\n7c  A results-shaped run touches only core files');
+{
+  const d = store.load(['EFNL 2026'], { players: false });
+  d.matches.push(M('EFNL 2026', 4321));
+  const r = store.save(d, ['EFNL 2026']);
+  ok('one file written, the core one', r.written.length === 1 && r.written[0].includes('-core'),
+    r.written.join(', '));
+  ok('players still on disk', read(sPlayers('2dcbf383')).players.length === 3,
+    `${read(sPlayers('2dcbf383')).players.length} players`);
 }
 
 // ── 8. Could these have failed? ──────────────────────────────────────────────
