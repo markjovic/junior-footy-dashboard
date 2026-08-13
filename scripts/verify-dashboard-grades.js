@@ -263,5 +263,34 @@ console.log('\n5  The view switch is reachable on a narrow viewport');
     run(`document.getElementById('mvt-finals').classList.contains('on')`) === false);
 }
 
+// ── 6. The loader asks for season core files, not players ───────────────────
+// per_season_storage_design.md §2.1: 78% of the stored bytes are player records
+// and nothing reads them until Scorers or a player panel is opened. Fetching
+// them up front cost every visitor 18.87 MB before a ladder could render.
+console.log('\n6  The page loads core files only');
+{
+  const body = html.slice(html.indexOf('<body'));
+  ok('it asks for data/seasons/<id>-core.json', /data\/seasons\/\$\{m\.seasonId\}-core\.json/.test(body));
+  ok('it no longer asks for data/orgs', !/data\/orgs\//.test(body),
+    'the previous layout');
+  ok('player files are fetched by a separate function',
+    /data\/seasons\/\$\{id\}-players\.json/.test(body) && has('loadPlayers'));
+  ok('and NOT by the initial load',
+    !/-players\.json/.test(body.slice(body.indexOf('async function loadStoredData'),
+                                      body.indexOf('function loadPlayers'))),
+    'loadStoredData must not name a players file');
+  ok('the seasons it loaded are remembered, so players match them',
+    /S\.loadedSeasons/.test(body));
+
+  // A reader must be able to tell "still arriving" from "there are none".
+  ok('Scorers says loading rather than empty while players are in flight',
+    /Loading scorers…/.test(body) && /S\.playersPending/.test(body));
+  ok('so does player search', /Loading players…/.test(body));
+
+  // Could that have failed? The old empty state must still exist for the real case.
+  ok('and still says "no scorer data" when there genuinely is none',
+    /No scorer data loaded/.test(body));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
