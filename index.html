@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.164</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.165</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.164</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.165</span>
         </div>
 
 
@@ -821,7 +821,13 @@ let S = {
   matches: [],   // {id,age,rawGrade,home,away,hScore,hG,hB,aScore,aG,aB,round,venue,hLogo,aLogo}
   players: [],   // {uuid,name,team,teamRaw,rawGrade,age,gp,goals}
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
-  gotwFlags: {}, // { "U12|3": "matchId", "U12|F:GF": "matchId" }  age|roundKey -> matchId
+  // { "EFNL 2026|U12|3": "matchId", "EFNL 2026|U12|F:GF": "matchId" }
+  // compName|age|roundKey -> matchId. The compName carries the season, so
+  // "EFNL 2026|U12|3" and "EFNL 2025|U12|3" are distinct. Before Beta 0.165 the
+  // key was age|roundKey with no competition, so every competition sharing an age
+  // group collided on every round and setting one pick silently deleted another.
+  // lastround_gotw_keying_design.md.
+  gotwFlags: {},
   pwHash: null, // unused — password is hardcoded as ADMIN_HASH above
   selectedAge: null,
   showAllAges: false,
@@ -852,7 +858,12 @@ let S = {
   selClub:    '',       // club filter, finals view only
   selTeam: '',
   selLdrGrade: null,
-  lastRound: {},       // { 'age|rawGrade': roundNumber } — highest fetched round per grade
+  // { 'compName|age|gradeId': roundNumber } — highest home-and-away round per
+  // grade. The key is built here and in results-engine.js and the two MUST agree:
+  // they did not from Beta 0.133 until 0.165 (writer age|rawGrade, reader
+  // compName|age|gradeId), so the round number on the grade tabs rendered as an
+  // empty string for months without anything reporting an error.
+  lastRound: {},
   adminOpen: false,
   pendingMatches: [],
   pendingPlayers: [],
@@ -1329,6 +1340,18 @@ function roundKey(m) {
   return m.isFinals ? `F:${m.finalsAbbrev || m.round}` : String(m.round);
 }
 
+// The gotwFlags key. ONE definition, because there are five call sites and they
+// must agree: the picker writes the key and four readers look it up, so a
+// divergence shows the automatic pick and looks entirely normal.
+//
+// The competition comes from the record rather than from S.selComp. The admin
+// picker has its own competition dropdown independent of the sidebar filter, so
+// reading the global would let a pick made for one competition be stored under
+// another.
+function gotwKeyFor(comp, age, rKey) {
+  return `${comp || ''}|${age}|${rKey}`;
+}
+
 function roundLabel(m) {
   if (!m.isFinals) return `Round ${m.round}`;
   return m.finalsName || m.finalsAbbrev || `Finals ${m.round}`;
@@ -1472,7 +1495,7 @@ function getGOTWMatch(age) {
   const rText = roundLabel(roundMatches[0]);
 
   // Check for admin GOTW flag for this round
-  const flagKey = `${age}|${rKey}`;
+  const flagKey = gotwKeyFor(roundMatches[0].compName, age, rKey);
   const flaggedId = S.gotwFlags[flagKey];
   if (flaggedId) {
     const flagged = roundMatches.find(m => m.id === flaggedId);
@@ -1762,7 +1785,11 @@ function renderLadder(age) {
   // correctly shows the full home-and-away season rather than nothing.
 
   document.getElementById('ldr-tabs').innerHTML = grades.map(g => {
-    const key = `${S.selComp||''}|${age}|${g}`;
+    // No `|| ''` fallback. renderAgeTabs() forces S.selComp to the first
+    // competition on every render and runs before renderLadder() on every path,
+    // and if the competition list is empty there are no grades and this loop does
+    // not run. An empty first segment could never match a written key anyway.
+    const key = `${S.selComp}|${age}|${g}`;
     const lr = S.lastRound[key];
     // Renamed from roundLabel to avoid shadowing the global roundLabel() helper.
     const lrTag = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
@@ -2024,7 +2051,7 @@ function renderResults(age) {
       const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
       const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
       const valid = matchIsValid(m);
-      const gotwKey = `${age}|${roundKey(m)}`;
+      const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
@@ -3043,7 +3070,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
     const haText = isHome ? 'Home' : 'Away';
-    const gotwKey = `${age}|${roundKey(m)}`;
+    const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
     const isGotw = S.gotwFlags[gotwKey] === m.id;
     return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
       <span class="gtag ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(gLabel(g))}</span>
@@ -3916,7 +3943,7 @@ function renderGotwPicker() {
       const pct = m => total(m) ? Math.abs(m.hScore-m.aScore)/total(m) : 1;
       return pct(a)-pct(b);
     });
-  const flagKey = `${age}|${rKey}`;
+  const flagKey = gotwKeyFor(comp, age, rKey);
   const flaggedId = S.gotwFlags[flagKey] || '';
 
   document.getElementById('gotw-picker-list').innerHTML = matches.length
@@ -3936,13 +3963,16 @@ function renderGotwPicker() {
 }
 
 async function saveGotwFlags() {
+  const comp = document.getElementById('gotw-comp-sel').value;
   const age = document.getElementById('gotw-age-sel').value;
   const rKey = document.getElementById('gotw-round-sel').value;
-  // flagKey stays age|roundKey. roundKey() returns the bare number for
-  // home-and-away rounds, so every already-stored flag still matches.
+  // The key gained the competition in Beta 0.165. It was age|roundKey, so a pick
+  // for EFNL U12 round 3 and one for SEJ U12 round 3 were the same entry and the
+  // second silently replaced the first. roundKey() still returns the bare number
+  // for home-and-away rounds and F:<abbrev> for finals.
   const picked = document.querySelector('input[name="gotw-pick"]:checked');
   if (!picked) return;
-  const flagKey = `${age}|${rKey}`;
+  const flagKey = gotwKeyFor(comp, age, rKey);
   if (picked.value) S.gotwFlags[flagKey] = picked.value;
   else delete S.gotwFlags[flagKey];
   await sSet(SK.gotw, S.gotwFlags);
