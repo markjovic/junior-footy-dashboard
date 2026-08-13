@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.150</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.151</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.150</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.151</span>
         </div>
 
 
@@ -2579,42 +2579,35 @@ function renderFinalsByClub(pool) {
       a.name.localeCompare(b.name));
   }
 
-  // ── One column per finals round ───────────────────────────────────────────
-  // The path used to be a joined string, so a team that played two finals and a
-  // team that played four produced rows of different shapes and nothing lined
-  // up between them. The columns come from the DATA — every finals round in the
-  // pool, ordered by cmpRound — rather than from a hardcoded EF/QF/SF/PF/GF,
-  // because a competition that runs a different series would silently lose a
-  // column.
-  const roundCols = (() => {
-    const seen = new Map();     // abbrev -> a representative match, for ordering
-    for (const m of pool) {
-      const a = m.finalsAbbrev || 'F';
-      if (!seen.has(a)) seen.set(a, m);
-    }
-    return [...seen.entries()].sort((x, y) => cmpRound(x[1], y[1])).map(([a]) => a);
-  })();
-  const colCount = Math.max(roundCols.length, 1);
+  // ── Columns by POSITION, not by round name ────────────────────────────────
+  // A shared column per round name forced every team to carry a column for
+  // every round anyone played: grades running FR1-PF-GF got empty SF and FR2
+  // columns, which is most of the row. Each team's finals are packed left to
+  // right instead, in the order they were played, and the round is named on the
+  // cell — so a four-round series occupies four columns and a two-round series
+  // two, and week one still lines up with week one.
+  // As many columns as the longest finals run on screen. A grade playing four
+  // finals gets four; one playing two leaves the last two empty rather than
+  // every grade carrying a column for a round it never played.
+  const colCount = Math.max(1, ...[...teams.values()].map(t => t.matches.length));
 
   const teamRow = t => {
     const st = t.status || teamStatus(t, pool);
-    const byRound = new Map();
-    for (const m of t.matches) byRound.set(m.finalsAbbrev || 'F', m);
+    const played = t.matches.slice();
 
-    const cells = roundCols.map(ab => {
-      const m = byRound.get(ab);
-      if (!m) return `<span style="color:var(--b2)">·</span>`;
+    const cells = played.map(m => {
+      const ab   = m.finalsAbbrev || 'F';
       const opp  = m.home === t.team ? m.away : m.home;
       const mine = m.home === t.team ? m.hScore : m.aScore;
       const thrs = m.home === t.team ? m.aScore : m.hScore;
-      // Two lines per cell: the result, then who it was against. The opponent
-      // is half of what a finals result means, and a tooltip is not readable at
-      // a glance — the alignment was supposed to make comparison easier, not
-      // remove the thing being compared.
+      // The round is named on the cell, since there is no shared header to name
+      // it. Two lines below: the result, then who it was against.
+      const tag = `<span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.5px;` +
+        `color:var(--tx3);margin-right:4px">${ab}</span>`;
       const oppLine = `<span style="display:block;font-size:10px;color:var(--tx3);` +
         `overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${opp}">${opp}</span>`;
       if (!isPlayed(m)) {
-        return `<span style="min-width:0"><span class="fv-prov">v</span>${oppLine}` +
+        return `<span style="min-width:0">${tag}<span class="fv-prov">v</span>${oppLine}` +
           `<span style="display:block;font-size:9px;color:var(--tx3)">${fmtDate(m)}</span></span>`;
       }
       const winner = mine > thrs;
@@ -2625,8 +2618,10 @@ function renderFinalsByClub(pool) {
                 : winner ? '<span style="color:var(--gold);font-weight:600">W</span>'
                 : mine < thrs ? '<span style="color:#ef4444;font-weight:600">L</span>'
                 : '<span style="color:var(--tx2);font-weight:600">D</span>';
-      return `<span style="min-width:0" title="${ab} v ${opp}">${res} ${mine}–${thrs}${oppLine}</span>`;
-    }).join('');
+      return `<span style="min-width:0" title="${ab} v ${opp}">${tag}${res} ${mine}–${thrs}${oppLine}</span>`;
+    });
+    while (cells.length < colCount) cells.push('<span></span>');
+    const cellHtml = cells.join('');
 
     const rank  = gradeRankOf(t.comp, t.age, t.grade);
     const tiers = gradeTierCount(t.comp, t.age);
@@ -2646,14 +2641,11 @@ function renderFinalsByClub(pool) {
     return `<div title="${rowTitle}" style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:start;font-size:12px;${rowStyle}">
       <span class="fv-tag" style="${gradeStyle}">${t.age} ${abbrevGrade(gLabel(t.grade))}</span>
       <span style="justify-self:start">${rankTag}</span>
-      ${cells}
+      ${cellHtml}
     </div>`;
   };
 
-  // A header row, or the columns are unlabelled and the alignment is pointless.
-  const colHeader = `<div style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:2px 0 5px;border-bottom:1px solid var(--b2);font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);font-family:'DM Mono',monospace">
-    <span>grade</span><span></span>${roundCols.map(a => `<span>${a}</span>`).join('')}
-  </div>`;
+
 
   const blocks = entries.map(e => {
     // Premiers first, then teams that reached a grand final, then the rest —
@@ -2682,7 +2674,7 @@ function renderFinalsByClub(pool) {
           e.premiers  ? `<span style="color:var(--gold)">${e.premiers} premier${e.premiers!==1?'s':''}</span>` : '',
         ].filter(Boolean).join(' &middot; ')}</span>
       </div>
-      ${colHeader}${e.teams.map(teamRow).join('')}
+      ${e.teams.map(teamRow).join('')}
     </div>`;
   }).join('');
 
@@ -2691,7 +2683,7 @@ function renderFinalsByClub(pool) {
         <span style="flex:1"></span><span style="font-size:11px;color:var(--tx3)">${orphans.length} team${orphans.length!==1?'s':''}</span></div>
         <div style="font-size:11px;color:var(--tx3);padding:8px 0">
           No club could be resolved for these teams. Run the Build Club Index workflow.</div>
-        ${colHeader}${orphans.map(teamRow).join('')}</div>`
+        ${orphans.map(teamRow).join('')}</div>`
     : '';
 
   return blocks + orphanNote;
