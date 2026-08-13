@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.148</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.149</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -704,7 +704,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.148</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.149</span>
         </div>
 
 
@@ -2099,7 +2099,8 @@ const FINALS_SORTS = {
   // fifth. Picking a single measure could not express that: sorting by
   // premierships alone put a club with one flag above a club with none and
   // eight grand finals, which is not how anyone reads a season.
-  premiership: { label: 'premiership season', composite: true, tiers: 'tiersPremiers' },
+  premiership: { label: 'premierships', composite: true, tiers: 'tiersPremiers',
+                 flat: e => e.premiers },
   teams:     { label: 'teams in finals', flat: e => e.teams.length, tiers: 'tiersAll' },
   remaining: { label: 'remaining',       flat: e => e.remaining,    tiers: 'tiersRemaining' },
   gf:        { label: 'GF appearances',  flat: e => e.inGF,         tiers: 'tiersGF' },
@@ -2407,6 +2408,10 @@ function tierLabel(r) {
 // shape of a club's finals presence, not only its best result.
 function tierSummary(e) {
   const def   = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+  // A sort with no `flat` is a mistake in FINALS_SORTS, but a summary line is
+  // not worth taking the page down for — this runs inside render(), and an
+  // exception here aborts init and leaves the loading overlay up forever.
+  if (!def || typeof def.flat !== 'function') return '';
   const tiers = e[def.tiers] || {};
   const total = def.flat(e);
   const ranks = Object.keys(tiers).map(Number).sort((a,b) => a - b);
