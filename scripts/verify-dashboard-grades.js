@@ -334,5 +334,90 @@ console.log('\n7  Year is the outer scope, and its lists come from the manifest'
     JSON.stringify(run('getYears()')) === '["2026"]', JSON.stringify(run('getYears()')));
 }
 
+// ── 8. The sidebar is built in BOTH views ───────────────────────────────────
+// render() returns early for the finals view. renderAgeTabs() — which builds the
+// Season dropdown and the Competition chips — sat below that return, so a reload
+// straight into finals never built the sidebar and both came up empty. On a
+// normal load it worked only because the dashboard had rendered first.
+console.log('\n8  Reloading into the finals view still builds the sidebar');
+{
+  const body = html.slice(html.indexOf('<body'));
+  const renderAt = body.indexOf('function render()');
+  const chunk = body.slice(renderAt, renderAt + 2000);
+  const tabsAt = chunk.indexOf('renderAgeTabs()');
+  const finalsAt = chunk.indexOf('if (finals) {');
+  ok('renderAgeTabs runs BEFORE the finals early return',
+    tabsAt > 0 && finalsAt > 0 && tabsAt < finalsAt,
+    `renderAgeTabs at ${tabsAt}, finals branch at ${finalsAt}`);
+
+  // And behaviourally: render() in the finals view must populate the dropdown.
+  run(`S.manifest = [
+    { org: 'a', seasonId: 's1', seasonName: '2026', compName: 'YJFL 2026' },
+    { org: 'a', seasonId: 's2', seasonName: '2022', compName: 'YJFL 2022' },
+  ];
+  S.seasonFiles = new Set(); S.loadedSeasons = ['s1']; S.selYear = null;
+  S.matches = [{ id: 'm', compName: 'YJFL 2026', age: 'U12', rawGrade: 'A',
+                 gradeId: 'g1', round: 1, home: 'a', away: 'b' }];
+  S.view = 'finals';
+  document.getElementById('year-sel').innerHTML = '';
+  render();`);
+  const opts = run(`document.getElementById('year-sel').innerHTML`);
+  ok('the Season dropdown is populated in the finals view',
+    /2026/.test(opts) && /2022/.test(opts), JSON.stringify(opts).slice(0, 80));
+
+  // Could that have failed? Reset as a fresh page would be — the element caches
+  // its last markup in dataset.last and skips rebuilding identical lists, so
+  // clearing innerHTML alone would not prove anything.
+  run(`S.view = 'dash';
+    const el = document.getElementById('year-sel');
+    el.innerHTML = ''; el.dataset.last = '';
+    render();`);
+  ok('and in the dashboard view', /2026/.test(run(`document.getElementById('year-sel').innerHTML`)),
+    'the same single call site serves both');
+}
+
+// ── 9. A past season obeys the one-ladder rule too ──────────────────────────
+// _valid and _grade are cached on every record at load, and a cached value wins
+// over matchGrade(). There were three copies of that computation and they
+// drifted: loadSeasons() kept `_grade = m.gradeId`, the behaviour reverted in
+// Beta 0.135, so a promoted team appeared on BOTH ladders in a past season and
+// on one in a live season. One definition now, called from all three.
+console.log('\n9  A promoted team stays on one ladder in ANY season');
+{
+  const body = html.slice(html.indexOf('<body'));
+  ok('there is exactly one definition of the computation',
+    (body.match(/_valid = \(hg === ag/g) || []).length === 1,
+    `${(body.match(/_valid = \(hg === ag/g) || []).length} copies`);
+  ok('and every loader calls it',
+    (body.match(/precomputeMatches\(/g) || []).length >= 4,
+    `${(body.match(/precomputeMatches\(/g) || []).length} references`);
+  // The comment explaining the drift mentions the pattern, so match a STATEMENT
+  // — an assignment ending in a semicolon — rather than any occurrence of it.
+  ok('no loader sets _grade to the match\'s own gradeId',
+    !/m\._grade = m\.gradeId;/.test(body), 'that is the reverted option B');
+
+  // Behaviourally: a team promoted from B to A counts on A for both matches,
+  // whichever loader put the records in memory.
+  run(`S.gradeMeta = {
+    'EFNL 2025|U12|gA': { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA' },
+    'EFNL 2025|U12|gB': { r: 2, lvl: 'junior', g: 'M', label: 'B', gradeId: 'gB' },
+  }; rebuildGradeLabels();
+  S.roster = { 'EFNL 2025|Norwood|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+               'EFNL 2025|Vermont|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+               'EFNL 2025|Blackburn|U12': { grade: 'A', gradeId: 'gA', age: 'U12' } };
+  S.matches = [
+    { id: 'p1', compName: 'EFNL 2025', age: 'U12', rawGrade: 'B', gradeId: 'gB',
+      round: 1, home: 'Norwood', away: 'Vermont', hScore: 1, aScore: 0 },
+    { id: 'p2', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', gradeId: 'gA',
+      round: 5, home: 'Norwood', away: 'Blackburn', hScore: 1, aScore: 0 },
+  ];
+  precomputeMatches(S.matches);
+  S.selComp = 'EFNL 2025'; S.selYear = '2025';`);
+  ok('the earlier B match counts towards A',
+    run('matchGrade(S.matches[0])') === 'gA', run('matchGrade(S.matches[0])'));
+  ok('one ladder, not two',
+    run('gradesForAge("U12")').length === 1, JSON.stringify(run('gradesForAge("U12")')));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
