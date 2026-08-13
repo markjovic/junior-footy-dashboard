@@ -184,6 +184,40 @@ ok('pre-migration records still collapse to one ladder',
   merged.length === 1, `${merged.length}: ${JSON.stringify(merged)}`);
 ok('which is exactly the defect this change fixes', merged[0] === '');
 
+// ── 4a. Scorers survive a team the roster cannot resolve ────────────────────
+// activGrades() returns grade IDS. currentGrade() returns an id only when the
+// team is found in the roster; otherwise it falls back to rawGrade, which
+// matches nothing in a set of ids — so those players silently vanished from the
+// scorers list. fetch-stats.js stores gradeID on every player record.
+console.log('\n4a  A scorer whose team is not in the roster still appears');
+run(`S.gradeMeta = {
+  'EFNL 2026|U12|gA': { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA' },
+}; rebuildGradeLabels();`);
+sandbox.__p = [
+  // In the roster: resolves the old way.
+  { team: 'Norwood', teamRaw: 'Norwood Purple', age: 'U12', rawGrade: 'A',
+    compName: 'EFNL 2026', gradeID: 'gA', goals: 5, gp: 3 },
+  // NOT in the roster — the name does not match. Without gradeID this player
+  // resolves to 'A', which is not an id, and disappears.
+  { team: 'Vermont', teamRaw: 'Vermont Blue Under 12s', age: 'U12', rawGrade: 'A',
+    compName: 'EFNL 2026', gradeID: 'gA', goals: 9, gp: 3 },
+];
+run(`S.players = __p.map(x => ({...x}));
+     S.roster = { 'EFNL 2026|Norwood Purple|U12': { grade: 'A', gradeId: 'gA', age: 'U12' } };
+     S.selComp = 'EFNL 2026'; S.selGrades = new Set(['gA']);`);
+ok('the rostered player resolves to a grade id',
+  run('playerGrade(S.players[0])') === 'gA', run('playerGrade(S.players[0])'));
+ok('the unrostered player falls back to its stored gradeID',
+  run('playerGrade(S.players[1])') === 'gA', run('playerGrade(S.players[1])'));
+ok('BOTH appear in the scorers list',
+  run('getTopScorers("U12").length') === 2, `${run('getTopScorers("U12").length')} of 2`);
+
+// Could that have failed? Remove the stored gradeID and the unrostered player
+// goes back to being dropped.
+run(`S.players = __p.map(x => { const c = {...x}; if (c.team === 'Vermont') delete c.gradeID; return c; });`);
+ok('without gradeID the unrostered player is dropped again',
+  run('getTopScorers("U12").length') === 1, `${run('getTopScorers("U12").length')} of 2`);
+
 // ── 5. The view switch survives a narrow viewport ───────────────────────────
 // A headless harness cannot see a clipped element, so this asserts the STRUCTURE
 // that makes clipping impossible rather than the appearance. .hdr is a flex row
