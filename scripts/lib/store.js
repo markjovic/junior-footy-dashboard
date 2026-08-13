@@ -42,7 +42,7 @@ const path = require('path');
 
 // Bump on every change. Printed by report() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const STORE_VERSION = 'v5 2026-08-12 never-blank-players';
+const STORE_VERSION = 'v6 2026-08-13 core-key-comments';
 
 const ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -67,8 +67,15 @@ const CORE_KEYS = [
   'teamOrg',     // cross-organisation, same shape as teamClub
   'compLogos',   // one per competition, trivially small
   'teamLogos',   // keyed by bare team name with NO competition
-  'gotwFlags',   // keyed age|round with NO competition
-  'lastRound',   // keyed age|rawGrade with NO competition
+  // Both of these were keyed WITHOUT a competition until 2026-08-13, which is
+  // why they are here. They now carry one — gotwFlags is compName|age|roundKey
+  // and lastRound is compName|age|gradeId — so neither is a cross-organisation
+  // key by necessity any more, and both COULD move to PREFIX_KEYS and live in
+  // their season's own file. That is a second migration and it has not been
+  // decided. lastround_gotw_keying_design.md §4 records the option so it is not
+  // lost; until then they stay here, where every reader already looks for them.
+  'gotwFlags',   // compName|age|roundKey -> match id, set from the dashboard
+  'lastRound',   // compName|age|gradeId -> highest home-and-away round
 ];
 
 const TIMESTAMP_KEYS = [
