@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.149</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.150</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -565,7 +565,6 @@ body{overflow-x:hidden}
           </span>
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
-            <option value="premiership">Premiership season</option>
             <option value="name">Alphabetical</option>
             <option value="teams">Most teams in finals</option>
             <option value="remaining">Most remaining</option>
@@ -573,8 +572,10 @@ body{overflow-x:hidden}
             <option value="premiers">Most premierships</option>
           </select>
           <span class="fv-switch" id="fv-weight-wrap" style="display:none">
-            <button id="fvw-off" class="on" onclick="setFinalsWeighted(false)">TOTAL</button>
-            <button id="fvw-on"           onclick="setFinalsWeighted(true)">BY GRADE</button>
+            <button id="fvw-off" class="on" onclick="setFinalsWeighted(false)"
+                    title="Compare clubs on the plain count">TOTAL</button>
+            <button id="fvw-on"           onclick="setFinalsWeighted(true)"
+                    title="Compare from the top grade down: one team in the top grade beats any number in lower grades">GRADE STRENGTH</button>
           </span>
         </span>
         <span class="card-meta" id="fv-meta"></span>
@@ -704,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.149</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.150</span>
         </div>
 
 
@@ -783,8 +784,6 @@ function saveFilters() {
       view:       S.view,
       finalsMode: S.finalsMode,
       finalsSort: S.finalsSort,
-      sortV: 2,   // see loadFilters: a saved sort from before the composite
-                  // ordering existed is ignored rather than restored
       finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
       finalsLevel:  S.finalsLevel,
@@ -846,8 +845,8 @@ let S = {
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age' | 'club' | 'winners'
-  finalsSort: 'premiership', // which measure to order by — see FINALS_SORTS
-  finalsWeighted: true, // use the grade tier as the tiebreak at each level
+  finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
+  finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
   finalsLevel:  'all',  // 'all' | 'junior' | 'senior'
   selClub:    '',       // club filter, finals view only
@@ -2093,14 +2092,6 @@ function syncViewTabs() {
 // `flat` reads the plain count; `tiers` names the per-rank breakdown to compare
 // when weighting is on.
 const FINALS_SORTS = {
-  // The default. A club's finals season is judged premierships first, then
-  // grand finals reached, then teams that made finals at all — each with the
-  // grade tier as the tiebreak, so a flag in the top grade outranks one in the
-  // fifth. Picking a single measure could not express that: sorting by
-  // premierships alone put a club with one flag above a club with none and
-  // eight grand finals, which is not how anyone reads a season.
-  premiership: { label: 'premierships', composite: true, tiers: 'tiersPremiers',
-                 flat: e => e.premiers },
   teams:     { label: 'teams in finals', flat: e => e.teams.length, tiers: 'tiersAll' },
   remaining: { label: 'remaining',       flat: e => e.remaining,    tiers: 'tiersRemaining' },
   gf:        { label: 'GF appearances',  flat: e => e.inGF,         tiers: 'tiersGF' },
@@ -2571,39 +2562,8 @@ function renderFinalsByClub(pool) {
     };
   });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
-  // The best age a club reached on a given measure, as the last tiebreak.
-  // ageSort puts seniors first, so a premiership in Senior Men outranks one in
-  // U8 when everything above is level.
-  const bestAge = (e, pred) => {
-    const ages = e.teams.filter(t => !pred || pred(t)).map(t => t.age);
-    // teams.values() all carry .status, but a predicate reading it must not
-    // throw if that ever stops being true.
-    return ages.length ? ages.slice().sort(ageSort)[0] : null;
-  };
-  const cmpAge = (a, b, pred) => {
-    const aa = bestAge(a, pred), bb = bestAge(b, pred);
-    if (aa && bb) return ageSort(aa, bb);
-    return aa ? -1 : bb ? 1 : 0;
-  };
-
   if (S.finalsSort === 'name') {
     entries.sort((a,b) => a.name.localeCompare(b.name));
-  } else if (FINALS_SORTS[S.finalsSort] && FINALS_SORTS[S.finalsSort].composite) {
-    // Premierships, then grand finals, then finals appearances. At each level:
-    // the count, then the grade tier, then the age. BY GRADE turns the tier
-    // comparison on and off; without it the levels fall straight through to age.
-    const tier = (at, bt) => (S.finalsWeighted ? cmpTiers(at, bt) : 0);
-    entries.sort((a,b) =>
-      (b.premiers - a.premiers) ||
-      tier(a.tiersPremiers, b.tiersPremiers) ||
-      (a.premiers ? cmpAge(a, b, t => (t.status || {}).wonGF) : 0) ||
-      (b.inGF - a.inGF) ||
-      tier(a.tiersGF, b.tiersGF) ||
-      (a.inGF ? cmpAge(a, b, t => (t.status || {}).inGF) : 0) ||
-      (b.teams.length - a.teams.length) ||
-      tier(a.tiersAll, b.tiersAll) ||
-      cmpAge(a, b, null) ||
-      a.name.localeCompare(b.name));
   } else {
     const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
     // Weighted compares the chosen measure tier by tier; flat compares totals.
@@ -2696,7 +2656,19 @@ function renderFinalsByClub(pool) {
   </div>`;
 
   const blocks = entries.map(e => {
-    e.teams.sort((a,b) => ageSort(a.age, b.age) || String(a.grade).localeCompare(String(b.grade)));
+    // Premiers first, then teams that reached a grand final, then the rest —
+    // with the grade's strength as the tiebreak within each band, and age after
+    // that. Sorting by age alone buried a top-grade premiership below an under-8
+    // team that lost its first final.
+    e.teams.sort((a,b) => {
+      const sa = a.status || teamStatus(a, pool), sb = b.status || teamStatus(b, pool);
+      const band = t => (t.wonGF ? 0 : t.inGF ? 1 : 2);
+      const rank = t => gradeRankOf(t.comp, t.age, t.grade) || 99;
+      return (band(sa) - band(sb)) ||
+             (rank(a) - rank(b)) ||
+             ageSort(a.age, b.age) ||
+             String(a.grade).localeCompare(String(b.grade));
+    });
     return `<div class="fv-card">
       <div class="fv-club">
         ${crestHTML(e.teams[0].team, 20, 'tlogo')}
@@ -4199,16 +4171,10 @@ async function init() {
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (['age','club','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
-      // ⚠️ A saved choice from before 2026-08-12 is ignored once. Everyone who
-      // had ever opened the finals view had 'name' stored, because that was the
-      // old default — so the new default could never take effect and the view
-      // stayed alphabetical no matter what the code said. sortV marks a
-      // selection made since the composite ordering existed.
-      if (f.sortV === 2 && f.finalsSort &&
-          Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
+      if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
         S.finalsSort = f.finalsSort;
       }
-      if (f.sortV === 2 && typeof f.finalsWeighted === 'boolean') S.finalsWeighted = f.finalsWeighted;
+      if (typeof f.finalsWeighted === 'boolean') S.finalsWeighted = f.finalsWeighted;
       if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
