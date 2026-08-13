@@ -1,19 +1,25 @@
 # .github/workflows/probe-concurrent-comps.yml
 #
-# Diagnostic only. Reads data/core.json and calls PlayHQ, writes nothing, commits
-# nothing. contents:read is enough and there is no git step.
+# Diagnostic only. Reads data/ and calls PlayHQ, writes nothing, commits nothing.
+# contents:read is enough and there is no git step.
 #
-# It answers one question before D1 is designed: how does PlayHQ represent two
-# competitions running in the same age group? The three options recorded for D1
-# — separate labelled ladders, a note, or a tab within the age group — cannot be
-# chosen without knowing whether the second competition is a separate PlayHQ
-# competition with its own season, extra grades inside one season, or a
-# short-form series for which a ladder is the wrong thing to show at all.
+# It measures one age group in one season completely: competitions, grades,
+# rounds with their RAW fields, every registry team, every game in every round,
+# and what is stored against what PlayHQ has.
 #
-# Defaults to SEJ 2026 U10, which is the case in OUTSTANDING_TASKS.md D1 and the
-# one producing roster conflicts in the results log.
+# WHY IT DUMPS EVERYTHING RATHER THAN ANSWERING A NARROW QUESTION. v1 asked four
+# narrow questions and every answer was individually correct and collectively
+# misleading: it missed that one side is registered twice in one grade under two
+# team ids, that the Lightning Premiership round holds three games per team
+# rather than one, and that round 10 of the season-long grade is a permanent
+# PENDING placeholder. That placeholder stops fetchGrade()'s round walk, so four
+# rounds of real results are never fetched.
 #
-# Roughly 3 + one call per grade in the age group. A dozen calls for the default.
+# Defaults to SEJ 2026 U10, which is the case in OUTSTANDING_TASKS.md D1.
+#
+# COST. Section 5 is one fixture call per round per grade. The default age group
+# is about 60 calls; PROBE_MAX_CALLS caps it. Widening PROBE_AGE to every age
+# would be several hundred, so raise the cap deliberately rather than by default.
 
 name: Probe concurrent competitions
 
@@ -31,9 +37,14 @@ on:
         default: '4dfaaab5'
         type: string
       age:
-        description: 'Age to focus on, e.g. U10. Leave empty for every age.'
+        description: 'Age to focus on, e.g. U10. Empty means every age — expensive.'
         required: false
         default: 'U10'
+        type: string
+      max_calls:
+        description: 'Cap on API calls. Default 120.'
+        required: false
+        default: '120'
         type: string
 
 permissions:
@@ -45,9 +56,9 @@ concurrency:
 
 jobs:
   probe:
-    name: How are two competitions represented
+    name: Measure one age group completely
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,4 +73,5 @@ jobs:
           PROBE_ORG: ${{ github.event.inputs.org }}
           PROBE_SEASON: ${{ github.event.inputs.season }}
           PROBE_AGE: ${{ github.event.inputs.age }}
+          PROBE_MAX_CALLS: ${{ github.event.inputs.max_calls }}
         run: node scripts/probe-concurrent-comps.js
