@@ -608,5 +608,52 @@ console.log('\n14  Every finals sort is reachable from the dropdown');
     /align-items:start/.test(body));
 }
 
+// ── 15. The by-club view actually renders ───────────────────────────────────
+// Every earlier finals test asserted on the SOURCE or rendered with an empty
+// pool, so teamRow() and the club header had never once executed. A sort entry
+// missing its `flat` therefore reached the browser: tierSummary() threw inside
+// render(), init() never finished, and the page sat on the loading overlay.
+console.log('\n15  A club card renders without throwing');
+{
+  run(`S.gradeMeta = { 'EFNL 2026|U12|g1': { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'g1' } };
+  rebuildGradeLabels();
+  S.clubs = { c1: { name: 'Norwood', type: 'CLUB' } };
+  S.teamClub = { 'EFNL 2026|Norwood|U12': 'c1', 'EFNL 2026|Vermont|U12': 'c1' };
+  S.roster = { 'EFNL 2026|Norwood|U12': { grade: 'A', gradeId: 'g1', age: 'U12' },
+               'EFNL 2026|Vermont|U12': { grade: 'A', gradeId: 'g1', age: 'U12' } };
+  const M = (ab, r, h, a, hs, as) => ({ id: 'm'+ab, compName: 'EFNL 2026', age: 'U12',
+    rawGrade: 'A', gradeId: 'g1', round: r, home: h, away: a, hScore: hs, aScore: as,
+    isFinals: true, finalsAbbrev: ab, status: { value: 'FINAL' }, date: '2026-09-01' });
+  S.matches = [M('SF',1,'Norwood','Vermont',50,40), M('GF',3,'Norwood','Kew',60,50)];
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp = 'EFNL 2026'; S.selYear = '2026'; S.view = 'finals'; S.finalsMode = 'club';
+  // Set explicitly rather than inherited from an earlier section — a test that
+  // depends on leftover state passes or fails for reasons it does not state.
+  S.finalsGender = 'all'; S.finalsLevel = 'all'; S.showAllAges = true; S.selClub = null;
+  // render() calls renderAgeTabs() first, which resets S.selComp from the
+  // MANIFEST for the selected year. Without a manifest naming this competition
+  // it picks a different one and the pool comes back empty.
+  S.manifest = [{ org: 'a', seasonId: 's1', seasonName: '2026', compName: 'EFNL 2026' }];
+  S.seasonFiles = new Set(); S.loadedSeasons = ['s1'];`);
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw', !threw, threw || 'clean');
+  const out = threw ? '' : run(`document.getElementById('finals-body').innerHTML`);
+  ok('a club card was produced', out.length > 500, `${out.length} chars`);
+  ok('the opponent is on screen', /Kew/.test(out) && /Vermont/.test(out));
+  ok('the grand final win is marked', /★/.test(out));
+  ok('the columns are labelled', /grade<\/span>/.test(out));
+
+  // EVERY sort must render, not just the default — that is what was missed.
+  for (const s of ['premiership', 'teams', 'remaining', 'gf', 'premiers', 'name']) {
+    let e2 = null;
+    try { run(`S.finalsSort = ${JSON.stringify(s)}; S.finalsWeighted = true; render();`); }
+    catch (e) { e2 = e.message; }
+    ok(`sort "${s}" renders weighted`, !e2, e2 || 'clean');
+  }
+  run(`S.finalsSort = 'premiership'; S.finalsWeighted = true;`);
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
