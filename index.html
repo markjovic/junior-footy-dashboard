@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.161</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.163</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.161</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.163</span>
         </div>
 
 
@@ -2651,8 +2651,9 @@ function renderFinalsByClub(pool) {
       const thrs = m.home === t.team ? m.aScore : m.hScore;
       // The round is named on the cell, since there is no shared header to name
       // it. Two lines below: the result, then who it was against.
+      const roundName = roundLabel(m);   // "Qualifying Final", not "QF"
       const tag = `<span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.5px;` +
-        `color:var(--tx3);margin-right:4px">${ab}</span>`;
+        `color:var(--tx3);margin-right:4px">${roundName}</span>`;
       const oppLine = `<span style="display:block;font-size:10px;color:var(--tx3);` +
         `overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${opp}">${opp}</span>`;
       if (!isPlayed(m)) {
@@ -2712,6 +2713,8 @@ function renderFinalsByClub(pool) {
              ageSort(a.age, b.age) ||
              String(a.grade).localeCompare(String(b.grade));
     });
+    // Key by gradeId (same as the team object) so all teams in a grade share
+    // one round index even when their rawGrade strings differ.
     const byGrade2 = new Map();
     for (const t of e.teams) {
       const k = `${t.comp}|${t.age}|${t.grade}`;
@@ -2785,9 +2788,11 @@ function renderFinalsView() {
   pool.forEach(m => finalsTeams(m).forEach(t => {
     const id = clubIdOf(m.compName, t, m.age);
     if (id) clubIds.add(id);
-    const key = `${m.compName}|${t}|${m.age}|${m.rawGrade}`;
+    const key = `${m.compName}|${t}|${m.age}|${m.gradeId || m.rawGrade}`;
     if (!allTeams.has(key)) allTeams.set(key, {
-      comp: m.compName, age: m.age, grade: m.rawGrade || '', team: t, matches: [],
+      comp: m.compName, age: m.age,
+      grade: m.gradeId || m.rawGrade || '',
+      team: t, matches: [],
     });
     allTeams.get(key).matches.push(m);
   }));
