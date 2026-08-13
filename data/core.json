@@ -7757,68 +7757,6 @@
     "U17|Navy": 14
   },
   "lastSplit": "2026-08-11T10:32:45.778Z",
-  "orgFiles": [
-    {
-      "file": "data/orgs/0f20da4f-archive.json",
-      "org": "0f20da4f",
-      "kind": "archive",
-      "bytes": 4817965
-    },
-    {
-      "file": "data/orgs/0f20da4f-current.json",
-      "org": "0f20da4f",
-      "kind": "current",
-      "bytes": 4662383
-    },
-    {
-      "file": "data/orgs/1cf85e52-archive.json",
-      "org": "1cf85e52",
-      "kind": "archive",
-      "bytes": 21421718
-    },
-    {
-      "file": "data/orgs/1cf85e52-current.json",
-      "org": "1cf85e52",
-      "kind": "current",
-      "bytes": 1491343
-    },
-    {
-      "file": "data/orgs/383836bb-archive.json",
-      "org": "383836bb",
-      "kind": "archive",
-      "bytes": 19545066
-    },
-    {
-      "file": "data/orgs/383836bb-current.json",
-      "org": "383836bb",
-      "kind": "current",
-      "bytes": 10522366
-    },
-    {
-      "file": "data/orgs/4c8b472e-archive.json",
-      "org": "4c8b472e",
-      "kind": "archive",
-      "bytes": 10830321
-    },
-    {
-      "file": "data/orgs/4c8b472e-current.json",
-      "org": "4c8b472e",
-      "kind": "current",
-      "bytes": 4893580
-    },
-    {
-      "file": "data/orgs/4f9a099e-archive.json",
-      "org": "4f9a099e",
-      "kind": "archive",
-      "bytes": 26201099
-    },
-    {
-      "file": "data/orgs/4f9a099e-current.json",
-      "org": "4f9a099e",
-      "kind": "current",
-      "bytes": 5974465
-    }
-  ],
   "teamOrg": {
     "EFNL 2026|Noble Park Seniors|Senior Men": "feb09793",
     "EFNL 2026|Blackburn Seniors|Senior Men": "1c7b6fc1",
@@ -14885,5 +14823,223 @@
   },
   "lastUpdated": "2026-08-13T00:27:42.556Z",
   "lastResultsFetch": "2026-08-13T00:27:42.556Z",
-  "lastStatsFetch": "2026-08-12T17:35:06.918Z"
+  "lastStatsFetch": "2026-08-12T17:35:06.918Z",
+  "seasonFiles": [
+    {
+      "file": "data/seasons/2170ac5a-core.json",
+      "seasonId": "2170ac5a",
+      "kind": "core",
+      "bytes": 951226
+    },
+    {
+      "file": "data/seasons/2170ac5a-players.json",
+      "seasonId": "2170ac5a",
+      "kind": "players",
+      "bytes": 3942431
+    },
+    {
+      "file": "data/seasons/263ca13b-core.json",
+      "seasonId": "263ca13b",
+      "kind": "core",
+      "bytes": 885570
+    },
+    {
+      "file": "data/seasons/263ca13b-players.json",
+      "seasonId": "263ca13b",
+      "kind": "players",
+      "bytes": 3776889
+    },
+    {
+      "file": "data/seasons/2dcbf383-core.json",
+      "seasonId": "2dcbf383",
+      "kind": "core",
+      "bytes": 2428837
+    },
+    {
+      "file": "data/seasons/2dcbf383-players.json",
+      "seasonId": "2dcbf383",
+      "kind": "players",
+      "bytes": 8093607
+    },
+    {
+      "file": "data/seasons/3733598c-core.json",
+      "seasonId": "3733598c",
+      "kind": "core",
+      "bytes": 1319600
+    },
+    {
+      "file": "data/seasons/3733598c-players.json",
+      "seasonId": "3733598c",
+      "kind": "players",
+      "bytes": 5283000
+    },
+    {
+      "file": "data/seasons/3c56297e-core.json",
+      "seasonId": "3c56297e",
+      "kind": "core",
+      "bytes": 1576123
+    },
+    {
+      "file": "data/seasons/3c56297e-players.json",
+      "seasonId": "3c56297e",
+      "kind": "players",
+      "bytes": 5268025
+    },
+    {
+      "file": "data/seasons/3fff6775-core.json",
+      "seasonId": "3fff6775",
+      "kind": "core",
+      "bytes": 1426757
+    },
+    {
+      "file": "data/seasons/3fff6775-players.json",
+      "seasonId": "3fff6775",
+      "kind": "players",
+      "bytes": 4677713
+    },
+    {
+      "file": "data/seasons/48ad3050-core.json",
+      "seasonId": "48ad3050",
+      "kind": "core",
+      "bytes": 349244
+    },
+    {
+      "file": "data/seasons/48ad3050-players.json",
+      "seasonId": "48ad3050",
+      "kind": "players",
+      "bytes": 1006195
+    },
+    {
+      "file": "data/seasons/4dfaaab5-core.json",
+      "seasonId": "4dfaaab5",
+      "kind": "core",
+      "bytes": 360450
+    },
+    {
+      "file": "data/seasons/4dfaaab5-players.json",
+      "seasonId": "4dfaaab5",
+      "kind": "players",
+      "bytes": 1130969
+    },
+    {
+      "file": "data/seasons/5488f6a0-core.json",
+      "seasonId": "5488f6a0",
+      "kind": "core",
+      "bytes": 1165271
+    },
+    {
+      "file": "data/seasons/5488f6a0-players.json",
+      "seasonId": "5488f6a0",
+      "kind": "players",
+      "bytes": 4402521
+    },
+    {
+      "file": "data/seasons/75d8a232-core.json",
+      "seasonId": "75d8a232",
+      "kind": "core",
+      "bytes": 2167020
+    },
+    {
+      "file": "data/seasons/75d8a232-players.json",
+      "seasonId": "75d8a232",
+      "kind": "players",
+      "bytes": 7766872
+    },
+    {
+      "file": "data/seasons/8c46e153-core.json",
+      "seasonId": "8c46e153",
+      "kind": "core",
+      "bytes": 927668
+    },
+    {
+      "file": "data/seasons/8c46e153-players.json",
+      "seasonId": "8c46e153",
+      "kind": "players",
+      "bytes": 3890373
+    },
+    {
+      "file": "data/seasons/c8e95577-core.json",
+      "seasonId": "c8e95577",
+      "kind": "core",
+      "bytes": 1108381
+    },
+    {
+      "file": "data/seasons/c8e95577-players.json",
+      "seasonId": "c8e95577",
+      "kind": "players",
+      "bytes": 4154459
+    },
+    {
+      "file": "data/seasons/ca9cc98b-core.json",
+      "seasonId": "ca9cc98b",
+      "kind": "core",
+      "bytes": 2001510
+    },
+    {
+      "file": "data/seasons/ca9cc98b-players.json",
+      "seasonId": "ca9cc98b",
+      "kind": "players",
+      "bytes": 7609977
+    },
+    {
+      "file": "data/seasons/cda2f0ec-core.json",
+      "seasonId": "cda2f0ec",
+      "kind": "core",
+      "bytes": 1239781
+    },
+    {
+      "file": "data/seasons/cda2f0ec-players.json",
+      "seasonId": "cda2f0ec",
+      "kind": "players",
+      "bytes": 4734761
+    },
+    {
+      "file": "data/seasons/d6ed597a-core.json",
+      "seasonId": "d6ed597a",
+      "kind": "core",
+      "bytes": 1392612
+    },
+    {
+      "file": "data/seasons/d6ed597a-players.json",
+      "seasonId": "d6ed597a",
+      "kind": "players",
+      "bytes": 5030453
+    },
+    {
+      "file": "data/seasons/ef761f0e-core.json",
+      "seasonId": "ef761f0e",
+      "kind": "core",
+      "bytes": 1565750
+    },
+    {
+      "file": "data/seasons/ef761f0e-players.json",
+      "seasonId": "ef761f0e",
+      "kind": "players",
+      "bytes": 5126859
+    },
+    {
+      "file": "data/seasons/fbe5e275-core.json",
+      "seasonId": "fbe5e275",
+      "kind": "core",
+      "bytes": 1306926
+    },
+    {
+      "file": "data/seasons/fbe5e275-players.json",
+      "seasonId": "fbe5e275",
+      "kind": "players",
+      "bytes": 5025142
+    },
+    {
+      "file": "data/seasons/feccaf1c-core.json",
+      "seasonId": "feccaf1c",
+      "kind": "core",
+      "bytes": 1611841
+    },
+    {
+      "file": "data/seasons/feccaf1c-players.json",
+      "seasonId": "feccaf1c",
+      "kind": "players",
+      "bytes": 5658136
+    }
+  ]
 }
