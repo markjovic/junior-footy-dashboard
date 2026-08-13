@@ -253,6 +253,12 @@ body{overflow-x:hidden}
 /* ── Mobile responsive ── */
 /* ── Mobile section tabs ── */
 .mob-tabs{display:none;gap:1px;background:var(--b1);border-bottom:1px solid var(--b1)}
+/* The view switch, as a full-width row. Shown only below 768px — above that the
+   header has room and keeps it. Margins pull it out of .main's padding so it
+   spans edge to edge like the section tabs below it. */
+.mob-view-tabs{gap:1px;background:var(--b1);border-bottom:1px solid var(--b1);
+  margin:-12px -12px 12px;padding:0}
+.mob-view-tabs .mob-tab{font-size:11px;padding:11px 4px}
 .mob-tab{flex:1;padding:9px 4px;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--tx3);background:var(--s1);border:none;transition:all .12s;font-family:'DM Mono',monospace}
 .mob-tab.on{color:var(--tx);background:var(--s2)}
 .mob-section{display:block}
@@ -285,6 +291,9 @@ body{overflow-x:hidden}
   .gotw-logo{width:32px;height:32px}
   .gotw-num{font-size:24px}
   .mob-tabs{display:flex}
+  /* Out of the clipped header, into a row that cannot be clipped. */
+  #view-switch{display:none!important}
+  .mob-view-tabs{display:flex!important}
   .mob-section{display:none}
   .mob-section.on{display:block}
   .dgrid{display:contents}
@@ -365,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.135</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.136</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -437,6 +446,10 @@ body{overflow-x:hidden}
   </aside>
 
   <main class="main">
+    <div class="mob-view-tabs" id="mob-view-tabs" style="display:none">
+      <button class="mob-tab on" id="mvt-dash"   onclick="switchView('dash')">Dashboard</button>
+      <button class="mob-tab"    id="mvt-finals" onclick="switchView('finals')">Finals</button>
+    </div>
     <div id="no-data" class="no-data-screen">
       <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.9">
         <defs>
@@ -686,7 +699,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.135</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.136</span>
         </div>
 
 
@@ -1532,6 +1545,12 @@ function render() {
   if (fv) fv.style.display = (hasData && finals) ? 'block' : 'none';
   const vs = document.getElementById('view-switch');
   if (vs) vs.style.display = hasData ? 'inline-flex' : 'none';
+  // The mobile row is the same control in a place the header cannot clip it.
+  // The media query decides whether it is on screen; this only decides whether
+  // there is anything to switch between.
+  const mvt = document.getElementById('mob-view-tabs');
+  if (mvt) mvt.style.display = hasData ? '' : 'none';
+  syncViewTabs();
   applyViewChrome();
 
   if (finals) {
@@ -1922,8 +1941,24 @@ function renderResults(age) {
 function switchView(v) {
   if (S.view === v) return;
   S.view = v;
+  syncViewTabs();
   saveFilters();
   render();
+}
+
+// The header switch and the mobile row are two controls for one piece of state.
+// Both are updated from S.view rather than from whichever was clicked, so they
+// cannot disagree — including when the view is restored from saved filters and
+// neither was clicked at all.
+function syncViewTabs() {
+  const on = (id, yes) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('on', yes);
+  };
+  on('vsw-dash', S.view !== 'finals');
+  on('vsw-finals', S.view === 'finals');
+  on('mvt-dash', S.view !== 'finals');
+  on('mvt-finals', S.view === 'finals');
 }
 
 // Club-mode orderings. Every numeric sort is descending and falls through the
