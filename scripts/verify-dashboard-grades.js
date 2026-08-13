@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v1 2026-08-12';
+const VERSION = 'verify-dashboard-grades v2 2026-08-13 gotw-key';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -526,6 +526,90 @@ console.log('\n15  A club card renders without throwing');
     ok(`sort "${s}" renders weighted`, !e2, e2 || 'clean');
   }
   run(`S.finalsSort = 'premiers'; S.finalsWeighted = true;`);
+}
+
+// ── 16. The GOTW key carries the competition ─────────────────────────────────
+// lastround_gotw_keying_design.md. This belongs in a suite because it fails
+// SILENTLY: a key the picker writes and a reader cannot build shows the automatic
+// closest-margin pick, which looks entirely normal. Nothing on screen says the
+// administrator's choice was ignored.
+console.log('\n16  The Game of the Week key carries the competition');
+ok('gotwKeyFor exists — one definition for five call sites', has('gotwKeyFor'));
+if (has('gotwKeyFor')) {
+  const k = (c, a, r) => run(`gotwKeyFor(${JSON.stringify(c)}, ${JSON.stringify(a)}, ${JSON.stringify(r)})`);
+
+  ok('a home-and-away key has three segments',
+    k('EFNL 2026', 'U12', '3') === 'EFNL 2026|U12|3', k('EFNL 2026', 'U12', '3'));
+
+  // THE DEFECT ITSELF. Before Beta 0.165 both of these were "U12|3", so setting
+  // one pick silently deleted the other.
+  ok('two competitions in the same age and round get DIFFERENT keys',
+    k('EFNL 2026', 'U12', '3') !== k('SEJ 2026', 'U12', '3'),
+    `${k('EFNL 2026', 'U12', '3')} vs ${k('SEJ 2026', 'U12', '3')}`);
+
+  // compName carries the season, so two seasons of one competition separate too.
+  ok('two seasons of one competition get DIFFERENT keys',
+    k('EFNL 2026', 'U12', '3') !== k('EFNL 2025', 'U12', '3'),
+    `${k('EFNL 2026', 'U12', '3')} vs ${k('EFNL 2025', 'U12', '3')}`);
+
+  // A finals round key is "F:GF". Splitting on the pipe must not disturb it.
+  ok('a finals round key survives intact',
+    k('EFNL 2026', 'U12', 'F:GF') === 'EFNL 2026|U12|F:GF', k('EFNL 2026', 'U12', 'F:GF'));
+  ok('and still has exactly three segments',
+    k('EFNL 2026', 'U12', 'F:GF').split('|').length === 3);
+
+  // Could that have failed? A key must not silently lose the competition when the
+  // caller has none — it must still be three segments so a split does not shift.
+  ok('a missing competition still yields three segments',
+    k(null, 'U12', '3').split('|').length === 3, k(null, 'U12', '3'));
+}
+
+// End to end: a flag stored under the NEW key must actually be honoured by
+// getGOTWMatch, and one stored under the OLD key must not be. Reading the key
+// builder alone would not catch a reader that still assembles its own.
+if (has('getGOTWMatch') && has('gotwKeyFor')) {
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|gA': { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA' },
+  }; rebuildGradeLabels();`);
+  sandbox.__g16 = [
+    { id: 'EFNL 2026|U12|gA|3|Norwood|Vermont', compName: 'EFNL 2026', age: 'U12',
+      rawGrade: 'A', gradeId: 'gA', round: 3, home: 'Norwood', away: 'Vermont',
+      hScore: 50, aScore: 10 },
+    { id: 'EFNL 2026|U12|gA|3|Blackburn|Mitcham', compName: 'EFNL 2026', age: 'U12',
+      rawGrade: 'A', gradeId: 'gA', round: 3, home: 'Blackburn', away: 'Mitcham',
+      hScore: 40, aScore: 39 },
+  ];
+  run(`S.matches = __g16.map(x => ({...x}));
+       S.roster = { 'EFNL 2026|Norwood|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+                    'EFNL 2026|Vermont|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+                    'EFNL 2026|Blackburn|U12': { grade: 'A', gradeId: 'gA', age: 'U12' },
+                    'EFNL 2026|Mitcham|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' } };
+       S.selComp = 'EFNL 2026'; S.selRound = ''; S.gotwFlags = {};
+       precomputeMatches(S.matches);`);
+
+  // With no flag the automatic pick wins: Blackburn v Mitcham is the closer game.
+  ok('with no flag, the closest margin is chosen',
+    run('(getGOTWMatch("U12")||{}).match && getGOTWMatch("U12").match.home') === 'Blackburn',
+    run('String((getGOTWMatch("U12")||{}).match && getGOTWMatch("U12").match.home)'));
+
+  // A flag under the OLD two-segment key must be ignored — that is the shape the
+  // page wrote before Beta 0.165 and it must no longer be honoured.
+  run(`S.gotwFlags = { 'U12|3': 'EFNL 2026|U12|gA|3|Norwood|Vermont' };`);
+  ok('a flag under the OLD age|roundKey is NOT honoured',
+    run('getGOTWMatch("U12").match.home') === 'Blackburn',
+    run('getGOTWMatch("U12").match.home'));
+
+  // The same flag under the new key must override the automatic pick.
+  run(`S.gotwFlags = { 'EFNL 2026|U12|3': 'EFNL 2026|U12|gA|3|Norwood|Vermont' };`);
+  ok('a flag under the NEW compName|age|roundKey IS honoured',
+    run('getGOTWMatch("U12").match.home') === 'Norwood',
+    run('getGOTWMatch("U12").match.home'));
+
+  // And a flag belonging to another competition must not leak across.
+  run(`S.gotwFlags = { 'SEJ 2026|U12|3': 'EFNL 2026|U12|gA|3|Norwood|Vermont' };`);
+  ok("another competition's flag does not leak in",
+    run('getGOTWMatch("U12").match.home') === 'Blackburn',
+    run('getGOTWMatch("U12").match.home'));
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

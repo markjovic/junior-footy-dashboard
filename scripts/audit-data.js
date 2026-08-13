@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/audit-data.js
 //
-// Reads data/core.json and data/orgs/*.json and reports whether what is on disk
+// Reads data/core.json and data/seasons/*.json and reports whether what is on disk
 // agrees with the manifest. READ ONLY — it opens nothing for writing and there is
 // no commit step in its workflow.
 //
@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v10 2026-08-12 player-index-sizing';
+const VERSION = 'audit-data v11 2026-08-13 key-shapes';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -637,6 +637,48 @@ console.log('\n8  A cross-season search index, sized');
   console.log(`  every player record, all seasons: ${mb(playerBytes)} (${allPlayers} records)`);
   if (minBytes) {
     console.log(`  the index is ${(playerBytes / minBytes).toFixed(0)}x smaller`);
+  }
+}
+
+// ── 9. Cross-organisation key shapes ────────────────────────────────────────
+// lastround_gotw_keying_design.md. Added as a ninth section rather than inserted
+// near the other core.json checks, so no existing section number moves.
+//
+// lastRound must be compName|age|gradeToken; gotwFlags must be
+// compName|age|roundKey. Neither carried a competition until 2026-08-13.
+//
+// This is here because BOTH failure modes are silent. A lastRound key the
+// dashboard cannot build renders no round number on the grade tab, and a
+// gotwFlags key it cannot build falls through to the automatic closest-margin
+// pick. Neither raises anything on screen — the lastRound mismatch went unnoticed
+// from Beta 0.133 until it was found by reading the two files side by side. This
+// is the only place a stale key can announce itself.
+console.log('\n9  Cross-organisation key shapes (lastround_gotw_keying_design.md)');
+{
+  const compNames = new Set((core.manifest || []).filter(m => m.compName).map(m => m.compName));
+  const SHAPES = [
+    { key: 'lastRound', shape: 'compName|age|gradeId',
+      repair: 'a full (non-VIP) results run rebuilds it' },
+    { key: 'gotwFlags', shape: 'compName|age|roundKey',
+      repair: 'these are set from the dashboard, so a wrong one must be re-picked' },
+  ];
+  for (const { key, shape, repair } of SHAPES) {
+    const keys = Object.keys(core[key] || {});
+    const wrong = keys.filter(k => k.split('|').length !== 3);
+    const unknownComp = keys.filter(k =>
+      k.split('|').length === 3 && !compNames.has(k.slice(0, k.indexOf('|'))));
+    console.log(`  ${key.padEnd(10)} ${String(keys.length).padStart(5)} key(s), ` +
+      `${keys.length - wrong.length} in the ${shape} shape`);
+    if (wrong.length) {
+      warn(`core.${key}: ${wrong.length} of ${keys.length} key(s) are not ${shape} — e.g. ` +
+           `${wrong.slice(0, 3).map(k => `"${k}"`).join(', ')}. index.html cannot build these, ` +
+           `so nothing reads them and nothing reports an error. To repair: ${repair}.`);
+    }
+    if (unknownComp.length) {
+      warn(`core.${key}: ${unknownComp.length} key(s) name a competition absent from the ` +
+           `manifest — e.g. ${unknownComp.slice(0, 3).map(k => `"${k}"`).join(', ')}. ` +
+           `Unreachable, because the dashboard builds the key from a manifest compName.`);
+    }
   }
 }
 
