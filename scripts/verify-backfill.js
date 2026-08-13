@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v3 2026-08-13 placeholder-round';
+const VERSION = 'verify-backfill v4 2026-08-13 gameid-dedup';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -124,6 +124,9 @@ async function gqlPost(query, vars) {
     return { data: { discoverGrade: { id: vars.gradeID, name: 'U12 Mixed A', dates: g.dates,
       rounds } } };
   }
+  // STUB_RENAME='true' appends a suffix to every team name while keeping the
+  // fixture ids identical — PlayHQ's mid-season rename, reproduced.
+  const REN = (n) => process.env.STUB_RENAME === 'true' ? n + ' - LP' : n;
   if (query.includes('discoverFixtureByRound')) {
     // Round 2 is the round under test. STUB_R2 selects its shape:
     //   placeholder  one PENDING game dated in the PAST — the SEJ dummy fixture
@@ -137,19 +140,19 @@ async function gqlPost(query, vars) {
                  : r2 === 'future'      ? '2099-01-05'
                  : null;
       return { data: { discoverFixtureByRound: { games: [
-        { id: 'dummy', home: team('Dummy 1', 'aaaa1111'), away: team('Dummy 2', 'bbbb2222'),
+        { id: 'dummy-' + vars.roundID, home: team('Dummy 1', 'aaaa1111'), away: team('Dummy 2', 'bbbb2222'),
           result: { home: stats(0, 0, 0), away: stats(0, 0, 0) },
           status: { value: 'PENDING' }, date,
           allocation: { court: { venue: null } } },
       ] } } };
     }
     return { data: { discoverFixtureByRound: { games: [
-      { id: 'g1', home: team('Blackburn U12', '383836bb'), away: team('Norwood U12', 'aaaa1111'),
+      { id: 'g1-' + vars.roundID, home: team(REN('Blackburn U12'), '383836bb'), away: team(REN('Norwood U12'), 'aaaa1111'),
         result: { home: stats(10, 5, 65), away: stats(8, 3, 51) },
         status: { value: 'FINAL' }, date: '2025-04-05',
         allocation: { court: { venue: { name: 'Morton Park', suburb: 'Blackburn',
           state: 'VIC', latitude: -37.8, longitude: 145.1 } } } },
-      { id: 'g2', home: team('Vermont U12', 'bbbb2222'), away: team('Mitcham U12', 'cccc3333'),
+      { id: 'g2-' + vars.roundID, home: team(REN('Vermont U12'), 'bbbb2222'), away: team(REN('Mitcham U12'), 'cccc3333'),
         result: { home: stats(12, 6, 78), away: stats(4, 2, 26) },
         status: { value: 'FINAL' }, date: '2025-04-05',
         allocation: { court: { venue: { name: 'Vermont Reserve', suburb: 'Vermont',
@@ -653,6 +656,84 @@ console.log('\n11  A placeholder round does not stop the round walk');
   ok('and it walks past the placeholder again',
     /placeholder or abandoned, continuing/.test(r.out),
     'the gap is permanent, so this costs one call per run — by design');
+}
+
+// ── 12. A renamed team must SUPERSEDE its old record, not add beside it ──────
+// Fix A of lastround/rename design. The match id embeds both team names, so when
+// PlayHQ renames a team the next re-fetch of that round builds a DIFFERENT id and
+// byId cannot tell it is the same fixture. Before engine v16 the old record
+// survived and the new one was added beside it, so the ladder counted the game
+// twice.
+//
+// Measured in SEJ 2026 U10 on 2026-08-13: sixteen phantom records in a5a8276d and
+// six in cb7b3db3, one per renamed side, all on round 9 — the round that was the
+// highest known when the rename landed. Every affected ladder gained a game in
+// its P column.
+//
+// STUB_RENAME re-serves identical fixture ids under changed names.
+console.log('\n12  A renamed team supersedes rather than duplicates');
+{
+  const count = (p) => (read(p).matches || []).filter(m => !m.isBye && !m.isPartial).length;
+  const names = (p) => [...new Set((read(p).matches || [])
+    .flatMap(m => [m.home, m.away]).filter(Boolean))].sort();
+
+  reset();
+  let r = run('fetch-results.js', { VIP_ONLY: 'true' });
+  ok('exit 0 on the first run', r.code === 0, `exit ${r.code}`);
+  const before = count(EFNL_CUR);
+  ok('records stored under the original names', before === 2, `${before}`);
+  ok('and they carry a gameId',
+    (read(EFNL_CUR).matches || []).every(m => m.isBye || m.isPartial || !!m.gameId),
+    JSON.stringify((read(EFNL_CUR).matches || []).map(m => m.gameId)));
+  ok('the original names are stored',
+    names(EFNL_CUR).includes('Blackburn'), JSON.stringify(names(EFNL_CUR)));
+
+  // Same fixture ids, new names. THE assertion: the count must not grow.
+  r = run('fetch-results.js', { VIP_ONLY: 'true', STUB_RENAME: 'true' });
+  ok('exit 0 after the rename', r.code === 0, `exit ${r.code}`);
+  ok('the record count did NOT grow',
+    count(EFNL_CUR) === before,
+    `${before} before, ${count(EFNL_CUR)} after — a grown count is the duplicate`);
+  ok('the supersede was reported, not silent',
+    /Superseded \d+ record\(s\) whose team name\(s\) changed/.test(r.out),
+    'replacing stored data quietly is not something to find out later');
+  ok('the NEW name is stored',
+    names(EFNL_CUR).includes('Blackburn - LP'), JSON.stringify(names(EFNL_CUR)));
+  ok('the OLD name is GONE',
+    !names(EFNL_CUR).includes('Blackburn'), JSON.stringify(names(EFNL_CUR)));
+
+  // Could it have failed? A run with no rename must supersede nothing, or the
+  // assertion above would pass for any run at all.
+  reset();
+  run('fetch-results.js', { VIP_ONLY: 'true' });
+  r = run('fetch-results.js', { VIP_ONLY: 'true' });
+  ok('an unchanged re-run supersedes nothing',
+    !/Superseded/.test(r.out), 'otherwise the check fires on every run and means nothing');
+  ok('and still stores exactly two records', count(EFNL_CUR) === 2, `${count(EFNL_CUR)}`);
+
+  // Records written before v16 have no gameId. They must behave exactly as they
+  // did — indexed by id alone, never colliding on an empty gameId.
+  reset();
+  run('fetch-results.js', { VIP_ONLY: 'true' });
+  {
+    const f = read(EFNL_CUR);
+    f.matches.forEach(m => { delete m.gameId; });
+    fs.writeFileSync(EFNL_CUR, JSON.stringify(f));
+    r = run('fetch-results.js', { VIP_ONLY: 'true' });
+    ok('pre-v16 records with no gameId do not collapse together',
+      count(EFNL_CUR) === 2, `${count(EFNL_CUR)} — an empty gameId must not be an index key`);
+    ok('and they acquire a gameId when re-fetched',
+      (read(EFNL_CUR).matches || []).every(m => m.isBye || m.isPartial || !!m.gameId),
+      'this is what makes the fix need no migration');
+    // The read-side `if (m.gameId)` guard. Two pre-v16 records both have no
+    // gameId, so indexing them anyway would file both under the empty string and
+    // report a duplicate that does not exist. That is cosmetic rather than
+    // corrupting — it produces a wrong log line, not wrong data — which is why it
+    // needs its own assertion instead of being covered by the count checks.
+    ok('two gameId-less records are NOT reported as duplicates of each other',
+      !/Pre-existing gameId duplicates found/.test(r.out),
+      'an empty gameId is not an identity');
+  }
 }
 
 // ── 10. lastRoundKey resolves through the ROSTER, not the record ─────────────
