@@ -66,7 +66,7 @@ const {
 } = require('./lib/results-engine');
 const store = require('./lib/store');
 
-const VERSION = 'probe-concurrent-comps v2 2026-08-13 full-dump';
+const VERSION = 'probe-concurrent-comps v3 2026-08-13 ladder-attribution';
 const ROOT = path.resolve(__dirname, '..');
 
 const ORG    = (process.env.PROBE_ORG    || '1cf85e52').trim();
@@ -370,6 +370,118 @@ async function main() {
         log(`    stored                      : ${have.join(' ') || '(none)'}`);
         log(`    MISSING FROM STORAGE        : ${missing.join(' ') || '(none)'}` +
           (missing.length ? '   <-- results exist and are not stored' : ''));
+      }
+    }
+  }
+
+  // ── 7. Ladder attribution — which grade each team's games COUNT towards ────
+  // Offline. No API calls: everything here comes from the stored records and the
+  // stored roster.
+  //
+  // WHY THIS SECTION EXISTS. Section 6 says which rounds are stored. It does not
+  // say which LADDER their games land on, and those are different questions,
+  // because index.html does not group by the grade a record was stored under. It
+  // groups by matchGrade() -> currentGrade() -> rosterGrade(), i.e. the grade the
+  // ROSTER says the team is in now. Reproduced here by the same expression.
+  //
+  // Team ids are never stored. cleanTeam(name) is the identity in every match id,
+  // roster key, teamOrg entry and teamLogos entry. So the two sets of ids PlayHQ
+  // uses for one side across a restructure are told apart only by name — and
+  // "Narre North Foxes FC U10 Girls - LP" and "Narre North Foxes FC U10 Girls"
+  // stay distinct after the age token is stripped, while colliding on everything
+  // else.
+  //
+  // A ladder row's P column is what this measures, and a derivation from reading
+  // the code gave a figure that did not match the screen. This settles it by
+  // counting the real records.
+  if (stored && (stored.__filesRead || []).length) {
+    log(`\n${'='.repeat(74)}\n7  Ladder attribution from stored records\n${'='.repeat(74)}`);
+    const roster = stored.roster || {};
+    // rosterGrade() from index.html, verbatim in behaviour.
+    const resolve = (name, ageTok, rawGrade) => {
+      const e = roster[`${entry.compName}|${name}|${ageTok}`];
+      if (!e) return rawGrade;
+      return e.gradeId || e.grade || rawGrade;
+    };
+
+    const recs = (stored.matches || []).filter(m =>
+      m.compName === entry.compName && inAgeIds.has(m.gradeId || ''));
+    log(`${recs.length} stored record(s) in this age`);
+
+    // Per team: stored-under grades, roster resolution, games, rounds.
+    const perTeam = new Map();
+    let invalid = 0, valid = 0;
+    const invalidEx = [];
+    for (const m of recs) {
+      if (m.isBye || m.isPartial) continue;
+      const hg = resolve(m.home, m.age, m.rawGrade);
+      const ag = resolve(m.away, m.age, m.rawGrade);
+      // index.html sets _valid = (hg === ag) and every ladder, scorer list and
+      // grade tab filters on it. A record whose two sides resolve differently is
+      // silently dropped from the dashboard entirely.
+      const isValid = hg === ag && hg !== null && hg !== undefined;
+      if (isValid) valid++; else {
+        invalid++;
+        if (invalidEx.length < 12) {
+          invalidEx.push(`${pad(m.isFinals ? 'F:' + (m.finalsAbbrev || m.round) : 'R' + m.round, 6)} ` +
+            `stored ${pad(m.gradeId, 10)} ${pad(m.home, 34)} -> ${pad(hg, 10)} v ` +
+            `${pad(m.away, 34)} -> ${ag}`);
+        }
+      }
+      for (const side of ['home', 'away']) {
+        const nm = m[side];
+        if (!nm) continue;
+        if (!perTeam.has(nm)) {
+          perTeam.set(nm, { storedGrades: new Set(), rounds: new Set(),
+                            games: 0, countedGames: 0, resolved: null });
+        }
+        const t = perTeam.get(nm);
+        t.storedGrades.add(m.gradeId || '');
+        t.rounds.add(m.isFinals ? `F:${m.finalsAbbrev || m.round}` : String(m.round));
+        t.games++;
+        if (isValid) t.countedGames++;
+        t.resolved = resolve(nm, m.age, m.rawGrade);
+      }
+    }
+    log(`${valid} record(s) count towards a ladder, ${invalid} are DROPPED because the ` +
+        `two sides resolve to different grades`);
+    if (invalidEx.length) {
+      log(`\n  dropped records, examples:`);
+      for (const e of invalidEx) log(`    ${e}`);
+      if (invalid > invalidEx.length) log(`    ... ${invalid - invalidEx.length} more`);
+    }
+
+    const wT = Math.max(30, ...[...perTeam.keys()].map(n => n.length)) + 2;
+    log(`\n  ${pad('stored team name', wT)}${pad('stored under', 22)}` +
+        `${pad('roster says', 12)}${pad('games', 7)}${pad('counted', 9)}rounds`);
+    const rows = [...perTeam].sort((a, b) =>
+      (a[1].resolved === b[1].resolved ? 0 : String(a[1].resolved) < String(b[1].resolved) ? -1 : 1)
+      || (a[0] < b[0] ? -1 : 1));
+    for (const [nm, t] of rows) {
+      log('  ' + pad(nm, wT) + pad([...t.storedGrades].join(','), 22) +
+        pad(t.resolved, 12) + pad(t.games, 7) + pad(t.countedGames, 9) +
+        [...t.rounds].sort().join(' '));
+    }
+
+    // What each ladder actually shows: teams grouped by the grade the roster
+    // resolves them to, which is the grade tab they appear under.
+    log(`\n  LADDERS as the dashboard would build them — grouped by roster grade:`);
+    const byResolved = new Map();
+    for (const [nm, t] of perTeam) {
+      const k = String(t.resolved);
+      if (!byResolved.has(k)) byResolved.set(k, []);
+      byResolved.get(k).push([nm, t]);
+    }
+    for (const [gid, ts] of byResolved) {
+      const label = nameOfGrade.get(gid) || `(no grade named ${gid})`;
+      log(`\n    ${label}  [${gid}] — ${ts.length} team(s)`);
+      for (const [nm, t] of ts.sort((a, b) => b[1].countedGames - a[1].countedGames)) {
+        log(`      P=${pad(t.countedGames, 4)} ${pad(nm, wT)} stored under ${[...t.storedGrades].join(',')}`);
+      }
+      const spread = new Set(ts.map(([, t]) => t.countedGames));
+      if (spread.size > 1) {
+        log(`      >> ${spread.size} different games-played counts on ONE ladder: ` +
+            `${[...spread].sort((a, b) => a - b).join(', ')}`);
       }
     }
   }
