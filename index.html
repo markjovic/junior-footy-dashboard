@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.136</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.137</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -699,7 +699,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.136</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.137</span>
         </div>
 
 
@@ -1236,6 +1236,29 @@ function gLabel(key) {
   return (S.gradeLabelById && S.gradeLabelById[key]) || key;
 }
 
+// Is this key a real PlayHQ grade id, or a leftover rawGrade?
+function isGradeId(key) {
+  return !!(key && S.gradeLabelById && S.gradeLabelById[key]);
+}
+
+// The grade a PLAYER's team counts towards, in the same shape ladders group by.
+//
+// currentGrade() resolves through the roster and returns a grade id — but only
+// when the team is found there. Player records carry `teamRaw` with a colour
+// word, match records carry a cleaned name, and the two do not always meet. A
+// team that misses falls back to its rawGrade, which is not an id, so it matched
+// nothing in a set of ids and its scorers silently vanished from the list.
+//
+// fetch-stats.js already stores gradeID on every player record as a join key.
+// Where the roster cannot answer, that is the authoritative answer.
+function playerGrade(p) {
+  const lookupTeam = p.teamRaw || p.team;
+  const viaRoster = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
+  if (isGradeId(viaRoster)) return viaRoster;
+  if (p.gradeID) return p.gradeID;
+  return viaRoster;
+}
+
 // Sort position for a grade within its competition and age. PlayHQ's own
 // ordering (rank 1 = strongest) is preferred; GRADE_ORDER on the label is the
 // fallback for grades with no metadata yet.
@@ -1460,9 +1483,7 @@ function getTopScorers(age, n=9999) {
       if (p.age !== age) return false;
       // Filter by competition
       if (S.selComp && p.compName !== S.selComp) return false;
-      // Use teamRaw (full name with colour) for roster lookup — matches roster key format
-      const lookupTeam = p.teamRaw || p.team;
-      const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName);
+      const teamGrade = playerGrade(p);
       // If teamGrade is empty (single-division grade), include the player regardless of grade filter
       // Also pass if teamGrade looks like an unresolved full grade name (e.g. "U08 Mixed")
       // Only bypass for names containing a U-age prefix — not division names like "Senior Men"
@@ -1842,7 +1863,7 @@ function renderScorers(age) {
     const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '-';
     // Use teamRaw for roster lookup (includes colour word, matches roster key)
     const lookupTeam = p.teamRaw || p.team;
-    const teamGrade = currentGrade(lookupTeam, p.age, p.rawGrade, p.compName) || p.rawGrade || '';
+    const teamGrade = playerGrade(p) || p.rawGrade || '';
     const gc = `gtag-${abbrevGrade(gLabel(teamGrade)).replace(/[^A-Za-z0-9]/g,'')}`;
     // Display name: use teamRaw stripped of age suffix for readability
     const displayTeam = (p.teamRaw || p.team).replace(/\s+U\d+\s*/g,' ').trim();
