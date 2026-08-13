@@ -26,7 +26,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v14 2026-08-13 lastround-rekey';
+const ENGINE_VERSION = 'v15 2026-08-13 placeholder-round';
 
 'use strict';
 
@@ -681,8 +681,43 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
     }
 
     if (finalGames.length === 0) {
-      // Games scheduled but none final — not played yet, stop
-      console.log(`scheduled, not yet played — stopping`);
+      // Games scheduled but none final. Two quite different things look like
+      // this, and until v15 both were treated as the leading edge of the season:
+      //
+      //   NOT PLAYED YET — dated today or later. Nothing after it can have been
+      //   played either, so stopping is right and saves a call per later round.
+      //
+      //   A PLACEHOLDER or ABANDONMENT — dated in the past. It will never become
+      //   final, so stopping here stops FOREVER. SEJ 2026 round 10 of
+      //   cb7b3db3 is one game, "Dummy U10 Girls 1 v Dummy U10 Girls 2", PENDING,
+      //   venue TBC, dated 2026-07-12 — the week a Lightning Premiership round
+      //   robin replaced the normal fixture. Rounds 11 to 14 all have real
+      //   results and were never fetched. Measured 2026-08-13 by
+      //   scripts/probe-concurrent-comps.js: four rounds, eight games, absent
+      //   from storage and unreachable.
+      //
+      // The GAME date decides, not the round's provisionalDates — see the note at
+      // the future-round detection above, which records that PlayHQ's round dates
+      // carry data-entry errors. Game dates were measured clean across all 68
+      // calls of the probe run and are present on non-final games.
+      //
+      // A string compare on YYYY-MM-DD, exactly as the season-ended guard does.
+      // Never new Date(string).
+      const dated = games.map(g => g.date).filter(Boolean).sort();
+      const latest = dated.length ? dated[dated.length - 1] : '';
+      if (latest && latest < today) {
+        // Nothing is recorded for this round. NOT a bye: a bye asserts the grade
+        // had no game that week, and here it did play — in another grade. Writing
+        // one would hide the gap from audit-data.js while storing something
+        // false. The gap is real and stays visible.
+        console.log(`no results, dated ${latest} in the past — placeholder or ` +
+          `abandoned, continuing`);
+        continue;
+      }
+      // Undated games fall through to the break deliberately: with no date there
+      // is no evidence it is in the past, and the safe reading of no evidence is
+      // the behaviour that was already there.
+      console.log(`scheduled, not yet played${latest ? ` (${latest})` : ''} — stopping`);
       break;
     }
 
