@@ -190,9 +190,13 @@ function ensureDataDir() {
   }
 }
 
+// Bump on every change. Printed first so a stale copy in an Actions log is
+// distinguishable from a real failure.
+const VERSION = 'build-club-index v2 2026-08-12 all-seasons-no-players';
+
 async function main() {
   ensureDataDir();
-  console.log('build-club-index.js');
+  console.log(`=== ${VERSION} ===`);
   console.log(`Options: ${JSON.stringify(OPTS)}`);
 
   readJson(CONFIG_PATH, 'config.json'); // presence check only
@@ -200,13 +204,20 @@ async function main() {
   // it writes only cross-organisation keys.
   let data;
   try {
-    data = store.load(null);
+    // Unscoped so every season contributes — teamClub is keyed comp|team|age and
+    // holds all eighteen, so a past season's teams resolve to a club too. That
+    // is why the finals by-club view showed everything before 2026 as
+    // Unattributed: this had not run since the backfill added those seasons.
+    //
+    // players:false because it reads teamOrg and match records and never a
+    // player. Loading them meant 82.57 MB of records this script does not touch.
+    data = store.load(null, { players: false });
   } catch (e) {
     console.error(`FATAL: ${e.message}`);
     process.exit(1);
   }
   const cache = readJson(CLUBS_PATH, 'clubs.json', {});
-  console.log(`Loaded data.json: ${(data.matches || []).length} match record(s)`);
+  console.log(`Loaded ${(data.matches || []).length} match record(s) across every season`);
   console.log(`Loaded clubs.json cache: ${Object.keys(cache).length} club(s)`);
 
   // ── Scan match records for club evidence ──
