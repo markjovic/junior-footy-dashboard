@@ -26,6 +26,7 @@ query discoverSeason($id: String!) {
       rounds {
         id
         number
+        current
         isFinalsRound
       }
     }
@@ -74,12 +75,18 @@ async function main() {
   const grades = seasonRes?.data?.discoverSeason?.grades || [];
   if (!grades.length) { console.error('No grades returned for SER 2026'); process.exit(1); }
 
-  // Pick the first grade that has at least one round.
+  // Pick the most recent completed home-and-away round from any grade.
+  // Round 1 returns 0 games from discoverFixtureByRound for completed seasons.
+  // Take the highest-numbered non-finals round across all grades.
   let roundId = null;
   let gradeName = '';
+  let bestNum = -1;
   for (const g of grades) {
-    const r = (g.rounds || []).find(r => !r.isFinalsRound);
-    if (r) { roundId = r.id; gradeName = g.name; break; }
+    const rounds = (g.rounds || []).filter(r => !r.isFinalsRound);
+    for (const r of rounds) {
+      const n = parseInt(r.number, 10) || 0;
+      if (n > bestNum) { bestNum = n; roundId = r.id; gradeName = g.name; }
+    }
   }
   if (!roundId) { console.error('No round found'); process.exit(1); }
 
