@@ -1,0 +1,84 @@
+# .github/workflows/cleanup-obsolete.yml
+#
+# Removes files superseded by the 2026-08-11 and 2026-08-12 storage work.
+#
+# EVERY REMOVAL IS EXPLICITLY LISTED IN scripts/cleanup-obsolete.js, with a
+# reason and a replacement. There is no glob. Nothing is removed unless its
+# replacement exists on disk.
+#
+# DEFAULTS TO A DRY RUN, which prints what would go and why.
+#
+# ⚠️ include_rollback_data removes data/orgs (~105 MB) and data/data.json — the
+# rollback paths from the two storage migrations. data/orgs restored 179,624
+# player records on 2026-08-12, so leave it until the per-season layout has run a
+# full weekend of scheduled fetches without incident.
+#
+# Everything removed stays in git history. A mistake is one revert away.
+
+name: Clean up obsolete files
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be removed and stop'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      include_rollback_data:
+        description: 'ALSO remove data/orgs and data/data.json (~105 MB) — only after a clean weekend'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check scripts/cleanup-obsolete.js
+          node --check scripts/verify-cleanup.js
+          echo "both parse"
+
+      # Prove the guards refuse before trusting a run that deletes anything.
+      - name: Verify the cleanup
+        run: node scripts/verify-cleanup.js
+
+      - name: Clean up
+        id: cleanup
+        env:
+          CLEANUP_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          CLEANUP_ROLLBACK_DATA: ${{ github.event.inputs.include_rollback_data }}
+        run: |
+          set +e
+          node scripts/cleanup-obsolete.js
+          CODE=$?
+          echo "exit_code=$CODE" >> $GITHUB_OUTPUT
+          set -e
+          # 0 = removed, 2 = nothing to do or dry run. Anything else is a failure,
+          # including a refusal because a replacement is missing.
+          if [ "$CODE" != "0" ] && [ "$CODE" != "2" ]; then
+            echo "cleanup-obsolete.js exited $CODE — failing the job"
+            exit "$CODE"
+          fi
+
+      - name: Commit
+        if: steps.cleanup.outputs.exit_code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # -A so deletions are staged. data/ alone would miss the scripts and
+          # workflows, and naming root-level data.json fails with exit 128 —
+          # it was moved into data/ on 2026-08-11.
+          git add -A
+          git diff --staged --quiet || git commit -m "remove obsolete scripts and workflows (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push

@@ -44,6 +44,8 @@ jobs:
                    scripts/rebuild-grade-meta.js \
                    scripts/split-by-season.js \
                    scripts/verify-per-season.js \
+                   scripts/cleanup-obsolete.js \
+                   scripts/verify-cleanup.js \
                    scripts/verify-audit.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
@@ -63,7 +65,8 @@ jobs:
           # verify-per-season.js covers store.js.
           SUITES="verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades \
-                  verify-rebuild-grade-meta verify-per-season verify-audit"
+                  verify-rebuild-grade-meta verify-per-season \
+                  verify-cleanup verify-audit"
           FAILED=0
           SUMMARY=""
           for s in $SUITES; do
