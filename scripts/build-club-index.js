@@ -192,7 +192,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed first so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const VERSION = 'build-club-index v3 2026-08-12 accurate-log';
+const VERSION = 'build-club-index v4 2026-08-13 teamlogos-fallback';
 
 async function main() {
   ensureDataDir();
@@ -270,6 +270,27 @@ async function main() {
     }
   }
   console.log(`Club codes from match logos (fallback): ${fromMatchLogos}`);
+
+  // Second fallback: teamLogos, keyed by bare team name. These were harvested
+  // from logo URLs before per-match copies were stripped, so they contain the
+  // same org codes. For teams whose rounds were all stored before teamOrg was
+  // introduced, this is the only remaining evidence.
+  const teamLogosMap = data.teamLogos || {};
+  let fromTeamLogos = 0;
+  for (const key of [...noLogo]) {
+    const parts = key.split('|');
+    if (parts.length < 2) continue;
+    const teamName = parts[1];
+    const logoUrl = teamLogosMap[teamName];
+    if (!logoUrl) continue;
+    const id = clubIdFromLogo(logoUrl);
+    if (!id) continue;
+    withLogo.add(key);
+    if (!votes.has(key)) votes.set(key, new Map());
+    votes.get(key).set(id, (votes.get(key).get(id) || 0) + 1);
+    fromTeamLogos++;
+  }
+  console.log(`Club codes from teamLogos (second fallback): ${fromTeamLogos}`);
   for (const k of [...noLogo]) if (withLogo.has(k)) noLogo.delete(k);
 
   // Resolve each team to a single club id, reporting any disagreement rather
