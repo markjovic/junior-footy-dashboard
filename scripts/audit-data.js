@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v11 2026-08-13 key-shapes';
+const VERSION = 'audit-data v12 2026-08-13 live-gaps-first';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -307,6 +307,7 @@ for (const r of rows.sort()) console.log(line(r));
 console.log('\n4  Round coverage, per grade id — what the fetcher re-walks every run');
 let gradesChecked = 0, gradesWithGaps = 0;
 const gapExamples = [];
+const allGaps = [];   // every gap, ranked before ten are printed
 const emptyGrade = new Map();
 // fetch-results.js takes its competition list from config.json, which holds only
 // the current seasons, so it never walks an archived season's rounds. A gap in a
@@ -327,14 +328,27 @@ for (const [c, b] of byComp) {
     if (missing.length) {
       gradesWithGaps++;
       if (isLive) liveWithGaps++; else retiredWithGaps++;
-      if (gapExamples.length < 10) {
-        gapExamples.push(`${isLive ? 'LIVE    ' : 'retired '}${key} — has 1..${max}, missing ${missing.join(', ')}`);
-      }
+      // Collected in full and ranked below. Taking the first ten as they arrived
+      // meant byComp iteration order decided which were shown: on 2026-08-13 the
+      // run reported 1 live gap and 67 retired ones, and all ten printed
+      // examples were retired. The single gap that costs anything per run was
+      // the one gap not printed.
+      allGaps.push({ isLive, key, max, missing });
     }
-    // An empty rawGrade means parseGradeName could not resolve a grade name and
-    // collapsed it. Every grade sharing that key shares a match id space.
+    // No grade id AND no rawGrade. parseGradeName collapsed the name and the
+    // record has not been migrated, so nothing identifies its grade.
     if (key.split('|')[2] === '') emptyGrade.set(c, (emptyGrade.get(c) || 0) + 1);
   }
+}
+
+// LIVE first, then by how many rounds are missing. A retired gap costs nothing
+// per run; a live one is re-fetched every time. Ranking by cost is the whole
+// point of separating the two counts a few lines above.
+allGaps.sort((a, b) => (Number(b.isLive) - Number(a.isLive)) ||
+                       (b.missing.length - a.missing.length));
+for (const g of allGaps.slice(0, 10)) {
+  gapExamples.push(`${g.isLive ? 'LIVE    ' : 'retired '}${g.key} — has 1..${g.max}, ` +
+    `missing ${g.missing.join(', ')}`);
 }
 console.log(`  ${gradesChecked} grade(s) checked, ${gradesWithGaps} with a missing round ` +
   `(${liveWithGaps} in a live season, ${retiredWithGaps} in a retired one)`);
@@ -369,10 +383,15 @@ if (gradesWithGaps > gapExamples.length) {
   warn(`${gradesWithGaps - gapExamples.length} further grade(s) with gaps, not listed`);
 }
 for (const [c, n] of emptyGrade) {
-  warn(`${c}: ${n} grade key(s) have an empty rawGrade — parseGradeName collapsed them. ` +
-       `Match ids are no longer affected once a record is migrated, but index.html still ` +
-       `groups ladders by rawGrade, so these grades share a ladder until ` +
-       `grade_identity_migration.md build-order step 6`);
+  // The old wording said these grades "share a ladder until build-order step 6".
+  // Step 6 is done — index.html groups ladders by gradeId, which is what section
+  // 7 above measures at 99.91% — so that sentence had been wrong since Beta
+  // 0.133 and was printed on every run.
+  warn(`${c}: ${n} grade key(s) have neither a grade id nor a rawGrade — ` +
+       `parseGradeName collapsed the name and these records are not migrated. ` +
+       `Ladders group by gradeId, so they no longer merge on screen; the effect is ` +
+       `that these records are the "needs pass 2" rows in section 7. They self-heal ` +
+       `when a results run next fetches a real round for the grade`);
 }
 
 // ── 5. grades.json coverage ──────────────────────────────────────────────────

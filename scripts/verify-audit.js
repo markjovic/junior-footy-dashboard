@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-audit v2 2026-08-13 key-shapes';
+const VERSION = 'verify-audit v3 2026-08-13 live-gaps-first';
 console.log(`=== ${VERSION} ===`);
 
 const AUDIT = path.join(__dirname, 'audit-data.js');
@@ -117,6 +117,9 @@ function write(fx) {
   fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify(fx.core, null, 2));
   if (fx.current) writeSeason('2dcbf383', fx.current);
   if (fx.archive) writeSeason('75d8a232', fx.archive);
+  // Season files are read in sorted filename order, so anything placed here is
+  // read AFTER both of the above. Used by 4c-bis.
+  if (fx.extra) writeSeason(fx.extraId, fx.extra);
   if (fx.grades) fs.writeFileSync(path.join(TMP, 'data', 'grades.json'), JSON.stringify(fx.grades));
 }
 
@@ -235,9 +238,15 @@ seeded('and is labelled LIVE so the two cannot be confused', fx => {
   fx.current.matches[1].id = 'EFNL 2026|U12|A|3|a|b';
 }, /LIVE .*EFNL 2026\|U12\|A — has 1\.\.3, missing 2/, 0);
 
-seeded('an empty rawGrade is reported as a collapsed grade', fx => {
+seeded('a grade with neither an id nor a rawGrade is reported', fx => {
   for (const m of fx.archive.matches) { m.rawGrade = ''; m.id = m.id.replace('|A|', '||'); }
-}, /empty rawGrade/, 0);
+}, /neither a grade id nor a rawGrade/, 0);
+
+// The old wording claimed these grades "share a ladder until build-order step 6".
+// Step 6 has been done since Beta 0.133, so that sentence was wrong on every run.
+seeded('and does NOT claim they still share a ladder', fx => {
+  for (const m of fx.archive.matches) { m.rawGrade = ''; m.id = m.id.replace('|A|', '||'); }
+}, /Ladders group by gradeId, so they no longer merge on screen/, 0);
 
 seeded('a season with no grades in grades.json', fx => {
   fx.grades = fx.grades.filter(g => g.seasonID !== '75d8a232');
@@ -337,6 +346,64 @@ LAST = audit();
 ok('a gradeId with an unmigrated id does NOT count as done',
   /0 of 5 record\(s\) carry their PlayHQ grade id/.test(LAST.out),
   (LAST.out.match(/\d+ of \d+ record\(s\) carry[^.]*\./) || ['not reported'])[0]);
+
+// ── 4c-bis. A LIVE round gap must be printed even when retired gaps outnumber it
+// Only ten examples are printed. Until v12 they were the first ten found, in the
+// order the season files happened to be read — so on 2026-08-13 the audit
+// reported 1 live gap and 67 retired ones and printed ten retired examples,
+// hiding the only gap with a per-run cost. 52 assertions passed that day because
+// none of them checked WHICH examples were printed.
+console.log('\n4c-bis  A live round gap is not crowded out by retired ones');
+{
+  const fxg = clean();
+  // Twelve retired grades, each with rounds 1 and 3 stored and 2 missing. More
+  // than the ten example slots, so an unranked list cannot show anything else.
+  for (let i = 0; i < 12; i++) {
+    const gid = `z${i}`;
+    for (const rd of [1, 3]) {
+      fxg.archive.matches.push({ id: `EFNL 2025|U13|${gid}|${rd}|a|b`, compName: 'EFNL 2025',
+        age: 'U13', rawGrade: 'A', gradeId: gid, round: rd, home: 'a', away: 'b' });
+    }
+  }
+  fxg.archive.meta.phases.matches = fxg.archive.matches.length;
+  // The LIVE gap goes in a season whose id sorts LAST, so it is the last gap
+  // found. Putting it in 2dcbf383 proved nothing: that file is read first, so it
+  // headed the list whether or not the ranking existed — the first version of
+  // this test passed with the sort deleted.
+  fxg.extraId = 'ffffaaaa';
+  fxg.extra = {
+    meta: { seasonId: 'ffffaaaa', org: '383836bb', comps: ['EFNL 2027'],
+            phases: { results: true, players: false, matches: 2, players_n: 0 } },
+    matches: [
+      { id: 'EFNL 2027|U12|gx|1|a|b', compName: 'EFNL 2027', age: 'U12',
+        rawGrade: 'A', gradeId: 'gx', round: 1, home: 'a', away: 'b' },
+      { id: 'EFNL 2027|U12|gx|3|a|b', compName: 'EFNL 2027', age: 'U12',
+        rawGrade: 'A', gradeId: 'gx', round: 3, home: 'a', away: 'b' },
+    ],
+    players: [], roster: {}, gradeMeta: {},
+  };
+  fxg.core.manifest.push({ org: '383836bb', seasonId: 'ffffaaaa', seasonName: '2027',
+    compName: 'EFNL 2027', status: 'ACTIVE', retired: false,
+    phases: { results: true, players: false } });
+  fxg.core.seasonFiles.push(
+    { file: 'data/seasons/ffffaaaa-core.json', seasonId: 'ffffaaaa', kind: 'core', bytes: 1 },
+    { file: 'data/seasons/ffffaaaa-players.json', seasonId: 'ffffaaaa', kind: 'players', bytes: 1 });
+  fxg.grades.push({ id: 'gx', name: 'U12 - A', ageName: 'U12', genderName: 'Mixed',
+    seasonID: 'ffffaaaa', compName: 'EFNL 2027' });
+  write(fxg);
+  LAST = audit();
+  ok('the fixture really does have more retired gaps than example slots',
+    /12 with a missing round|1[0-9] with a missing round/.test(LAST.out),
+    (LAST.out.match(/\d+ grade\(s\) checked, \d+ with a missing round/) || ['not reported'])[0]);
+  ok('the LIVE gap is printed', /LIVE .*EFNL 2027\|U12\|gx/.test(LAST.out),
+    'this is the only gap that costs anything per run, and it is found LAST');
+  ok('and it is the FIRST example listed',
+    (LAST.out.match(/round gap — (LIVE|retired)/) || [])[1] === 'LIVE',
+    (LAST.out.match(/round gap — \S+/) || ['none'])[0]);
+  ok('retired gaps are still reported alongside it',
+    /round gap — retired/.test(LAST.out));
+  ok('exit 0 — gaps are warnings', LAST.code === 0, `exit ${LAST.code}`);
+}
 
 // ── 4d. Cross-organisation key shapes ───────────────────────────────────────
 // lastround_gotw_keying_design.md. Section 9 exists because both failure modes
