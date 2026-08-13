@@ -419,5 +419,26 @@ console.log('\n9  A promoted team stays on one ladder in ANY season');
     run('gradesForAge("U12")').length === 1, JSON.stringify(run('gradesForAge("U12")')));
 }
 
+// ── 10. Search results name their season ────────────────────────────────────
+// Search spans every loaded season, so one player returns one row per season
+// they played in — and the rest of the line is often identical between them.
+// Before the year selector only one season was ever loaded, so it never showed.
+console.log('\n10  A search result says which season it is');
+{
+  ok('seasonYearOf() defined', has('seasonYearOf'));
+  ok('it reads the year off a compName', run(`seasonYearOf('EFNL 2025')`) === '2025',
+    run(`seasonYearOf('EFNL 2025')`));
+  ok('a competition with a year in its NAME does not confuse it',
+    run(`seasonYearOf('AFL Barwon FNL 2024')`) === '2024',
+    run(`seasonYearOf('AFL Barwon FNL 2024')`));
+  ok('and something with no year yields nothing, not a wrong year',
+    run(`seasonYearOf('')`) === '' && run(`seasonYearOf('EFNL')`) === '');
+
+  const body = html.slice(html.indexOf('<body'));
+  ok('the search result renders the season', /yearTag/.test(body));
+  ok('and results are ordered newest season first',
+    /seasonYearOf\(a\.compName\)/.test(body) && /by\.localeCompare\(ay\)/.test(body));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
