@@ -42,7 +42,7 @@ const path = require('path');
 
 // Bump on every change. Printed by report() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const STORE_VERSION = 'v3 2026-08-12 per-season-files';
+const STORE_VERSION = 'v4 2026-08-12 write-only-if-changed';
 
 const ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -75,6 +75,31 @@ const TIMESTAMP_KEYS = [
   'lastUpdated', 'lastResultsFetch', 'lastStatsFetch',
   'lastFixtureFetch', 'lastClubIndex', 'exportedAt',
 ];
+
+// Compare what is about to be written against what is on disk, ignoring the
+// timestamp. Without this every run rewrote all 36 files even when it changed
+// half of them: a results run touches matches and never players, and a stats run
+// the reverse. Doing it here rather than asking each writer to declare what it
+// skips means a new writer gets the same protection without being told, and a
+// forgotten rule cannot cost a rewrite.
+//
+// generatedAt is excluded because it changes on every run and would make every
+// file look different. Everything else, including meta, is compared.
+function unchanged(p, payload) {
+  if (!fs.existsSync(p)) return false;
+  let existing;
+  try { existing = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return false; }
+  const strip = (o) => {
+    if (!o || typeof o !== 'object') return o;
+    const c = { ...o };
+    if (c.meta && typeof c.meta === 'object') {
+      c.meta = { ...c.meta };
+      delete c.meta.generatedAt;
+    }
+    return c;
+  };
+  return JSON.stringify(strip(existing)) === JSON.stringify(strip(payload));
+}
 
 function readJson(p, fallback) {
   if (!fs.existsSync(p)) return fallback;
@@ -268,37 +293,46 @@ function save(data, scope) {
   const written = [];
   const seasonPhases = new Map();
   let skipped = 0;
+  let untouched = 0;   // in scope, but byte-identical to what is already on disk
 
   for (const b of buckets.values()) {
     if (!inScope(b.seasonId)) { skipped++; continue; }
 
+    // A run that did not load players knows nothing about them, so it must
+    // carry forward what the file already says rather than writing zeros. Doing
+    // otherwise made the core file claim the season had no players, which is
+    // both wrong and a spurious rewrite on every results run.
+    const prevPhases = wrotePlayers ? null
+      : ((readJson(corePath(b.seasonId), null) || {}).meta || {}).phases || {};
     const phases = {
       results: b.matches.length > 0,
-      players: b.players.length > 0,
+      players: wrotePlayers ? b.players.length > 0 : prevPhases.players === true,
       matches: b.matches.length,
-      players_n: b.players.length,
+      players_n: wrotePlayers ? b.players.length : (prevPhases.players_n || 0),
     };
     // Recorded so the log can say "untouched" rather than "0 players", which
     // reads as data loss when the caller simply did not ask for them.
     seasonPhases.set(b.seasonId, wrotePlayers ? phases : { ...phases, playersUntouched: true });
 
     const cp = corePath(b.seasonId);
-    fs.writeFileSync(cp, JSON.stringify({
+    const corePayload = {
       meta: { seasonId: b.seasonId, org: b.org, comps: [...b.compNames].sort(),
               generatedAt: new Date().toISOString(), phases },
       matches: b.matches, roster: b.roster, gradeMeta: b.gradeMeta,
-    }), 'utf8');
-    written.push(path.relative(ROOT, cp));
+    };
+    if (unchanged(cp, corePayload)) { untouched++; }
+    else { fs.writeFileSync(cp, JSON.stringify(corePayload), 'utf8'); written.push(path.relative(ROOT, cp)); }
 
     // Only when the caller loaded players. A writer that skipped them must not
     // replace a season's whole player list with an empty one.
     if (wrotePlayers) {
       const pp = playersPath(b.seasonId);
-      fs.writeFileSync(pp, JSON.stringify({
+      const playersPayload = {
         meta: { seasonId: b.seasonId, generatedAt: new Date().toISOString(), count: b.players.length },
         players: b.players,
-      }), 'utf8');
-      written.push(path.relative(ROOT, pp));
+      };
+      if (unchanged(pp, playersPayload)) { untouched++; }
+      else { fs.writeFileSync(pp, JSON.stringify(playersPayload), 'utf8'); written.push(path.relative(ROOT, pp)); }
     }
   }
 
@@ -309,7 +343,9 @@ function save(data, scope) {
     for (const sid of allowed) {
       const cp = corePath(sid);
       const rel = path.relative(ROOT, cp);
-      if (!written.includes(rel) && existedBefore.has(cp)) emptied.push(rel);
+      // A season that produced a bucket but was unchanged is not emptied — it
+      // is identical. Only one with no bucket at all has lost its records.
+      if (!written.includes(rel) && existedBefore.has(cp) && !seasonPhases.has(sid)) emptied.push(rel);
     }
   }
 
@@ -327,9 +363,8 @@ function save(data, scope) {
   nextCore.manifest = core.manifest.map(m => {
     const p = seasonPhases.get(m.seasonId);
     if (!p) return m;
-    const prev = m.phases || {};
-    return { ...m, phases: wrotePlayers ? p
-      : { ...p, players: prev.players === true, players_n: prev.players_n || 0 } };
+    const { playersUntouched, ...phases } = p;
+    return { ...m, phases };
   });
 
   nextCore.seasonFiles = listSeasonFiles().sort().map(f => {
@@ -343,7 +378,7 @@ function save(data, scope) {
   fs.writeFileSync(CORE_PATH, JSON.stringify(nextCore, null, 2), 'utf8');
 
   return {
-    written, skipped, emptied, unplaced,
+    written, skipped, untouched, emptied, unplaced,
     seasonPhases: [...seasonPhases].map(([seasonId, p]) => ({ seasonId, ...p })),
   };
 }
@@ -367,7 +402,7 @@ function saveCore(data) {
   });
   delete next.orgFiles;
   fs.writeFileSync(CORE_PATH, JSON.stringify(next, null, 2), 'utf8');
-  return { written: ['data/core.json'], skipped: 0, emptied: [], unplaced: {}, seasonPhases: [] };
+  return { written: ['data/core.json'], skipped: 0, untouched: 0, emptied: [], unplaced: {}, seasonPhases: [] };
 }
 
 // Competition names that are live, from the manifest. Lets a writer restrict
@@ -380,6 +415,7 @@ function liveComps(statuses) {
 
 function report(result, label) {
   const parts = [`${result.written.length} file(s) written`];
+  if (result.untouched) parts.push(`${result.untouched} unchanged, not rewritten`);
   if (result.skipped) parts.push(`${result.skipped} outside scope, untouched`);
   if (result.emptied.length) parts.push(`${result.emptied.length} EMPTIED`);
   console.log(`[${label || 'store'} ${STORE_VERSION}] ${parts.join(', ')}`);

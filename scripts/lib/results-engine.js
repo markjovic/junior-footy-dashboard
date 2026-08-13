@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v10 2026-08-12 roster-by-gradeId';
+const ENGINE_VERSION = 'v11 2026-08-12 skip-players-on-load';
 
 'use strict';
 
@@ -1134,7 +1134,11 @@ async function run(o) {
   let existing = { matches: [], players: [], gotwFlags: {} };
   {
     try {
-      existing = store.load(storeScope);
+      // Results never touch player records, and they are 78% of the stored
+      // bytes. Not loading them means this run neither reads 82 MB it will not
+      // use nor rewrites eighteen player files that cannot have changed.
+      // per_season_storage_design.md.
+      existing = store.load(storeScope, { players: false });
       console.log(`Loaded ${storeScope.length} organisation scope(s): ${(existing.matches || []).length} existing match(es)`);
     } catch (e) {
       throw new Error(`store.load failed: ${e.message}`);
