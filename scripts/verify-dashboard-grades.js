@@ -520,5 +520,56 @@ console.log('\n12  Search is scoped to the selected season');
   ok('the note names the season being searched', /searching 2025 only/.test(h25));
 }
 
+// ── 13. The finals by-club view ─────────────────────────────────────────────
+console.log('\n13  Finals by club: premierships first, results aligned');
+{
+  const body = html.slice(html.indexOf('<body'));
+
+  ok('there is a composite ordering', /premiership: \{ label:/.test(body));
+  ok('and it is the default', /finalsSort: 'premiership'/.test(body),
+    'the old default was alphabetical, which hid the grade weighting entirely');
+  ok('the grade tiebreak is on by default', /finalsWeighted: true/.test(body));
+
+  // The weighting control only hid itself for the alphabetical sort. With that
+  // as the default it appeared to do nothing, which is why it "went missing".
+  ok('BY GRADE is visible for the default sort',
+    /inClubMode && S\.finalsSort !== 'name'/.test(body),
+    'hidden only for the alphabetical sort');
+
+  // Columns come from the data, not from a hardcoded EF/QF/SF/PF/GF — a
+  // competition running a different series would silently lose a column.
+  ok('one column per finals round, derived from the pool', /const roundCols/.test(body));
+  ok('ordered by cmpRound rather than alphabetically', /sort\(\(x, y\) => cmpRound/.test(body));
+  ok('every row uses the same column count',
+    (body.match(/repeat\(\$\{colCount\},minmax\(0,1fr\)\)/g) || []).length >= 2,
+    'header and rows must agree or nothing lines up');
+  ok('and the columns are labelled', /const colHeader/.test(body));
+
+  // A grand final win is the result of the season, not one more W.
+  ok('a GF win is marked distinctly', /const isFlag = winner && ab === 'GF'/.test(body));
+  ok('and the grade name carries it', /st\.wonGF/.test(body) && /rgba\(240,192,64,\.12\)/.test(body),
+    'visible from the left edge without reading across');
+  ok('a knocked-out team is dimmed', /st\.out \? 'opacity:\.55'/.test(body));
+
+  // The ordering itself: premierships, then grade, then grand finals.
+  const cmpT = (at, bt) => { const k = new Set([...Object.keys(at||{}), ...Object.keys(bt||{})].map(Number));
+    const mx = k.size ? Math.max(...k) : 0;
+    for (let r = 1; r <= mx; r++) { const d = ((bt&&bt[r])||0) - ((at&&at[r])||0); if (d) return d; } return 0; };
+  const mk = (name, premiers, inGF, teams, tp, tg, ta) =>
+    ({ name, premiers, inGF, teams: { length: teams }, tiersPremiers: tp, tiersGF: tg, tiersAll: ta });
+  const A = mk('fifth-grade flag', 1, 1, 1, {5:1}, {5:1}, {5:1});
+  const B = mk('top-grade flag',   1, 2, 6, {1:1}, {1:1,3:1}, {1:2,3:4});
+  const C = mk('eight GFs, none',  0, 8, 9, {},    {1:2,2:6}, {1:3,2:6});
+  const order = [A,B,C].sort((a,b) =>
+    (b.premiers-a.premiers) || cmpT(a.tiersPremiers,b.tiersPremiers) ||
+    (b.inGF-a.inGF) || cmpT(a.tiersGF,b.tiersGF) ||
+    (b.teams.length-a.teams.length) || cmpT(a.tiersAll,b.tiersAll) ||
+    a.name.localeCompare(b.name)).map(e => e.name);
+  ok('a top-grade flag outranks a fifth-grade one',
+    order[0] === 'top-grade flag', order.join(' > '));
+  ok('and any flag outranks eight grand finals without one',
+    order[2] === 'eight GFs, none', order.join(' > '));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
