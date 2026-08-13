@@ -9948,7 +9948,20 @@
     "EFNL 2026|South Belgrave Veterans Women|Veterans": "a9a17709",
     "EFNL 2026|Donvale Seniors|Senior Men": "a016282f",
     "EFNL 2026|The Basin Reserves|Reserve Men": "f44925c0",
-    "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144"
+    "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144",
+    "SER 2026|Karingal JFC Boys Red|U14": "8224a0f1",
+    "SER 2026|Edithvale Aspendale JFC Boys Dales|U15": "04e2e7d1",
+    "SER 2026|South Mornington JFC Boys Red|U16": "2412a73a",
+    "SER 2026|Red Hill JFC Boys|U16": "7644788b",
+    "SER 2026|Rosebud JFC Girls|U14 Girls": "8307d2cb",
+    "SER 2026|Rosebud JFC Boys|U17.5": "8307d2cb",
+    "SER 2026|Mt Eliza JFC Boys Red|U17.5": "6b16740a",
+    "SER 2026|Mt Eliza JFC Girls Red|U18.5 Girls": "6b16740a",
+    "SER 2026|Frankston Dolphins JFC Girls|U18.5 Girls": "024cc769",
+    "SER 2026|Frankston YCW JFC Girls|U18.5 Girls": "ac71ef4a",
+    "SER 2026|Mt Martha JFC Girls|U18.5 Girls": "f9f163a0",
+    "SER 2026|Berwick Springs JFC Girls Blue|U18.5 Girls": "d175b7eb",
+    "SER 2026|Mt Martha JFC U18 Girls|U18.5 Girls": "f9f163a0"
   },
   "compLogos": {
     "EFNL 2026": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0",
@@ -20084,5 +20097,5 @@
       "bytes": 5658136
     }
   ],
-  "lastClubIndex": "2026-08-13T04:54:51.951Z"
+  "lastClubIndex": "2026-08-13T09:07:13.002Z"
 }
