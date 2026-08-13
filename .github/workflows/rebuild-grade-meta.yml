@@ -1,0 +1,78 @@
+# .github/workflows/rebuild-grade-meta.yml
+#
+# Regenerates gradeMeta for every stored season from data/grades.json.
+# season_selection_design.md §1.4 and §4 step 1.
+#
+# OFFLINE — no PlayHQ call is made. Every grade name it needs is already in
+# grades.json.
+#
+# WHY: fetch-results.js only regenerates gradeMeta for the seasons in
+# config.json, so the thirteen archived seasons still carry pre-2026-08-12
+# entries with no label and no grade id. An archived ladder would show a hex id
+# where a grade name belongs. Nothing displays an archive today, so this changes
+# nothing visible — it is the prerequisite for the year selector.
+#
+# DEFAULTS TO A DRY RUN. Leave dry_run true until the report reads correctly.
+
+name: Rebuild gradeMeta
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: '8-character organisation code, or "all"'
+        required: true
+        default: 'all'
+        type: string
+      dry_run:
+        description: 'Report and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check scripts/rebuild-grade-meta.js
+          node --check scripts/verify-rebuild-grade-meta.js
+          echo "both files parse"
+
+      # Prove the guards fire before trusting a run that reports success.
+      - name: Verify the rebuild
+        run: node scripts/verify-rebuild-grade-meta.js
+
+      - name: Rebuild
+        id: rebuild
+        env:
+          REBUILD_ORG: ${{ github.event.inputs.org }}
+          REBUILD_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set +e
+          node scripts/rebuild-grade-meta.js
+          CODE=$?
+          echo "exit_code=$CODE" >> $GITHUB_OUTPUT
+          set -e
+          # 0 = changed, 2 = nothing to do. Anything else is a real failure.
+          if [ "$CODE" != "0" ] && [ "$CODE" != "2" ]; then
+            echo "rebuild-grade-meta.js exited $CODE — failing the job"
+            exit "$CODE"
+          fi
+
+      - name: Commit
+        if: steps.rebuild.outputs.exit_code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          git diff --staged --quiet || git commit -m "rebuild gradeMeta: ${{ github.event.inputs.org }} (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push

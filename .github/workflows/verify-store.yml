@@ -41,6 +41,8 @@ jobs:
                    scripts/verify-backfill.js \
                    scripts/verify-migrate-grade-ids.js \
                    scripts/verify-dashboard-grades.js \
+                   scripts/verify-rebuild-grade-meta.js \
+                   scripts/rebuild-grade-meta.js \
                    scripts/verify-audit.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
@@ -55,7 +57,8 @@ jobs:
           # every suite runs and one run gives the whole picture.
           set +e
           SUITES="verify-store verify-discover-seasons verify-backfill \
-                  verify-migrate-grade-ids verify-dashboard-grades verify-audit"
+                  verify-migrate-grade-ids verify-dashboard-grades \
+                  verify-rebuild-grade-meta verify-audit"
           FAILED=0
           SUMMARY=""
           for s in $SUITES; do
