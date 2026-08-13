@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.147</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.148</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -565,6 +565,7 @@ body{overflow-x:hidden}
           </span>
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
+            <option value="premiership">Premiership season</option>
             <option value="name">Alphabetical</option>
             <option value="teams">Most teams in finals</option>
             <option value="remaining">Most remaining</option>
@@ -703,7 +704,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.147</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.148</span>
         </div>
 
 
@@ -782,6 +783,8 @@ function saveFilters() {
       view:       S.view,
       finalsMode: S.finalsMode,
       finalsSort: S.finalsSort,
+      sortV: 2,   // see loadFilters: a saved sort from before the composite
+                  // ordering existed is ignored rather than restored
       finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
       finalsLevel:  S.finalsLevel,
@@ -2639,8 +2642,15 @@ function renderFinalsByClub(pool) {
       const opp  = m.home === t.team ? m.away : m.home;
       const mine = m.home === t.team ? m.hScore : m.aScore;
       const thrs = m.home === t.team ? m.aScore : m.hScore;
+      // Two lines per cell: the result, then who it was against. The opponent
+      // is half of what a finals result means, and a tooltip is not readable at
+      // a glance — the alignment was supposed to make comparison easier, not
+      // remove the thing being compared.
+      const oppLine = `<span style="display:block;font-size:10px;color:var(--tx3);` +
+        `overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${opp}">${opp}</span>`;
       if (!isPlayed(m)) {
-        return `<span class="fv-prov" title="v ${opp}, ${fmtDate(m)}">v ${opp}</span>`;
+        return `<span style="min-width:0"><span class="fv-prov">v</span>${oppLine}` +
+          `<span style="display:block;font-size:9px;color:var(--tx3)">${fmtDate(m)}</span></span>`;
       }
       const winner = mine > thrs;
       // A grand final win is the result of the season, so it is marked as such
@@ -2650,7 +2660,7 @@ function renderFinalsByClub(pool) {
                 : winner ? '<span style="color:var(--gold);font-weight:600">W</span>'
                 : mine < thrs ? '<span style="color:#ef4444;font-weight:600">L</span>'
                 : '<span style="color:var(--tx2);font-weight:600">D</span>';
-      return `<span title="${ab} v ${opp}">${res} ${mine}–${thrs}</span>`;
+      return `<span style="min-width:0" title="${ab} v ${opp}">${res} ${mine}–${thrs}${oppLine}</span>`;
     }).join('');
 
     const rank  = gradeRankOf(t.comp, t.age, t.grade);
@@ -2668,7 +2678,7 @@ function renderFinalsByClub(pool) {
     // from one still running without needing a word in a column.
     const rowStyle = st.out ? 'opacity:.55' : '';
     const rowTitle = st.wonGF ? 'Premiers' : st.out ? 'Out of the finals' : 'Still alive';
-    return `<div title="${rowTitle}" style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:center;font-size:12px;${rowStyle}">
+    return `<div title="${rowTitle}" style="display:grid;grid-template-columns:104px 44px repeat(${colCount},minmax(0,1fr));gap:8px;padding:7px 0;border-bottom:1px solid var(--b1);align-items:start;font-size:12px;${rowStyle}">
       <span class="fv-tag" style="${gradeStyle}">${t.age} ${abbrevGrade(gLabel(t.grade))}</span>
       <span style="justify-self:start">${rankTag}</span>
       ${cells}
@@ -4184,8 +4194,16 @@ async function init() {
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (['age','club','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
-      if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) S.finalsSort = f.finalsSort;
-      if (typeof f.finalsWeighted === 'boolean') S.finalsWeighted = f.finalsWeighted;
+      // ⚠️ A saved choice from before 2026-08-12 is ignored once. Everyone who
+      // had ever opened the finals view had 'name' stored, because that was the
+      // old default — so the new default could never take effect and the view
+      // stayed alphabetical no matter what the code said. sortV marks a
+      // selection made since the composite ordering existed.
+      if (f.sortV === 2 && f.finalsSort &&
+          Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
+        S.finalsSort = f.finalsSort;
+      }
+      if (f.sortV === 2 && typeof f.finalsWeighted === 'boolean') S.finalsWeighted = f.finalsWeighted;
       if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
