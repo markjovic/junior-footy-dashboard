@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v9 2026-08-12 labels-unique';
+const ENGINE_VERSION = 'v10 2026-08-12 roster-by-gradeId';
 
 'use strict';
 
@@ -1020,14 +1020,32 @@ function rebuildRoster(matches) {
         // `grade` today; it reads `gradeId` after step 6, and both are present
         // through the changeover.
         latest.set(key, { grade, gradeId, age, round, compName });
-      } else if (round === prev.round && grade !== prev.grade) {
-        // Same team, same age, same round, different grades
-        // Prefer non-empty grade, then alphabetically earlier (A < B < C < D)
-        const winner = (!prev.grade && grade) ? grade
-          : (prev.grade && !grade) ? prev.grade
-          : [prev.grade, grade].sort()[0];
-        console.warn(`  WARNING: ${name} (${age}) in both grade ${prev.grade} and ${grade} in R${round} — keeping ${winner}`);
-        latest.set(key, { ...prev, grade: winner, compName });
+      } else if (round === prev.round &&
+                 (gradeId || grade) !== (prev.gradeId || prev.grade)) {
+        // Same team, same age, same round, DIFFERENT GRADES.
+        //
+        // Detection is on the grade id, not on rawGrade. Two genuinely separate
+        // grades that both parse to "" — four EFNL U8s, nine YJFL U10 pools —
+        // used to compare equal here, so the second silently overwrote nothing
+        // and no warning was raised. That is why currentGrade() could return a
+        // grade a team was not in.
+        //
+        // Resolution is unchanged: prefer a non-empty rawGrade, then the
+        // alphabetically earlier one. A blank rawGrade is usually a grading pool
+        // or an ungraded fixture, and the lettered grade is the one the team
+        // actually plays in.
+        let takeNew;
+        if (!prev.grade && grade) takeNew = true;
+        else if (prev.grade && !grade) takeNew = false;
+        else if (grade === prev.grade) takeNew = false;  // same label, different
+                                                         // grade — keep the first
+        else takeNew = grade < prev.grade;
+
+        const winner = takeNew ? { grade, gradeId } : { grade: prev.grade, gradeId: prev.gradeId };
+        const idOf = (g) => g ? ` [${g}]` : '';
+        console.warn(`  WARNING: ${name} (${age}) in both grade ${prev.grade}${idOf(prev.gradeId)} ` +
+          `and ${grade}${idOf(gradeId)} in R${round} — keeping ${winner.grade}${idOf(winner.gradeId)}`);
+        latest.set(key, { ...prev, grade: winner.grade, gradeId: winner.gradeId, compName });
       }
     });
   });
