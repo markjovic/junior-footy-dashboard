@@ -1,14 +1,25 @@
 # .github/workflows/probe-team-join.yml
 #
 # Diagnostic only. Reads data/ and calls PlayHQ, writes nothing, commits nothing.
-# contents:read is enough and there is no git step at all. The exit-code
-# convention (0 changed / 2 no change / 1 fatal) does not apply — nothing is ever
-# written to the repo.
+# contents:read is enough and there is no git step at all.
 #
 # It answers one question: can stored match records be joined to a PlayHQ season
 # team registry by team name? Every stored record was written by a fetcher that
-# discards the team id, so that join is the only way to attach ids to 41.81 MB of
-# existing data without re-fetching every round of every season.
+# discards the team id, so that join is the only way to attach ids to the stored
+# match records without re-fetching every round of every season.
+#
+# Stored records are read through scripts/lib/store.js, scoped to the one
+# competition being measured, so exactly one season core file is opened and the
+# player file — 78% of the bytes, and nothing this probe reads — is skipped.
+#
+# EXIT CODES. The 0-changed / 2-no-change / 1-fatal convention used by the
+# writers does not apply, because nothing is ever written to the repo. This
+# probe exits 0 when every requested season was read and measured, and 1 when
+# any of them could not be. Until v4 it exited 0 in both cases: it read the
+# retired data/orgs layout, and once that directory goes it found no files,
+# measured nothing, and still reported success. A missing season file is now a
+# loud failure, established from what store.load actually opened rather than
+# inferred from a record count of zero.
 #
 # Two API calls per season. Default is EFNL 2025 and 2024.
 
