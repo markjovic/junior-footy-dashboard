@@ -42,14 +42,16 @@ function clean() {
         { org: '383836bb', seasonId: '75d8a232', seasonName: '2025', compName: 'EFNL 2025',
           status: 'COMPLETED', retired: true, phases: { results: true, players: false } },
       ],
-      orgFiles: [
-        { file: 'data/orgs/383836bb-current.json', org: '383836bb', kind: 'current', bytes: 1 },
-        { file: 'data/orgs/383836bb-archive.json', org: '383836bb', kind: 'archive', bytes: 1 },
+      seasonFiles: [
+        { file: 'data/seasons/2dcbf383-core.json', seasonId: '2dcbf383', kind: 'core', bytes: 1 },
+        { file: 'data/seasons/2dcbf383-players.json', seasonId: '2dcbf383', kind: 'players', bytes: 1 },
+        { file: 'data/seasons/75d8a232-core.json', seasonId: '75d8a232', kind: 'core', bytes: 1 },
+        { file: 'data/seasons/75d8a232-players.json', seasonId: '75d8a232', kind: 'players', bytes: 1 },
       ],
     },
     current: {
-      meta: { org: '383836bb', kind: 'current', seasons: ['2dcbf383'],
-              phases: { '2dcbf383': { results: true, players: true, matches: 2, players_n: 1 } } },
+      meta: { seasonId: '2dcbf383', org: '383836bb', comps: ['EFNL 2026'],
+              phases: { results: true, players: true, matches: 2, players_n: 1 } },
       matches: [
         { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 1,
           home: 'Blackburn', away: 'Norwood' },
@@ -61,8 +63,8 @@ function clean() {
       gradeMeta: { 'EFNL 2026|U12|A': { r: 1 } },
     },
     archive: {
-      meta: { org: '383836bb', kind: 'archive', seasons: ['75d8a232'],
-              phases: { '75d8a232': { results: true, players: false, matches: 3, players_n: 0 } } },
+      meta: { seasonId: '75d8a232', org: '383836bb', comps: ['EFNL 2025'],
+              phases: { results: true, players: false, matches: 3, players_n: 0 } },
       matches: [
         { id: 'EFNL 2025|U12|A|1|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 1,
           home: 'Blackburn', away: 'Norwood' },
@@ -91,13 +93,26 @@ function clean() {
   };
 }
 
+// data/seasons/<seasonId>-core.json and <seasonId>-players.json.
+// per_season_storage_design.md. `current` and `archive` remain the fixture's
+// shorthand for the 2026 and 2025 seasons; only where they land has changed.
+const SEASONS = path.join(TMP, 'data', 'seasons');
+const sCore = (id) => path.join(SEASONS, `${id}-core.json`);
+const sPlayers = (id) => path.join(SEASONS, `${id}-players.json`);
+function writeSeason(id, season) {
+  const { players = [], ...rest } = season;
+  fs.writeFileSync(sCore(id), JSON.stringify({ ...rest }));
+  fs.writeFileSync(sPlayers(id), JSON.stringify({
+    meta: { seasonId: id, count: players.length }, players,
+  }));
+}
+
 function write(fx) {
-  const ORGS = path.join(TMP, 'data', 'orgs');
   fs.rmSync(path.join(TMP, 'data'), { recursive: true, force: true });
-  fs.mkdirSync(ORGS, { recursive: true });
+  fs.mkdirSync(SEASONS, { recursive: true });
   fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify(fx.core, null, 2));
-  if (fx.current) fs.writeFileSync(path.join(ORGS, '383836bb-current.json'), JSON.stringify(fx.current));
-  if (fx.archive) fs.writeFileSync(path.join(ORGS, '383836bb-archive.json'), JSON.stringify(fx.archive));
+  if (fx.current) writeSeason('2dcbf383', fx.current);
+  if (fx.archive) writeSeason('75d8a232', fx.archive);
   if (fx.grades) fs.writeFileSync(path.join(TMP, 'data', 'grades.json'), JSON.stringify(fx.grades));
 }
 
@@ -147,9 +162,9 @@ seeded('records in the wrong file (retired records left in current)',
   fx => {
     fx.current.matches.push({ id: 'EFNL 2025|U12|A|3|a|b', compName: 'EFNL 2025',
                               age: 'U12', rawGrade: 'A', round: 3 });
-    fx.current.meta.phases['75d8a232'] = { results: true, players: false, matches: 1, players_n: 0 };
+    fx.current.meta.phases.matches = 3;   // now disagrees with what is in the file
   },
-  /records are in 383836bb-current\.json/);
+  /records are in season file 2dcbf383/);
 
 seeded('a record whose compName is not in the manifest',
   fx => { fx.archive.matches[0].compName = 'EFNL 2019'; },
@@ -160,23 +175,23 @@ seeded('a match id that disagrees with its compName',
   /does not match its compName/);
 
 seeded('meta.phases count disagreeing with the records present',
-  fx => { fx.archive.meta.phases['75d8a232'].matches = 999; },
+  fx => { fx.archive.meta.phases.matches = 999; },
   /meta\.phases says 999 matches/);
 
 seeded('meta.phases missing for a season that has records',
-  fx => { delete fx.archive.meta.phases['75d8a232']; },
-  /meta\.phases has no entry/);
+  fx => { delete fx.archive.meta.phases; },
+  /has 3 matches but no meta\.phases/);
 
 seeded('the manifest disagreeing with the file',
   fx => { fx.core.manifest[1].phases = { results: true, players: true }; },
   /manifest says results=true players=true/);
 
-seeded('a file on disk that orgFiles does not list',
-  fx => { fx.core.orgFiles = fx.core.orgFiles.filter(f => !f.file.includes('archive')); },
-  /missing from core\.orgFiles/);
+seeded('a file on disk that seasonFiles does not list',
+  fx => { fx.core.seasonFiles = fx.core.seasonFiles.filter(f => !f.file.includes('75d8a232')); },
+  /missing from core\.seasonFiles/);
 
-seeded('orgFiles listing a file that does not exist',
-  fx => { fx.core.orgFiles.push({ file: 'data/orgs/deadbeef-archive.json', org: 'deadbeef', kind: 'archive' }); },
+seeded('seasonFiles listing a file that does not exist',
+  fx => { fx.core.seasonFiles.push({ file: 'data/seasons/deadbeef-core.json', seasonId: 'deadbeef', kind: 'core' }); },
   /the file does not exist/);
 
 seeded('a roster key with no manifest entry',
@@ -184,7 +199,7 @@ seeded('a roster key with no manifest entry',
   /roster key .* has no manifest entry/);
 
 seeded('a duplicate match id',
-  fx => { fx.archive.matches.push({ ...fx.archive.matches[0] }); fx.archive.meta.phases['75d8a232'].matches = 3; },
+  fx => { fx.archive.matches.push({ ...fx.archive.matches[0] }); fx.archive.meta.phases.matches = 4; },
   /duplicate match id/);
 
 // ── 3. Warnings, which must not fail the run unless STRICT ───────────────────
@@ -287,7 +302,7 @@ ok('with one U9 grade there is no collision', !/1 records across 2 grades/.test(
 const fx8 = clean();
 fx8.archive.matches.push({ id: 'EFNL 2025|U99|Z|1|a|b', compName: 'EFNL 2025',
   age: 'U99', rawGrade: 'Z', round: 1, home: 'a', away: 'b' });
-fx8.archive.meta.phases['75d8a232'].matches = 4;
+fx8.archive.meta.phases.matches = 4;
 write(fx8);
 LAST = audit();
 ok('an unplaceable record is warned about',

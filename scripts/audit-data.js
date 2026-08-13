@@ -40,10 +40,11 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v8 2026-08-12 gaps-cost-live-only';
+const VERSION = 'audit-data v9 2026-08-12 per-season-layout';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
-const ORGS = path.join(DATA, 'orgs');
+const SEASONS = path.join(DATA, 'seasons');
+const ORGS = path.join(DATA, 'orgs');   // the previous layout, kept as a rollback path
 const CORE_PATH = path.join(DATA, 'core.json');
 const GRADES_PATH = path.join(DATA, 'grades.json');
 const STRICT = process.env.AUDIT_STRICT === 'true';
@@ -56,6 +57,12 @@ const warn = (m) => warnings.push(m);
 const info = (m) => infos.push(m);
 
 const mb = (n) => (n / 1024 / 1024).toFixed(2) + ' MB';
+// A season's display name, for the file listing.
+function manifestSeasonName(core, seasonId) {
+  const m = (core.manifest || []).find(x => x.seasonId === seasonId);
+  return m ? (m.compName || m.seasonName || '') : '(not in manifest)';
+}
+
 function readJson(p) {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
   catch (e) { err(`could not parse ${path.relative(ROOT, p)}: ${e.message}`); return null; }
@@ -75,52 +82,86 @@ if (!core || !Array.isArray(core.manifest)) {
   process.exit(1);
 }
 
-const onDisk = fs.existsSync(ORGS)
-  ? fs.readdirSync(ORGS).filter(f => /^[0-9a-f]{8}-(current|archive)\.json$/.test(f)).sort()
+const onDisk = fs.existsSync(SEASONS)
+  ? fs.readdirSync(SEASONS).filter(f => /^[0-9a-f]{8}-(core|players)\.json$/.test(f)).sort()
   : [];
+if (!onDisk.length) {
+  console.error(`FATAL: no season files in data/seasons. Run "Split storage by season" first.`);
+  process.exit(1);
+}
 
-// ── 1. Files against the orgFiles index ──────────────────────────────────────
+// ── 1. Files against the seasonFiles index ───────────────────────────────────
+// per_season_storage_design.md: one core file and one players file per season.
+// A season's records never move between files, so there is no current/archive
+// distinction to check — only whether the index matches what is on disk.
 console.log('1  Files');
-const indexed = new Set((core.orgFiles || []).map(f => f.file));
+const indexed = new Set((core.seasonFiles || []).map(f => f.file));
 for (const f of onDisk) {
-  if (!indexed.has(`data/orgs/${f}`)) {
-    err(`data/orgs/${f} exists but is missing from core.orgFiles — the dashboard will never fetch it`);
+  if (!indexed.has(`data/seasons/${f}`)) {
+    err(`data/seasons/${f} exists but is missing from core.seasonFiles — the dashboard cannot find it`);
   }
 }
 for (const rel of indexed) {
   if (!fs.existsSync(path.join(ROOT, rel))) {
-    err(`core.orgFiles lists ${rel} but the file does not exist — every visitor gets a 404`);
+    err(`core.seasonFiles lists ${rel} but the file does not exist — every visitor gets a 404`);
   }
 }
 
-const files = {};   // relative name -> parsed payload
-let totalBytes = 0;
+// The previous layout is a deliberate rollback path until a full weekend of
+// scheduled runs has passed. Reported so it cannot be forgotten, not as a fault.
+if (fs.existsSync(ORGS)) {
+  const old = fs.readdirSync(ORGS).filter(f => f.endsWith('.json'));
+  if (old.length) {
+    const bytes = old.reduce((a, f) => a + fs.statSync(path.join(ORGS, f)).size, 0);
+    info(`data/orgs still holds ${old.length} file(s), ${mb(bytes)} — the rollback path from the ` +
+         `per-season split. Delete it once the new layout has run a full weekend.`);
+  }
+}
+
+// seasonId -> { core, players } payloads, merged so the rest of the audit sees
+// one object per season exactly as it saw one per organisation file before.
+const files = {};
+let totalBytes = 0, coreBytes = 0, playerBytes = 0;
 for (const f of onDisk) {
-  const full = path.join(ORGS, f);
+  const full = path.join(SEASONS, f);
   const bytes = fs.statSync(full).size;
   totalBytes += bytes;
-  const [org, kindExt] = f.split('-');
+  const [seasonId, kindExt] = f.split('-');
   const kind = kindExt.replace('.json', '');
   const p = readJson(full);
   if (!p) continue;
-  files[f] = { org, kind, bytes, payload: p };
+  if (kind === 'core') coreBytes += bytes; else playerBytes += bytes;
 
-  if (p.meta && p.meta.org && p.meta.org !== org) {
-    err(`${f}: meta.org is ${p.meta.org} but the filename says ${org}`);
+  if (p.meta && p.meta.seasonId && p.meta.seasonId !== seasonId) {
+    err(`${f}: meta.seasonId is ${p.meta.seasonId} but the filename says ${seasonId}`);
   }
-  if (p.meta && p.meta.kind && p.meta.kind !== kind) {
-    err(`${f}: meta.kind is ${p.meta.kind} but the filename says ${kind}`);
-  }
-  // GitHub refuses a push over 100 MB per file. data.json was 36 MB before the
-  // split, so this is worth a number rather than an assumption.
   if (bytes > 90 * 1024 * 1024) err(`${f} is ${mb(bytes)} — over GitHub's 100 MB limit is a hard push failure`);
   else if (bytes > 50 * 1024 * 1024) warn(`${f} is ${mb(bytes)} — over half of GitHub's 100 MB per-file limit`);
 
-  console.log(`  ${f.padEnd(28)} ${mb(bytes).padStart(9)}  ` +
-    `${(p.matches || []).length} matches, ${(p.players || []).length} players, ` +
-    `${Object.keys(p.roster || {}).length} roster, ${Object.keys(p.gradeMeta || {}).length} gradeMeta`);
+  const key = seasonId;
+  if (!files[key]) files[key] = { seasonId, bytes: 0, payload: { matches: [], players: [], roster: {}, gradeMeta: {} } };
+  files[key].bytes += bytes;
+  files[key].org = (p.meta && p.meta.org) || files[key].org;
+  if (kind === 'core') {
+    files[key].payload.matches = p.matches || [];
+    files[key].payload.roster = p.roster || {};
+    files[key].payload.gradeMeta = p.gradeMeta || {};
+    files[key].meta = p.meta;
+  } else {
+    files[key].payload.players = p.players || [];
+  }
 }
-console.log(`  ${'TOTAL'.padEnd(28)} ${mb(totalBytes).padStart(9)}  across ${onDisk.length} file(s)`);
+for (const [sid, v] of Object.entries(files)) {
+  const m = manifestSeasonName(core, sid);
+  console.log(`  ${sid} ${String(m).padEnd(14)} ${mb(v.bytes).padStart(9)}  ` +
+    `${v.payload.matches.length} matches, ${v.payload.players.length} players, ` +
+    `${Object.keys(v.payload.roster).length} roster, ${Object.keys(v.payload.gradeMeta).length} gradeMeta`);
+}
+console.log(`  ${'TOTAL'.padEnd(24)} ${mb(totalBytes).padStart(9)}  across ${onDisk.length} file(s)`);
+console.log(`  ${'  core only'.padEnd(24)} ${mb(coreBytes).padStart(9)}  ` +
+  `— what a reader needs for ladders and results`);
+console.log(`  ${'  players'.padEnd(24)} ${mb(playerBytes).padStart(9)}  ` +
+  `(${(100 * playerBytes / totalBytes).toFixed(0)}%) — deferred until Scorers is opened`);
 
 // ── 2. Every record must reach a manifest entry ──────────────────────────────
 console.log('\n2  Records against the manifest');
@@ -203,27 +244,30 @@ const rows = [];
 for (const m of core.manifest) {
   if (!m.compName) continue;
   const b = byComp.get(m.compName);
-  const expected = `${m.org}-${m.retired ? 'archive' : 'current'}.json`;
+  // One file per season, so "the right file" is simply the season's own. There
+  // is no current/archive placement to get wrong any more — records never move
+  // between files, which is what the split removed.
+  const expected = m.seasonId;
 
   if (!b || b.matches === 0) {
     info(`${m.compName} (${m.seasonId}) has no records — not backfilled`);
-    rows.push([m.compName, m.seasonId, m.retired ? 'archive' : 'current', '0', '0', 'NOT BACKFILLED']);
+    rows.push([m.compName, m.seasonId, m.retired ? 'retired' : 'live', '0', '0', 'NOT BACKFILLED']);
     continue;
   }
 
   for (const f of b.files) {
     if (f !== expected) {
-      err(`${m.compName} records are in ${f} but the manifest says ${m.retired ? 'retired' : 'live'}, ` +
-          `so they belong in ${expected}`);
+      err(`${m.compName} records are in season file ${f}, but the manifest says ` +
+          `they belong to season ${expected}`);
     }
   }
 
-  // meta.phases in the file
-  const fileMeta = (files[expected] || {}).payload;
-  const filePhases = fileMeta && fileMeta.meta && (fileMeta.meta.phases || {})[m.seasonId];
+  // meta.phases is flat now — one season per file, so it describes that season
+  // rather than being keyed by season id.
+  const filePhases = (files[expected] || {}).meta && files[expected].meta.phases;
   let state = 'ok';
   if (!filePhases) {
-    err(`${m.compName}: ${expected} has ${b.matches} matches but meta.phases has no entry for ${m.seasonId}`);
+    err(`${m.compName}: ${expected}-core.json has ${b.matches} matches but no meta.phases`);
     state = 'NO meta.phases';
   } else {
     if (filePhases.matches !== b.matches) {
@@ -247,7 +291,7 @@ for (const m of core.manifest) {
     }
   }
 
-  rows.push([m.compName, m.seasonId, m.retired ? 'archive' : 'current',
+  rows.push([m.compName, m.seasonId, m.retired ? 'retired' : 'live',
              String(b.matches), String(b.players), state]);
 }
 
