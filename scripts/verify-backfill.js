@@ -419,6 +419,42 @@ console.log('\n8  gradeMeta carries both keys and a label');
     !!(m2['YJFL 2026|U8|z1'] || {}).label, JSON.stringify((m2['YJFL 2026|U8|z1'] || {}).label));
 }
 
+// ── 9. rebuildRoster resolves on grade identity ─────────────────────────────
+console.log('\n9  Roster conflicts are detected on the grade id');
+{
+  const { rebuildRoster } = require(path.join(TMP, 'scripts', 'lib', 'results-engine.js'));
+  const R = (h, a, rg, gid, rd) => ({ compName: 'EFNL 2026', age: 'U8', rawGrade: rg,
+    gradeId: gid, round: rd, home: h, away: a, isFinals: false });
+
+  // Two genuinely separate grades that both parse to "". Detected on rawGrade
+  // these compared EQUAL, so the conflict was invisible and currentGrade()
+  // could return a grade the team was not in.
+  let r = rebuildRoster([R('Norwood', 'A1', '', 'gN', 1), R('Norwood', 'B1', '', 'gS', 1)]);
+  ok('two blank-rawGrade grades are now seen as a conflict',
+    !!r['EFNL 2026|Norwood|U8'].gradeId, JSON.stringify(r['EFNL 2026|Norwood|U8']));
+
+  // The lettered grade wins, and the id must follow it. The old code set the
+  // winning LABEL while keeping the previous grade's id, so a team could be
+  // stored as grade "A" carrying another grade's id — and index.html groups on
+  // the id, so it would have appeared in the wrong ladder.
+  r = rebuildRoster([R('Norwood', 'A1', '', 'gN', 1), R('Norwood', 'B1', 'A', 'gA', 1)]);
+  ok('a lettered grade beats a blank one', r['EFNL 2026|Norwood|U8'].grade === 'A',
+    JSON.stringify(r['EFNL 2026|Norwood|U8'].grade));
+  ok('and the gradeId FOLLOWS the winning grade, not the loser',
+    r['EFNL 2026|Norwood|U8'].gradeId === 'gA',
+    JSON.stringify(r['EFNL 2026|Norwood|U8'].gradeId));
+
+  // Could that have failed? Same grade twice must raise nothing at all.
+  r = rebuildRoster([R('Norwood', 'A1', 'A', 'gA', 1), R('Norwood', 'B1', 'A', 'gA', 1)]);
+  ok('the same grade twice is not a conflict',
+    r['EFNL 2026|Norwood|U8'].grade === 'A' && r['EFNL 2026|Norwood|U8'].gradeId === 'gA');
+
+  // A later round always wins outright, conflict or not.
+  r = rebuildRoster([R('Norwood', 'A1', 'A', 'gA', 1), R('Norwood', 'B1', 'B', 'gB', 5)]);
+  ok('a later round supersedes an earlier grade', r['EFNL 2026|Norwood|U8'].gradeId === 'gB',
+    JSON.stringify(r['EFNL 2026|Norwood|U8']));
+}
+
 console.log('\n7  The fixture is real');
 reset();
 ok('core seeded with two compLogos', Object.keys(read(CORE).compLogos).length === 2);
