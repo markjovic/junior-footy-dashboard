@@ -658,5 +658,61 @@
   "ff08ba6e": {
     "name": "Knox (Eastern Football Netball League)",
     "type": "CLUB"
+  },
+  "0a3e5940": {
+    "name": "Boroondara Hawks JFC",
+    "type": "CLUB"
+  },
+  "1cf85e52": {
+    "name": "South East Juniors",
+    "type": "ASSOCIATION"
+  },
+  "3eda96f3": {
+    "name": "Doncaster JFC",
+    "type": "CLUB"
+  },
+  "4413c4ba": {
+    "name": "Carlton JFC",
+    "type": "CLUB"
+  },
+  "50d082d4": {
+    "name": "Bacchus Marsh Football & Netball Club Inc",
+    "type": "CLUB"
+  },
+  "779a2eee": {
+    "name": "Carrum Downs Junior Football Club Inc",
+    "type": "CLUB"
+  },
+  "840b1589": {
+    "name": "Tooradin-Dalmore FC",
+    "type": "CLUB"
+  },
+  "a00ef6df": {
+    "name": "Mount Evelyn Football Club (AFL Outer East Senior Football)",
+    "type": "CLUB"
+  },
+  "a9061e79": {
+    "name": "Aquinas JFC",
+    "type": "CLUB"
+  },
+  "ae33838d": {
+    "name": "North Dandenong Masala Junior Football Club",
+    "type": "CLUB"
+  },
+  "b2761807": {
+    "name": "Beaconsfield JFC",
+    "type": "CLUB"
+  },
+  "ce5fd4aa": {
+    "name": "Keysborough Junior Football Club",
+    "type": "CLUB"
+  },
+  "d19813f7": {
+    "name": "Eynesbury Eagles Football & Netball Club",
+    "type": "CLUB"
+  },
+  "ff18da62": {
+    "name": "Endeavour Hills Football Club",
+    "type": "CLUB"
   }
 }
