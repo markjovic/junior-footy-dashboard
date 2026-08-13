@@ -256,7 +256,7 @@ body{overflow-x:hidden}
 /* The view switch, as a full-width row. Shown only below 768px — above that the
    header has room and keeps it. Margins pull it out of .main's padding so it
    spans edge to edge like the section tabs below it. */
-.mob-view-tabs{gap:1px;background:var(--b1);border-bottom:1px solid var(--b1);
+.mob-view-tabs{display:none;gap:1px;background:var(--b1);border-bottom:1px solid var(--b1);
   margin:-12px -12px 12px;padding:0}
 .mob-view-tabs .mob-tab{font-size:11px;padding:11px 4px}
 .mob-tab{flex:1;padding:9px 4px;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--tx3);background:var(--s1);border:none;transition:all .12s;font-family:'DM Mono',monospace}
@@ -293,7 +293,7 @@ body{overflow-x:hidden}
   .mob-tabs{display:flex}
   /* Out of the clipped header, into a row that cannot be clipped. */
   #view-switch{display:none!important}
-  .mob-view-tabs{display:flex!important}
+  .mob-view-tabs.has-data{display:flex}
   .mob-section{display:none}
   .mob-section.on{display:block}
   .dgrid{display:contents}
@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.142</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.145</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -393,6 +393,11 @@ body{overflow-x:hidden}
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <button id="sidebar-close" onclick="toggleSidebar()">✕ Close</button>
+
+    <div class="fgroup" id="comp-filter-group">
+      <div class="flabel">Season</div>
+      <select class="fsel" id="year-sel" onchange="selectYear(this.value)"></select>
+    </div>
     <div class="fgroup" id="player-search-group">
       <div class="flabel">Player search</div>
       <input class="mi" id="player-search-input" type="search" placeholder="Name…"
@@ -400,11 +405,6 @@ body{overflow-x:hidden}
         oninput="onPlayerSearch(this.value)"
         style="font-size:12px;padding:6px 8px">
       <div id="player-search-results" style="display:none;margin-top:4px;display:flex;flex-direction:column;gap:1px;max-height:240px;overflow-y:auto;border:1px solid var(--b2);border-radius:var(--r);background:var(--s2)"></div>
-    </div>
-
-    <div class="fgroup" id="comp-filter-group">
-      <div class="flabel">Season</div>
-      <select class="fsel" id="year-sel" onchange="selectYear(this.value)"></select>
     </div>
     <div class="fgroup" id="comp-filter-group2">
       <div class="flabel">Competition</div>
@@ -450,7 +450,7 @@ body{overflow-x:hidden}
   </aside>
 
   <main class="main">
-    <div class="mob-view-tabs" id="mob-view-tabs" style="display:none">
+    <div class="mob-view-tabs" id="mob-view-tabs">
       <button class="mob-tab on" id="mvt-dash"   onclick="switchView('dash')">Dashboard</button>
       <button class="mob-tab"    id="mvt-finals" onclick="switchView('finals')">Finals</button>
     </div>
@@ -703,7 +703,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.142</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.145</span>
         </div>
 
 
@@ -1634,8 +1634,11 @@ function render() {
   // The mobile row is the same control in a place the header cannot clip it.
   // The media query decides whether it is on screen; this only decides whether
   // there is anything to switch between.
+  // A class, not an inline display. Setting style.display directly overrode the
+  // media query in one direction and fell back to the CSS default in the other,
+  // which put the row on screen beside the header switch on desktop.
   const mvt = document.getElementById('mob-view-tabs');
-  if (mvt) mvt.style.display = hasData ? '' : 'none';
+  if (mvt) mvt.classList.toggle('has-data', hasData);
   syncViewTabs();
   applyViewChrome();
 
@@ -3356,13 +3359,24 @@ function onPlayerSearch(val) {
     res.innerHTML = '<div class="player-result" style="cursor:default;color:var(--tx3)">Loading players…</div>';
     return;
   }
-  const q = val.toLowerCase();
+  // Every whitespace-separated token must appear somewhere in the name, in any
+  // order — so "jovic to", "toby jo" and "to jov" all find Toby Jovic. A single
+  // substring match only worked when the query was typed in name order.
+  const q = val.toLowerCase().trim();
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const nameMatches = (name) => {
+    const n = name.toLowerCase();
+    return tokens.every(t => n.includes(t));
+  };
   const matches = S.players
-    .filter(p => p.name.toLowerCase().includes(q) && p.uuid)
+    .filter(p => p.uuid && nameMatches(p.name) &&
+      (!S.selYear || seasonYearOf(p.compName) === S.selYear))
     .sort((a,b) => {
-      // Exact prefix match first, then any match
-      const aStart = a.name.toLowerCase().startsWith(q);
-      const bStart = b.name.toLowerCase().startsWith(q);
+      // A name that STARTS with the first token first, so typing "toby j" puts
+      // Toby James above someone whose surname merely contains "toby".
+      const t0 = tokens[0] || '';
+      const aStart = a.name.toLowerCase().startsWith(t0);
+      const bStart = b.name.toLowerCase().startsWith(t0);
       if (aStart !== bStart) return aStart ? -1 : 1;
       // Then the most recent season, so this year's entry is the one on top.
       // Search spans every loaded season, and once past seasons could be loaded
@@ -3373,7 +3387,19 @@ function onPlayerSearch(val) {
     })
     .slice(0, 12);
 
-  if (!matches.length) { res.style.display='none'; return; }
+  // The scope of the search, because it covers only the seasons in memory and a
+  // name absent from 2026 is indistinguishable from a name that does not exist.
+  const searched = S.selYear ? [S.selYear] : [];
+  const scopeNote = searched.length
+    ? `<div style="padding:5px 8px;font-size:9px;color:var(--tx3);border-top:1px solid var(--b2);` +
+      `font-family:'DM Mono',monospace">searching ${searched.join(', ')} only</div>`
+    : '';
+
+  if (!matches.length) {
+    res.style.display = 'flex';
+    res.innerHTML = `<div class="player-result" style="cursor:default;color:var(--tx3)">No match in ${searched.join(', ') || 'the loaded seasons'}</div>${scopeNote}`;
+    return;
+  }
 
   const stripAge = n => n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim();
   res.style.display = 'flex';
@@ -3382,8 +3408,10 @@ function onPlayerSearch(val) {
     const grade = abbrevGrade(gLabel(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName)));
     // The season, because the same player appears once per season they played in
     // and the rest of the line is often identical between them.
+    // Only worth showing when it could differ from the selected season. Scoped
+    // search means it cannot, so the tag would be the same on every row.
     const year = seasonYearOf(p.compName);
-    const yearTag = year
+    const yearTag = (year && year !== S.selYear)
       ? `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:1px 4px;border-radius:3px;` +
         `background:rgba(255,255,255,.07);color:var(--tx3);flex-shrink:0">${year}</span>`
       : '';
@@ -3396,7 +3424,7 @@ function onPlayerSearch(val) {
       ${yearTag}
       ${p.goals ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold)">${p.goals}G</span>` : ''}
     </div>`;
-  }).join('');
+  }).join('') + scopeNote;
 }
 
 function clearSearch() {
