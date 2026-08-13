@@ -1,7 +1,11 @@
 # .github/workflows/verify-store.yml
 #
-# Runs every verification. Same filename as before so it replaces the previous
-# version cleanly.
+# Runs every verification and prints ONE summary at the end, so a green or red
+# run is readable without expanding five separate steps.
+#
+# All five run even if an earlier one fails, so a single run gives the complete
+# picture rather than stopping at the first failure. The job fails at the end if
+# any of them did.
 #
 # Touches nothing. Each verification builds its own fixture in a temp directory
 # and stubs the network, so no PlayHQ call is made and data/ and config.json are
@@ -27,33 +31,71 @@ jobs:
                    scripts/lib/results-engine.js \
                    scripts/discover-seasons.js \
                    scripts/fetch-results.js \
+                   scripts/fetch-stats.js \
                    scripts/fetch-fixtures.js \
                    scripts/backfill.js \
                    scripts/migrate-grade-ids.js \
+                   scripts/audit-data.js \
                    scripts/verify-store.js \
                    scripts/verify-discover-seasons.js \
                    scripts/verify-backfill.js \
                    scripts/verify-migrate-grade-ids.js \
-                   scripts/verify-dashboard-grades.js; do
+                   scripts/verify-dashboard-grades.js \
+                   scripts/verify-audit.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
           done
 
-      # No `set +e` anywhere. A failure must fail the job — a verification that
-      # reports green when it failed is worse than having none.
-      - name: Verify store.js
-        run: node scripts/verify-store.js
+      - name: Run all verifications
+        run: |
+          # No `set -e`. Every suite runs even after one fails, so one run gives
+          # the whole picture instead of stopping at the first red.
+          SUITES="verify-store verify-discover-seasons verify-backfill \
+                  verify-migrate-grade-ids verify-dashboard-grades verify-audit"
+          FAILED=0
+          SUMMARY=""
+          for s in $SUITES; do
+            echo "::group::$s"
+            OUT=$(node "scripts/$s.js" 2>&1)
+            CODE=$?
+            echo "$OUT"
+            echo "::endgroup::"
 
-      - name: Verify discover-seasons.js
-        run: node scripts/verify-discover-seasons.js
+            # The last line of every suite is "<name> <version>: N passed, N failed".
+            LINE=$(echo "$OUT" | grep -E ': [0-9]+ passed, [0-9]+ failed' | tail -1)
+            [ -z "$LINE" ] && LINE="$s: produced no summary line"
+            if [ "$CODE" = "0" ]; then
+              SUMMARY="${SUMMARY}PASS  ${LINE}"$'\n'
+            else
+              FAILED=1
+              SUMMARY="${SUMMARY}FAIL  ${LINE}"$'\n'
+              # The failing assertions themselves, so the summary is actionable
+              # without opening the group above it.
+              while IFS= read -r l; do
+                SUMMARY="${SUMMARY}        ${l}"$'\n'
+              done < <(echo "$OUT" | grep -E '^\s+FAIL ' | head -10)
+            fi
+          done
 
-      - name: Verify the results engine and backfill
-        run: node scripts/verify-backfill.js
+          echo ""
+          echo "=================== SUMMARY ==================="
+          printf '%s' "$SUMMARY"
+          echo "==============================================="
 
-      - name: Verify the grade id migration
-        run: node scripts/verify-migrate-grade-ids.js
+          # Also on the run page itself, so it is visible without opening the
+          # log at all. Guarded so the same script runs locally.
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            {
+              echo "### Verification summary"
+              echo ""
+              echo '```'
+              printf '%s' "$SUMMARY"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-      # Evaluates index.html's real inline script in a sandbox, so the ladder
-      # grouping under test is the committed code rather than a copy.
-      - name: Verify the dashboard grade grouping
-        run: node scripts/verify-dashboard-grades.js
+          if [ "$FAILED" != "0" ]; then
+            echo "One or more verifications failed."
+            exit 1
+          fi
+          echo "All verifications passed."
