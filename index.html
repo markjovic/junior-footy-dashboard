@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.141</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.142</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -703,7 +703,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.141</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.142</span>
         </div>
 
 
@@ -1538,6 +1538,14 @@ function getYears() {
     if (m.compName && m.seasonName && seasonFilePresent(m.seasonId)) ys.add(String(m.seasonName));
   }
   return [...ys].sort().reverse();
+}
+
+// The year out of a compName. compName is "<short name> <year>" by
+// construction — discover-seasons.js builds it that way and it is half of every
+// stored key — so the trailing token is the season.
+function seasonYearOf(compName) {
+  const m = String(compName || '').match(/(\d{4})\s*$/);
+  return m ? m[1] : '';
 }
 
 function seasonFilePresent(id) {
@@ -3356,6 +3364,11 @@ function onPlayerSearch(val) {
       const aStart = a.name.toLowerCase().startsWith(q);
       const bStart = b.name.toLowerCase().startsWith(q);
       if (aStart !== bStart) return aStart ? -1 : 1;
+      // Then the most recent season, so this year's entry is the one on top.
+      // Search spans every loaded season, and once past seasons could be loaded
+      // a name returned one row per season in arbitrary order.
+      const ay = seasonYearOf(a.compName), by = seasonYearOf(b.compName);
+      if (ay !== by) return by.localeCompare(ay);
       return a.name.localeCompare(b.name);
     })
     .slice(0, 12);
@@ -3367,12 +3380,20 @@ function onPlayerSearch(val) {
   res.innerHTML = matches.map(p => {
     const teamDisplay = stripAge(p.teamRaw || p.team);
     const grade = abbrevGrade(gLabel(currentGrade(p.teamRaw||p.team, p.age, p.rawGrade, p.compName)));
+    // The season, because the same player appears once per season they played in
+    // and the rest of the line is often identical between them.
+    const year = seasonYearOf(p.compName);
+    const yearTag = year
+      ? `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:1px 4px;border-radius:3px;` +
+        `background:rgba(255,255,255,.07);color:var(--tx3);flex-shrink:0">${year}</span>`
+      : '';
     return `<div class="player-result" onclick="openPlayerPanel('${p.uuid}');clearSearch()">
       ${crestHTML(teamDisplay, 16, 'tlogo')}
       <div style="flex:1;min-width:0">
         <div class="player-result-name">${toProperCase(p.name)}</div>
         <div class="player-result-meta">${teamDisplay} &middot; ${p.age} &middot; ${grade}</div>
       </div>
+      ${yearTag}
       ${p.goals ? `<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--gold)">${p.goals}G</span>` : ''}
     </div>`;
   }).join('');
