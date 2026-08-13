@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.155</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.160</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.155</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.160</span>
         </div>
 
 
@@ -2597,26 +2597,47 @@ function renderFinalsByClub(pool) {
   //
   // The column has no name — the same position means different things in
   // different finals systems. The round is labelled on each cell instead.
-  const cardColCount = list => Math.max(1, ...list.map(t => t.matches.length));
+  // Columns are positional within a GRADE's own finals series.
+  // A grade with 4 rounds uses columns 1-4. A grade with 3 rounds uses 2-4
+  // (right-aligned so GF is always in the last column). A team that played
+  // rounds 1 and 3 of a 4-round series sits in columns 1 and 3.
+  //
+  // The card's column count is the longest series any grade in it ran.
+  // Different grades are not aligned to each other — they can't be, because
+  // different finals systems use different round names. Each grade is
+  // aligned within itself: column 4 = GF for everyone.
 
-  const matchToColMap = (t, total) => {
-    // Sort matches: GF last, everything else by round number.
-    const sorted = t.matches.slice().sort((a, b) => {
-      if ((a.finalsAbbrev==='GF') !== (b.finalsAbbrev==='GF'))
-        return a.finalsAbbrev==='GF' ? 1 : -1;
-      return (a.round||0) - (b.round||0);
-    });
-    const offset = total - sorted.length;   // left-pad shorter runs
-    const map = new Map();
-    sorted.forEach((m, i) => map.set(offset + i, m));
-    return map;
+  // How many finals rounds did this grade run in total?
+  // That is the length of the UNION of rounds across all teams in the grade.
+  const gradeRoundCount = (gradeTeams) => {
+    const rounds = new Set();
+    for (const t of gradeTeams) for (const m of t.matches) rounds.add(m.round);
+    return Math.max(rounds.size, 1);
   };
 
-  const teamRow = (t, total) => {
+  const cardColCount = list => {
+    // Group teams by grade, find each grade's round count, take the max.
+    const byGrade = new Map();
+    for (const t of list) {
+      const k = `${t.comp}|${t.age}|${t.grade}`;
+      if (!byGrade.has(k)) byGrade.set(k, []);
+      byGrade.get(k).push(t);
+    }
+    return Math.max(1, ...[...byGrade.values()].map(gradeRoundCount));
+  };
+
+  // roundIdx: Map<round_number, card_column_index> for this team's grade.
+  // Built once per grade from all teams in the grade, passed in to teamRow.
+  const teamRow = (t, total, roundIdx) => {
     const colCount = total;
     const st = t.status || teamStatus(t, pool);
 
-    const colMap = matchToColMap(t, colCount);
+    // Slot each match into the column its round maps to.
+    const colMap = new Map();
+    for (const m of t.matches) {
+      const col = roundIdx.has(m.round) ? roundIdx.get(m.round) : total - 1;
+      colMap.set(col, m);
+    }
     const cells = Array.from({length: colCount}, (_, i) => {
       const m = colMap.get(i);
       if (!m) return `<span style="color:var(--b2)">·</span>`;
@@ -2687,7 +2708,32 @@ function renderFinalsByClub(pool) {
              ageSort(a.age, b.age) ||
              String(a.grade).localeCompare(String(b.grade));
     });
+    const byGrade2 = new Map();
+    for (const t of e.teams) {
+      const k = `${t.comp}|${t.age}|${t.grade}`;
+      if (!byGrade2.has(k)) byGrade2.set(k, []);
+      byGrade2.get(k).push(t);
+    }
     const total = cardColCount(e.teams);
+    // For each grade: collect all rounds played across every team, sort them
+    // (GF last), and assign column indices right-aligned within the card.
+    // A grade with 3 rounds in a 4-column card uses columns 1, 2, 3 (0-based),
+    // so its GF is always in the last column.
+    const gradeRoundIdx = new Map();
+    for (const [k, gradeTeams] of byGrade2) {
+      const roundNums = [...new Set(gradeTeams.flatMap(t => t.matches.map(m => m.round)))];
+      // GF round: the one whose match has finalsAbbrev GF (may differ across comps).
+      const gfMatch = gradeTeams.flatMap(t => t.matches).find(m => m.finalsAbbrev === 'GF');
+      const gfRound = gfMatch?.round ?? null;
+      if (gfRound !== null) roundNums.sort((a, b) => a === gfRound ? 1 : b === gfRound ? -1 : a - b);
+      else roundNums.sort((a, b) => a - b);
+      // Right-align only if this grade played a GF — a grade with no GF was
+      // eliminated early and left-aligns from column 0.
+      const nRounds = roundNums.length;
+      const gradeOffset = gfRound !== null ? total - nRounds : 0;
+      const idx = new Map(roundNums.map((r, i) => [r, gradeOffset + i]));
+      gradeRoundIdx.set(k, idx);
+    }
     return `<div class="fv-card">
       <div class="fv-club">
         ${crestHTML(e.teams[0].team, 20, 'tlogo')}
@@ -2701,7 +2747,7 @@ function renderFinalsByClub(pool) {
           e.premiers  ? `<span style="color:var(--gold)">${e.premiers} premier${e.premiers!==1?'s':''}</span>` : '',
         ].filter(Boolean).join(' &middot; ')}</span>
       </div>
-      ${e.teams.map(t => teamRow(t, total)).join('')}
+      ${e.teams.map(t => teamRow(t, total, gradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`) || new Map())).join('')}
     </div>`;
   }).join('');
 
@@ -2710,7 +2756,7 @@ function renderFinalsByClub(pool) {
         <span style="flex:1"></span><span style="font-size:11px;color:var(--tx3)">${orphans.length} team${orphans.length!==1?'s':''}</span></div>
         <div style="font-size:11px;color:var(--tx3);padding:8px 0">
           No club could be resolved for these teams. Run the Build Club Index workflow.</div>
-        ${orphans.map(t => teamRow(t, cardColCount(orphans))).join('')}</div>`
+        ${orphans.map(t => teamRow(t, cardColCount(orphans), new Map())).join('')}</div>`
     : '';
 
   return blocks + orphanNote;
