@@ -525,16 +525,22 @@ console.log('\n13  Finals by club: premierships first, results aligned');
 {
   const body = html.slice(html.indexOf('<body'));
 
-  ok('there is a composite ordering', /premiership: \{ label:/.test(body));
-  ok('and it is the default', /finalsSort: 'premiership'/.test(body),
-    'the old default was alphabetical, which hid the grade weighting entirely');
-  ok('the grade tiebreak is on by default', /finalsWeighted: true/.test(body));
+  // The TEAMS inside a club card are what carries the result, and they were
+  // ordered by age alone — which buried a top-grade premiership below an
+  // under-8 side that lost its first final.
+  ok('teams sort into premiers, then GF, then the rest',
+    /const band = t => \(t\.wonGF \? 0 : t\.inGF \? 1 : 2\)/.test(body));
+  ok('with the grade strength as the tiebreak', /const rank = t => gradeRankOf/.test(body));
+  ok('and age after that, not before it',
+    body.indexOf('band(sa) - band(sb)') < body.indexOf('ageSort(a.age, b.age) ||'));
 
-  // The weighting control only hid itself for the alphabetical sort. With that
-  // as the default it appeared to do nothing, which is why it "went missing".
-  ok('BY GRADE is visible for the default sort',
-    /inClubMode && S\.finalsSort !== 'name'/.test(body),
-    'hidden only for the alphabetical sort');
+  // One idea, one entry. 'premiers' already meant most grand final wins.
+  ok('there is no duplicate premiership sort', !/premiership:/.test(body),
+    'premiers already means most GF wins');
+
+  // "BY GRADE" said nothing about what it compares.
+  ok('the weighting toggle says what it does', /GRADE STRENGTH/.test(body));
+  ok('and explains itself on hover', /one team in the top grade beats any number/.test(body));
 
   // Columns come from the data, not from a hardcoded EF/QF/SF/PF/GF — a
   // competition running a different series would silently lose a column.
@@ -581,20 +587,17 @@ console.log('\n14  Every finals sort is reachable from the dropdown');
   const body = html.slice(html.indexOf('<body'));
   const keys = [...body.matchAll(/^  (\w+):\s*(?:\{|null)/gm)]
     .map(m => m[1])
-    .filter(k => /^(premiership|teams|remaining|gf|premiers|name)$/.test(k));
+    .filter(k => /^(teams|remaining|gf|premiers|name)$/.test(k));
   const sel = body.slice(body.indexOf('id="fv-sort"'));
   const opts = [...sel.slice(0, sel.indexOf('</select>')).matchAll(/value="(\w+)"/g)].map(m => m[1]);
   ok('the dropdown offers every sort that exists',
     keys.every(k => opts.includes(k)),
     `sorts: ${keys.join(',')} | options: ${opts.join(',')}`);
-  ok('and the default is among them', opts.includes('premiership'));
-
-  // A saved choice from before the composite existed must not win. Everyone who
-  // had opened the finals view had 'name' stored, so the new default could never
-  // take effect.
-  ok('a pre-2026-08-12 saved sort is ignored', /f\.sortV === 2 && f\.finalsSort/.test(body));
-  ok('and the marker is written back on save', /sortV: 2/.test(body));
-  ok('the weighting restore is guarded the same way, ONCE',
+  ok('and the saved choice is restored, not discarded',
+    /f\.finalsSort && Object\.prototype\.hasOwnProperty\.call\(FINALS_SORTS/.test(body) &&
+    !/sortV/.test(body),
+    'the migration guard went with the sort it was added for');
+  ok('the weighting restore happens ONCE',
     (body.match(/typeof f\.finalsWeighted === 'boolean'/g) || []).length === 1,
     'an unguarded second restore would override the guarded one');
 
@@ -646,13 +649,13 @@ console.log('\n15  A club card renders without throwing');
   ok('the columns are labelled', /grade<\/span>/.test(out));
 
   // EVERY sort must render, not just the default — that is what was missed.
-  for (const s of ['premiership', 'teams', 'remaining', 'gf', 'premiers', 'name']) {
+  for (const s of ['teams', 'remaining', 'gf', 'premiers', 'name']) {
     let e2 = null;
     try { run(`S.finalsSort = ${JSON.stringify(s)}; S.finalsWeighted = true; render();`); }
     catch (e) { e2 = e.message; }
     ok(`sort "${s}" renders weighted`, !e2, e2 || 'clean');
   }
-  run(`S.finalsSort = 'premiership'; S.finalsWeighted = true;`);
+  run(`S.finalsSort = 'premiers'; S.finalsWeighted = true;`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
