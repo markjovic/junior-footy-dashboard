@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.138</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.139</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -403,6 +403,10 @@ body{overflow-x:hidden}
     </div>
 
     <div class="fgroup" id="comp-filter-group">
+      <div class="flabel">Season</div>
+      <select class="fsel" id="year-sel" onchange="selectYear(this.value)"></select>
+    </div>
+    <div class="fgroup" id="comp-filter-group2">
       <div class="flabel">Competition</div>
       <div id="comp-filters"></div>
     </div>
@@ -699,7 +703,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.138</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.139</span>
         </div>
 
 
@@ -827,6 +831,15 @@ let S = {
   clubs:    {},          // { clubId: { name, type } }            from build-club-index.js
   teamClub: {},          // { "comp|team|age": clubId }           from build-club-index.js
   selGrades: new Set(),
+  // Season selection. selYear is the outer scope: it decides which competitions
+  // exist, because YJFL ran 2022-2026 and SER only 2025-2026, so "2022 with SER
+  // selected" has no answer. season_selection_design.md §2.1.
+  selYear: null,
+  manifest: [],           // from core.json, so a year with nothing loaded still lists
+  loadedSeasons: [],      // season ids whose core file is in memory
+  loadedPlayerSeasons: [],// season ids whose player file is in memory
+  seasonFiles: new Set(), // which files exist, from core.seasonFiles
+  yearLoading: false,
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age' | 'club' | 'winners'
@@ -1497,8 +1510,33 @@ function getTopScorers(age, n=9999) {
 // ═══════════════════════════════════════
 // VIEW HELPERS
 // ═══════════════════════════════════════
+// Every season year, newest first. From the manifest, so a year whose records
+// have not been fetched still appears — deriving it from S.matches would list
+// only what is already loaded, which is the year you are already looking at.
+function getYears() {
+  const ys = new Set();
+  for (const m of S.manifest) {
+    if (m.compName && m.seasonName && seasonFilePresent(m.seasonId)) ys.add(String(m.seasonName));
+  }
+  return [...ys].sort().reverse();
+}
+
+function seasonFilePresent(id) {
+  return !S.seasonFiles.size || S.seasonFiles.has(`data/seasons/${id}-core.json`);
+}
+
+// The manifest entries for a year — what the competition list is built from.
+function seasonsForYear(year) {
+  return S.manifest.filter(m =>
+    m.compName && String(m.seasonName) === String(year) && seasonFilePresent(m.seasonId));
+}
+
+// Competitions available in the selected year. MANIFEST-driven for the same
+// reason as getYears(): a past year has nothing in S.matches until it is
+// fetched, and an empty list would leave nothing to click to trigger the fetch.
 function getComps() {
-  return [...new Set(S.matches.map(m => m.compName).filter(Boolean))].sort();
+  if (!S.selYear) return [...new Set(S.matches.map(m => m.compName).filter(Boolean))].sort();
+  return seasonsForYear(S.selYear).map(m => m.compName).sort();
 }
 function matchesComp(m) {
   if (!S.selComp) return true;
@@ -1595,6 +1633,20 @@ function render() {
 }
 
 function renderAgeTabs() {
+  // Season first: it decides which competitions exist.
+  const years = getYears();
+  const yearSel = document.getElementById('year-sel');
+  if (yearSel) {
+    if (!S.selYear || !years.includes(S.selYear)) S.selYear = years[0] || null;
+    const html = years.map(y =>
+      `<option value="${y}"${y === S.selYear ? ' selected' : ''}>${y}${
+        S.loadedSeasons.length && !seasonsForYear(y).some(m => S.loadedSeasons.includes(m.seasonId))
+          ? '' : ''}</option>`).join('');
+    if (yearSel.dataset.last !== html) { yearSel.innerHTML = html; yearSel.dataset.last = html; }
+    yearSel.value = S.selYear || '';
+    yearSel.disabled = !!S.yearLoading;
+  }
+
   // Competition filter — only show if more than one competition
   const comps = getComps();
   const compGroup = document.getElementById('comp-filter-group');
@@ -2614,6 +2666,68 @@ function renderStats() {
 // ═══════════════════════════════════════
 // INTERACTIONS
 // ═══════════════════════════════════════
+// Choosing a year fetches its seasons if they are not already in memory, then
+// resets everything below it in the hierarchy. The fetched season stays in
+// memory for the session, so switching back is instant — 0.33 to 2.32 MB per
+// season is worth holding to avoid re-fetching on every flick between years.
+// season_selection_design.md §2.4a.
+async function selectYear(y) {
+  if (!y || S.selYear === y) return;
+  S.selYear = y;
+  const ids = seasonsForYear(y).map(m => m.seasonId);
+  const missing = ids.filter(id => !S.loadedSeasons.includes(id));
+  if (missing.length) {
+    S.yearLoading = true;
+    render();
+    await loadSeasons(missing);
+    S.yearLoading = false;
+  }
+  // Everything below the year is scoped by it, so none of it survives the change.
+  S.selComp = null; S.selectedAge = null; S.selGrades = new Set();
+  S.selLdrGrade = null; S.selRound = ''; S.selTeam = '';
+  const rs = document.getElementById('round-sel'); if (rs) rs.value = '';
+  const ts = document.getElementById('team-sel');  if (ts) ts.value = '';
+  saveFilters();
+  render();
+  // Players for the newly loaded seasons, once the ladder is on screen.
+  if (missing.length) loadPlayers();
+}
+
+// Fetch season core files and merge them in. Records already in memory are left
+// alone: a season is immutable once retired, and re-fetching it would be waste.
+async function loadSeasons(ids) {
+  const parts = await Promise.all(ids.map(async id => {
+    try {
+      const r = await fetch(`data/seasons/${id}-core.json`);
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  }));
+  const added = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p) continue;
+    S.loadedSeasons.push(ids[i]);
+    Object.assign(S.roster, p.roster || {});
+    Object.assign(S.gradeMeta, p.gradeMeta || {});
+    for (const m of p.matches || []) {
+      if (m.isBye) continue;
+      (m.scheduled ? S.fixtures : added).push(m);
+    }
+  }
+  rebuildGradeLabels();
+  // _valid and _grade are cached per record and must be computed with the roster
+  // in place, or the cached value silently wins over the functions.
+  for (const m of added) {
+    if (m.gradeId) { m._valid = true; m._grade = m.gradeId; continue; }
+    const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+    const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
+    m._valid = (hg === ag && hg !== null && hg !== undefined);
+    m._grade = hg || m.rawGrade;
+  }
+  S.matches.push(...added);
+  console.log(`Loaded ${added.length} match record(s) from ${ids.length} season file(s)`);
+}
+
 function selectComp(c) { if (S.selComp===c) return; S.selComp=c; S.selectedAge=null; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
 function selectAge(a) { S.selectedAge=a; S.selGrades=new Set(); S.selLdrGrade=null; S.selRound=''; S.selTeam=''; document.getElementById('round-sel').value=''; document.getElementById('team-sel').value=''; saveFilters(); render(); }
 function toggleGrade(g) { S.selGrades.has(g)?S.selGrades.delete(g):S.selGrades.add(g); updateResetBtn(); saveFilters(); render(); }
@@ -3739,9 +3853,17 @@ async function loadStoredData() {
     Object.assign(d.gradeMeta, p.gradeMeta || {});
   }
 
-  // Remembered so loadPlayers() asks for the same seasons and nothing else.
+  // The manifest drives the year and competition lists, so it has to outlive
+  // this function — a past year has nothing in S.matches until it is fetched.
+  S.manifest = core.manifest;
+  S.seasonFiles = present;
   S.loadedSeasons = seasons.filter(m => !present.size ||
     present.has(`data/seasons/${m.seasonId}-core.json`)).map(m => m.seasonId);
+  // The newest year that actually loaded, so the page opens on the current one.
+  const loadedYears = seasons
+    .filter(m => S.loadedSeasons.includes(m.seasonId))
+    .map(m => String(m.seasonName)).sort();
+  if (!S.selYear) S.selYear = loadedYears[loadedYears.length - 1] || null;
 
   // Cross-organisation keys and the freshness timestamps live in core.json.
   for (const k of ['clubs','teamClub','teamOrg','compLogos','teamLogos','gotwFlags','lastRound',
@@ -3764,9 +3886,10 @@ async function loadStoredData() {
 let playersLoading = null;
 function loadPlayers() {
   if (playersLoading) return playersLoading;
-  if (S.players && S.players.length) return Promise.resolve(S.players);
-  const ids = S.loadedSeasons || [];
-  if (!ids.length) return Promise.resolve([]);
+  // Whichever seasons are in memory but whose players are not. Selecting a past
+  // year adds seasons, so this is a difference rather than a one-off.
+  const ids = (S.loadedSeasons || []).filter(id => !S.loadedPlayerSeasons.includes(id));
+  if (!ids.length) return Promise.resolve(S.players || []);
 
   S.playersPending = true;
   playersLoading = (async () => {
@@ -3776,14 +3899,20 @@ function loadPlayers() {
         return r.ok ? await r.json() : null;
       } catch (e) { return null; }
     }));
-    const players = [];
-    for (const p of parts) if (p && Array.isArray(p.players)) players.push(...p.players);
-    S.players = players;
+    let added = 0;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (!p || !Array.isArray(p.players)) continue;
+      S.loadedPlayerSeasons.push(ids[i]);
+      S.players.push(...p.players);
+      added += p.players.length;
+    }
     S.playersPending = false;
-    console.log(`Loaded ${players.length} player record(s) across ${ids.length} season(s)`);
-    try { await sSet(SK.players, players); } catch (e) { /* cache only */ }
+    playersLoading = null;
+    console.log(`Loaded ${added} player record(s) across ${ids.length} season(s)`);
+    try { await sSet(SK.players, S.players); } catch (e) { /* cache only */ }
     render();
-    return players;
+    return S.players;
   })();
   return playersLoading;
 }
