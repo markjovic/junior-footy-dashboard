@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.160</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.161</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.160</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.161</span>
         </div>
 
 
@@ -2694,6 +2694,10 @@ function renderFinalsByClub(pool) {
 
 
 
+  // One column count for the whole view so every card lines up with every other.
+  const allTeams = [...entries.flatMap(e => e.teams), ...orphans];
+  const globalTotal = cardColCount(allTeams);
+
   const blocks = entries.map(e => {
     // Premiers first, then teams that reached a grand final, then the rest —
     // with the grade's strength as the tiebreak within each band, and age after
@@ -2714,7 +2718,7 @@ function renderFinalsByClub(pool) {
       if (!byGrade2.has(k)) byGrade2.set(k, []);
       byGrade2.get(k).push(t);
     }
-    const total = cardColCount(e.teams);
+    const total = globalTotal;
     // For each grade: collect all rounds played across every team, sort them
     // (GF last), and assign column indices right-aligned within the card.
     // A grade with 3 rounds in a 4-column card uses columns 1, 2, 3 (0-based),
@@ -2756,7 +2760,7 @@ function renderFinalsByClub(pool) {
         <span style="flex:1"></span><span style="font-size:11px;color:var(--tx3)">${orphans.length} team${orphans.length!==1?'s':''}</span></div>
         <div style="font-size:11px;color:var(--tx3);padding:8px 0">
           No club could be resolved for these teams. Run the Build Club Index workflow.</div>
-        ${orphans.map(t => teamRow(t, cardColCount(orphans), new Map())).join('')}</div>`
+        ${orphans.map(t => teamRow(t, globalTotal, new Map())).join('')}</div>`
     : '';
 
   return blocks + orphanNote;
