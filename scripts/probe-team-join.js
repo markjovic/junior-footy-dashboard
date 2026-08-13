@@ -4,8 +4,8 @@
 // Measures whether stored match records can be joined to a PlayHQ season team
 // registry BY NAME. team_registry_design.md §3 keys everything on the team id,
 // but no stored record has one — both fetchers select it and discard it — so
-// attaching ids to 41.81 MB of existing records needs a one-time bridge, and the
-// only thing stored records carry is the team name.
+// attaching ids to existing records needs a one-time bridge, and the only thing
+// stored records carry is the team name.
 //
 // This measures whether that bridge works before anything is built on it. If the
 // match rate is poor the plan needs a different answer, and the cost of finding
@@ -13,9 +13,25 @@
 //
 // READ ONLY. It fetches from PlayHQ and reads data/, and writes nothing.
 //
+// v4 (2026-08-13): stored records now come from store.load(), not from a hand
+// -rolled walk of data/orgs. v3 read `data/orgs/<org>-(current|archive).json`,
+// which is the layout superseded on 2026-08-12. That directory is kept only as a
+// rollback path and is scheduled for deletion, and v3 did not fail when it went:
+// fs.existsSync returned false, the loop read nothing, and the probe printed
+// "nothing stored for this season" and exited 0. A green run reporting no data
+// is indistinguishable from a season that genuinely has none, which is the exact
+// silent failure this repo's working practice exists to prevent.
+//
+// So a missing or unreadable season file is now a LOUD failure with a non-zero
+// exit, established from store.load's own __filesRead rather than inferred from
+// a record count of zero. A season file that is present and holds no matches for
+// the competition is reported separately, because that is a different fact.
+//
 // Env:
 //   PROBE_SEASONS   comma-separated season ids. Default: EFNL 2025 and 2024.
 //   PROBE_EXAMPLES  how many examples of each category to print. Default 8.
+//
+// Exit: 0 all requested seasons were read and measured, 1 any could not be.
 //
 // Run: node scripts/probe-team-join.js
 
@@ -28,11 +44,14 @@ const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 // went wrong: its age regex only recognised U-ages, so every senior grade keyed
 // as an empty string and 36% of teams looked unmatched when they were not.
 const { parseGradeName, cleanTeam } = require('./lib/results-engine');
+// The storage layer. Records are placed into season files BY compName, so
+// loading a scope of one competition opens exactly that season's core file and
+// no other. players:false skips the player file, which is 78% of the bytes and
+// holds nothing this probe reads.
+const store = require('./lib/store');
 
-const VERSION = 'probe-team-join v3 2026-08-12 per-age';
+const VERSION = 'probe-team-join v4 2026-08-13 store.load';
 const ROOT = path.resolve(__dirname, '..');
-const CORE_PATH = path.join(ROOT, 'data', 'core.json');
-const ORGS = path.join(ROOT, 'data', 'orgs');
 const EXAMPLES = parseInt(process.env.PROBE_EXAMPLES || '8', 10);
 
 // ── Copied verbatim from scripts/probe-search.js, which ran on 2026-08-11 ─────
@@ -71,8 +90,20 @@ function readJson(p) {
 
 async function main() {
   log(`=== ${VERSION} ===`);
+  log(`    store ${store.STORE_VERSION}`);
 
-  const core = readJson(CORE_PATH);
+  // node --check parses this file; it cannot tell whether results-engine still
+  // exports what is destructured above. A rename there would otherwise surface
+  // as "cleanTeam is not a function" thrown from inside the per-season loop,
+  // after the API has already been called.
+  for (const [name, fn] of [['parseGradeName', parseGradeName], ['cleanTeam', cleanTeam]]) {
+    if (typeof fn !== 'function') {
+      console.error(`FATAL: scripts/lib/results-engine.js does not export ${name}.`);
+      process.exit(1);
+    }
+  }
+
+  const core = readJson(store.CORE_PATH);
   if (!core || !Array.isArray(core.manifest)) {
     console.error('FATAL: data/core.json has no manifest.');
     process.exit(1);
@@ -88,11 +119,19 @@ async function main() {
   const wanted = (process.env.PROBE_SEASONS || '75d8a232,ca9cc98b')
     .split(',').map(s => s.trim()).filter(Boolean);
 
+  // A season that could not be read at all. Counted rather than thrown, so one
+  // unreadable season does not hide the measurement for the others.
+  let unreadable = 0;
+
   await refreshSession();
 
   for (const seasonId of wanted) {
     const entry = core.manifest.find(m => m.seasonId === seasonId);
-    if (!entry) { console.error(`  season ${seasonId} is not in the manifest — skipping`); continue; }
+    if (!entry) {
+      console.error(`  season ${seasonId} is not in the manifest — skipping`);
+      unreadable++;
+      continue;
+    }
     log(`\n${'='.repeat(70)}\n${entry.compName} (${seasonId}), ${entry.status}\n${'='.repeat(70)}`);
 
     // ── 1. The registry, from PlayHQ ─────────────────────────────────────────
@@ -103,6 +142,7 @@ async function main() {
       if (r && r.errors) for (const e of r.errors) log(`  API error: ${e.message}`);
     } catch (e) {
       console.error(`  FATAL fetching the registry: ${e.message}`);
+      unreadable++;
       continue;
     }
     log(`registry: ${teams.length} team(s), ${teams.filter(t => t.grade && t.grade.id).length} with a grade`);
@@ -126,26 +166,61 @@ async function main() {
     await sleep(500);
 
     // ── 2. What is stored ────────────────────────────────────────────────────
+    // Through store.load, scoped to this one competition. store.save places a
+    // record into a season file by looking its compName up in the manifest, so
+    // every record carrying this compName is in this season's core file and
+    // nowhere else. The per-record compName check below is therefore redundant
+    // in the ordinary case, and is kept because it stops a duplicated compName
+    // in the manifest from quietly pulling in another season's records.
+    let stored;
+    try {
+      stored = store.load([entry.compName], { players: false });
+    } catch (e) {
+      console.error(`  FATAL loading stored data: ${e.message}`);
+      unreadable++;
+      continue;
+    }
+
+    // The distinction v3 could not make. __filesRead lists what store.load
+    // actually opened; an empty list means no season file was read, which is a
+    // missing or unparseable file rather than a season with no matches.
+    const filesRead = stored.__filesRead || [];
+    if (!filesRead.length) {
+      console.error(`  NO SEASON FILE WAS READ for ${entry.compName} (${seasonId}).`);
+      console.error(`  Expected data/seasons/${seasonId}-core.json.`);
+      console.error(`  This is a missing file, NOT a season with no matches. Nothing was measured.`);
+      unreadable++;
+      continue;
+    }
+    if (!filesRead.some(f => f.includes(seasonId))) {
+      console.error(`  MANIFEST MISMATCH: "${entry.compName}" resolved to ${filesRead.join(', ')},`);
+      console.error(`  which is not season ${seasonId}. Two manifest entries share a compName.`);
+      unreadable++;
+      continue;
+    }
+    log(`read:     ${filesRead.join(', ')}`);
+
     // Distinct (age, cleaned team name) pairs appearing in stored matches. The
     // age is part of the key because cleanTeam strips it: "Norwood U12 Purple"
     // and "Norwood U14 Purple" both store as "Norwood Purple", so the name alone
     // is not unique and never was.
     const storedPairs = new Map();   // "age|name" -> count
-    for (const f of fs.existsSync(ORGS) ? fs.readdirSync(ORGS) : []) {
-      if (!/^[0-9a-f]{8}-(current|archive)\.json$/.test(f)) continue;
-      const payload = readJson(path.join(ORGS, f));
-      for (const m of (payload && payload.matches) || []) {
-        if (m.compName !== entry.compName) continue;
-        for (const side of ['home', 'away']) {
-          if (!m[side]) continue;
-          const k = `${m.age}|${m[side]}`;
-          storedPairs.set(k, (storedPairs.get(k) || 0) + 1);
-        }
+    for (const m of stored.matches || []) {
+      if (m.compName !== entry.compName) continue;
+      for (const side of ['home', 'away']) {
+        if (!m[side]) continue;
+        const k = `${m.age}|${m[side]}`;
+        storedPairs.set(k, (storedPairs.get(k) || 0) + 1);
       }
     }
     log(`stored:   ${storedPairs.size} distinct (age, team) pair(s) across the season's matches`);
 
-    if (!storedPairs.size) { log('  nothing stored for this season — skipping the join'); continue; }
+    if (!storedPairs.size) {
+      // The file WAS read — checked above — so this is a real emptiness, not a
+      // missing file. Reported, and not counted as unreadable.
+      log('  the season file was read and holds no matches for this competition — skipping the join');
+      continue;
+    }
 
     // ── 3. The join ──────────────────────────────────────────────────────────
     // Registry names go through the same cleanTeam the fetchers applied, using
@@ -262,6 +337,13 @@ async function main() {
   }
 
   logSummary('probe-team-join');
+
+  if (unreadable) {
+    console.error(`\n${VERSION}: ${unreadable} of ${wanted.length} requested season(s) COULD NOT BE MEASURED.`);
+    console.error('Nothing was written. Read the errors above before trusting any figure printed here.');
+    process.exit(1);
+  }
+
   log(`\n${VERSION}: done. Nothing was written.`);
 }
 
