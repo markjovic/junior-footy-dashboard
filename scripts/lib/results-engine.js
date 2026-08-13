@@ -3,14 +3,15 @@
 // The results fetch, shared by the scheduled run and the historic backfill.
 //
 //   const engine = require('./lib/results-engine');
-//   const r = await engine.run({ competitions, ignoreSeasonEnded, writeLastRound, label });
+//   const r = await engine.run({ competitions, ignoreSeasonEnded, label });
 //   process.exit(r.exitCode);
 //
 // WHY THIS EXISTS
 // scripts/backfill.js needs the same queries, the same result traversal and the
 // same dedup as scripts/fetch-results.js, differing only in where the season
-// list comes from, whether the season-ended guard applies, and whether
-// lastRound is written. A second copy of that logic would drift, and
+// list comes from and whether the season-ended guard applies. (lastRound was a
+// third difference until v14 — see the lastRound block in run().) A second copy
+// of that logic would drift, and
 // working_practice.md is explicit that authority comes from being exercised —
 // the scheduled path runs this code roughly sixteen times a weekend, so it is
 // the proven one and the backfill borrows it rather than reimplementing it.
@@ -25,7 +26,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v13 2026-08-13 org-id-direct';
+const ENGINE_VERSION = 'v14 2026-08-13 lastround-rekey';
 
 'use strict';
 
@@ -1002,6 +1003,31 @@ function buildGradeMeta(grades) {
 // happen but could during a transition), alphabetically earlier grade wins
 // and a warning is logged.
 
+/**
+ * The lastRound key for one side of one match: "compName|age|gradeToken".
+ * lastround_gotw_keying_design.md §4.
+ *
+ * Module-level and exported ONLY so it can be unit-tested against a promoted
+ * team. The suite that covers this cannot reach a promotion through the network
+ * stub — that needs two grades and a mid-season grade change in the same
+ * fixture — and an inline closure left the roster resolution passing whether it
+ * was there or not. Verified 2026-08-13 by substituting `m.gradeId` for the
+ * roster lookup: the whole suite still passed, which is the definition of an
+ * untested guard.
+ *
+ * THE TOKEN MUST MATCH index.html's, which is the grade a team counts towards
+ * NOW: gradesForAge() → matchGrade() → currentGrade() → rosterGrade(), i.e.
+ * `entry.gradeId || entry.grade || rawGrade`. The expression below is that one.
+ * For a promoted team it differs from m.gradeId, and keying on m.gradeId would
+ * write a key the reader never builds — which renders no round tag and looks
+ * exactly like a grade that has not played yet.
+ */
+function lastRoundKey(m, side, roster) {
+  const entry = (roster || {})[`${m.compName || ''}|${m[side]}|${m.age}`];
+  const token = entry ? (entry.gradeId || entry.grade || m.rawGrade) : m.rawGrade;
+  return `${m.compName || ''}|${m.age}|${token}`;
+}
+
 function rebuildRoster(matches) {
   // Finals are excluded explicitly. With finals at 1-3 and home-and-away at
   // 14-18 they could never win the `round > prev.round` comparison anyway, but
@@ -1110,8 +1136,13 @@ function ensureDataDir() {
  *                                        every stored key — "EFNL 2025", not "EFNL".
  * @param {string[]} [o.scope]            store scope; defaults to the comp names.
  * @param {boolean}  [o.ignoreSeasonEnded] bypass the season-ended guard (backfill).
- * @param {boolean}  [o.writeLastRound]   default true; false leaves lastRound alone.
  * @param {string}   [o.label]            log prefix.
+ *
+ * o.writeLastRound was accepted up to v13 and is GONE. It existed because
+ * lastRound was keyed without a competition, so only a run that saw every
+ * competition could compute it. The key now carries the competition and the map
+ * merges per competition, so every run writes its own entries correctly and the
+ * flag has nothing left to guard. It is ignored if passed.
  * @returns {Promise<{exitCode:number,newCount:number,updatedCount:number,
  *                    gradeMetaChanged:boolean,total:number,
  *                    failedGrades:string[],erroredGrades:string[]}>}
@@ -1120,7 +1151,6 @@ function ensureDataDir() {
 async function run(o) {
   const competitions      = o.competitions || [];
   const ignoreSeasonEnded = o.ignoreSeasonEnded === true;
-  const writeLastRound    = o.writeLastRound !== false;
   const label             = o.label || 'results-engine';
 
   ensureDataDir();
@@ -1129,7 +1159,6 @@ async function run(o) {
   console.log(`[${label} ${ENGINE_VERSION}] ${competitions.length} competition-season(s): ` +
     competitions.map(c => c.name).join(', '));
   if (ignoreSeasonEnded) console.log(`[${label}] season-ended guard BYPASSED (backfill mode)`);
-  if (!writeLastRound)    console.log(`[${label}] lastRound will NOT be written`);
 
 
   // 2. Load existing data, scoped to the competitions this run covers.
@@ -1301,28 +1330,43 @@ async function run(o) {
   console.log(`Roster: ${Object.keys(roster).length} team(s)`);
 
   // 7. Write data.json — preserve gotwFlags and players, replace matches and roster
-  // Build lastRound map: "age|rawGrade" → highest round in data
-  // Rebuilt from scratch, and written back ONLY when writeLastRound is set.
   //
-  // The key is age|rawGrade with no competition and no season — the defect in
-  // storage_ingestion_design.md §3. That has two consequences and they pull in
-  // opposite directions, so neither merging nor replacing is right on its own:
+  // Build lastRound map: "compName|age|gradeToken" → highest home-and-away round.
+  // lastround_gotw_keying_design.md.
   //
-  //   Replacing on a scoped run DELETES the other competitions' entries, because
-  //   this map is built from the matches in scope and assigned wholesale into
+  // THE KEY CHANGED IN v14 and the reason the old one was hard is worth keeping.
+  // It used to be "age|rawGrade": no competition, no season. That forced an
+  // impossible choice, because both treatments were wrong:
+  //
+  //   Replacing on a scoped run DELETED the other competitions' entries, since
+  //   the map is built from the matches in scope and assigned wholesale into
   //   core.json. Measured 2026-08-12: a VIP-only run took
   //   {"U12|A":14,"U14|B":16} to {"U12|A":14}.
   //
-  //   Merging on ANY run makes it a ratchet. The comparison below only raises a
+  //   Merging on ANY run made it a ratchet. The comparison below only raises a
   //   value, so 2026's round 18 would survive into 2027 and never come back down
-  //   to round 3. That is what the first attempt at this fix did, and the
+  //   to round 3. The first attempt at this fix did exactly that and the
   //   verification caught it.
   //
-  // So a value keyed without a competition can only be computed correctly by a
-  // run that can see every competition. A full run rebuilds it; a scoped run
-  // leaves it alone entirely and it stays correct until the next full run.
-  // The caller decides, because only the caller knows whether it covered
-  // everything. The real fix is re-keying, which needs a migration.
+  // The workaround was o.writeLastRound: a full run rebuilt the map, a scoped run
+  // left it alone. With the competition in the key there is no conflict left —
+  // this run rebuilds the competitions it covered and keeps every other
+  // competition exactly as stored, which is the same treatment gradeMeta gets
+  // below and for the same reason. The flag is gone.
+  //
+  // WHY THE TOKEN IS THE ROSTER'S GRADE AND NOT m.gradeId. index.html reads this
+  // map at the ladder grade tabs, keyed by the grade a team counts towards NOW —
+  // gradesForAge() → matchGrade() → currentGrade() → rosterGrade(), which returns
+  // `entry.gradeId || entry.grade || rawGrade`. For a promoted team that is not
+  // the grade on its old fixtures. Keying on m.gradeId here would diverge from
+  // the reader for exactly the teams the roster exists to handle, and it would
+  // diverge silently — an unread key renders no tag and looks like a grade that
+  // simply has no rounds yet. So the token is resolved through the roster
+  // rebuilt six lines above, by the same expression the page uses.
+  //
+  // Reading the reader and writing to match it is the whole point: the previous
+  // mismatch (writer two segments and a rawGrade, reader three and a grade id)
+  // meant this feature rendered nothing at all from Beta 0.133 until v14.
   const lastRound = {};
   let strippedLogos = 0;
   // Merged over the stored map, so teams not covered by this run keep the URL
@@ -1337,8 +1381,18 @@ async function run(o) {
     if (m.scheduled) return; // don't let fixture records affect lastRound
     // lastRound is the last home-and-away round. A finals round numbered 1 must
     // never overwrite R14, and a finals number means nothing on its own.
-    const key = `${m.age}|${m.rawGrade}`;
-    if (!m.isFinals && (!lastRound[key] || m.round > lastRound[key])) lastRound[key] = m.round;
+    //
+    // Both sides are keyed, not just the home team. A promoted team's away
+    // fixtures count towards its new grade too, and keying only on home would
+    // leave a grade whose teams happened to be away in the final round reporting
+    // an earlier number than it played.
+    if (!m.isFinals) {
+      for (const side of ['home', 'away']) {
+        if (!m[side]) continue;
+        const key = lastRoundKey(m, side, roster);
+        if (!lastRound[key] || m.round > lastRound[key]) lastRound[key] = m.round;
+      }
+    }
     if (!m.isBye) {
       // Logos come from fetchedLogos above. Records stored before this change
       // still carry them, so they are harvested here too — that is what keeps
@@ -1370,6 +1424,36 @@ async function run(o) {
   const compLogos = { ...(existing.compLogos || {}) };
   grades.forEach(g => { if (g.compLogoUrl) compLogos[g.compName] = g.compLogoUrl; });
 
+  // The set of competitions this run actually COVERED, taken from the grades that
+  // came back rather than from the competitions that were asked for. If a
+  // competition's grade discovery failed it is not covered, so its stored entries
+  // survive instead of being rebuilt from nothing. Used by both merges below.
+  const covered = new Set(grades.map(g => g.compName));
+
+  // lastRound, merged per COMPETITION. Rebuild what this run covered, keep the
+  // rest. Two things this must get right, both of which a naive merge gets wrong:
+  //
+  //   A key is only kept if its competition is NOT covered. Keeping by key alone
+  //   would leave a withdrawn or renamed grade's entry behind forever.
+  //
+  //   A pre-v14 key is DROPPED, not kept. Old keys are "U12|A" — two segments,
+  //   and the first is an age. An age is never a compName, so `covered.has()` is
+  //   false for it and a keep-if-not-covered test alone would preserve every dead
+  //   key permanently. The segment-count test is what removes them, on the first
+  //   run, without a migration.
+  const keptLastRound = {};
+  let droppedLegacy = 0;
+  for (const [k, v] of Object.entries(existing.lastRound || {})) {
+    if (k.split('|').length !== 3) { droppedLegacy++; continue; }
+    if (!covered.has(k.slice(0, k.indexOf('|')))) keptLastRound[k] = v;
+  }
+  const mergedLastRound = { ...keptLastRound, ...lastRound };
+  if (droppedLegacy) {
+    console.log(`lastRound: dropped ${droppedLegacy} pre-v14 key(s) that no reader could match`);
+  }
+  console.log(`lastRound: ${Object.keys(lastRound).length} rebuilt for ` +
+    `${covered.size} covered competition(s), ${Object.keys(keptLastRound).length} kept`);
+
   // Merged per COMPETITION, not per key. A VIP_ONLY run only discovers the VIP
   // competitions' grades, so replacing wholesale would delete the others — but
   // a blind key merge is also wrong, because a renamed or withdrawn grade would
@@ -1377,7 +1461,6 @@ async function run(o) {
   // display ("2/5" where only four grades exist).
   // So: for every competition this run actually covered, its metadata is
   // rebuilt from scratch; every other competition is left exactly as it was.
-  const covered = new Set(grades.map(g => g.compName));
   const kept = {};
   for (const [k, v] of Object.entries(existing.gradeMeta || {})) {
     const comp = k.slice(0, k.indexOf('|'));
@@ -1399,10 +1482,11 @@ async function run(o) {
     matches: allWithByes,
     roster,
     gradeMeta,
-    // Omitted unless the caller covered every competition. `...existing` then
-    // carries the stored map through untouched, so store.save writes back what
-    // was already there rather than a version built from a partial view.
-    ...(writeLastRound ? { lastRound } : {}),
+    // Always written now. Up to v13 this was omitted unless the caller claimed to
+    // have covered every competition, because the key had no competition in it.
+    // The merge above is per competition, so a scoped run writes its own entries
+    // and leaves everyone else's alone.
+    lastRound: mergedLastRound,
     teamLogos,
     teamOrg,
     compLogos,
@@ -1458,6 +1542,9 @@ module.exports = {
   rebuildRoster,
   parseGradeName,
   cleanTeam,
+  // Exported so the promoted-team case can be unit-tested. See its own comment:
+  // an inline closure passed the whole suite with the roster lookup removed.
+  lastRoundKey,
   // Exported for scripts/migrate-grade-ids.js pass 3, which has to reproduce a
   // stored match id from a live fixture. Exported rather than copied: a second
   // copy of a query drifts, and the working practice is explicit that queries
