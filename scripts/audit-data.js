@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v7 2026-08-12 rounds-per-gradeId';
+const VERSION = 'audit-data v8 2026-08-12 gaps-cost-live-only';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const ORGS = path.join(DATA, 'orgs');
@@ -264,7 +264,17 @@ console.log('\n4  Round coverage, per grade id — what the fetcher re-walks eve
 let gradesChecked = 0, gradesWithGaps = 0;
 const gapExamples = [];
 const emptyGrade = new Map();
+// fetch-results.js takes its competition list from config.json, which holds only
+// the current seasons, so it never walks an archived season's rounds. A gap in a
+// retired season is worth knowing about but costs nothing per run — counting all
+// of them together produced "~645 calls re-fetched on EVERY run" against a real
+// run total of 546, which was impossible and should have been caught by reading
+// the run rather than trusting the metric.
+const retiredComps = new Set(
+  (core.manifest || []).filter(m => m.retired && m.compName).map(m => m.compName));
+let liveWithGaps = 0, retiredWithGaps = 0;
 for (const [c, b] of byComp) {
+  const isLive = !retiredComps.has(c);
   for (const [key, rounds] of b.rounds) {
     gradesChecked++;
     const max = Math.max(...rounds);
@@ -272,8 +282,9 @@ for (const [c, b] of byComp) {
     for (let r = 1; r <= max; r++) if (!rounds.has(r)) missing.push(r);
     if (missing.length) {
       gradesWithGaps++;
+      if (isLive) liveWithGaps++; else retiredWithGaps++;
       if (gapExamples.length < 10) {
-        gapExamples.push(`${key} — has 1..${max}, missing ${missing.join(', ')}`);
+        gapExamples.push(`${isLive ? 'LIVE    ' : 'retired '}${key} — has 1..${max}, missing ${missing.join(', ')}`);
       }
     }
     // An empty rawGrade means parseGradeName could not resolve a grade name and
@@ -281,14 +292,15 @@ for (const [c, b] of byComp) {
     if (key.split('|')[2] === '') emptyGrade.set(c, (emptyGrade.get(c) || 0) + 1);
   }
 }
-console.log(`  ${gradesChecked} grade(s) checked, ${gradesWithGaps} with a missing round`);
+console.log(`  ${gradesChecked} grade(s) checked, ${gradesWithGaps} with a missing round ` +
+  `(${liveWithGaps} in a live season, ${retiredWithGaps} in a retired one)`);
 // A gap means the consecutive scan in results-engine.js stops there, so every
-// round above it is re-fetched on EVERY run rather than once. Before 2026-08-12
-// round tracking keyed on rawGrade, so collapsed grades shared one counter and
-// their gaps were invisible — and unpaid for.
+// round above it is re-fetched. Only a LIVE season costs anything: an archived
+// season is not in config.json and is never walked.
 if (gradesWithGaps) {
   let wasted = 0;
-  for (const [, b] of byComp) {
+  for (const [c, b] of byComp) {
+    if (retiredComps.has(c)) continue;
     for (const [, rounds] of b.rounds) {
       const mx = Math.max(...rounds);
       let consec = 0;
@@ -296,9 +308,17 @@ if (gradesWithGaps) {
       if (consec < mx) wasted += (mx - consec);
     }
   }
-  console.log(`  ~${wasted} round fixture call(s) re-fetched on EVERY full run because of them`);
-  warn(`${gradesWithGaps} grade(s) have a round gap, costing roughly ${wasted} repeated ` +
-       `fixture call(s) per full run — the consecutive scan restarts at each gap`);
+  console.log(`  ~${wasted} round fixture call(s) re-fetched on every full results run ` +
+    `(live seasons only — retired ones are never walked)`);
+  if (wasted) {
+    warn(`${liveWithGaps} live grade(s) have a round gap, costing roughly ${wasted} repeated ` +
+         `fixture call(s) per full results run — the consecutive scan restarts at each gap`);
+  }
+  if (retiredWithGaps) {
+    warn(`${retiredWithGaps} retired grade(s) have a round gap. These cost nothing per run — ` +
+         `an archived season is not in config.json and is never re-walked — but a gap may be a ` +
+         `round that was never played rather than one that was missed`);
+  }
 }
 for (const g of gapExamples) warn(`round gap — ${g}`);
 if (gradesWithGaps > gapExamples.length) {
