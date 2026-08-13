@@ -26,7 +26,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v15 2026-08-13 placeholder-round';
+const ENGINE_VERSION = 'v16 2026-08-13 gameid-dedup';
 
 'use strict';
 
@@ -758,6 +758,23 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
         // step 4 — so that the problem stops growing while the migration is
         // built. Records written before 2026-08-12 do not have it.
         id: matchId, age, rawGrade, gradeId: id, round: number,
+        // PlayHQ's own id for THIS FIXTURE. Captured because every other part of
+        // a record's identity can change underneath it: the match id embeds the
+        // two team names, and PlayHQ renames teams mid-season.
+        //
+        // Measured 2026-08-13 in SEJ 2026 U10. Six sides in cb7b3db3 and sixteen
+        // in a5a8276d were renamed to add a "- LP" suffix when a Lightning
+        // Premiership round robin was inserted. Round 9 was the highest known
+        // round at the time, so the next run re-fetched it, built a DIFFERENT
+        // matchId from the new names, and stored a second record for the same
+        // game. Every renamed side gained a phantom game and every affected
+        // ladder gained one to its P column.
+        //
+        // gameId is stable across a rename, so it is the identity a re-fetch can
+        // safely collapse on. The matchId format is deliberately unchanged —
+        // re-keying 53,606 records would be a migration, and this needs none:
+        // records acquire gameId as their round is next fetched.
+        gameId: game.id || '',
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         compName: grade.compName,
         home: homeName, away: awayName,
@@ -1224,6 +1241,10 @@ async function run(o) {
 
   // 4. Build dedup map and per-grade highest-known-round map from existing matches
   const byId = new Map();
+  // Fix A, lastround/rename design §2. Indexed on PlayHQ's fixture id so a team
+  // rename cannot present the same game as a new one.
+  const byGameId = new Map();
+  const staleDuplicates = [];
   const knownRounds = new Map(); // "age|rawGrade" → highest round in data.json
 
   // Build a map of which rounds exist per grade, and which are partial
@@ -1235,6 +1256,22 @@ async function run(o) {
   const partialFinals = new Map(); // key → Set of finals abbreviations that are partial
   (existing.matches || []).forEach(m => {
     byId.set(m.id, m);
+    // A SECOND index, on PlayHQ's fixture id. The matchId embeds both team names,
+    // so a renamed team makes a re-fetch look like a different game and byId
+    // cannot tell they are the same fixture. byGameId can.
+    //
+    // Only records that HAVE a gameId are indexed. Everything written before
+    // engine v16 has none, so this is empty on the first run after the change and
+    // fills in as rounds are re-fetched. A missing gameId therefore behaves
+    // exactly as it did before, rather than colliding on the empty string.
+    if (m.gameId) {
+      const prev = byGameId.get(m.gameId);
+      // Two stored records already sharing a gameId is the duplicate this change
+      // exists to stop. Keep the one whose id matches what the CURRENT names
+      // would build — resolved below, once the fetch supplies the current names.
+      if (prev) staleDuplicates.push(prev.id === m.id ? m : prev);
+      byGameId.set(m.gameId, m);
+    }
     // Scheduled (fixture-only) records must not affect highestKnown —
     // they have no scores and would cause fetch-results to skip real rounds
     if (m.scheduled) return;
@@ -1283,6 +1320,8 @@ async function run(o) {
   // 5. Fetch new results for each grade — sequential with cooldown
   let newCount = 0;
   let updatedCount = 0;
+  let renamedCount = 0;
+  const renameExamples = [];
   let fetchError = null;
   let resultsGradeIdx = 0;
   let consecutive403s = 0;
@@ -1328,6 +1367,30 @@ async function run(o) {
         const partialKey = `${m.compName}|${m.age}|${m.gradeId || m.rawGrade}|${tokenOfMatch(m)}|__partial__`;
         byId.delete(partialKey);
       }
+      // FIX A. Before deciding new-or-update, ask whether this FIXTURE is already
+      // stored under a different match id. It will be whenever PlayHQ has renamed
+      // either team, because both names are baked into the id.
+      //
+      // Without this the old record survives untouched and the new one is added
+      // beside it, so the ladder counts the game twice. Measured in SEJ 2026 U10:
+      // sixteen phantom records in a5a8276d and six in cb7b3db3, one per renamed
+      // side, all on round 9 — the round that happened to be the highest known
+      // when the rename landed.
+      //
+      // The stale record is DELETED rather than left for a later pass. It cannot
+      // be reconstructed from anything the next run sees, since the old name is
+      // gone from the API.
+      if (m.gameId) {
+        const prior = byGameId.get(m.gameId);
+        if (prior && prior.id !== m.id) {
+          byId.delete(prior.id);
+          renamedCount++;
+          if (renameExamples.length < 8) {
+            renameExamples.push(`${prior.id}  ->  ${m.id}`);
+          }
+        }
+        byGameId.set(m.gameId, m);
+      }
       if (byId.has(m.id)) {
         const prev = byId.get(m.id);
         const changed = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
@@ -1342,6 +1405,30 @@ async function run(o) {
 
   if (fetchError) console.error(`\nFetch loop error: ${fetchError.message}`);
   console.log(`\nMatches: ${newCount} new, ${updatedCount} updated, ${byId.size} total`);
+  // Loud, because it means PlayHQ changed a team name and a stored record was
+  // replaced rather than added beside. Silent replacement of stored data is not
+  // something to discover from a record count later.
+  if (renamedCount) {
+    console.log(`Superseded ${renamedCount} record(s) whose team name(s) changed ` +
+      `— same PlayHQ fixture, new match id:`);
+    for (const e of renameExamples) console.log(`  ${e}`);
+    if (renamedCount > renameExamples.length) {
+      console.log(`  ... ${renamedCount - renameExamples.length} more`);
+    }
+  }
+  // Duplicates that were already on disk before this ran. These are the ones a
+  // rename created BEFORE gameId existed to catch it; they are removed only when
+  // their round is re-fetched, so a persistent count here means rounds that no
+  // longer get walked.
+  if (staleDuplicates.length) {
+    const removed = staleDuplicates.filter(d => !byId.has(d.id)).length;
+    console.log(`Pre-existing gameId duplicates found: ${staleDuplicates.length}, ` +
+      `${removed} removed by this run`);
+    if (removed < staleDuplicates.length) {
+      console.log(`  ${staleDuplicates.length - removed} remain — their round was not ` +
+        `re-fetched. They clear when it is.`);
+    }
+  }
 
   // 6. Rebuild roster from all match history
   // Separate real matches from bye sentinels
