@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v11 2026-08-12 skip-players-on-load';
+const ENGINE_VERSION = 'v12 2026-08-12 explicit-no-players';
 
 'use strict';
 
@@ -1411,7 +1411,9 @@ async function run(o) {
   // visitor. All four writers — fetch-results, fetch-fixtures, fetch-stats and
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
-  store.report(store.save(merged, storeScope), label);
+  // Explicit, because the marker load() leaves on the object does not survive
+  // the { ...existing } spread above. store.js v5 also guards against it.
+  store.report(store.save(merged, storeScope, { players: false }), label);
 
   // Never collapse a failure into "no data" — the run's own call outcomes,
   // printed so a quiet degradation is visible in the log rather than inferred

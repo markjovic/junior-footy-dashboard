@@ -42,7 +42,7 @@ const path = require('path');
 
 // Bump on every change. Printed by report() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const STORE_VERSION = 'v4 2026-08-12 write-only-if-changed';
+const STORE_VERSION = 'v5 2026-08-12 never-blank-players';
 
 const ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -202,11 +202,30 @@ function load(scope, opts) {
  * @returns {{written: string[], skipped: number, emptied: string[],
  *            unplaced: object, seasonPhases: object[]}}
  */
-function save(data, scope) {
+/**
+ * @param {object} data
+ * @param {Iterable<string>|null} scope
+ * @param {{players?: boolean}} [opts] players:false writes no player files.
+ *        Pass it explicitly. The marker load() leaves on the object is a
+ *        fallback, not the mechanism — see below.
+ */
+function save(data, scope, opts) {
   const core = data.__core || loadCore();
   const idx = compIndex(core);
   const scopeSet = scope ? new Set(scope) : null;
-  const wrotePlayers = data.__hadPlayers !== false;
+
+  // ⚠️ load() marks the object with a NON-ENUMERABLE __hadPlayers, and a spread
+  // — `const merged = { ...existing, matches, ... }`, which every writer does —
+  // silently drops it. On 2026-08-12 that made save() believe players had been
+  // loaded when they had not, and it wrote an empty array over five seasons'
+  // player files: about 44,900 records.
+  //
+  // So the caller says so explicitly, and the marker is only a fallback. The
+  // guard further down is what actually makes it safe, because an explicit
+  // argument can be forgotten too.
+  const wrotePlayers = (opts && opts.players !== undefined)
+    ? opts.players !== false
+    : data.__hadPlayers !== false;
 
   // Bucket every record by the season it belongs to.
   const buckets = new Map();     // seasonId -> bucket
@@ -327,6 +346,22 @@ function save(data, scope) {
     // replace a season's whole player list with an empty one.
     if (wrotePlayers) {
       const pp = playersPath(b.seasonId);
+
+      // THE GUARD. Replacing a season's players with none is almost always a
+      // writer that did not load them, not a season that lost every player.
+      // Refuse rather than destroy; a caller that means it says so.
+      if (!b.players.length) {
+        const existing = readJson(pp, null);
+        const had = existing && Array.isArray(existing.players) ? existing.players.length : 0;
+        if (had > 0 && !(opts && opts.allowEmptyPlayers)) {
+          throw new Error(
+            `store.save would replace ${had} player record(s) in season ${b.seasonId} with none. ` +
+            `NOTHING HAS BEEN WRITTEN for this file. If the writer did not load players, pass ` +
+            `{ players: false }; if the season genuinely has none, pass { allowEmptyPlayers: true }.`
+          );
+        }
+      }
+
       const playersPayload = {
         meta: { seasonId: b.seasonId, generatedAt: new Date().toISOString(), count: b.players.length },
         players: b.players,
