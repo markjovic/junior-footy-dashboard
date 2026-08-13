@@ -13,7 +13,21 @@
 
 name: Verify storage layer
 
+# Runs ITSELF on every push that touches code. It was workflow_dispatch only,
+# which meant asking a person to run it after every commit — twenty times in one
+# day on 2026-08-12. A check that depends on someone remembering is a check that
+# will be skipped on the commit that needed it.
+#
+# data/ is excluded on purpose: a scheduled fetch commits data on every run and
+# none of it can change what these suites test, so verifying it would be noise.
+
 on:
+  push:
+    paths:
+      - 'scripts/**'
+      - 'index.html'
+      - 'org-discovery.html'
+      - '.github/workflows/verify-store.yml'
   workflow_dispatch:
 
 jobs:
