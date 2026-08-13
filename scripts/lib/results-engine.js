@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v12 2026-08-12 explicit-no-players';
+const ENGINE_VERSION = 'v13 2026-08-13 org-id-direct';
 
 'use strict';
 
@@ -107,6 +107,7 @@ query discoverFixtureByRound($roundID: ID!) {
         ... on DiscoverTeam {
           id
           name
+          organisation { id }
           logo { sizes { url dimensions { width height } } }
         }
       }
@@ -114,6 +115,7 @@ query discoverFixtureByRound($roundID: ID!) {
         ... on DiscoverTeam {
           id
           name
+          organisation { id }
           logo { sizes { url dimensions { width height } } }
         }
       }
@@ -490,8 +492,12 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
   // aLogo on every match record; those are no longer stored, and here the
   // competition and age are known, so the key is exact rather than inferred.
   const teamOrgs = {};
-  const orgCodeFromLogo = (url) => {
-    const m = String(url || '').match(/\/production\/[a-z]+\/([0-9a-f]{8})-[0-9a-f-]+\//i);
+  const orgCodeFromTeam = (team, logoUrl) => {
+    // Prefer the organisation id returned directly by PlayHQ — no URL parsing,
+    // works regardless of Cloudinary path format. Falls back to the logo URL
+    // for records fetched before this change.
+    if (team?.organisation?.id) return team.organisation.id.toLowerCase();
+    const m = String(logoUrl || '').match(/\/production\/[a-z]+\/([0-9a-f]{8})-[0-9a-f-]+\//i);
     return m ? m[1].toLowerCase() : '';
   };
 
@@ -733,8 +739,8 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       // Keyed comp|team|age, matching rebuildRoster and teamClub exactly. Age is
       // load-bearing: cleanTeam strips it, and PlayHQ registers the senior and
       // junior arms of a club as separate organisations.
-      const hOrg = orgCodeFromLogo(hUrl);
-      const aOrg = orgCodeFromLogo(aUrl);
+      const hOrg = orgCodeFromTeam(game.home, hUrl);
+      const aOrg = orgCodeFromTeam(game.away, aUrl);
       if (hOrg) teamOrgs[`${grade.compName}|${homeName}|${age}`] = hOrg;
       if (aOrg) teamOrgs[`${grade.compName}|${awayName}|${age}`] = aOrg;
     }
