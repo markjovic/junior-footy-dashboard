@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.163</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.164</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.163</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.164</span>
         </div>
 
 
@@ -2699,6 +2699,27 @@ function renderFinalsByClub(pool) {
   const allTeams = [...entries.flatMap(e => e.teams), ...orphans];
   const globalTotal = cardColCount(allTeams);
 
+  // Grade round index built from ALL teams across ALL clubs so that a team
+  // which won FR1 and went straight to GF (different club from the FR1 loser
+  // who played PF) still shares the same column index as its grade-mates.
+  const globalByGrade = new Map();
+  for (const t of allTeams) {
+    const k = `${t.comp}|${t.age}|${t.grade}`;
+    if (!globalByGrade.has(k)) globalByGrade.set(k, []);
+    globalByGrade.get(k).push(t);
+  }
+  const globalGradeRoundIdx = new Map();
+  for (const [k, gradeTeams] of globalByGrade) {
+    const roundNums = [...new Set(gradeTeams.flatMap(t => t.matches.map(m => m.round)))];
+    const gfMatch = gradeTeams.flatMap(t => t.matches).find(m => m.finalsAbbrev === 'GF');
+    const gfRound = gfMatch?.round ?? null;
+    if (gfRound !== null) roundNums.sort((a, b) => a === gfRound ? 1 : b === gfRound ? -1 : a - b);
+    else roundNums.sort((a, b) => a - b);
+    const nRounds = roundNums.length;
+    const gradeOffset = gfRound !== null ? globalTotal - nRounds : 0;
+    globalGradeRoundIdx.set(k, new Map(roundNums.map((r, i) => [r, gradeOffset + i])));
+  }
+
   const blocks = entries.map(e => {
     // Premiers first, then teams that reached a grand final, then the rest —
     // with the grade's strength as the tiebreak within each band, and age after
@@ -2713,34 +2734,7 @@ function renderFinalsByClub(pool) {
              ageSort(a.age, b.age) ||
              String(a.grade).localeCompare(String(b.grade));
     });
-    // Key by gradeId (same as the team object) so all teams in a grade share
-    // one round index even when their rawGrade strings differ.
-    const byGrade2 = new Map();
-    for (const t of e.teams) {
-      const k = `${t.comp}|${t.age}|${t.grade}`;
-      if (!byGrade2.has(k)) byGrade2.set(k, []);
-      byGrade2.get(k).push(t);
-    }
     const total = globalTotal;
-    // For each grade: collect all rounds played across every team, sort them
-    // (GF last), and assign column indices right-aligned within the card.
-    // A grade with 3 rounds in a 4-column card uses columns 1, 2, 3 (0-based),
-    // so its GF is always in the last column.
-    const gradeRoundIdx = new Map();
-    for (const [k, gradeTeams] of byGrade2) {
-      const roundNums = [...new Set(gradeTeams.flatMap(t => t.matches.map(m => m.round)))];
-      // GF round: the one whose match has finalsAbbrev GF (may differ across comps).
-      const gfMatch = gradeTeams.flatMap(t => t.matches).find(m => m.finalsAbbrev === 'GF');
-      const gfRound = gfMatch?.round ?? null;
-      if (gfRound !== null) roundNums.sort((a, b) => a === gfRound ? 1 : b === gfRound ? -1 : a - b);
-      else roundNums.sort((a, b) => a - b);
-      // Right-align only if this grade played a GF — a grade with no GF was
-      // eliminated early and left-aligns from column 0.
-      const nRounds = roundNums.length;
-      const gradeOffset = gfRound !== null ? total - nRounds : 0;
-      const idx = new Map(roundNums.map((r, i) => [r, gradeOffset + i]));
-      gradeRoundIdx.set(k, idx);
-    }
     return `<div class="fv-card">
       <div class="fv-club">
         ${crestHTML(e.teams[0].team, 20, 'tlogo')}
@@ -2754,7 +2748,7 @@ function renderFinalsByClub(pool) {
           e.premiers  ? `<span style="color:var(--gold)">${e.premiers} premier${e.premiers!==1?'s':''}</span>` : '',
         ].filter(Boolean).join(' &middot; ')}</span>
       </div>
-      ${e.teams.map(t => teamRow(t, total, gradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`) || new Map())).join('')}
+      ${e.teams.map(t => teamRow(t, total, globalGradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`) || new Map())).join('')}
     </div>`;
   }).join('');
 
@@ -2763,7 +2757,7 @@ function renderFinalsByClub(pool) {
         <span style="flex:1"></span><span style="font-size:11px;color:var(--tx3)">${orphans.length} team${orphans.length!==1?'s':''}</span></div>
         <div style="font-size:11px;color:var(--tx3);padding:8px 0">
           No club could be resolved for these teams. Run the Build Club Index workflow.</div>
-        ${orphans.map(t => teamRow(t, globalTotal, new Map())).join('')}</div>`
+        ${orphans.map(t => teamRow(t, globalTotal, globalGradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`) || new Map())).join('')}</div>`
     : '';
 
   return blocks + orphanNote;
