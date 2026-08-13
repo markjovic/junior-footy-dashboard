@@ -292,5 +292,47 @@ console.log('\n6  The page loads core files only');
     /No scorer data loaded/.test(body));
 }
 
+// ── 7. The season selector ──────────────────────────────────────────────────
+// season_selection_design.md §2.1: year is the OUTER scope, and the competition
+// list must come from the manifest rather than from loaded records — a past year
+// has nothing in S.matches until it is fetched, and an empty competition list
+// would leave nothing to click to trigger the fetch.
+console.log('\n7  Year is the outer scope, and its lists come from the manifest');
+{
+  const body = html.slice(html.indexOf('<body'));
+  ok('a season selector exists in the sidebar', /id="year-sel"/.test(body));
+  ok('it sits ABOVE the competition filter',
+    body.indexOf('id="year-sel"') < body.indexOf('id="comp-filters"'));
+  for (const fn of ['getYears', 'getComps', 'seasonsForYear', 'selectYear', 'loadSeasons']) {
+    ok(`${fn}() defined`, has(fn));
+  }
+
+  // YJFL ran 2022-2026, SER only 2025-2026. Choosing 2022 must offer YJFL alone.
+  run(`S.manifest = [
+    { org: 'a', seasonId: 's1', seasonName: '2026', compName: 'YJFL 2026' },
+    { org: 'a', seasonId: 's2', seasonName: '2022', compName: 'YJFL 2022' },
+    { org: 'b', seasonId: 's3', seasonName: '2026', compName: 'SER 2026' },
+  ];
+  S.seasonFiles = new Set(); S.loadedSeasons = []; S.matches = []; S.selYear = null;`);
+  const years = run('getYears()');
+  ok('years are newest first', JSON.stringify(years) === '["2026","2022"]', JSON.stringify(years));
+
+  run('S.selYear = "2026";');
+  const c26 = run('getComps()');
+  ok('2026 offers both competitions', c26.length === 2, JSON.stringify(c26));
+  run('S.selYear = "2022";');
+  const c22 = run('getComps()');
+  ok('2022 offers only the competition that ran then',
+    JSON.stringify(c22) === '["YJFL 2022"]', JSON.stringify(c22));
+
+  // The whole point: this works with NOTHING loaded.
+  ok('and it did so with no matches in memory', run('S.matches.length') === 0);
+
+  // A season with no file must not be offered — asking for it is a 404.
+  run(`S.seasonFiles = new Set(['data/seasons/s1-core.json']); S.selYear = null;`);
+  ok('a season with no file on disk is not offered',
+    JSON.stringify(run('getYears()')) === '["2026"]', JSON.stringify(run('getYears()')));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
