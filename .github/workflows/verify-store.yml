@@ -1,9 +1,9 @@
 # .github/workflows/verify-store.yml
 #
 # Runs every verification and prints ONE summary at the end, so a green or red
-# run is readable without expanding five separate steps.
+# run is readable without expanding seven separate groups.
 #
-# All five run even if an earlier one fails, so a single run gives the complete
+# All seven run even if an earlier one fails, so a single run gives the complete
 # picture rather than stopping at the first failure. The job fails at the end if
 # any of them did.
 #
@@ -74,7 +74,8 @@ jobs:
           # verify-store.js was retired on 2026-08-12: it tested the
           # per-organisation layout — creating a missing -archive.json, rollover
           # between files — and none of those concepts exist any more.
-          # verify-per-season.js covers store.js.
+          # verify-per-season.js covers store.js. The script itself was deleted
+          # on 2026-08-13 by repo-tidy.js in the storage2026 group.
           SUITES="verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades \
                   verify-rebuild-grade-meta verify-per-season verify-audit"
