@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.137</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.138</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -699,7 +699,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.137</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.138</span>
         </div>
 
 
@@ -1851,7 +1851,18 @@ function renderScorers(age) {
   const meta = document.getElementById('scorers-meta');
   const gradeStr = S.selGrades.size ? [...S.selGrades].join(', ') : 'All grades';
   meta.textContent = gradeStr;
-  if (!scorers.length) { el.innerHTML='<div class="empty"><p>No scorer data loaded</p></div>'; return; }
+  if (!scorers.length) {
+    // "Still arriving" and "there are none" look identical to a reader, and the
+    // first is now the common case for the first few seconds after a page load.
+    el.innerHTML = S.playersPending
+      ? '<div class="empty"><p>Loading scorers…</p></div>'
+      : '<div class="empty"><p>No scorer data loaded</p></div>';
+    if (S.playersPending) return;
+    // Nothing pending and nothing loaded — ask for them. Covers a visitor who
+    // opens Scorers before the idle prefetch has run.
+    if (!S.players || !S.players.length) loadPlayers();
+    return;
+  }
   el.innerHTML = `<div style="display:grid;grid-template-columns:20px 20px 1fr 28px 36px 32px 36px 32px;padding:3px 14px 5px;gap:6px;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--s1);z-index:1">
     <span></span><span></span><span></span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">GRD</span>
@@ -3196,6 +3207,14 @@ function closePlayerModal() {
 function onPlayerSearch(val) {
   const res = document.getElementById('player-search-results');
   if (!val || val.length < 2) { res.style.display='none'; return; }
+  // Search spans every age and competition, so an empty player set means "not
+  // loaded yet", not "no such player". Ask for them and say so.
+  if ((!S.players || !S.players.length)) {
+    loadPlayers();
+    res.style.display = 'flex';
+    res.innerHTML = '<div class="player-result" style="cursor:default;color:var(--tx3)">Loading players…</div>';
+    return;
+  }
   const q = val.toLowerCase();
   const matches = S.players
     .filter(p => p.name.toLowerCase().includes(q) && p.uuid)
@@ -3646,10 +3665,12 @@ async function generateHash() {
 // ═══════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════
-// Data is stored per organisation: data/core.json holds the manifest and the
-// cross-organisation keys, and data/orgs/<code>-current.json holds one
-// organisation's live seasons. This reassembles them into the single object the
-// rest of the dashboard already expects, so no render path changes.
+// Data is stored per season: data/core.json holds the manifest and the
+// cross-organisation keys, data/seasons/<seasonId>-core.json holds one season's
+// matches, roster and grade metadata, and <seasonId>-players.json holds its
+// player records. This reassembles them into the single object the rest of the
+// dashboard already expects, so no render path changes.
+// per_season_storage_design.md.
 //
 // It still falls back to data/data.json. That file is no longer written, but an
 // older deployment or a rolled-back commit will still have one, and a dashboard
@@ -3668,25 +3689,39 @@ async function loadStoredData() {
     return await r.json();
   }
 
-  // Which organisations have live seasons, and which have only retired ones.
-  // Between seasons every season is retired, and showing nothing at all would be
-  // worse than showing the season just gone — so an organisation with no live
-  // season falls back to its archive.
-  const live = new Set(), retired = new Set();
-  for (const m of core.manifest) (m.retired ? retired : live).add(m.org);
-  let files = [...live].map(o => `data/orgs/${o}-current.json`);
-  for (const o of retired) if (!live.has(o)) files.push(`data/orgs/${o}-archive.json`);
+  // ── Which seasons to show ────────────────────────────────────────────────
+  // One live season per organisation. Between seasons every season is retired,
+  // and showing nothing would be worse than showing the season just gone, so an
+  // organisation with no live season falls back to its most recent retired one.
+  const byOrg = new Map();
+  for (const m of core.manifest) {
+    if (!m.compName || !m.seasonId) continue;
+    if (!byOrg.has(m.org)) byOrg.set(m.org, []);
+    byOrg.get(m.org).push(m);
+  }
+  const seasons = [];
+  for (const [, list] of byOrg) {
+    const liveOnes = list.filter(m => !m.retired);
+    if (liveOnes.length) { seasons.push(...liveOnes); continue; }
+    const newest = list.slice().sort((a, b) =>
+      String(b.seasonName).localeCompare(String(a.seasonName)))[0];
+    if (newest) seasons.push(newest);
+  }
 
-  // core.orgFiles lists the files that actually exist. A configured organisation
-  // that has never been fetched has no file, and requesting it costs every
-  // visitor a 404 — there were twelve of those. Filter to what exists; if the
-  // index is absent (an older core.json) fall back to asking for all of them.
-  if (Array.isArray(core.orgFiles) && core.orgFiles.length) {
-    const present = new Set(core.orgFiles.map(f => f.file));
+  // core.seasonFiles lists what actually exists. Asking for a season that was
+  // never fetched costs every visitor a 404.
+  const present = new Set((core.seasonFiles || []).map(f => f.file));
+  let files = seasons.map(m => `data/seasons/${m.seasonId}-core.json`);
+  if (present.size) {
     const wanted = files.filter(f => present.has(f));
     if (wanted.length) files = wanted;
   }
 
+  // ⚠️ CORE FILES ONLY. Player records are 78% of the stored bytes — 82.57 MB
+  // against 22.68 MB — and nothing reads them until Scorers or a player panel is
+  // opened. Fetching them here cost every visitor 18.87 MB before a ladder could
+  // render. They arrive shortly afterwards, from loadPlayers().
+  // per_season_storage_design.md §2.1.
   const parts = await Promise.all(files.map(async f => {
     try {
       const r = await fetch(f);
@@ -3700,10 +3735,13 @@ async function loadStoredData() {
     if (!p) continue;
     loaded++;
     if (Array.isArray(p.matches)) d.matches.push(...p.matches);
-    if (Array.isArray(p.players)) d.players.push(...p.players);
     Object.assign(d.roster, p.roster || {});
     Object.assign(d.gradeMeta, p.gradeMeta || {});
   }
+
+  // Remembered so loadPlayers() asks for the same seasons and nothing else.
+  S.loadedSeasons = seasons.filter(m => !present.size ||
+    present.has(`data/seasons/${m.seasonId}-core.json`)).map(m => m.seasonId);
 
   // Cross-organisation keys and the freshness timestamps live in core.json.
   for (const k of ['clubs','teamClub','teamOrg','compLogos','teamLogos','gotwFlags','lastRound',
@@ -3711,9 +3749,43 @@ async function loadStoredData() {
     if (core[k] !== undefined) d[k] = core[k];
   }
 
-  console.log(`Loaded ${loaded}/${files.length} organisation file(s): ${d.matches.length} matches, ${d.players.length} players`);
-  if (!loaded) console.warn('No organisation files loaded — the dashboard will be empty.');
+  console.log(`Loaded ${loaded}/${files.length} season file(s): ${d.matches.length} matches ` +
+    `(players deferred)`);
+  if (!loaded) console.warn('No season files loaded — the dashboard will be empty.');
   return d;
+}
+
+// ── Player records, fetched after the page is usable ─────────────────────────
+// Not on demand from Scorers: player SEARCH spans every age and competition, so
+// a partial load would silently return nothing for a name in an age that had not
+// been visited — which reads as missing data rather than as loading. Fetching
+// the whole set shortly after first paint keeps search honest and still gets a
+// ladder on screen without waiting for 82 MB.
+let playersLoading = null;
+function loadPlayers() {
+  if (playersLoading) return playersLoading;
+  if (S.players && S.players.length) return Promise.resolve(S.players);
+  const ids = S.loadedSeasons || [];
+  if (!ids.length) return Promise.resolve([]);
+
+  S.playersPending = true;
+  playersLoading = (async () => {
+    const parts = await Promise.all(ids.map(async id => {
+      try {
+        const r = await fetch(`data/seasons/${id}-players.json`);
+        return r.ok ? await r.json() : null;
+      } catch (e) { return null; }
+    }));
+    const players = [];
+    for (const p of parts) if (p && Array.isArray(p.players)) players.push(...p.players);
+    S.players = players;
+    S.playersPending = false;
+    console.log(`Loaded ${players.length} player record(s) across ${ids.length} season(s)`);
+    try { await sSet(SK.players, players); } catch (e) { /* cache only */ }
+    render();
+    return players;
+  })();
+  return playersLoading;
 }
 
 // ═══════════════════════════════════════
@@ -3767,6 +3839,13 @@ async function init() {
         if (d.gradeMeta && Object.keys(d.gradeMeta).length) { S.gradeMeta = d.gradeMeta; rebuildGradeLabels(); }
         if (d.clubs && Object.keys(d.clubs).length) S.clubs = d.clubs;
         if (d.teamClub && Object.keys(d.teamClub).length) S.teamClub = d.teamClub;
+        // Players are fetched separately, once the ladder is on screen. Deferred
+        // rather than skipped: player search spans every age, so a partial set
+        // would return nothing for a name in an age nobody had opened.
+        if (!S.players || !S.players.length) {
+          if (typeof requestIdleCallback === 'function') requestIdleCallback(() => loadPlayers(), { timeout: 3000 });
+          else setTimeout(() => loadPlayers(), 300);
+        }
         // Freshness timestamps
         const fmtTime = iso => {
           if (!iso) return '—';
