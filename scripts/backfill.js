@@ -35,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const engine = require('./lib/results-engine');
 
-const VERSION = 'backfill v2 2026-08-12 (phase A, per-season)';
+const VERSION = 'backfill v3 2026-08-13 (phase A, per-season)';
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
@@ -204,10 +204,13 @@ async function main() {
       // Every season here has finished by definition, so the guard would skip
       // all of them.
       ignoreSeasonEnded: true,
-      // lastRound is keyed age|rawGrade with no season, so writing it would
-      // overwrite the live season's value. §3 of the design document gives this
-      // as the alternative to re-keying, and the archive has no consumer yet.
-      writeLastRound: false,
+      // writeLastRound: false was passed here until engine v14. lastRound was
+      // keyed age|rawGrade with no season, so writing a retired season's rounds
+      // would have overwritten the live season's value for the same age and
+      // grade name. The key now carries the compName, which carries the season
+      // ("EFNL 2025", not "EFNL"), so a backfilled season writes its own entries
+      // and cannot reach the live one. The argument is gone rather than passed as
+      // true, because the engine no longer reads it.
       label: `backfill ${comp.name}`,
     });
 

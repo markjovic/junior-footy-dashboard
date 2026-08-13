@@ -11,6 +11,10 @@
 // the dead catch in fetchGrade, and the lastRound and compLogos maps being
 // rebuilt from the scoped run instead of merged over what was stored.
 //
+// v3 (2026-08-13): engine v14 re-keys lastRound to carry the competition, so the
+// writeLastRound argument this script used to pass is gone.
+// lastround_gotw_keying_design.md.
+//
 // Exit codes, unchanged: 0 = changed, commit. 2 = no change, skip commit.
 // 1 = fatal.
 
@@ -20,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const engine = require('./lib/results-engine');
 
-const VERSION = 'v2 2026-08-12 engine-split';
+const VERSION = 'v3 2026-08-13 lastround-rekey';
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 
@@ -52,11 +56,12 @@ async function main() {
     // The scheduled run keeps the season-ended guard. Without it every run
     // re-walks every completed grade of every competition.
     ignoreSeasonEnded: false,
-    // lastRound is keyed age|rawGrade with no competition, so it can only be
-    // computed correctly by a run that sees every competition. A VIP-only run
-    // leaves it untouched; it stays correct until the next full run, and full
-    // runs happen several times each weekend.
-    writeLastRound: !vipOnly,
+    // writeLastRound was passed here as !vipOnly until engine v14. lastRound was
+    // keyed age|rawGrade with no competition, so only a run that saw every
+    // competition could compute it and a VIP-only run had to leave it alone. The
+    // key now carries the competition and the engine merges per competition, so a
+    // VIP-only run writes its own entries and keeps everyone else's. The argument
+    // is gone rather than passed as true, because the engine no longer reads it.
     label: 'fetch-results',
   });
 
