@@ -1087,7 +1087,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 785,
+        "matches": 793,
         "players_n": 2086
       }
     },
@@ -13395,7 +13395,7 @@
     "SEJ 2026|U10|b5f90cc8": 14,
     "SEJ 2026|U10|a5a8276d": 9,
     "SEJ 2026|U10|c7b922d4": 14,
-    "SEJ 2026|U10 Girls|cb7b3db3": 9,
+    "SEJ 2026|U10 Girls|cb7b3db3": 14,
     "SEJ 2026|U10|Blue": 10,
     "SEJ 2026|U10|Red": 10,
     "SER 2026|U13|Premier": 4,
@@ -20586,10 +20586,15 @@
     "YJFL 2026|Warrandyte Mixed|U10": "f6660aff",
     "YJFL 2026|Richmond Mixed|U10": "f3dc4036",
     "WFNL 2026|Werribee Districts Mixed Gold|U9": "a3dd148f",
-    "WFNL 2026|Wyndhamvale Mixed|U9": "cbdfeb0b"
+    "WFNL 2026|Wyndhamvale Mixed|U9": "cbdfeb0b",
+    "SEJ 2026|Officer JFC Girls|U10 Girls": "b84dfe28",
+    "SEJ 2026|Clyde JFC Girls|U10 Girls": "0197a5a9",
+    "SEJ 2026|Narre North Foxes FC Girls|U10 Girls": "59720f22",
+    "SEJ 2026|Berwick Springs JFC Girls Blue|U10 Girls": "d175b7eb",
+    "SEJ 2026|Cranbourne JFC Girls Blue|U10 Girls": "fb13976b"
   },
-  "lastUpdated": "2026-08-13T13:00:12.735Z",
-  "lastResultsFetch": "2026-08-13T13:00:12.735Z",
+  "lastUpdated": "2026-08-13T14:47:29.223Z",
+  "lastResultsFetch": "2026-08-13T14:47:29.223Z",
   "lastStatsFetch": "2026-08-12T17:35:06.918Z",
   "seasonFiles": [
     {
@@ -20680,7 +20685,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 360450
+      "bytes": 364000
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
