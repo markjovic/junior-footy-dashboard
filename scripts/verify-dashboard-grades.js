@@ -440,5 +440,74 @@ console.log('\n10  A search result says which season it is');
     /seasonYearOf\(a\.compName\)/.test(body) && /by\.localeCompare\(ay\)/.test(body));
 }
 
+// ── 11. Partial names, in any order ─────────────────────────────────────────
+// A single substring match only worked when the query was typed in name order,
+// so "jovic to" found nothing. Every token must appear somewhere in the name.
+console.log('\n11  Search matches name parts in any order');
+{
+  run(`S.players = [
+    { uuid: 'u1', name: 'Toby Jovic', team: 'Norwood', teamRaw: 'Norwood Purple',
+      age: 'U12', rawGrade: 'B', compName: 'EFNL 2026', goals: 5 },
+    { uuid: 'u2', name: 'Toby James', team: 'Canterbury', teamRaw: 'Canterbury Mixed',
+      age: 'U13', rawGrade: 'A', compName: 'EFNL 2026', goals: 0 },
+  ];
+  S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels();
+  // Search is scoped to the SELECTED season — accumulating scope by browsing was
+  // unpredictable, so the fixture has to say which season it is looking at.
+  S.selYear = '2026';`);
+
+  const found = (q) => {
+    run(`onPlayerSearch(${JSON.stringify(q)});`);
+    return run(`document.getElementById('player-search-results').innerHTML`);
+  };
+  ok('"toby jo" finds Toby Jovic', /Toby Jovic/.test(found('toby jo')));
+  ok('"jovic to" finds him too — reversed order', /Toby Jovic/.test(found('jovic to')));
+  ok('"to jov" finds him — both parts partial', /Toby Jovic/.test(found('to jov')));
+  ok('"jovic" alone still works', /Toby Jovic/.test(found('jovic')));
+  ok('"toby" finds BOTH', (() => { const h2 = found('toby');
+    return /Toby Jovic/.test(h2) && /Toby James/.test(h2); })());
+  ok('a name that matches nothing says so rather than vanishing',
+    /No match in/.test(found('zzzzz')));
+
+  // The scope matters: a name absent from 2026 is indistinguishable from a name
+  // that does not exist, unless the search says what it looked at.
+  ok('the results say which season was searched', /searching 2026 only/.test(found('toby')));
+}
+
+// ── 12. Search scope is the selected season, and looks like it ──────────────
+// It used to cover whatever happened to be in memory, so the same query returned
+// more results the longer you had been on the page, with nothing to explain why.
+// And it sat ABOVE the season control, which implied it was global.
+console.log('\n12  Search is scoped to the selected season');
+{
+  const body = html.slice(html.indexOf('<body'));
+  ok('the search box sits BELOW the season selector',
+    body.indexOf('id="year-sel"') < body.indexOf('id="player-search-input"'),
+    'position implies scope');
+
+  run(`S.players = [
+    { uuid: 'a', name: 'Toby Jovic', team: 'Norwood', teamRaw: 'Norwood Purple',
+      age: 'U12', rawGrade: 'B', compName: 'EFNL 2026', goals: 5 },
+    { uuid: 'b', name: 'Toby Jovic', team: 'Norwood', teamRaw: 'Norwood',
+      age: 'U11', rawGrade: 'B', compName: 'EFNL 2025', goals: 5 },
+  ];
+  S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels(); S.selYear = '2026';`);
+  const find = (q) => { run(`onPlayerSearch(${JSON.stringify(q)});`);
+    return run(`document.getElementById('player-search-results').innerHTML`); };
+
+  const h26 = find('jovic');
+  ok('only the selected season is returned',
+    (h26.match(/Toby Jovic/g) || []).length === 1,
+    `${(h26.match(/Toby Jovic/g) || []).length} row(s)`);
+  ok('and it is the 2026 one', /Norwood Purple/.test(h26) && /U12/.test(h26));
+
+  run(`S.selYear = '2025';`);
+  const h25 = find('jovic');
+  ok('changing season changes the result, not adds to it',
+    (h25.match(/Toby Jovic/g) || []).length === 1 && /U11/.test(h25),
+    `${(h25.match(/Toby Jovic/g) || []).length} row(s)`);
+  ok('the note names the season being searched', /searching 2025 only/.test(h25));
+}
+
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

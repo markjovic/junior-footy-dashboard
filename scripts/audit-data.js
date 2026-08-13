@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v9 2026-08-12 per-season-layout';
+const VERSION = 'audit-data v10 2026-08-12 player-index-sizing';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -593,6 +593,50 @@ if (!parseGradeName) {
   if (tNone) {
     warn(`${tNone} stored record(s) have an age|rawGrade that no grade in grades.json ` +
          `reduces to — they cannot be resolved offline OR by the registry`);
+  }
+}
+
+// ── 8. What a cross-season player search index would cost ───────────────────
+// Search covers only the seasons in memory, because all eighteen seasons of
+// player records are 94 MB. An index would let it span every season without
+// them — but its size depends on how many DISTINCT people there are, not on the
+// 224,247 player-season records. The same child across five seasons is five
+// records and one person.
+//
+// Measured here rather than estimated, because the whole decision turns on it.
+console.log('\n8  A cross-season search index, sized');
+{
+  const byUuid = new Map();       // uuid -> { name, seasons:Set }
+  let withUuid = 0, noUuid = 0;
+  for (const [, v] of Object.entries(files)) {
+    for (const p of v.payload.players || []) {
+      if (!p.uuid) { noUuid++; continue; }
+      withUuid++;
+      if (!byUuid.has(p.uuid)) byUuid.set(p.uuid, { name: p.name || '', seasons: new Set() });
+      byUuid.get(p.uuid).seasons.add(v.seasonId);
+    }
+  }
+  const people = byUuid.size;
+  console.log(`  ${withUuid} player-season record(s) with a uuid, ${noUuid} without`);
+  console.log(`  ${people} DISTINCT people`);
+  if (people) {
+    console.log(`  ${(withUuid / people).toFixed(2)} season(s) each on average`);
+  }
+
+  // Two shapes, both measured by serialising the real thing rather than by
+  // multiplying an assumed row size.
+  const minimal = [...byUuid].map(([u, v]) => [u, v.name, [...v.seasons]]);
+  const minBytes = JSON.stringify(minimal).length;
+  console.log(`  index of uuid + name + seasons : ${mb(minBytes)}`);
+  console.log(`    (enough to FIND someone; the row's team, age and goals would`);
+  console.log(`     come from that season's player file when it is shown)`);
+
+  // For comparison, what search costs today if every season were loaded.
+  let allPlayers = 0;
+  for (const [, v] of Object.entries(files)) allPlayers += (v.payload.players || []).length;
+  console.log(`  every player record, all seasons: ${mb(playerBytes)} (${allPlayers} records)`);
+  if (minBytes) {
+    console.log(`  the index is ${(playerBytes / minBytes).toFixed(0)}x smaller`);
   }
 }
 
