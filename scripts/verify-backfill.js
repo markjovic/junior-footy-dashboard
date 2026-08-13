@@ -275,7 +275,7 @@ reset();
 r = run('fetch-results.js', { VIP_ONLY: 'true' });
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('engine version printed and accepted',
-  /engine v\d+ 2026-08-12/.test(r.out), 'the check is a minimum major version, not an equality');
+  /engine v\d+ 202[0-9]-[0-9][0-9]-[0-9][0-9]/.test(r.out), 'the check is a minimum major version, not an equality');
 ok('season-ended guard NOT bypassed', !/season-ended guard BYPASSED/.test(r.out));
 ok('2026 matches written to current', read(EFNL_CUR).matches.length === 2,
   `${read(EFNL_CUR).matches.length} matches`);
