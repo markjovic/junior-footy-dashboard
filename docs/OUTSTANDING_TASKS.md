@@ -1,188 +1,203 @@
-<!-- docs/OUTSTANDING_TASKS.md -->
-# Outstanding Tasks — Local Footy Dashboard
+# Outstanding Tasks
 
-<!-- This repo only. The 869-line OUTSTANDING_TASKS.md in the sports-players-stats -->
-<!-- project is a different system and does not belong here. -->
-<!-- Revision: 2026-08-10 -->
+**Repo:** `markjovic/junior-footy-dashboard`  
+**Last updated:** 2026-08-13 (Beta 0.164)
 
-Ordered by whether the next piece of work depends on it.
-
----
-
-## 1. Multi-season support — the next major piece
-
-The dashboard is single-season. Everything below is groundwork already
-established; none of it is built.
-
-**Season discovery.** `discoverCompetitions(organisationID)` returns every season
-an organisation has played, with `id`, `name`, `startDate`, `endDate` and
-`ACTIVE`/`COMPLETED` status. One call per organisation replaces the hand-maintained
-`seasonID` values in `config.json`. Exactly one season per year per organisation.
-A probe on 2026-08-10 returned "There was an error. Please try again later",
-most likely rate limiting rather than a wrong query — the same call works from a
-browser. **Retry before designing around it.**
-
-**Team identity is the hard problem, and it must be settled once.** Team identity
-is currently derived from a cleaned display name. Both fetchers request the PlayHQ
-team `id` and discard it. Organisation ids appear stable across seasons; team ids
-appear season-scoped — a U8 team in 2025 is not the U9 team in 2026.
-
-*Verify first, do not assume:* query `discoverTeams` for a known club against the
-2025 season id (`75d8a232` for EFNL) and check whether any team id matches 2026.
-
-Re-keying match ids would touch every record in `data.json` plus `gotwFlags`,
-`roster` and `teamLogos`. It should be decided in a design document, not
-incrementally.
-
-**Historic data to absorb.** `2024.html` and `scripts/fetch-u10-2024.js` were
-removed in the 2026-08-10 tidy and need restoring from git history. `2024.html` is
-45 KB and there is no separate 2024 data file, so it likely embeds that season and
-is its only standalone copy. `fetch-u10-2024.js` is a working example of fetching
-a past season.
+This document is the single place for anything that needs a decision, an action
+from you, or work from me. Read top to bottom; the order is priority.
 
 ---
 
-## 2. ~~Verify `DiscoverTeam.organisation`~~ — CONFIRMED 2026-08-10
+## YOUR ACTIONS — do these now
 
-It resolves and returns clubs. Superseded by the team registry — see
-`team_registry_design.md`, which uses `discoverTeams(filter:{seasonID})` to get
-registration, grade and organisation for every team in one call per season.
+### 1. Run Repo Tidy to remove dead files
 
-**Blocked on approval of that design document.**
+**Workflow:** Repo Tidy  
+**Inputs:** `groups: storage2026,probes,historic`, `apply: false` (dry run first)
 
----
+The 2026-08-12 dry run confirmed 17 items. `probe-ser-logos.js` and its
+workflow should also be added to the `probes` group in `repo-tidy.js` before
+running — add the two entries, then include `probes` in the groups.
 
-## 2b. Verify `DiscoverTeam.organisation`
+Read the dry run output, then re-run with `apply: true`.
 
-`playhq_api_reference.md` documents `organisation { id name }` on `DiscoverTeam`.
-The club index was built on logo-URL derivation because a probe asked for `club`
-and got a validation error — the field is named `organisation`.
+### 2. Delete `data/orgs` (after a clean weekend)
 
-If `organisation` on a team is the club rather than the league, both fetchers can
-capture the club id at fetch time, `build-club-index.js` becomes unnecessary, and
-teams with no logo are covered too. One probe settles it.
+**Wait for:** two full weekends of stable scheduled results runs.  
+**How:** GitHub web UI → navigate to `data/orgs/` → delete the directory.  
+**Why:** 105.25 MB rollback path. The audit reports it as INFO every run until
+it's gone.
 
----
+### 3. Delete `data/data.json` if still present
 
-## 3. ~~Minify `data.json`~~ — DONE 2026-08-10
+The rollback path from the 2026-08-11 per-organisation split. Nothing reads
+or writes it.
 
-Applied across all four writers (`fetch-results`, `fetch-fixtures`, `fetch-stats`,
-`build-club-index`) in the same commit as the `data/` relocation. All four must
-agree, or whichever runs next re-inflates the file and every run produces a
-whole-file diff.
+### 4. Commit `results-engine.js` v13
 
-53 MB to 36.6 MB — 31% on the real file. A synthetic fixture predicted only
-21.7%, so the measurement was conservative. Does not shrink `.git`; the
-pretty-printed blobs remain in history.
+Delivered 2026-08-13. Adds `organisation { id }` to the fixture query so club
+identity is read directly from PlayHQ. The next scheduled results run after
+committing this will write `teamOrg` entries for teams whose rounds were
+previously skipped. Then run **Build Club Index** (no filter) to pick them up.
 
-`grades.json` and `clubs.json` are deliberately left pretty-printed. They are
-84 KB and 14 KB and get read by eye.
+### 5. Add `probe-ser-logos.js` to repo-tidy's probes group
 
----
-
-## 4. ~~Retire `migrate-grades.js`~~ — workflow cleared 2026-08-10
-
-The `run_migration` input, both migration steps in `fetch-results.yml`, the admin
-panel checkbox and the `run_migration` entry in the dashboard's dispatch payload
-were all removed together. They had to go together: the admin panel sent
-`run_migration` on **every** dispatch, so removing only the workflow input would
-have made every admin-triggered fetch fail with a 422 "Unexpected inputs
-provided".
-
-The script itself can now be removed with `repo-tidy.yml`, `groups: migration`.
-
-**Check the Cloudflare Worker first.** `footy-cron` dispatches this workflow on a
-schedule. If its payload includes `run_migration`, every scheduled run will now
-fail with a 422. The Worker source is not in this repo and was not checked.
+The probe answered its question (2026-08-13). Add to `repo-tidy.js` probes
+group and remove via tidy run.
 
 ---
 
-## 5. Add a Sunday fixtures run during finals
+## YOUR DECISIONS — needed before work can start
 
-`footy-cron` dispatches `fetch=fixtures` only on Monday and Thursday evenings.
-Finals are played Saturday and Sunday, and the finals view's elimination rule
-depends on the next round's fixture existing — a team that lost with no fixture
-after it reads as out.
+### D1. Concurrent competitions (SEJ 2026 U10)
 
-So from the last game on Saturday until Monday 9pm AEST, teams that lost a
-qualifying final can show as eliminated when they still have a preliminary final
-to come. Adding `{ dow: 0, hour: 10, fetch: 'fixtures', vip: false }` (Sun 8pm
-AEST) to the Worker's `SCHEDULE` closes the gap. Worker source is not in this
-repo.
+Two leagues run in the same age group. A team can only be on one ladder. The
+Lightning Premiership grades currently don't appear.
 
----
+**Options:**
+- Show both ladders separately, labelled by sub-competition
+- Show only the main ladder, with a note that Lightning Premiership exists
+- Add a tab within the age group to switch between them
 
-## 6. parseGradeName collapses 17 grades into 5 keys
+**Decision needed before any code is written.**
 
-Surfaced 2026-08-10 by the duplicate-key warning in `buildGradeMeta`. Pre-existing,
-not caused by the finals work.
+### D2. `lastRound` and `gotwFlags` keying collision
 
-`parseGradeName` derives `rawGrade` only from a trailing letter (`A`–`D`),
-`Division N`, `Premier`, or a fixed colour list. Any other distinguishing token is
-discarded, so several PlayHQ grades resolve to one key:
+Both keys use `age|rawGrade` with no competition component. When two
+competitions share an age/grade name, the values collide. This causes incorrect
+behaviour for affected grades.
 
-| PlayHQ grades | Resolve to |
-|---|---|
-| `U8 - Eastern / North / South / West` | `EFNL 2026\|U8\|` |
-| `U10 Mixed - Pool 1` … `Pool 6` | `YJFL 2026\|U10\|` |
-| `U10 Mixed Lightning Cup - Hoppers Crossing / Truganina / Wyndhamvale` | `WFNL 2026\|U10\|` |
-| `Little Demons - U10 Mixed Blue` and `SEJ Lightning Premiership - U10 Mixed Blue` | `SEJ 2026\|U10\|Blue` |
-| the same pair in Red | `SEJ 2026\|U10\|Red` |
+**The fix requires a data migration.** If yes, I'll write the design first.
 
-**The consequence is not just ranking.** That key is the match id prefix —
-`compName|age|rawGrade|round|teams`. Two grades sharing it share an id namespace:
-SEJ's Lightning Premiership has a Round 1 and Little Demons has Rounds 1–14, so
-the same two teams meeting in Round 1 of both means one result overwrites the
-other. Where teams differ, the grade's ladder silently mixes two competitions.
+### D3. URL state / deep linking
 
-Everything affected is U8 or U10, hidden by default, so nothing visible is wrong
-today.
+The competition, age, and year are not in the URL. Sharing a link opens the
+default view for everyone.
 
-**Why this is not a quick patch.** `parseGradeName` produces every match id.
-Changing it changes ids, orphaning existing records and creating duplicates — it
-needs a design document and a migration, which is what `migrate-grades.js` did
-last time.
+**Is this worth building?**
 
-**And a trailing-token rule does not fix the SEJ case.** There the distinguishing
-part is a prefix — `Little Demons` versus `SEJ Lightning Premiership` — which are
-effectively separate competitions sharing an age and a colour. That may be better
-modelled as a competition, not a grade.
+### D4. Cross-season player search index
 
-Verify the damage before designing: count match records under
-`SEJ 2026|U10|Blue` and check whether any round holds more fixtures than the
-grade should have.
+Search currently covers only the selected season. A 5.67 MB index (uuid + name
++ seasons for 70,672 distinct people) would span all 18 seasons. The
+architecture is clear.
+
+**Do you want this built?**
+
+### D5. The twelve new organisations
+
+`config.json` covers five organisations. Twelve more are in
+`organisationCodes[]` but need short names before they can be added — the
+short name becomes half of every match id.
+
+**Which do you want to add, and what short names?**
 
 ---
 
-## 7. Known-broken, low priority
+## ACTIONS FOR ME — ready when you say go
 
-**`lastRound` is dead in the dashboard.** It reads
-`S.lastRound["comp|age|grade"]`; `fetch-results.js` writes `"age|grade"` with no
-competition prefix. The round label on the ladder grade tabs has never rendered.
-Fix by adding the prefix in the writer, or dropping the prefix in the reader —
-the writer is the better place, since the key space is otherwise
-competition-scoped everywhere.
+### A1. Update `report-field-usage.js` SOURCES list (HIGH)
 
-**`logoKey()` colour stripping does not work.**
-`new RegExp('\\s+' + c + '\\s*$')` uses a plain string, so `\\s` collapses to a
-literal `s` and the pattern becomes `/s+Purples*$/`. Unnoticed because
-`teamLogos` is keyed by full team name and usually hits exactly. Fix is `'\\\\s+'`
-or a regex literal.
+Missing five writers added on 2026-08-12: `results-engine.js`,
+`migrate-grade-ids.js`, `rebuild-grade-meta.js`, `split-by-season.js`,
+`cleanup-obsolete.js`. Also missing the `gradeId` field. Without these it
+under-reports field usage — the tool that was supposed to prevent the next
+`hLogo` incident is partially blind.
 
-**A fatal script error does not fail the workflow run.** `fetch-results.yml`
-captures the exit code with `set +e` and commits only on `0`, so a crash shows as
-a green run with no commit. Applies to all four jobs; fix them together or not at
-all.
+Upload `scripts/report-field-usage.js` and say "go".
+
+### A2. Fix the two stale audit warnings
+
+- The empty `rawGrade` warning says "until build-order step 6" — step 6 is
+  done since Beta 0.133.
+- The `data/orgs` INFO resolves itself once you delete the directory.
+
+Small change, low priority.
+
+### A3. Cross-season player search index
+
+If D4 approved: 5.67 MB index, loaded on first keystroke. Results show the
+player's seasons; opening one fetches that season's player file only.
+
+### A4. Phase B player stats for new organisations
+
+When new organisations are added (D5), they need a backfill run with
+`STATS_INCLUDE_RETIRED=true`. Standard procedure once the orgs are configured.
+
+### A5. Fix `lastRound`/`gotwFlags` keying collision
+
+If D2 approved: design first, then implement. Requires changes to `store.js`,
+`results-engine.js`, `fetch-results.js`, and `index.html`.
+
+### A6. Concurrent competitions
+
+If D1 decided: design first, then implement.
 
 ---
 
-## 8. Documentation
+## MONITORING — after every scheduled run
 
-`README.md` is current at 0.124 and matches the post-tidy 28 files. If
-`2024.html` and `fetch-u10-2024.js` are restored, the repo structure block needs
-them back.
+1. **Verify storage layer** — runs automatically; check Actions tab for green
+2. **Audit data** — 0 errors is the target; warnings are expected and documented
+3. **The dashboard** — Season selector, a live ladder, Scorers for the week
 
-`playhq_api_reference.md` is shared with `sports-players-stats`. Any discovery
-about PlayHQ's behaviour, as opposed to this repo's code, belongs there and must
-be carried across to that project's knowledge — there is no cross-project sharing
-in Claude Projects, so drift between copies is invisible unless it is called out.
+---
+
+## DEFERRED
+
+### Probe scripts
+
+`probe-team-join.js` and `probe-finals-rounds.js` are kept as reusable
+diagnostics. `probe-ser-logos.js` answered its question and should be removed.
+
+### `team_registry_design.md` open questions
+
+Four open questions remain. Not urgent; review when `discoverTeams` behaviour
+needs to be pinned down for a future feature.
+
+### Grade identity migration — 49 remaining records
+
+Self-healing YJFL bye sentinels. No action needed unless the count grows.
+
+### `assets/clubs/**` directory
+
+~10.7 MB of club badge assets confirmed dead. The `assets` group in
+`repo-tidy.js` will remove them. Include in a future tidy run.
+
+---
+
+## WHAT CHANGED ON 2026-08-13
+
+- **Finals by-club view** (Beta 0.162–0.164): global grade round index, so
+  teams from different clubs in the same grade share one column scheme. Correct
+  `finalsAbbrev` labels (QF/EF/GF) rather than round names. Column placement
+  fixed for teams that won FR1 and went straight to GF.
+- **SER unattributed clubs resolved**: 566 SER teams appeared as Unattributed
+  since the club index was first built. Root cause: those rounds were fetched
+  before `teamOrg` was introduced; subsequent runs skipped them as already
+  stored; per-match logo fields were stripped. Evidence was in `teamLogos` all
+  along. `build-club-index.js` v4 adds a `teamLogos` fallback that resolved
+  all 566. 0 unattributed teams remain across all competitions.
+- **`results-engine.js` v13**: adds `organisation { id }` to the fixture
+  query. Future fetches write `teamOrg` directly from PlayHQ rather than
+  parsing a Cloudinary URL, which is more reliable and format-independent.
+- **`verify-backfill.js`**: version regex loosened to match any date, so it
+  doesn't need updating every session when `results-engine.js` changes.
+- **`probe-ser-logos.js`**: diagnostic confirmed the API returns logos and
+  organisation ids for SER correctly — the problem was timing, not a data gap.
+
+## WHAT CHANGED ON 2026-08-12
+
+- **Per-season storage layout**: `data/orgs` → `data/seasons`.
+- **Season selector**: Year is the outer scope.
+- **Page load**: 26.27 MB → ~5.4 MB.
+- **Players deferred**: loaded after first paint.
+- **Store.js v5**: write-only-if-changed; player-file blank guard.
+- **Grade identity migration**: 99.91% complete.
+- **gradeMeta rebuilt**: all 18 seasons have id-keyed entries with labels.
+- **Finals by-club view**: initial build — positional columns, GF last, global
+  column count, team sort by result band then grade strength.
+- **Player search**: token matching in any order; scoped to selected season.
+- **Verification**: 7 suites, 302 assertions, runs automatically on push.
+- **Repo tidy**: 17 dead files identified and ready for removal.
+- **Two data-loss incidents**: both recovered; both now guarded.

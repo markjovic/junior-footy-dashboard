@@ -1,174 +1,179 @@
-<!-- docs/working_practice.md -->
 # Working Practice
 
-<!-- CANONICAL COPY: markjovic/junior-footy-dashboard/docs/working_practice.md -->
-<!-- Revision: 2026-08-11 -->
-<!-- Shared across all projects. Contains nothing repo-specific — if a rule -->
-<!-- only applies to one codebase it belongs in that project's context file. -->
-
-How the work gets done, independent of which repository.
+**Repo:** `markjovic/junior-footy-dashboard`  
+**Last updated:** 2026-08-12  
 
 ---
 
-## Behavioural directives
+## Constraints
 
-Read this section every session.
+Mark is the sole developer. He has **no local git and no local execution
+environment**. Every script runs through GitHub Actions `workflow_dispatch`.
+Every file is committed through the GitHub web UI.
 
-1. **Read the whole file before touching or trusting it. No skimming, no
-   exceptions.** Do not infer behaviour from filenames, prior summaries, docs, or
-   partial greps. This applies especially under time pressure — skimming is what
-   causes the bugs, not thoroughness. **The GitHub blob view truncates at 1,000
-   lines**, so a longer file has to be uploaded; "I read it on GitHub" is not the
-   same as having read it.
-2. **"This should match the working version" is a claim to verify, not assert.**
-   Diff the full relevant structure, not just the piece under suspicion.
-3. **When something has failed multiple times, stop and get instrumentation
-   before the next theory.** Read-back diagnostics that prove what a value
-   actually resolved to are cheap and belong early, not after the eighth guess.
-4. **Own mistakes plainly and move on.** Don't re-litigate, don't over-apologise,
-   fix and continue. A paragraph of contrition is worse than a one-line
-   correction and a fix.
+**Never ask him to run a shell command.**
+
+When delivering more than one file, lead with a table of file → destination
+path. He commits batches without opening files, so a path comment on line 1 is
+necessary but not sufficient.
+
+Every delivered file carries its repo path as a comment on line 1 or 2
+(`// scripts/x.js`, `# .github/workflows/x.yml`). JSON cannot carry
+comments — state the path in the message.
+
+Every script ships with its matching workflow. If the workflow is unchanged,
+say so and re-present it.
 
 ---
 
-## Delivery
+## Delivery standards
 
-- **State the destination path of every delivered file in the message, not only
-  in the file.** A filename comment on line 1 is required, but a person
-  committing a batch will not open each file to discover where it goes. For more
-  than one file, lead with a table of file → path.
-- **Filename comment on line 1 or 2 of every delivered file.**
-  JS: `// scripts/x.js`. YAML: `# .github/workflows/x.yml`.
-  JSON cannot carry comments — say the path in the message.
-- **Every script ships with its matching workflow, at the same time.** If the
-  workflow is unchanged, say so and re-present it anyway.
-- **A version or marker line in any script whose output will be read from a
-  log.** Without it there is no way to tell a stale copy from a real failure, and
-  the two look identical. This costs a wasted run every time it is missing.
-- **`node --check` for JS, YAML parse for workflows, HTML parse plus a syntax
-  check of inline script.** All of these prove syntax only.
-- **Version increment on every HTML delivery** (0.9 → 0.10, never 1.0).
-  Separately-versioned pages are separate — do not sync them.
-- **`present_files` after every delivery.** A file written but never presented is
-  unreachable.
+- **Lead with what to do.** Reasoning comes after.
+- **Every script that produces output read from a log must print a version
+  line.** Without it, a stale cached copy and a real failure look identical,
+  and that costs a wasted run.
+- **Syntax checks before delivery:** `node --check` for JS, YAML parse for
+  workflows, HTML parse plus inline script check for HTML.
+- **Increment the version badge** on every `index.html` delivery
+  (0.160 → 0.161). `org-discovery.html` is versioned separately.
+- **Call `present_files` after every delivery.**
+- **Commit tests before the file they test** when they span two folders
+  (scripts/ and root). The intermediate red run is expected; the second commit
+  turns it green. A test committed after the code it tests produces a red run
+  for the opposite reason.
+
+---
+
+## Non-negotiable principles
+
+### Read before touching
+- **Read a whole file before touching or trusting it.** Never infer behaviour
+  from a filename, a summary, or a partial grep.
+- **Before removing or renaming any stored field,** run
+  `scripts/report-field-usage.js` and read every file it names. Removing
+  per-match logo URLs after checking only `index.html` silently broke
+  `build-club-index.js`, which derived every club identity from them.
+
+### Verify by execution, not by reading
+- **Stub the network and run the real script.** Verify by execution, not by
+  reading.
+- **Test the failure path too.** A guard that has never fired is untested.
+- **Never conclude from a sample.** Multiple incorrect conclusions were traced
+  to sampling early rounds or a subset of grades.
+- **When a test fails, establish whether the test or the code is wrong first.**
+  A comparison that sorts records must sort on a total order.
+- **Could these tests have failed?** Always reintroduce the defect in a copy
+  and confirm the tests catch it.
+
+### Data integrity
+- **Anything derived from a filtered grade list must MERGE per competition,
+  never replace.** This defect was fixed four times in four writers.
+- **Harvest before you strip.** Read a value into its new home before deleting
+  the old copy, in the same pass.
+- **Never new Date(string) for parsing.** Split YYYY-MM-DD; use Date.UTC for
+  arithmetic.
+- **`store.save` with `players: false`** must be passed explicitly, not relied
+  on from the non-enumerable marker that a spread operator will silently drop.
+  The guard in `store.save` is the backstop; the explicit parameter is the
+  intention.
+
+### Design before code
+- **Design questions are written down and approved before anything is built.**
+- **Probe before building.** Key PlayHQ API behaviours are established by
+  targeted probe scripts before any feature is built.
+- **If a discovery is about PlayHQ's behaviour** rather than this repo's code,
+  say so and draft the paragraph for `docs/playhq_api_reference.md`.
+
+### Scope
+- **Scoped writes are structurally isolated.** A VIP-only run scoped to EFNL
+  cannot reach YJFL files. `store.save` with a scope enforces this.
 - **No unsolicited refactoring.**
 
 ---
 
-## Verification
+## What belongs in verification suites
 
-- **All logic that has not been executed is a theory.** Verify by execution, not
-  by reading. Stub the network and run the real script end to end rather than
-  testing a reimplementation of it.
-- **Test the failure path, not just the success path.** A guard that has never
-  fired is a guard that has never been tested. Deliberately break the input and
-  confirm it refuses.
-- **A test that passes for the wrong reason is worse than no test.** If a
-  verification reports success, check that it *could* have failed — a stub that
-  never routes data through the path under test proves nothing.
-- **Never infer a rule from N=1.** Sample across competitions, grades, or
-  seasons before concluding.
-- **A counter without examples is a number that cannot be checked.** Print the
-  shapes of what was counted alongside the count.
-- **Test expectations are as likely to be wrong as the code.** When a test fails,
-  establish which is wrong before changing either. A verification comparing
-  sorted records must sort on a **total order** — sorting on a key with
-  duplicates leaves ties, and stable sort then reports a mismatch between two
-  identical sets.
-- **Keep the earlier suites and re-run them.**
+**Yes:** things that fail silently.
+- A promoted team appearing on two ladders
+- A scorer filtered out because their team is not in the roster
+- `render()` throwing and hanging the page
+- The page fetching 26 MB instead of 5 MB
+- Grade labels missing for archived seasons
 
----
+**No:** things you can see.
+- Whether a row reads well
+- Whether a control is in the right place
+- Whether a column header is redundant
+- Loading state text
 
-## Changing stored data
-
-- **Before removing or renaming any stored field, find every consumer
-  mechanically.** Not from memory, not from documentation, not by checking the
-  obvious consumer. Scan every producer and every reader and report which files
-  reference the field. A hand-maintained list of consumers goes stale silently.
-- **A field documented as unused is not evidence.** The dependency that breaks
-  will be the one written down in three places and still missed, because the
-  check was aimed at one consumer instead of all of them.
-- **Harvest before you strip.** When moving a value from one place to another,
-  read it into its new home first and delete the old copy second, in that order,
-  in the same pass.
-- **A writer that replaces rather than merges will eventually delete something.**
-  Anything derived from a filtered input must merge per key rather than assign
-  wholesale. Make it structural if possible; a rule that has to be remembered
-  will be forgotten.
-- **A migration that cannot prove it lost nothing is not a migration.**
-  Reassemble the output and compare it against the source before anything is
-  pointed at it.
+A regex over `index.html` cannot judge whether a layout is good. It only
+repeats the code back, passes whatever the code says, and has to be rewritten
+every time the design changes. About twenty such assertions were removed on
+2026-08-12 after they had to be rewritten three times in an hour to permit
+changes that were themselves the fix.
 
 ---
 
-## Editing
+## What to check after every delivery
 
-- **`str.replace` with `assert s.count(old) == 1` first.** If the count isn't 1,
-  the anchor is wrong — find a unique one rather than replacing blindly.
-- **A shorter-indent anchor can match inside a longer-indent line.** When
-  replacing several near-identical lines, match whole lines.
-- **When replacing a block, pin both boundaries exactly.** Cutting into a string
-  literal or dropping one closing brace produces a syntax error at best and a
-  silent behaviour change at worst. Re-read the block immediately before editing.
-- **No incremental patching of broken logic.** Map every path through the full
-  function and rewrite it cleanly.
-- **Never guess file contents, and never re-ask for a file already provided this
-  session.**
-- **Never `new Date(string)` for date parsing** — split `YYYY-MM-DD`. For
-  arithmetic use `Date.UTC` on split components.
+The verification workflow now runs automatically on every push to `scripts/**`,
+`index.html`, or `org-discovery.html`. There is no need to run it manually
+after commits — check the Actions tab for the result.
+
+After a **data-touching run** (fetch, backfill, migration), run Audit Data.
+After a **major change to the dashboard**, reload on desktop and on a narrow
+mobile portrait to check the layout.
 
 ---
 
-## PlayHQ API
+## Known pitfalls
 
-**Never write a query, header set or result traversal from scratch. Copy it —
-but copy from something continuously proven, in this order:**
+### `data/orgs` as a rollback path
+`data/orgs` was used on 2026-08-12 to restore 179,624 player records after a
+bug. It must not be deleted until scheduled runs have been stable for a full
+weekend.
 
-1. **The live script making the same class of call.**
-2. **`playhq_api_reference.md` as a cross-check, never on its own.** It is
-   documentation and it drifts. It has been wrong: it recorded
-   `discoverCompetitions` as unusable from a guest session when the real cause
-   was a missing required argument.
-3. **Never from a retired or unrun script.** Authority comes from being
-   exercised.
+### Stale files in the GitHub web UI
+The web UI editor sometimes shows a stale version of a file. Always verify
+a committed file's first line matches what was delivered before trusting it.
 
-**A corollary learned repeatedly:** the API frequently already returns what is
-being reconstructed by heuristic. Before writing a regex over a name, check
-whether the field exists.
+### The `__hadPlayers` marker
+`store.load` marks its return value with a non-enumerable `__hadPlayers`.
+Every writer spreads the object (`const merged = { ...existing, ... }`), which
+silently drops non-enumerable properties. Always pass `players: false`
+explicitly to `store.save` for writers that do not touch player records.
 
-**Type every failure.** A CloudFront WAF block, an expired session, a private
-record and an application error are four different things that all arrive as a
-non-200. Collapsing them into "error, retry twice" produces silent degradation.
-Test the response body before deciding what a 403 means.
+### PlayHQ session cookies
+Three cookies in a specific order: `phq_tier`, `phq_session`, `phq_sub`.
+`lib/playhq.js` handles this. Never write a local `getSession()`.
 
----
-
-## Documentation
-
-- **Documentation describes intent; the real file is authoritative when they
-  conflict.**
-- **A fix recorded in a document is not a fix in a file.**
-- **Date and attribute every shared document.** An undated copy makes drift
-  invisible.
-- **A deliberate decision not to touch data leaves no trace in the data** — the
-  next script cannot see it. Write it down.
-- **Record what was wrong, not just what is right.** A retraction that explains
-  the earlier error prevents someone re-deriving it. Deleting the wrong claim
-  loses that.
+### `git add` pathspecs
+Root-level `data.json`, `grades.json`, and `clubs.json` moved into `data/`
+on 2026-08-11. Any workflow that uses `git add data.json` (without a path)
+will fail with exit 128. Use `git add -A data/` instead.
 
 ---
 
-## Communication
+## Commit order for cross-folder deliveries
 
-- Plain English, complete sentences. No jargon, coined labels, or telegraphic
-  fragments.
-- **Lead with the action.** What to do goes first; the reasoning goes after. A
-  reader looking for "what do I run" should not have to read three paragraphs.
-- One question at a time, expecting one clear answer — not a menu of options.
-- Design questions get written down and approved before anything is built.
-- State what was measured versus what was inferred. "Verified across 249 grades"
-  and "this is probably how it works" are different claims and must read
-  differently.
-- **An extrapolation labelled as a measurement will be built on.** Dividing a
-  total by five and calling the result a per-item cost was wrong by a factor of
-  four and nearly caused an entire architecture to be discarded.
+When a change spans `index.html` (root) and `scripts/` (subfolder), the GitHub
+web UI cannot commit both in one operation.
+
+**Commit the tests first, then the file they test.** The intermediate state is
+"tests expect something not built yet" — red for a clear reason. The second
+commit turns it green. Committing the implementation first leaves a window where
+code exists that nothing checks.
+
+---
+
+## File naming
+
+Scripts: `scripts/x.js`  
+Lib: `scripts/lib/x.js`  
+Workflows: `.github/workflows/x.yml`  
+Data: `data/x.json` or `data/seasons/<seasonId>-x.json`  
+Docs: `docs/x.md`
+
+Match ids: `<compName>|<age>|<gradeId>|<round>|<home>|<away>`  
+The `compName` is the short competition name (e.g. "EFNL 2026"). The grade id
+is PlayHQ's UUID for the grade. Both are stable; `name` and `rawGrade` are not.
