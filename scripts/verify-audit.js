@@ -190,10 +190,31 @@ seeded('a duplicate match id',
 // ── 3. Warnings, which must not fail the run unless STRICT ───────────────────
 console.log('\n3  Warnings are reported without failing');
 
-seeded('a missing round is reported', fx => {
+// A gap in a RETIRED season costs nothing: fetch-results.js takes its list from
+// config.json and never walks an archive. Counting the two together produced a
+// figure larger than the entire run it claimed to describe.
+seeded('a missing round in a RETIRED season is reported as costing nothing', fx => {
   fx.archive.matches[1].round = 3;                       // 1 and 3 stored, 2 missing
   fx.archive.matches[1].id = 'EFNL 2025|U12|A|3|a|b';
-}, /round gap — EFNL 2025\|U12\|A — has 1\.\.3, missing 2/, 0);
+}, /retired .*EFNL 2025\|U12\|A — has 1\.\.3, missing 2/, 0);
+
+seeded('and is NOT counted against the per-run cost', fx => {
+  fx.archive.matches[1].round = 3;
+  fx.archive.matches[1].id = 'EFNL 2025|U12|A|3|a|b';
+}, /~0 round fixture call\(s\) re-fetched on every full results run/, 0);
+
+// A gap in a LIVE season does cost, every run.
+seeded('a missing round in a LIVE season IS counted', fx => {
+  fx.current.matches[1].round = 3;
+  fx.current.matches[1].id = 'EFNL 2026|U12|A|3|a|b';
+}, /~2 round fixture call\(s\) re-fetched on every full results run/, 0);
+// Two, not one: with rounds 1 and 3 stored the scan stops at 1, so rounds 2 AND
+// 3 are re-fetched. My first expectation here said one and was simply wrong.
+
+seeded('and is labelled LIVE so the two cannot be confused', fx => {
+  fx.current.matches[1].round = 3;
+  fx.current.matches[1].id = 'EFNL 2026|U12|A|3|a|b';
+}, /LIVE .*EFNL 2026\|U12\|A — has 1\.\.3, missing 2/, 0);
 
 seeded('an empty rawGrade is reported as a collapsed grade', fx => {
   for (const m of fx.archive.matches) { m.rawGrade = ''; m.id = m.id.replace('|A|', '||'); }
