@@ -133,6 +133,34 @@ ok('both labelled distinctly for display',
   new Set(grades.map(g => run(`gLabel(${JSON.stringify(g)})`))).size === 2,
   grades.map(g => run(`gLabel(${JSON.stringify(g)})`)).join(', '));
 
+// ── 3a. A promoted team stays on ONE ladder ─────────────────────────────────
+// team_registry_design.md §3.4: a team appears on exactly one ladder. Earlier
+// results still show; they do not count on the grade the team has left.
+// Returning the match's own gradeId here was tried on 2026-08-12 and reverted,
+// because it split a promoted team across two ladders.
+console.log('\n3a  A promoted team counts on one ladder only');
+run(`S.gradeMeta = {
+  'EFNL 2026|U12|gA': { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA' },
+  'EFNL 2026|U12|gB': { r: 2, lvl: 'junior', g: 'M', label: 'B', gradeId: 'gB' },
+}; rebuildGradeLabels();`);
+sandbox.__m3 = [
+  // Norwood played B in round 1, then was promoted to A from round 5.
+  { id: 'p1', compName: 'EFNL 2026', age: 'U12', rawGrade: 'B', gradeId: 'gB',
+    round: 1, home: 'Norwood', away: 'Vermont', hScore: 1, aScore: 0 },
+  { id: 'p2', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', gradeId: 'gA',
+    round: 5, home: 'Norwood', away: 'Blackburn', hScore: 1, aScore: 0 },
+];
+run(`S.matches = __m3.map(x => ({...x}));
+     S.roster = { 'EFNL 2026|Norwood|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+                  'EFNL 2026|Vermont|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+                  'EFNL 2026|Blackburn|U12': { grade: 'A', gradeId: 'gA', age: 'U12' } };
+     S.selComp = '';`);
+ok('the earlier B match counts towards A, the current grade',
+  run('matchGrade(S.matches[0])') === 'gA', run('matchGrade(S.matches[0])'));
+ok('so does the later A match', run('matchGrade(S.matches[1])') === 'gA');
+ok('the team is NOT split across two ladders',
+  run('gradesForAge("U12")').length === 1, JSON.stringify(run('gradesForAge("U12")')));
+
 // ── 4. Could this have failed? ───────────────────────────────────────────────
 console.log('\n4  Without ids the old behaviour returns — the test can fail');
 run(`S.matches = __m.map(x => { const c = {...x}; delete c.gradeId; return c; });
