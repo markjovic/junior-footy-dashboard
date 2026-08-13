@@ -47,9 +47,13 @@ jobs:
           done
 
       - name: Run all verifications
+        shell: bash
         run: |
-          # No `set -e`. Every suite runs even after one fails, so one run gives
-          # the whole picture instead of stopping at the first red.
+          # Actions runs `run:` steps as `bash -e` by default, which aborted this
+          # step at the first failing suite and printed no summary at all — the
+          # exact failure the summary exists to prevent. Turned off explicitly so
+          # every suite runs and one run gives the whole picture.
+          set +e
           SUITES="verify-store verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades verify-audit"
           FAILED=0
@@ -70,10 +74,15 @@ jobs:
               FAILED=1
               SUMMARY="${SUMMARY}FAIL  ${LINE}"$'\n'
               # The failing assertions themselves, so the summary is actionable
-              # without opening the group above it.
+              # without opening the group above it. If the suite CRASHED there
+              # are no assertions, so fall back to the tail of its output —
+              # otherwise a crash reads as "no summary line" and nothing else.
+              DETAIL=$(echo "$OUT" | grep -E '^[[:space:]]+FAIL ' | head -10)
+              # Stack frames crowd out the message, so drop them first.
+              [ -z "$DETAIL" ] && DETAIL=$(echo "$OUT" | grep -vE '^[[:space:]]+at ' | tail -8)
               while IFS= read -r l; do
                 SUMMARY="${SUMMARY}        ${l}"$'\n'
-              done < <(echo "$OUT" | grep -E '^\s+FAIL ' | head -10)
+              done <<< "$DETAIL"
             fi
           done
 
