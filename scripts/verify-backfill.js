@@ -35,12 +35,32 @@ for (const f of ['backfill.js', 'fetch-results.js', 'lib/results-engine.js', 'li
 }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'backfill-verify-'));
-const ORGS = path.join(TMP, 'data', 'orgs');
+// ── Per-season fixture helpers ──────────────────────────────────────────────
+// The storage layout moved from data/orgs/<org>-<kind>.json to
+// data/seasons/<seasonId>-core.json plus <seasonId>-players.json on 2026-08-12.
+// per_season_storage_design.md. These write the new shape.
+const SEASONS = path.join(TMP, 'data', 'seasons');
+const sCore = (id) => path.join(SEASONS, `${id}-core.json`);
+const sPlayers = (id) => path.join(SEASONS, `${id}-players.json`);
+function writeSeason(seasonId, org, comps, o) {
+  o = o || {};
+  fs.mkdirSync(SEASONS, { recursive: true });
+  const matches = o.matches || [], players = o.players || [];
+  fs.writeFileSync(sCore(seasonId), JSON.stringify({
+    meta: { seasonId, org, comps, generatedAt: new Date().toISOString(),
+            phases: { results: matches.length > 0, players: players.length > 0,
+                      matches: matches.length, players_n: players.length } },
+    matches, roster: o.roster || {}, gradeMeta: o.gradeMeta || {},
+  }));
+  fs.writeFileSync(sPlayers(seasonId), JSON.stringify({
+    meta: { seasonId, generatedAt: new Date().toISOString(), count: players.length }, players,
+  }));
+}
 const CORE = path.join(TMP, 'data', 'core.json');
 const GRADES = path.join(TMP, 'data', 'grades.json');
-const EFNL_CUR = path.join(ORGS, '383836bb-current.json');
-const EFNL_ARC = path.join(ORGS, '383836bb-archive.json');
-const YJFL_CUR = path.join(ORGS, '4f9a099e-current.json');
+const EFNL_CUR = sCore('2dcbf383');
+const EFNL_ARC = sCore('75d8a232');
+const YJFL_CUR = sCore('cda2f0ec');
 
 fs.mkdirSync(path.join(TMP, 'scripts', 'lib'), { recursive: true });
 for (const f of ['backfill.js', 'fetch-results.js']) {
@@ -123,24 +143,24 @@ module.exports = {
 const MANIFEST = () => ([
   { org: '383836bb', orgName: 'EFNL', seasonId: '2dcbf383', seasonName: '2026',
     compName: 'EFNL 2026', status: 'ACTIVE', retired: false, endDate: '2026-09-30',
-    file: 'data/orgs/383836bb-current.json', phases: { results: false, players: false } },
+    phases: { results: false, players: false } },
   { org: '383836bb', orgName: 'EFNL', seasonId: '75d8a232', seasonName: '2025',
     compName: 'EFNL 2025', status: 'COMPLETED', retired: true, endDate: '2025-09-30',
-    file: 'data/orgs/383836bb-archive.json', phases: { results: false, players: false } },
+    phases: { results: false, players: false } },
   { org: '383836bb', orgName: 'EFNL', seasonId: 'ca9cc98b', seasonName: '2024',
     compName: 'EFNL 2024', status: 'COMPLETED', retired: true, endDate: '2024-10-13',
-    file: 'data/orgs/383836bb-archive.json', phases: { results: false, players: false } },
+    phases: { results: false, players: false } },
   { org: '4f9a099e', orgName: 'YJFL', seasonId: 'cda2f0ec', seasonName: '2026',
     compName: 'YJFL 2026', status: 'ACTIVE', retired: false, endDate: '2026-09-30',
-    file: 'data/orgs/4f9a099e-current.json', phases: { results: false, players: false } },
+    phases: { results: false, players: false } },
   { org: '0f20da4f', orgName: 'Unnamed org', seasonId: 'ffff9999', seasonName: '2024',
     compName: null, status: 'COMPLETED', retired: true, endDate: '2024-09-30',
-    file: 'data/orgs/0f20da4f-archive.json', phases: { results: false, players: false } },
+    phases: { results: false, players: false } },
 ]);
 
 function reset(manifest) {
   fs.rmSync(path.join(TMP, 'data'), { recursive: true, force: true });
-  fs.mkdirSync(ORGS, { recursive: true });
+  fs.mkdirSync(SEASONS, { recursive: true });
   fs.writeFileSync(CORE, JSON.stringify({
     manifest: manifest || MANIFEST(),
     clubs: {}, teamClub: {}, teamOrg: {},
@@ -157,17 +177,13 @@ function reset(manifest) {
     ],
     organisationCodes: ['383836bb', '4f9a099e'],
   }, null, 2));
-  fs.writeFileSync(EFNL_CUR, JSON.stringify({
-    meta: { org: '383836bb', kind: 'current', seasons: ['2dcbf383'] },
-    matches: [], players: [], roster: {}, gradeMeta: {},
-  }));
-  fs.writeFileSync(YJFL_CUR, JSON.stringify({
-    meta: { org: '4f9a099e', kind: 'current', seasons: ['cda2f0ec'] },
+  writeSeason('2dcbf383', '383836bb', ['EFNL 2026'], {});
+  writeSeason('cda2f0ec', '4f9a099e', ['YJFL 2026'], {
     matches: [{ id: 'YJFL 2026|U14|B|16|Ivanhoe|Kew', compName: 'YJFL 2026',
                 age: 'U14', rawGrade: 'B', round: 16 }],
-    players: [], roster: { 'YJFL 2026|Ivanhoe|U14': { grade: 'B' } },
+    roster: { 'YJFL 2026|Ivanhoe|U14': { grade: 'B' } },
     gradeMeta: { 'YJFL 2026|U14|B': { r: 1 } },
-  }));
+  });
 }
 const CONFIG = () => path.join(TMP, 'config.json');
 
@@ -231,9 +247,8 @@ ok('rawGrade is still on the record for display',
   (arc.matches[0] || {}).rawGrade === 'A', JSON.stringify((arc.matches[0] || {}).rawGrade));
 ok('archive carries 2025 gradeMeta', !!(arc.gradeMeta || {})['EFNL 2025|U12|A']);
 ok('per-season completeness recorded',
-  (arc.meta.phases || {})['75d8a232'] && arc.meta.phases['75d8a232'].results === true &&
-  arc.meta.phases['75d8a232'].players === false,
-  JSON.stringify((arc.meta.phases || {})['75d8a232']));
+  (arc.meta.phases || {}).results === true && arc.meta.phases.players === false,
+  JSON.stringify(arc.meta.phases));
 
 // ── 2. It did not damage anything outside its scope ──────────────────────────
 console.log('\n2  Nothing outside the backfilled season was touched');
@@ -299,7 +314,7 @@ reset();
 r = run('backfill.js', { BACKFILL_ORG: '0f20da4f', BACKFILL_SEASON: '2024' });
 ok('refuses a season with compName null', r.code === 1 && /compName: null/.test(r.out),
   `exit ${r.code}`);
-ok('wrote no file for it', !fs.existsSync(path.join(ORGS, '0f20da4f-archive.json')));
+ok('wrote no file for it', !fs.existsSync(sCore('ffff9999')));
 
 // ── 7. Failure paths: bad inputs ─────────────────────────────────────────────
 reset();
@@ -329,13 +344,17 @@ ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('two seasons attempted, not three', /season 1\/2/.test(r.out) && /season 2\/2/.test(r.out),
   'the ACTIVE 2026 season must be excluded');
 ok('oldest first', r.out.indexOf('season 1/2: EFNL 2024') < r.out.indexOf('season 2/2: EFNL 2025'));
-const arcAll = read(EFNL_ARC);
-ok('archive holds both seasons',
-  arcAll.meta.seasons.length === 2, JSON.stringify(arcAll.meta.seasons));
-ok('both seasons have completeness recorded',
-  (arcAll.meta.phases || {})['75d8a232']?.results === true &&
-  (arcAll.meta.phases || {})['ca9cc98b']?.results === true,
-  JSON.stringify(arcAll.meta.phases));
+// A season per file now, so "both seasons" means two files, not one file with
+// two entries in it.
+const s2025 = read(sCore('75d8a232')), s2024 = read(sCore('ca9cc98b'));
+ok('both seasons written as separate files',
+  fs.existsSync(sCore('75d8a232')) && fs.existsSync(sCore('ca9cc98b')));
+ok('both have completeness recorded',
+  s2025.meta.phases.results === true && s2024.meta.phases.results === true,
+  `${JSON.stringify(s2025.meta.phases)} / ${JSON.stringify(s2024.meta.phases)}`);
+ok('and neither contains the other season',
+  s2025.matches.every(m => m.compName === 'EFNL 2025') &&
+  s2024.matches.every(m => m.compName === 'EFNL 2024'));
 ok('the live season file is untouched — backfill never fetches it',
   read(EFNL_CUR).matches.length === 0, `${read(EFNL_CUR).matches.length} matches`);
 ok('no archived record leaked into current',
@@ -350,10 +369,14 @@ r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: 'all',
 ok('exit 1', r.code === 1, `exit ${r.code}`);
 ok('named the season that failed', /in EFNL 2025/.test(r.out));
 ok('reported what is already safe', /Already written and safe: EFNL 2024/.test(r.out));
+// Separate files now, so the completed season and the failed one are checked
+// independently rather than by filtering one shared archive.
 ok('the earlier season IS on disk',
-  fs.existsSync(EFNL_ARC) && read(EFNL_ARC).matches.some(m => m.compName === 'EFNL 2024'));
-ok('the failed season is NOT on disk',
-  !read(EFNL_ARC).matches.some(m => m.compName === 'EFNL 2025'));
+  fs.existsSync(sCore('ca9cc98b')) &&
+  read(sCore('ca9cc98b')).matches.some(m => m.compName === 'EFNL 2024'));
+ok('the failed season was never written',
+  !fs.existsSync(sCore('75d8a232')) ||
+  !read(sCore('75d8a232')).matches.some(m => m.compName === 'EFNL 2025'));
 
 // ── 9. Could these have failed? ──────────────────────────────────────────────
 // A suite that passes against an empty fixture proves nothing. Assert the

@@ -30,10 +30,30 @@ for (const f of ['migrate-grade-ids.js', 'lib/store.js', 'lib/results-engine.js'
 }
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'migrate-verify-'));
-const ORGS = path.join(TMP, 'data', 'orgs');
+// ── Per-season fixture helpers ──────────────────────────────────────────────
+// The storage layout moved from data/orgs/<org>-<kind>.json to
+// data/seasons/<seasonId>-core.json plus <seasonId>-players.json on 2026-08-12.
+// per_season_storage_design.md.
+const SEASONS = path.join(TMP, 'data', 'seasons');
+const sCore = (id) => path.join(SEASONS, `${id}-core.json`);
+const sPlayers = (id) => path.join(SEASONS, `${id}-players.json`);
+function writeSeason(seasonId, org, comps, o) {
+  o = o || {};
+  fs.mkdirSync(SEASONS, { recursive: true });
+  const matches = o.matches || [], players = o.players || [];
+  fs.writeFileSync(sCore(seasonId), JSON.stringify({
+    meta: { seasonId, org, comps, generatedAt: new Date().toISOString(),
+            phases: { results: matches.length > 0, players: players.length > 0,
+                      matches: matches.length, players_n: players.length } },
+    matches, roster: o.roster || {}, gradeMeta: o.gradeMeta || {},
+  }));
+  fs.writeFileSync(sPlayers(seasonId), JSON.stringify({
+    meta: { seasonId, generatedAt: new Date().toISOString(), count: players.length }, players,
+  }));
+}
 const CORE = path.join(TMP, 'data', 'core.json');
-const ARC = path.join(ORGS, '383836bb-archive.json');
-const YJFL = path.join(ORGS, '4f9a099e-current.json');
+const ARC = sCore('75d8a232');
+const YJFL = sCore('cda2f0ec');
 
 fs.mkdirSync(path.join(TMP, 'scripts', 'lib'), { recursive: true });
 fs.copyFileSync(path.join(SCRIPTS, 'migrate-grade-ids.js'), path.join(TMP, 'scripts', 'migrate-grade-ids.js'));
@@ -126,22 +146,19 @@ function base() {
 
 function write(fx) {
   fs.rmSync(path.join(TMP, 'data'), { recursive: true, force: true });
-  fs.mkdirSync(ORGS, { recursive: true });
+  fs.mkdirSync(SEASONS, { recursive: true });
   fs.writeFileSync(path.join(TMP, 'data', 'grades.json'), JSON.stringify(fx.grades || GRADES));
   fs.writeFileSync(CORE, JSON.stringify({
     manifest: fx.manifest, gotwFlags: fx.gotwFlags, lastRound: fx.lastRound,
-    orgFiles: [], clubs: {},
+    clubs: {},
   }, null, 2));
-  fs.writeFileSync(ARC, JSON.stringify({
-    meta: { org: '383836bb', kind: 'archive', seasons: ['75d8a232'] },
-    matches: fx.archive, players: [], roster: { 'EFNL 2025|Bayswater|U8': {} },
+  writeSeason('75d8a232', '383836bb', ['EFNL 2025'], {
+    matches: fx.archive, roster: { 'EFNL 2025|Bayswater|U8': {} },
     gradeMeta: { 'EFNL 2025|U8|': { r: 1 } },
-  }));
-  fs.writeFileSync(YJFL, JSON.stringify({
-    meta: { org: '4f9a099e', kind: 'current', seasons: ['cda2f0ec'] },
+  });
+  writeSeason('cda2f0ec', '4f9a099e', ['YJFL 2026'], {
     matches: [M('YJFL 2026', 'U14', 'A', 1, 'Ivanhoe', 'Kew')],
-    players: [], roster: {}, gradeMeta: {},
-  }));
+  });
 }
 
 function run(env) {
