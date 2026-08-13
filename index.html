@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.139</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.141</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -703,7 +703,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.139</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.141</span>
         </div>
 
 
@@ -1213,6 +1213,25 @@ function matchGrade(m) {
   return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.rawGrade, m.compName);
 }
 
+// _valid and _grade are cached on every record when it is loaded, and a cached
+// value silently wins over matchGrade() and matchIsValid(). There were three
+// copies of this computation — two in init, one in loadSeasons — and they
+// drifted: loadSeasons kept `_grade = m.gradeId`, the option-B behaviour that
+// was reverted in Beta 0.135, so a promoted team appeared on BOTH ladders in a
+// past season and on one in a live season. One definition, called from all of
+// them, is the only way that cannot happen again.
+//
+// The roster is the authority: a team counts towards the grade it is in NOW.
+// team_registry_design.md §3.4.
+function precomputeMatches(list) {
+  for (const m of list) {
+    const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
+    const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
+    m._valid = (hg === ag && hg !== null && hg !== undefined);
+    m._grade = hg || m.rawGrade;
+  }
+}
+
 // ── Display ────────────────────────────────────────────────────────────────
 // A grouping key is an opaque id. Everything shown to a person goes through
 // here, and everything that sorts or colours by grade uses the result.
@@ -1612,6 +1631,13 @@ function render() {
   syncViewTabs();
   applyViewChrome();
 
+  // The SIDEBAR belongs to both views, so it is built before the finals branch
+  // returns. It used to sit below, which meant a reload straight into the finals
+  // view never built it at all — the Season dropdown and the Competition chips
+  // came up empty, and only a switch to the dashboard filled them in. Found on
+  // screen 2026-08-12.
+  renderAgeTabs();
+
   if (finals) {
     // The finals view spans every age and grade, so it does not depend on
     // S.selectedAge and must render before the single-age guard below.
@@ -1620,7 +1646,6 @@ function render() {
     return;
   }
 
-  renderAgeTabs();
   if (!hasData || !S.selectedAge) return;
   const age = S.selectedAge;
   renderSidebarFilters(age);
@@ -2715,15 +2740,9 @@ async function loadSeasons(ids) {
     }
   }
   rebuildGradeLabels();
-  // _valid and _grade are cached per record and must be computed with the roster
-  // in place, or the cached value silently wins over the functions.
-  for (const m of added) {
-    if (m.gradeId) { m._valid = true; m._grade = m.gradeId; continue; }
-    const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
-    const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
-    m._valid = (hg === ag && hg !== null && hg !== undefined);
-    m._grade = hg || m.rawGrade;
-  }
+  // The roster must be merged above before this runs, or every record resolves
+  // against a roster that does not yet contain its teams.
+  precomputeMatches(added);
   S.matches.push(...added);
   console.log(`Loaded ${added.length} match record(s) from ${ids.length} season file(s)`);
 }
@@ -3928,14 +3947,7 @@ async function init() {
   if (roster)  S.roster=roster;
   if (matches) {
     S.matches=matches.filter(m => !m.isBye);
-    S.matches.forEach(m => {
-      // Must agree with matchGrade() and matchIsValid() above, or this cached
-      // value silently wins over them.
-      const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
-      const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
-      m._valid = (hg === ag && hg !== null && hg !== undefined);
-      m._grade = hg || m.rawGrade;
-    });
+    precomputeMatches(S.matches);
   }
   if (players) S.players=players;
   if (gotwFlags) S.gotwFlags=gotwFlags;
@@ -3950,15 +3962,8 @@ async function init() {
         if (d.matches?.length) {
           S.fixtures = d.matches.filter(m => m.scheduled);
           S.matches  = d.matches.filter(m => !m.isBye && !m.scheduled);
-          // Pre-compute validity on all matches once (roster must be loaded first)
-          S.matches.forEach(m => {
-            // Must agree with matchGrade() and matchIsValid() above, or this cached
-            // value silently wins over them.
-            const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
-            const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
-            m._valid = (hg === ag && hg !== null && hg !== undefined);
-            m._grade = hg || m.rawGrade;
-          });
+          // Roster must be loaded first — every record resolves against it.
+          precomputeMatches(S.matches);
         }
         if (d.players?.length) S.players = d.players;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
