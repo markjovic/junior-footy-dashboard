@@ -10,15 +10,23 @@
 // WHAT IT CHANGES, and nothing else:
 //   matches[].id        rawGrade segment replaced by the grade id
 //   matches[].gradeId   set
-//   gotwFlags values    remapped, because the VALUE is a match id (the key is
-//                       age|roundKey and is untouched) — see §3.1
+//   gotwFlags values    remapped, because the VALUE is a match id. The KEY is
+//                       untouched by this script — see §3.1.
+//
+// NOTE ON THE gotwFlags KEY (2026-08-13). It was age|roundKey when this script
+// was written and is now compName|age|roundKey. That re-keying was done in
+// index.html, not here, and this script still only remaps VALUES, so nothing
+// below changes. The remap works on either key shape because it never reads the
+// key. lastround_gotw_keying_design.md.
 //
 // WHAT IT DELIBERATELY LEAVES ALONE:
 //   rawGrade stays on every record as the display value, so index.html's grade
-//   chip and its gradeMeta lookup keep working unchanged. gradeMeta and
-//   lastRound keep their current keys for the same reason: re-keying them needs
-//   index.html and the engine changed in the same step, which is build-order
-//   step 6, and folding it in here would make neither change provable.
+//   chip and its gradeMeta lookup keep working unchanged. gradeMeta keeps its
+//   current keys: re-keying needs index.html and the engine changed in the same
+//   step, which is build-order step 6, and folding it in here would make neither
+//   change provable. lastRound was in this list until 2026-08-13; it was re-keyed
+//   in results-engine.js v14 and needed no migration, because a full results run
+//   rebuilds it from scratch.
 //
 // DEFAULTS TO A DRY RUN. It resolves everything, reports the full plan, and
 // writes nothing unless MIGRATE_DRY_RUN=false.

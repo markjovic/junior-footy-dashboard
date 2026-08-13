@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-audit v1 2026-08-12';
+const VERSION = 'verify-audit v2 2026-08-13 key-shapes';
 console.log(`=== ${VERSION} ===`);
 
 const AUDIT = path.join(__dirname, 'audit-data.js');
@@ -42,6 +42,10 @@ function clean() {
         { org: '383836bb', seasonId: '75d8a232', seasonName: '2025', compName: 'EFNL 2025',
           status: 'COMPLETED', retired: true, phases: { results: true, players: false } },
       ],
+      // Both correctly shaped. Section 9 checking an EMPTY map would pass
+      // whatever it did, so the clean case has to carry real keys.
+      lastRound: { 'EFNL 2026|U12|g1': 2, 'EFNL 2025|U12|g2': 2 },
+      gotwFlags: { 'EFNL 2026|U12|2': 'EFNL 2026|U12|A|2|a|b' },
       seasonFiles: [
         { file: 'data/seasons/2dcbf383-core.json', seasonId: '2dcbf383', kind: 'core', bytes: 1 },
         { file: 'data/seasons/2dcbf383-players.json', seasonId: '2dcbf383', kind: 'players', bytes: 1 },
@@ -333,6 +337,54 @@ LAST = audit();
 ok('a gradeId with an unmigrated id does NOT count as done',
   /0 of 5 record\(s\) carry their PlayHQ grade id/.test(LAST.out),
   (LAST.out.match(/\d+ of \d+ record\(s\) carry[^.]*\./) || ['not reported'])[0]);
+
+// ── 4d. Cross-organisation key shapes ───────────────────────────────────────
+// lastround_gotw_keying_design.md. Section 9 exists because both failure modes
+// are silent: a lastRound key the page cannot build renders no round number on
+// the grade tab, and a gotwFlags key it cannot build falls through to the
+// automatic pick. Neither shows an error, so the audit is the only place a stale
+// key can announce itself — and an audit nobody has seen fire is worth nothing.
+console.log('\n4d  Section 9 checks the cross-organisation key shapes');
+write(clean());
+LAST = audit();
+ok('section 9 ran', /9  Cross-organisation key shapes/.test(LAST.out));
+ok('a correctly shaped tree raises no shape warning',
+  !/are not compName/.test(LAST.out) && LAST.code === 0, `exit ${LAST.code}`);
+ok('and it counted the keys it checked',
+  /lastRound\s+2 key\(s\), 2 in the/.test(LAST.out),
+  (LAST.out.match(/lastRound\s+\d+ key\(s\)[^\n]*/) || ['not reported'])[0]);
+ok('gotwFlags is checked too',
+  /gotwFlags\s+1 key\(s\), 1 in the/.test(LAST.out),
+  (LAST.out.match(/gotwFlags\s+\d+ key\(s\)[^\n]*/) || ['not reported'])[0]);
+
+// A pre-2026-08-13 two-segment lastRound key. This is the exact shape the engine
+// wrote from Beta 0.133 until v14 and that the dashboard could never read.
+seeded('a two-segment lastRound key is reported',
+  fx => { fx.core.lastRound['U12|A'] = 14; },
+  /core\.lastRound: 1 of 3 key\(s\) are not compName\|age\|gradeId/, 0);
+
+// The same defect on the other key.
+seeded('a two-segment gotwFlags key is reported',
+  fx => { fx.core.gotwFlags['U12|3'] = 'EFNL 2026|U12|A|3|a|b'; },
+  /core\.gotwFlags: 1 of 2 key\(s\) are not compName\|age\|roundKey/, 0);
+
+// Right shape, wrong competition: three segments but naming a season that is not
+// in the manifest, so the page can never build it.
+seeded('a key naming a competition absent from the manifest is reported',
+  fx => { fx.core.lastRound['SEJ 2019|U12|g9'] = 5; },
+  /core\.lastRound: 1 key\(s\) name a competition absent from the manifest/, 0);
+
+// Could these have failed? Both are WARNINGS, so they must not fail the run on
+// their own — and must fail it under STRICT, like every other warning.
+{
+  const fxk = clean();
+  fxk.core.lastRound['U12|A'] = 14;
+  write(fxk);
+  LAST = audit();
+  ok('a wrong-shape key alone exits 0', LAST.code === 0, `exit ${LAST.code}`);
+  LAST = audit({ AUDIT_STRICT: 'true' });
+  ok('the same tree exits 1 under STRICT', LAST.code === 1, `exit ${LAST.code}`);
+}
 
 // ── 5. Could these have failed? ──────────────────────────────────────────────
 console.log('\n5  The fixture is real');
