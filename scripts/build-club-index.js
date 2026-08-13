@@ -192,7 +192,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed first so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const VERSION = 'build-club-index v2 2026-08-12 all-seasons-no-players';
+const VERSION = 'build-club-index v3 2026-08-12 accurate-log';
 
 async function main() {
   ensureDataDir();
@@ -375,8 +375,11 @@ async function main() {
   // Only clubs and teamClub changed, both cross-organisation. Using save()
   // would rewrite every organisation file with a fresh timestamp and produce a
   // whole-file diff on every run.
-  store.report(store.saveCore(data), 'build-club-index');
-  console.log(`Wrote data.json — ${Object.keys(mergedClubs).length} club(s), ${Object.keys(mergedTeamClub).length} team mapping(s)`);
+  // store.report prints the STORE's version, which reads oddly beside this
+  // script's own. Labelled so the two are not mistaken for each other.
+  store.report(store.saveCore(data), `${VERSION} via store`);
+  console.log(`Wrote data/core.json and data/clubs.json — ${Object.keys(mergedClubs).length} club(s), ` +
+    `${Object.keys(mergedTeamClub).length} team mapping(s)`);
   process.exit(0);
 }
 
