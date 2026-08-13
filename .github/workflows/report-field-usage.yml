@@ -1,15 +1,24 @@
 # .github/workflows/report-field-usage.yml
-name: Report field usage
-
-# READ-ONLY. Scans every producer and consumer of stored data and reports which
-# files reference each field. Commits nothing.
 #
-# Run this BEFORE removing or renaming any stored field. It exists because on
-# 2026-08-11 hLogo and aLogo were removed from match records after verifying that
-# index.html did not need them — which was true, and still wrong, because
-# build-club-index.js derived every club identity from them. The dependency was
-# recorded in two design documents and in that file's own header and was still
-# missed, because the check was aimed at one consumer instead of all of them.
+# Read-only. Scans scripts and templates for references to stored fields and
+# reports which files use each one. Calls no API, reads no data files, and
+# commits nothing — contents:read is enough and there is no git step.
+#
+# RUN THIS BEFORE REMOVING OR RENAMING ANY STORED FIELD. Removing hLogo and
+# aLogo from match records after checking only index.html silently broke
+# build-club-index.js, which derived every club identity from them. This is the
+# check that was missing that day.
+#
+# There was no workflow for this script until 2026-08-13, which meant it could
+# not be run at all without a local environment. A tool that cannot be executed
+# is not a safeguard.
+#
+# The script writes field-usage-report.json to the repo root. That file is NOT
+# committed — an Actions checkout is discarded at the end of the run — so it is
+# uploaded as an artifact instead. The readable matrix is in the log; the
+# artifact is for looking a field up afterwards.
+
+name: Report field usage
 
 on:
   workflow_dispatch:
@@ -23,19 +32,19 @@ concurrency:
 
 jobs:
   report:
-    name: Map fields to files
+    name: Who uses this field
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Report field usage
+      - name: Syntax check
+        run: node --check scripts/report-field-usage.js
+
+      - name: Report
         run: node scripts/report-field-usage.js
 
       - name: Upload report
@@ -44,5 +53,5 @@ jobs:
         with:
           name: field-usage-report
           path: field-usage-report.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
