@@ -18,7 +18,7 @@ const { gqlPost, refreshSession } = require('./lib/playhq');
 // SER 2026 season id: 263ca13b
 // We need one round id from a SER grade. Fetch the grade list first.
 const Q_SEASON = `
-query discoverSeason($id: ID!) {
+query discoverSeason($id: String!) {
   discoverSeason(seasonID: $id) {
     grades {
       id
