@@ -7780,7 +7780,7 @@
       "file": "data/orgs/1cf85e52-current.json",
       "org": "1cf85e52",
       "kind": "current",
-      "bytes": 1491299
+      "bytes": 1491343
     },
     {
       "file": "data/orgs/383836bb-archive.json",
@@ -14883,7 +14883,7 @@
     "WFNL 2026|Werribee Districts Mixed Gold|U9": "a3dd148f",
     "WFNL 2026|Wyndhamvale Mixed|U9": "cbdfeb0b"
   },
-  "lastUpdated": "2026-08-12T22:55:14.068Z",
-  "lastResultsFetch": "2026-08-12T22:55:14.068Z",
+  "lastUpdated": "2026-08-13T00:27:42.556Z",
+  "lastResultsFetch": "2026-08-13T00:27:42.556Z",
   "lastStatsFetch": "2026-08-12T17:35:06.918Z"
 }
