@@ -1,33 +1,54 @@
 #!/usr/bin/env node
 // scripts/probe-concurrent-comps.js
 //
-// Answers ONE question before D1 is designed: how does PlayHQ actually represent
-// two competitions running in the same age group?
+// Establishes, for ONE age group in ONE season, everything PlayHQ holds and
+// everything we have stored, so the SEJ U10 case can be designed against
+// measurement rather than inference.
 //
-// SEJ 2026 U10 has a main competition and a Lightning Premiership. The dashboard
-// shows one ladder per grade and a team can only be on one, so the Lightning
-// Premiership grades do not appear. Three options are recorded in
-// OUTSTANDING_TASKS.md D1 — separate labelled ladders, a note, or a tab — and
-// none of them can be chosen without knowing what the second competition IS.
+// WHAT v1 GOT WRONG, and why v2 exists.
+// v1 asked four narrow questions and each answer was individually true and
+// collectively misleading:
+//   * It reported "0 teams in more than one grade" and that was correct — but it
+//     only tested for a team in two GRADES. SEJ 2026 U10 Girls has the same side
+//     registered TWICE IN ONE GRADE under two team ids (8e1bd901 for R1-R9,
+//     6efcb2b7 for R11-R14), which that test cannot see.
+//   * It reported the Lightning Premiership as "1 home-and-away round + 1 GF"
+//     and concluded a ladder was meaningless. In fact that one round holds three
+//     games per team played on a single day — a round robin — so a ladder is
+//     entirely meaningful. PlayHQ's own LP ladder shows P=3.
+//   * It printed round LABELS rather than raw fields, so it could not show that
+//     round 10 of the season-long grade holds a single PENDING placeholder
+//     ("Dummy U10 Girls 1 v Dummy U10 Girls 2", venue TBC) standing in for the
+//     week the round robin replaced.
 //
-// The options differ depending on the answer:
-//   * If it is a SEPARATE PlayHQ competition with its own season, it needs its
-//     own config.json entry and its own compName, and D1 is a configuration
-//     question rather than a dashboard one.
-//   * If it is EXTRA GRADES inside the same season, it is a dashboard question,
-//     and whether a ladder is even meaningful depends on the round structure.
-//   * If it is a SHORT-FORM series — three rounds, no home-and-away — a ladder
-//     may be the wrong thing to show at all.
+// THAT PLACEHOLDER IS A LIVE DEFECT, which is the main thing v2 is for.
+// fetchGrade() walks rounds in order and breaks on the first round that has
+// games but none FINAL — "scheduled, not yet played — stopping". A permanent
+// PENDING placeholder at R10 therefore stops the walk forever, and R11-R14 are
+// never fetched even though PlayHQ has the results. The dashboard grade tab
+// showing "R9" is that, visible.
+//
+// So this probe reports, per grade in the age group:
+//   1  competitions and seasons for the organisation
+//   2  every grade, with parsed age/rawGrade and collapsing keys
+//   3  every round, RAW: number, name, abbreviatedName, isFinalsRound, current
+//   4  every team from the registry, grouped by grade, with duplicate names
+//      within one grade called out
+//   5  every game in every round: teams with ids, status, date — and any round
+//      that has games but none FINAL, which is where the walk would stop
+//   6  what is STORED for the same grades, so the gap is a number not a guess
 //
 // READ ONLY. Calls PlayHQ and reads data/, writes nothing, commits nothing.
 //
 // Env:
 //   PROBE_ORG      8-character organisation code. Default 1cf85e52 (SEJ).
 //   PROBE_SEASON   season id. Default 4dfaaab5 (SEJ 2026).
-//   PROBE_AGE      age token to focus on, matched case-insensitively against the
-//                  grade name. Default U10. Set to "" for every age.
+//   PROBE_AGE      age token matched against the grade name. Default U10.
+//                  Set to "" for every age — expensive, see below.
+//   PROBE_MAX_CALLS  cap on fixture calls, default 120. Section 5 costs one call
+//                  per round per grade; the default age is about 60.
 //
-// Exit: 0 the probe ran and reported, 1 it could not reach the data.
+// Exit: 0 the probe ran, 1 it could not reach the data.
 //
 // Run: node scripts/probe-concurrent-comps.js
 
@@ -36,27 +57,30 @@
 const fs = require('fs');
 const path = require('path');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
-// The engine's own parser. Reproducing it here is how the first team-join probe
-// went wrong — its age regex only recognised U-ages and every senior grade keyed
-// as an empty string.
-const { parseGradeName } = require('./lib/results-engine');
+// The engine's OWN queries and parser. Not copied: a second copy of a query
+// drifts, and the working practice is explicit that queries come from something
+// continuously exercised. Q_FIXTURE and Q_GRADE_ROUNDS are exported for exactly
+// this reason.
+const {
+  parseGradeName, cleanTeam, Q_GRADE_ROUNDS, Q_FIXTURE, roundToken,
+} = require('./lib/results-engine');
+const store = require('./lib/store');
 
-const VERSION = 'probe-concurrent-comps v1 2026-08-13';
+const VERSION = 'probe-concurrent-comps v2 2026-08-13 full-dump';
 const ROOT = path.resolve(__dirname, '..');
-const CORE_PATH = path.join(ROOT, 'data', 'core.json');
 
 const ORG    = (process.env.PROBE_ORG    || '1cf85e52').trim();
 const SEASON = (process.env.PROBE_SEASON || '4dfaaab5').trim();
 const AGE    = (process.env.PROBE_AGE === undefined ? 'U10' : process.env.PROBE_AGE).trim();
+const MAX_CALLS = parseInt(process.env.PROBE_MAX_CALLS || '120', 10);
 
 const log = (m) => console.log(m);
 
-// ── Queries, copied verbatim from code that has run ──────────────────────────
 // discoverCompetitions: docs/playhq_api_reference.md, verified 2026-08-11 across
 // all 1,175 AFL associations. organisationID is the 8-CHARACTER CODE, not the
-// UUID, despite being declared ID!, and `seasons` takes it as a required
-// argument of its own. Omitting either is the mistake that produced the
-// retracted "does not work from a guest session" note.
+// UUID, despite being declared ID!, and `seasons` takes it as its own required
+// argument. Omitting either is the mistake behind the retracted "does not work
+// from a guest session" note.
 const Q_COMPETITIONS = `
 query discoverCompetitions($organisationID: ID!) {
   discoverCompetitions(organisationID: $organisationID) {
@@ -65,41 +89,22 @@ query discoverCompetitions($organisationID: ID!) {
     seasons(organisationID: $organisationID) {
       id name startDate endDate status { name value }
     }
-    organisation { id name }
   }
 }`;
 
-// Copied from scripts/lib/results-engine.js Q_GRADE_LIST.
+// Copied from scripts/lib/results-engine.js Q_GRADE_LIST, which runs every
+// weekend. Not exported, so this is the one query duplicated here.
 const Q_GRADE_LIST = `
 query gradeListDiscoverSeason($id: String!) {
   discoverSeason(seasonID: $id) {
     id
     name
-    competition { id name organisation { id name } }
+    competition { id name }
     grades {
       id
       name
       age { name value }
       gender { name value }
-    }
-  }
-}`;
-
-// Copied from scripts/lib/results-engine.js Q_GRADE_ROUNDS.
-const Q_GRADE_ROUNDS = `
-query gradeRounds($gradeID: ID!) {
-  discoverGrade(gradeID: $gradeID) {
-    id
-    name
-    dates
-    rounds {
-      id
-      name
-      abbreviatedName
-      number
-      current
-      isFinalsRound
-      provisionalDates
     }
   }
 }`;
@@ -114,105 +119,83 @@ query discoverTeamsBySeason($seasonId: ID!) {
   }
 }`;
 
-function readJson(p) {
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; }
-}
-
+let calls = 0;
 async function ask(query, vars, opName) {
   const r = await gqlPost(query, vars, opName);
+  calls++;
   if (r && r.errors && r.errors.length) {
     for (const e of r.errors) log(`    API error: ${e.message}`);
   }
   return r && r.data;
 }
 
+const pad = (s, n) => String(s === undefined || s === null ? '' : s).padEnd(n);
+
 async function main() {
   log(`=== ${VERSION} ===`);
-  log(`organisation ${ORG}, season ${SEASON}, age filter ${AGE || '(all ages)'}`);
+  log(`organisation ${ORG}, season ${SEASON}, age filter ${AGE || '(all ages)'}, ` +
+      `fixture call cap ${MAX_CALLS}`);
 
-  const core = readJson(CORE_PATH);
+  let core;
+  try { core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8')); }
+  catch (e) { console.error(`FATAL: could not read core.json — ${e.message}`); process.exit(1); }
   if (!core || !Array.isArray(core.manifest)) {
     console.error('FATAL: data/core.json has no manifest.');
     process.exit(1);
   }
   const entry = core.manifest.find(m => m.seasonId === SEASON);
-  log(`manifest: ${entry ? `${entry.compName} (${entry.status})` : 'season NOT in the manifest'}`);
+  if (!entry) {
+    console.error(`FATAL: season ${SEASON} is not in the manifest. Nothing to compare against.`);
+    process.exit(1);
+  }
+  log(`manifest: ${entry.compName} (${entry.status})`);
 
   await refreshSession();
 
-  // ── 1. Is the second competition a separate PlayHQ COMPETITION? ────────────
-  // This is the question that decides whether D1 is a config change or a
-  // dashboard change, so it is asked first.
-  log(`\n${'='.repeat(70)}\n1  Competitions and seasons for organisation ${ORG}\n${'='.repeat(70)}`);
-  let comps = [];
+  // ── 1. Competitions and seasons ────────────────────────────────────────────
+  log(`\n${'='.repeat(74)}\n1  Competitions and seasons for ${ORG}\n${'='.repeat(74)}`);
   try {
     const d = await ask(Q_COMPETITIONS, { organisationID: ORG }, 'discoverCompetitions');
-    comps = (d && d.discoverCompetitions) || [];
+    const comps = (d && d.discoverCompetitions) || [];
+    log(`${comps.length} competition(s)`);
+    for (const c of comps) {
+      log(`\n  ${c.name}  (${c.id})`);
+      for (const s of (c.seasons || [])) {
+        log(`    ${pad(s.name, 8)} ${s.id}  ${pad((s.status || {}).value, 10)} ` +
+          `${s.startDate} .. ${s.endDate}${s.id === SEASON ? '  <-- configured' : ''}`);
+      }
+    }
   } catch (e) {
     console.error(`  FATAL: discoverCompetitions failed: ${e.message}`);
     process.exit(1);
   }
-  log(`${comps.length} competition(s)`);
-  for (const c of comps) {
-    log(`\n  ${c.name}  (${c.id})`);
-    for (const s of (c.seasons || [])) {
-      const mark = s.id === SEASON ? '  <-- the configured season' : '';
-      log(`    ${String(s.name).padEnd(8)} ${s.id}  ${String((s.status || {}).value || '').padEnd(10)}` +
-        ` ${s.startDate} .. ${s.endDate}${mark}`);
-    }
-  }
-  if (comps.length > 1) {
-    log(`\n  >> MORE THAN ONE COMPETITION. If the second age-group competition is one`);
-    log(`     of these, it has its own season id and needs its own config.json entry`);
-    log(`     and compName — D1 is then a configuration question, not a ladder one.`);
-  } else {
-    log(`\n  >> ONE COMPETITION. Any second age-group competition must therefore be`);
-    log(`     extra GRADES inside this season, which section 2 lists.`);
-  }
-  await sleep(500);
+  await sleep(400);
 
-  // ── 2. Every grade in the season, and which fall in the target age ─────────
-  log(`\n${'='.repeat(70)}\n2  Grades in season ${SEASON}\n${'='.repeat(70)}`);
+  // ── 2. Grades ──────────────────────────────────────────────────────────────
+  log(`\n${'='.repeat(74)}\n2  Grades in season ${SEASON}\n${'='.repeat(74)}`);
   let grades = [];
-  let seasonMeta = null;
   try {
     const d = await ask(Q_GRADE_LIST, { id: SEASON }, 'gradeListDiscoverSeason');
-    seasonMeta = d && d.discoverSeason;
-    grades = (seasonMeta && seasonMeta.grades) || [];
+    grades = ((d && d.discoverSeason && d.discoverSeason.grades) || []);
   } catch (e) {
     console.error(`  FATAL: gradeListDiscoverSeason failed: ${e.message}`);
     process.exit(1);
   }
-  if (seasonMeta && seasonMeta.competition) {
-    log(`season "${seasonMeta.name}" belongs to competition ` +
-      `"${seasonMeta.competition.name}" (${seasonMeta.competition.id})`);
-  }
-  log(`${grades.length} grade(s) in the season`);
-
-  // Matched on the NAME, not on the parsed age, because the parse is what is
-  // under suspicion: two grades that both parse to "U10" with an empty rawGrade
-  // is one of the shapes this probe is looking for.
   const inAge = AGE
     ? grades.filter(g => new RegExp(`\\b${AGE}\\b`, 'i').test(g.name) ||
                          new RegExp(`^${AGE}$`, 'i').test((g.age || {}).name || ''))
     : grades;
-  log(`${inAge.length} grade(s) matching "${AGE || 'all'}"\n`);
+  log(`${grades.length} grade(s) in the season, ${inAge.length} matching "${AGE || 'all'}"\n`);
 
-  const parsed = new Map();   // gradeId -> { age, rawGrade }
-  const wName = Math.max(20, ...inAge.map(g => g.name.length)) + 2;
-  log('  ' + 'grade name'.padEnd(wName) + 'id'.padEnd(10) +
-      'age'.padEnd(10) + 'gender'.padEnd(9) + 'parsed age'.padEnd(14) + 'rawGrade');
+  const parsed = new Map();
+  const wN = Math.max(24, ...inAge.map(g => g.name.length)) + 2;
+  log('  ' + pad('grade name', wN) + pad('id', 10) + pad('parsed age', 14) + 'rawGrade');
   for (const g of inAge) {
     const p = parseGradeName(g.name, (g.age || {}).name || '', (g.gender || {}).name || '');
     parsed.set(g.id, p);
-    log('  ' + g.name.padEnd(wName) + String(g.id).padEnd(10) +
-      String((g.age || {}).name || '').padEnd(10) +
-      String((g.gender || {}).name || '').padEnd(9) +
-      String(p.age).padEnd(14) + JSON.stringify(p.rawGrade));
+    log('  ' + pad(g.name, wN) + pad(g.id, 10) + pad(p.age, 14) + JSON.stringify(p.rawGrade));
   }
 
-  // Grades that collapse to one age|rawGrade key are the ones that cannot be
-  // told apart by anything except the grade id.
   const byKey = new Map();
   for (const g of inAge) {
     const p = parsed.get(g.id);
@@ -223,81 +206,176 @@ async function main() {
   const collapsed = [...byKey].filter(([, v]) => v.length > 1);
   if (collapsed.length) {
     log(`\n  ${collapsed.length} age|rawGrade key(s) hold more than one grade:`);
-    for (const [k, v] of collapsed) {
-      log(`    "${k}" -> ${v.map(g => `${g.id} "${g.name}"`).join('  |  ')}`);
-    }
-  } else {
-    log(`\n  every grade in this age has a distinct age|rawGrade key`);
+    for (const [k, v] of collapsed) log(`    "${k}" -> ${v.map(g => `${g.id} "${g.name}"`).join('  |  ')}`);
   }
 
-  // ── 3. Round structure per grade — is a ladder even meaningful? ────────────
-  // A grade with three rounds and no home-and-away is not a league table.
-  log(`\n${'='.repeat(70)}\n3  Round structure per grade\n${'='.repeat(70)}`);
-  const rounds = new Map();   // gradeId -> { ha, finals, names, dates }
+  // ── 3. Rounds, RAW ─────────────────────────────────────────────────────────
+  // v1 printed labels. The raw fields are what fetchGrade() branches on, so they
+  // are what has to be read.
+  log(`\n${'='.repeat(74)}\n3  Rounds per grade — RAW fields\n${'='.repeat(74)}`);
+  const roundsOf = new Map();   // gradeId -> rounds[]
   for (const g of inAge) {
     let gd = null;
     try {
       const d = await ask(Q_GRADE_ROUNDS, { gradeID: g.id }, 'gradeRounds');
       gd = d && d.discoverGrade;
-    } catch (e) {
-      log(`  ${g.name}: gradeRounds failed — ${e.message}`);
-      await sleep(400);
-      continue;
-    }
+    } catch (e) { log(`  ${g.name}: gradeRounds failed — ${e.message}`); await sleep(400); continue; }
     const rs = (gd && gd.rounds) || [];
-    const ha = rs.filter(r => r.isFinalsRound !== true);
-    const fin = rs.filter(r => r.isFinalsRound === true);
-    rounds.set(g.id, { ha: ha.length, finals: fin.length, dates: (gd && gd.dates) || [] });
-    log(`\n  ${g.name}  (${g.id})`);
-    log(`    ${rs.length} round(s): ${ha.length} home-and-away, ${fin.length} finals`);
-    log(`    months: ${((gd && gd.dates) || []).join(', ') || '(none)'}`);
-    const label = (r) => r.isFinalsRound === true
-      ? `${r.abbreviatedName || '?'}` : `R${r.number}`;
-    log(`    sequence: ${rs.map(label).join(' ')}`);
+    roundsOf.set(g.id, rs);
+    log(`\n  ${g.name}  (${g.id})   months: ${((gd && gd.dates) || []).join(', ') || '(none)'}`);
+    log('    ' + pad('number', 8) + pad('name', 22) + pad('abbrev', 9) +
+        pad('isFinals', 10) + pad('current', 9) + 'token');
+    for (const r of rs) {
+      const fAbbrev = r.isFinalsRound === true ? (r.abbreviatedName || String(r.number)) : '';
+      log('    ' + pad(r.number, 8) + pad(r.name, 22) + pad(r.abbreviatedName, 9) +
+        pad(r.isFinalsRound === true, 10) + pad(r.current === true, 9) +
+        roundToken(parseInt(r.number, 10) || 0, fAbbrev));
+    }
     await sleep(400);
   }
 
-  // ── 4. Teams: is a team in more than one grade in this age? ────────────────
-  // The six roster warnings in the 2026-08-13 results run say yes. This
-  // establishes it from the registry rather than from stored records.
-  log(`\n${'='.repeat(70)}\n4  Teams appearing in more than one grade in this age\n${'='.repeat(70)}`);
+  // ── 4. Teams, grouped by grade, duplicates within a grade called out ───────
+  log(`\n${'='.repeat(74)}\n4  Registry teams per grade\n${'='.repeat(74)}`);
   let teams = [];
   try {
     const d = await ask(Q_TEAMS, { seasonId: SEASON }, 'discoverTeamsBySeason');
     teams = (d && d.discoverTeams) || [];
-  } catch (e) {
-    log(`  discoverTeams failed: ${e.message}`);
-  }
+  } catch (e) { log(`  discoverTeams failed: ${e.message}`); }
   const inAgeIds = new Set(inAge.map(g => g.id));
   const relevant = teams.filter(t => t.grade && inAgeIds.has(t.grade.id));
-  log(`registry: ${teams.length} team(s) in the season, ${relevant.length} in this age`);
+  log(`${teams.length} team(s) in the season, ${relevant.length} in this age`);
 
-  // Keyed on the CLUB plus the bare team name, because PlayHQ registers the same
-  // side separately in each grade and the ids differ.
-  const byTeam = new Map();
+  const nameOfGrade = new Map(inAge.map(g => [g.id, g.name]));
+  const byGrade = new Map();
   for (const t of relevant) {
-    const k = `${(t.organisation || {}).id || '?'}|${t.name}`;
-    if (!byTeam.has(k)) byTeam.set(k, []);
-    byTeam.get(k).push(t);
+    if (!byGrade.has(t.grade.id)) byGrade.set(t.grade.id, []);
+    byGrade.get(t.grade.id).push(t);
   }
-  const multi = [...byTeam].filter(([, v]) => new Set(v.map(t => t.grade.id)).size > 1);
-  log(`${multi.length} team(s) registered in more than one grade in this age\n`);
-  for (const [k, v] of multi.slice(0, 25)) {
-    log(`  ${k.split('|')[1]}`);
-    for (const t of v) log(`      ${t.grade.id}  ${t.grade.name}`);
+  // THE CHECK v1 DID NOT MAKE. Two team ids sharing a name inside one grade is
+  // how a mid-season re-registration looks, and v1's "more than one grade" test
+  // could not see it.
+  const dupWithinGrade = [];
+  for (const [gid, ts] of byGrade) {
+    const p = parsed.get(gid) || { age: '' };
+    log(`\n  ${nameOfGrade.get(gid)}  (${gid}) — ${ts.length} team(s)`);
+    const seen = new Map();
+    for (const t of ts.slice().sort((a, b) => a.name < b.name ? -1 : 1)) {
+      const clean = cleanTeam(t.name, p.age);
+      log(`    ${pad(t.id, 10)} ${pad(t.name, 40)} clean="${clean}"`);
+      if (!seen.has(clean)) seen.set(clean, []);
+      seen.get(clean).push(t.id);
+    }
+    for (const [clean, ids] of seen) {
+      if (ids.length > 1) dupWithinGrade.push({ gid, clean, ids });
+    }
   }
-  if (multi.length > 25) log(`  ... ${multi.length - 25} more`);
+  if (dupWithinGrade.length) {
+    log(`\n  >> ${dupWithinGrade.length} cleaned name(s) held by MORE THAN ONE team id in the`);
+    log(`     SAME grade. Every stored key uses the cleaned name, so these are one`);
+    log(`     team as far as storage is concerned and two as far as PlayHQ is.`);
+    for (const d of dupWithinGrade) {
+      log(`     ${pad(nameOfGrade.get(d.gid), 34)} "${d.clean}" -> ${d.ids.join(', ')}`);
+    }
+  } else {
+    log(`\n  no cleaned name is held by two team ids in one grade`);
+  }
 
-  if (!multi.length && relevant.length) {
-    log(`  >> No team is in two grades. The two competitions are then disjoint sets`);
-    log(`     of teams, and separate ladders would not double-count anyone.`);
-  } else if (multi.length) {
-    log(`\n  >> Teams ARE in two grades. Any answer to D1 has to say which ladder a`);
-    log(`     shared team counts towards, or show it on both deliberately.`);
+  // Same cleaned name across DIFFERENT grades in this age.
+  const acrossGrades = new Map();
+  for (const t of relevant) {
+    const p = parsed.get(t.grade.id) || { age: '' };
+    const clean = cleanTeam(t.name, p.age);
+    if (!acrossGrades.has(clean)) acrossGrades.set(clean, new Set());
+    acrossGrades.get(clean).add(t.grade.id);
+  }
+  const multiGrade = [...acrossGrades].filter(([, s]) => s.size > 1);
+  log(`\n  ${multiGrade.length} cleaned name(s) appear in more than one grade in this age`);
+  for (const [clean, s] of multiGrade) {
+    log(`    "${clean}" -> ${[...s].map(g => nameOfGrade.get(g) || g).join('  |  ')}`);
+  }
+
+  // ── 5. Every game in every round ───────────────────────────────────────────
+  // The expensive section, and the one that finds the walk-stopping round.
+  log(`\n${'='.repeat(74)}\n5  Every game, every round\n${'='.repeat(74)}`);
+  const blockers = [];   // rounds with games but none FINAL
+  const apiRounds = new Map();   // gradeId -> Set of tokens that have FINAL games
+  for (const g of inAge) {
+    const rs = roundsOf.get(g.id) || [];
+    log(`\n  ${g.name}  (${g.id})`);
+    apiRounds.set(g.id, new Set());
+    for (const r of rs) {
+      if (calls >= MAX_CALLS) { log(`    [call cap ${MAX_CALLS} reached — stopping]`); break; }
+      const fAbbrev = r.isFinalsRound === true ? (r.abbreviatedName || String(r.number)) : '';
+      const token = roundToken(parseInt(r.number, 10) || 0, fAbbrev);
+      let games = [];
+      try {
+        const d = await ask(Q_FIXTURE, { roundID: r.id }, 'discoverFixtureByRound');
+        games = ((d && d.discoverFixtureByRound && d.discoverFixtureByRound.games) || []);
+      } catch (e) { log(`    ${pad(token, 6)} fixture failed — ${e.message}`); await sleep(300); continue; }
+      const finals = games.filter(x => (x.status || {}).value === 'FINAL');
+      if (finals.length) apiRounds.get(g.id).add(token);
+      log(`    ${pad(token, 6)} ${pad(r.name, 20)} ${games.length} game(s), ${finals.length} FINAL`);
+      for (const x of games) {
+        const h = x.home || {}, a = x.away || {};
+        log(`        ${pad((x.status || {}).value, 10)} ${pad(x.date, 12)} ` +
+          `${pad(h.id, 10)} ${pad(h.name, 32)} v ${pad(a.id, 10)} ${a.name || ''}`);
+      }
+      // This is the shape that stops fetchGrade's walk dead.
+      if (games.length && !finals.length) {
+        blockers.push({ grade: g.name, gid: g.id, token, name: r.name,
+                        teams: games.map(x => `${(x.home || {}).name} v ${(x.away || {}).name}`) });
+      }
+      await sleep(300);
+    }
+  }
+  if (blockers.length) {
+    log(`\n  >> ${blockers.length} round(s) have games but NONE final. fetchGrade() breaks out`);
+    log(`     of the round loop at the first of these, so every later round in that`);
+    log(`     grade is never fetched — permanently, if the placeholder never resolves.`);
+    for (const b of blockers) {
+      log(`     ${pad(b.grade, 34)} ${pad(b.token, 6)} ${b.name}  [${b.teams.join('; ')}]`);
+    }
+  } else {
+    log(`\n  every round with games has at least one FINAL result`);
+  }
+
+  // ── 6. Stored against PlayHQ ───────────────────────────────────────────────
+  // The gap as a number. Offline: store.load, no further API calls.
+  log(`\n${'='.repeat(74)}\n6  Stored rounds against PlayHQ rounds\n${'='.repeat(74)}`);
+  let stored = null;
+  try { stored = store.load([entry.compName], { players: false }); }
+  catch (e) { log(`  store.load failed: ${e.message}`); }
+  if (stored) {
+    const filesRead = stored.__filesRead || [];
+    if (!filesRead.length) {
+      log(`  NO SEASON FILE READ for ${entry.compName}. Expected data/seasons/${SEASON}-core.json.`);
+    } else {
+      log(`  read ${filesRead.join(', ')}`);
+      const storedByGrade = new Map();
+      for (const m of stored.matches || []) {
+        if (m.compName !== entry.compName) continue;
+        const gid = m.gradeId || '';
+        if (!inAgeIds.has(gid)) continue;
+        if (!storedByGrade.has(gid)) storedByGrade.set(gid, new Set());
+        const tok = m.isFinals ? `F:${m.finalsAbbrev || m.round}` : String(m.round);
+        storedByGrade.get(gid).add(tok);
+      }
+      log('');
+      for (const g of inAge) {
+        const api = [...(apiRounds.get(g.id) || [])];
+        const have = [...(storedByGrade.get(g.id) || [])];
+        const missing = api.filter(t => !have.includes(t));
+        log(`  ${g.name}  (${g.id})`);
+        log(`    PlayHQ has FINAL results in : ${api.join(' ') || '(none)'}`);
+        log(`    stored                      : ${have.join(' ') || '(none)'}`);
+        log(`    MISSING FROM STORAGE        : ${missing.join(' ') || '(none)'}` +
+          (missing.length ? '   <-- results exist and are not stored' : ''));
+      }
+    }
   }
 
   logSummary('probe-concurrent-comps');
-  log(`\n${VERSION}: done. Nothing was written.`);
+  log(`\n${VERSION}: ${calls} API call(s). Nothing was written.`);
 }
 
 main().catch(e => {
