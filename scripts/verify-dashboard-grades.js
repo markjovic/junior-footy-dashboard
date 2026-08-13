@@ -237,8 +237,19 @@ console.log('\n5  The view switch is reachable on a narrow viewport');
     /id="mvt-dash"/.test(body) && /id="mvt-finals"/.test(body));
   ok('the header switch is hidden below 768px',
     /#view-switch\{display:none!important\}/.test(head));
-  ok('and the mobile row is shown there',
-    /\.mob-view-tabs\{display:flex!important\}/.test(head));
+  // It must be hidden BY DEFAULT. Without a display in the base rule,
+  // render()'s `style.display = ''` fell through to the CSS default of block and
+  // the row appeared on desktop beside the header switch. Seen on screen at
+  // Beta 0.142.
+  ok('the mobile row is hidden by default',
+    /\.mob-view-tabs\{display:none/.test(head), 'or it shows on desktop too');
+  ok('and revealed only below 768px',
+    /\.mob-view-tabs\.has-data\{display:flex\}/.test(head));
+  ok('render toggles a CLASS, not an inline display',
+    /mvt\.classList\.toggle\('has-data'/.test(body) && !/mvt\.style\.display/.test(body),
+    'an inline display overrides the media query');
+  ok('and the element carries no inline display either',
+    !/id="mob-view-tabs" style="display/.test(body));
 
   // It must NOT be inside #dash. #mob-tabs is, which is why it could not be
   // reused: that row is hidden whenever the finals view is showing, so the way
