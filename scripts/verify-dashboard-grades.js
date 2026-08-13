@@ -33,15 +33,29 @@ if (!blocks.length) { console.error('FATAL: no inline script found in index.html
 // touches the DOM from event handlers and render functions, none of which run
 // here — but top-level lookups must not throw.
 const noop = () => {};
-const el = () => ({
-  style: {}, classList: { toggle: noop, add: noop, remove: noop, contains: () => false },
-  dataset: {}, addEventListener: noop, appendChild: noop, setAttribute: noop,
-  innerHTML: '', textContent: '', value: '', children: [], querySelectorAll: () => [],
-});
+// classList has to actually work, and getElementById has to return the SAME
+// object for the same id — otherwise a class set through one call is invisible
+// to the next and any assertion about highlighting passes or fails at random.
+const el = () => {
+  const classes = new Set();
+  return {
+    style: {}, dataset: {}, addEventListener: noop, appendChild: noop, setAttribute: noop,
+    innerHTML: '', textContent: '', value: '', children: [], querySelectorAll: () => [],
+    classList: {
+      add: (c) => classes.add(c),
+      remove: (c) => classes.delete(c),
+      contains: (c) => classes.has(c),
+      toggle: (c, on) => { if (on === undefined) { classes.has(c) ? classes.delete(c) : classes.add(c); }
+                           else if (on) classes.add(c); else classes.delete(c); return classes.has(c); },
+    },
+  };
+};
+const elCache = new Map();
+const elById = (id) => { if (!elCache.has(id)) elCache.set(id, el()); return elCache.get(id); };
 const sandbox = {
   console: { log: noop, warn: noop, error: noop },
   document: {
-    getElementById: () => el(), querySelector: () => el(), querySelectorAll: () => [],
+    getElementById: elById, querySelector: () => el(), querySelectorAll: () => [],
     createElement: () => el(), addEventListener: noop, body: el(), documentElement: el(),
   },
   window: {}, navigator: { userAgent: 'node' }, location: { protocol: 'https:', search: '' },
@@ -169,6 +183,51 @@ const merged = run('gradesForAge("U8")');
 ok('pre-migration records still collapse to one ladder',
   merged.length === 1, `${merged.length}: ${JSON.stringify(merged)}`);
 ok('which is exactly the defect this change fixes', merged[0] === '');
+
+// ── 5. The view switch survives a narrow viewport ───────────────────────────
+// A headless harness cannot see a clipped element, so this asserts the STRUCTURE
+// that makes clipping impossible rather than the appearance. .hdr is a flex row
+// with overflow:hidden, so anything inside it that does not fit disappears with
+// no trace — which is exactly how the FINALS button vanished in portrait.
+console.log('\n5  The view switch is reachable on a narrow viewport');
+{
+  const head = html.slice(0, html.indexOf('</head>'));
+  const body = html.slice(html.indexOf('<body'));
+  const hdr = body.slice(body.indexOf('<header'), body.indexOf('</header>'));
+
+  ok('the header is still overflow:hidden — the reason this matters',
+    /\.hdr\{[^}]*overflow:hidden/.test(head));
+  ok('a mobile view-switch row exists OUTSIDE the header',
+    /id="mob-view-tabs"/.test(body) && !/id="mob-view-tabs"/.test(hdr));
+  ok('it carries both destinations',
+    /id="mvt-dash"/.test(body) && /id="mvt-finals"/.test(body));
+  ok('the header switch is hidden below 768px',
+    /#view-switch\{display:none!important\}/.test(head));
+  ok('and the mobile row is shown there',
+    /\.mob-view-tabs\{display:flex!important\}/.test(head));
+
+  // It must NOT be inside #dash. #mob-tabs is, which is why it could not be
+  // reused: that row is hidden whenever the finals view is showing, so the way
+  // back would disappear along with it.
+  const dashStart = body.indexOf('id="dash"');
+  const finalsStart = body.indexOf('id="finals-view"');
+  const mvtAt = body.indexOf('id="mob-view-tabs"');
+  ok('the row sits ABOVE both views, not inside either',
+    mvtAt > 0 && mvtAt < dashStart && mvtAt < finalsStart,
+    `row at ${mvtAt}, dash at ${dashStart}, finals at ${finalsStart}`);
+
+  // Two controls, one piece of state. Both are set from S.view rather than from
+  // whichever was clicked, so they cannot disagree.
+  ok('both controls are synced from S.view', has('syncViewTabs'));
+  run('S.view = "finals"; syncViewTabs();');
+  ok('selecting finals highlights BOTH controls',
+    run(`document.getElementById('vsw-finals').classList.contains('on')`) === true &&
+    run(`document.getElementById('mvt-finals').classList.contains('on')`) === true);
+  run('S.view = "dash"; syncViewTabs();');
+  ok('and switching back clears both',
+    run(`document.getElementById('vsw-finals').classList.contains('on')`) === false &&
+    run(`document.getElementById('mvt-finals').classList.contains('on')`) === false);
+}
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
