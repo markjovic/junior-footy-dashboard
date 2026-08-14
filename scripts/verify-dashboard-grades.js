@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v2 2026-08-13 gotw-key';
+const VERSION = 'verify-dashboard-grades v3 2026-08-13 grade-attribution';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -102,7 +102,7 @@ const has = (n) => run(`typeof ${n}`) === 'function';
 
 // ── 1. The functions exist ───────────────────────────────────────────────────
 console.log('\n1  The grade identity layer is present');
-for (const fn of ['gLabel', 'rebuildGradeLabels', 'gradeLabelOf', 'matchGrade',
+for (const fn of ['gLabel', 'rebuildGradeLabels', 'gradeLabelOf', 'matchListGrade', 'matchLadderGrade',
                   'currentGrade', 'gradesForAge', 'gradeSortPos']) {
   ok(`${fn}() defined`, has(fn));
 }
@@ -144,10 +144,10 @@ sandbox.__r = {
 };
 run('S.matches = __m.map(x => ({...x})); S.roster = __r; S.selComp = "";');
 
-ok('matchGrade returns the grade id, not the rawGrade',
-  run('matchGrade(S.matches[0])') === 'aaa11111', run('matchGrade(S.matches[0])'));
+ok('matchListGrade returns the grade id, not the rawGrade',
+  run('matchListGrade(S.matches[0])') === 'aaa11111', run('matchListGrade(S.matches[0])'));
 ok('two matches in different grades do NOT share a grouping key',
-  run('matchGrade(S.matches[0]) !== matchGrade(S.matches[1])'),
+  run('matchListGrade(S.matches[0]) !== matchListGrade(S.matches[1])'),
   'they have the same empty rawGrade');
 
 const grades = run('gradesForAge("U8")');
@@ -183,10 +183,28 @@ run(`S.matches = __m3.map(x => ({...x}));
                   'EFNL 2026|Blackburn|U12': { grade: 'A', gradeId: 'gA', age: 'U12' } };
      S.selComp = '';`);
 ok('the earlier B match counts towards A, the current grade',
-  run('matchGrade(S.matches[0])') === 'gA', run('matchGrade(S.matches[0])'));
-ok('so does the later A match', run('matchGrade(S.matches[1])') === 'gA');
+  run('matchLadderGrade(S.matches[0])') === 'gA', run('matchLadderGrade(S.matches[0])'));
+ok('so does the later A match', run('matchLadderGrade(S.matches[1])') === 'gA');
+// This asserted gradesForAge().length === 1 until 2026-08-13. That was the TAB
+// count, and from Beta 0.166 a listed-only result gets its own tab deliberately:
+// the round-1 gB match is LISTED under gB, so gB has a tab showing it with no
+// ladder rows. The guarantee was never about tabs — it is that the team counts on
+// ONE ladder. Asserted directly now, so the check cannot be satisfied by a tab
+// count that means something else.
 ok('the team is NOT split across two ladders',
-  run('gradesForAge("U12")').length === 1, JSON.stringify(run('gradesForAge("U12")')));
+  run(`[...new Set(S.matches
+        .filter(m => m.home === 'Norwood' || m.away === 'Norwood')
+        .map(m => matchLadderGrade(m))
+        .filter(Boolean))].length`) === 1,
+  run(`JSON.stringify([...new Set(S.matches
+        .filter(m => m.home === 'Norwood' || m.away === 'Norwood')
+        .map(m => matchLadderGrade(m)))])`));
+ok('and both of its matches count towards A',
+  run('matchLadderGrade(S.matches[0])') === 'gA' &&
+  run('matchLadderGrade(S.matches[1])') === 'gA');
+ok('the old B grade still gets a TAB, for the result listed there',
+  run('gradesForAge("U12")').indexOf('gB') >= 0,
+  JSON.stringify(run('gradesForAge("U12")')));
 
 // ── 4. Could this have failed? ───────────────────────────────────────────────
 console.log('\n4  Without ids the old behaviour returns — the test can fail');
@@ -359,7 +377,7 @@ console.log('\n8  Reloading into the finals view still builds the sidebar');
 
 // ── 9. A past season obeys the one-ladder rule too ──────────────────────────
 // _valid and _grade are cached on every record at load, and a cached value wins
-// over matchGrade(). There were three copies of that computation and they
+// over matchLadderGrade(). There were three copies of that computation and they
 // drifted: loadSeasons() kept `_grade = m.gradeId`, the behaviour reverted in
 // Beta 0.135, so a promoted team appeared on BOTH ladders in a past season and
 // on one in a live season. One definition now, called from all three.
@@ -395,9 +413,20 @@ console.log('\n9  A promoted team stays on one ladder in ANY season');
   precomputeMatches(S.matches);
   S.selComp = 'EFNL 2025'; S.selYear = '2025';`);
   ok('the earlier B match counts towards A',
-    run('matchGrade(S.matches[0])') === 'gA', run('matchGrade(S.matches[0])'));
+    run('matchLadderGrade(S.matches[0])') === 'gA', run('matchLadderGrade(S.matches[0])'));
+  // Was gradesForAge().length === 1 — a TAB count. Same correction as the
+  // assertion above: from Beta 0.166 a listed-only result gets its own tab, so
+  // the ladder guarantee has to be asserted against the ladder.
   ok('one ladder, not two',
-    run('gradesForAge("U12")').length === 1, JSON.stringify(run('gradesForAge("U12")')));
+    run(`[...new Set(S.matches
+          .filter(m => m.home === 'Norwood' || m.away === 'Norwood')
+          .map(m => matchLadderGrade(m))
+          .filter(Boolean))].length`) === 1,
+    run(`JSON.stringify([...new Set(S.matches
+          .filter(m => m.home === 'Norwood' || m.away === 'Norwood')
+          .map(m => matchLadderGrade(m)))])`));
+  ok('and this holds on the CACHED path, after precomputeMatches',
+    run('S.matches[0]._ladder') === 'gA', String(run('S.matches[0]._ladder')));
 }
 
 // ── 10. Search results name their season ────────────────────────────────────
@@ -610,6 +639,147 @@ if (has('getGOTWMatch') && has('gotwKeyFor')) {
   ok("another competition's flag does not leak in",
     run('getGOTWMatch("U12").match.home') === 'Blackburn',
     run('getGOTWMatch("U12").match.home'));
+}
+
+// ── 17. Grade attribution: listing versus ladder ────────────────────────────
+// grade_attribution_split_design.md §2 and §5. Two questions with two answers:
+// WHERE a result is listed (m.gradeId, ground truth from PlayHQ) and WHAT it
+// counts towards (the teams' current grade, only when they agree).
+//
+// This belongs in a suite because every failure is silent. A result attributed to
+// the wrong ladder shows a plausible number; a result dropped shows nothing at
+// all. audit-data.js v13 measured 3,967 records — 7.6% of everything stored, in
+// all eighteen seasons — currently discarded this way.
+console.log('\n17  Grade attribution: listing versus ladder');
+// ASSERTED, not guarded. `if (has(...))` would SKIP this whole section when the
+// functions are absent, and a skipped section reads as a pass — which is how a
+// suite reports green on code that does not exist.
+ok('matchListGrade exists — the LISTING grade', has('matchListGrade'));
+ok('matchLadderGrade exists — the LADDER grade', has('matchLadderGrade'));
+ok('matchGrade is GONE — one ambiguous name is what conflated the two meanings',
+  !has('matchGrade'), 'rename it rather than leaving both');
+if (has('precomputeMatches') && has('matchLadderGrade') && has('matchListGrade')) {
+  const G = (comp, gid, rd, h, a) => ({
+    id: `${comp}|U12|${gid}|${rd}|${h}|${a}`, compName: comp, age: 'U12',
+    rawGrade: 'A', gradeId: gid, round: rd, home: h, away: a,
+    hScore: 30, aScore: 20,
+  });
+
+  // gGRADING is named grading; gA and gB are ordinary divisions.
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|gGRADING': { r: 1, lvl: 'junior', g: 'M', label: 'Grading', gradeId: 'gGRADING', name: 'U12 Mixed Grading' },
+    'EFNL 2026|U12|gA':       { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA', name: 'U12 Mixed A' },
+    'EFNL 2026|U12|gB':       { r: 2, lvl: 'junior', g: 'M', label: 'B', gradeId: 'gB', name: 'U12 Mixed B' },
+  }; rebuildGradeLabels();`);
+
+  sandbox.__g17 = [
+    // 1. Neither moved: both end in gA, played in gA.
+    G('EFNL 2026', 'gA', 5, 'Alpha', 'Bravo'),
+    // 2. BOTH moved to the SAME grade: played in gGRADING, both ended in gA.
+    //    This is the case the current code loses.
+    G('EFNL 2026', 'gGRADING', 1, 'Alpha', 'Bravo'),
+    // 3. ONE moved: played in gGRADING, Alpha ended gA, Charlie ended gB.
+    G('EFNL 2026', 'gGRADING', 2, 'Alpha', 'Charlie'),
+    // 4. Ordinary grade, one moved: played in gA, Charlie ended gB.
+    G('EFNL 2026', 'gA', 6, 'Alpha', 'Charlie'),
+  ];
+  run(`S.matches = __g17.map(x => ({...x}));
+       S.roster = {
+         'EFNL 2026|Alpha|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+         'EFNL 2026|Bravo|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+         'EFNL 2026|Charlie|U12': { grade: 'B', gradeId: 'gB', age: 'U12' },
+       };
+       S.selComp = 'EFNL 2026'; S.selYear = '2026';
+       precomputeMatches(S.matches);`);
+  const M = (i) => `S.matches[${i}]`;
+
+  // LISTING is always m.gradeId — ground truth, never the roster.
+  ok('a grading game is LISTED under the grading grade',
+    run(`matchListGrade(${M(1)})`) === 'gGRADING', run(`matchListGrade(${M(1)})`));
+  ok('an ordinary game is LISTED under its own grade',
+    run(`matchListGrade(${M(0)})`) === 'gA', run(`matchListGrade(${M(0)})`));
+  ok('a one-team-moved game is still LISTED, not lost',
+    run(`matchListGrade(${M(3)})`) === 'gA', run(`matchListGrade(${M(3)})`));
+
+  // LADDER: a grading grade counts towards ITSELF (§2.1).
+  ok('a grading game counts towards the GRADING ladder',
+    run(`matchLadderGrade(${M(1)})`) === 'gGRADING', run(`matchLadderGrade(${M(1)})`));
+  ok('even when both teams ended in the same division',
+    run(`matchLadderGrade(${M(1)})`) !== 'gA');
+
+  // LADDER: an ordinary grade counts towards the TEAMS' grade (§2.2).
+  ok('neither moved — counts towards their grade',
+    run(`matchLadderGrade(${M(0)})`) === 'gA', run(`matchLadderGrade(${M(0)})`));
+  ok('one moved — counts towards NO ladder',
+    !run(`matchLadderGrade(${M(3)})`), String(run(`matchLadderGrade(${M(3)})`)));
+  ok('but it is still listed', !!run(`matchListGrade(${M(3)})`));
+
+  // A grading game where one team moved still counts on the grading ladder —
+  // the grading competition is its own series and everyone was in it.
+  ok('a grading game with one mover still counts on the grading ladder',
+    run(`matchLadderGrade(${M(2)})`) === 'gGRADING', run(`matchLadderGrade(${M(2)})`));
+
+  // ONE TEAM, ONE DIVISION LADDER. The Beta 0.135 regression check.
+  ok('Charlie appears on exactly ONE division ladder',
+    run(`[...new Set(S.matches
+          .filter(m => { const g = matchLadderGrade(m);
+                         return g && g !== 'gGRADING' &&
+                                (m.home === 'Charlie' || m.away === 'Charlie'); })
+          .map(m => matchLadderGrade(m)))].length`) <= 1,
+    'more than one means the reverted Beta 0.135 behaviour is back');
+
+  // Could these have failed? A grade NOT named grading must take the fallback,
+  // which is what SEJ 2026 a5a8276d does deliberately.
+  run(`S.gradeMeta['EFNL 2026|U12|gGRADING'].name = 'U12 Mixed Zone 1'; rebuildGradeLabels();
+       precomputeMatches(S.matches);`);
+  ok('renaming the grade away from "grading" changes it to the fallback',
+    run(`matchLadderGrade(${M(2)})`) !== 'gGRADING',
+    'a name-based test that ignores the name is not a test');
+  ok('and both-moved-to-the-same-grade then counts on THEIR grade',
+    run(`matchLadderGrade(${M(1)})`) === 'gA', run(`matchLadderGrade(${M(1)})`));
+}
+
+// ── 18. Scorers: one row per person per season ──────────────────────────────
+// grade_attribution_split_design.md §4. fetch-stats.js stores player records PER
+// GRADE: audit v14 §11 measured 18,540 person-seasons holding more than one, up
+// to four, and only 1,383 of those involve a grading grade. So the page must
+// aggregate — group by uuid, sum gp and goals, and show the grade of the latest
+// round. Without it the same child is listed twice with half their goals each.
+console.log('\n18  Scorers show one row per person per season');
+ok('aggregatePlayers exists', has('aggregatePlayers'));
+if (has('aggregatePlayers')) {
+  sandbox.__p18 = [
+    { uuid: 'u1', name: 'Toby Jovic', team: 'Alpha', teamRaw: 'Alpha', age: 'U12',
+      rawGrade: 'A', gradeID: 'gGRADING', compName: 'EFNL 2026', gp: 2, goals: 5 },
+    { uuid: 'u1', name: 'Toby Jovic', team: 'Alpha', teamRaw: 'Alpha', age: 'U12',
+      rawGrade: 'A', gradeID: 'gA', compName: 'EFNL 2026', gp: 9, goals: 12 },
+    { uuid: 'u2', name: 'Sam Reid', team: 'Bravo', teamRaw: 'Bravo', age: 'U12',
+      rawGrade: 'A', gradeID: 'gA', compName: 'EFNL 2026', gp: 7, goals: 3 },
+  ];
+  const agg = run(`JSON.stringify(aggregatePlayers(__p18))`);
+  const rows = JSON.parse(agg);
+  ok('two records for one person collapse to ONE row',
+    rows.filter(r => r.uuid === 'u1').length === 1, agg);
+  ok('gp is SUMMED across grades',
+    (rows.find(r => r.uuid === 'u1') || {}).gp === 11,
+    String((rows.find(r => r.uuid === 'u1') || {}).gp));
+  ok('goals are SUMMED across grades',
+    (rows.find(r => r.uuid === 'u1') || {}).goals === 17,
+    String((rows.find(r => r.uuid === 'u1') || {}).goals));
+  ok('a person with one record is unaffected',
+    (rows.find(r => r.uuid === 'u2') || {}).goals === 3);
+  ok('the row count is people, not records', rows.length === 2, String(rows.length));
+
+  // Could that have failed? Two people who share a name must NOT collapse.
+  sandbox.__p18b = [
+    { uuid: 'x1', name: 'Sam Reid', team: 'Alpha', teamRaw: 'Alpha', age: 'U12',
+      rawGrade: 'A', gradeID: 'gA', compName: 'EFNL 2026', gp: 1, goals: 1 },
+    { uuid: 'x2', name: 'Sam Reid', team: 'Bravo', teamRaw: 'Bravo', age: 'U12',
+      rawGrade: 'A', gradeID: 'gA', compName: 'EFNL 2026', gp: 1, goals: 1 },
+  ];
+  ok('two different people sharing a name stay separate',
+    JSON.parse(run(`JSON.stringify(aggregatePlayers(__p18b))`)).length === 2,
+    'aggregating on name instead of uuid would merge them');
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
