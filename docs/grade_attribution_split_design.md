@@ -1,173 +1,196 @@
-# Grade attribution across a mid-season split
+# Grade attribution: grading grades, teams that move, and player stats
 
 **Repo:** `markjovic/junior-footy-dashboard`
-**Drafted:** 2026-08-13
-**Status:** awaiting approval of §6. Nothing is built until that is answered.
-**Companion:** engine v16 (`gameId` supersede) fixes the *rename duplicate*. This
-document is the other half — where 42 real games are being silently dropped.
+**Drafted:** 2026-08-13. Revision 6.
+**Status:** APPROVED. §8 is build order. No open questions.
+**Supersedes** revisions 1–5. §1 records what was wrong in each, because the
+pattern in the errors cost four rewrites and is worth not repeating.
 
 ---
 
-## 1. What was measured
+## 1. How this arrived here
 
-`probe-concurrent-comps.js` v3, SEJ 2026 U10, 2026-08-13:
-
-```
-212 stored record(s) in this age
-150 record(s) count towards a ladder, 42 are DROPPED because the two
-sides resolve to different grades
-```
-
-**20% of the records in one age group never reach the screen**, and nothing
-reports it. `precomputeMatches()` sets `_valid = (hg === ag)` and every ladder,
-scorer list and grade tab filters on it. A record whose two sides resolve to
-different grades is discarded with no error and no count.
-
-### 1.1 The cause
-
-`a5a8276d` (Little Demons U10 Mixed) ran rounds 1–9 as **one 16-team
-competition**. At the July restructure it split into `b5f90cc8` (Mixed Blue) and
-`c7b922d4` (Mixed Red), eight teams each, which then played rounds 11–14.
-
-`rebuildRoster()` keeps **one grade per team**, taken from its latest round. So
-every team now resolves to Blue or Red. Any round 1–9 game between a Blue-bound
-side and a Red-bound side therefore has `hg !== ag` and vanishes:
-
-```
-R3  stored a5a8276d  Cranbourne JFC Mixed Blue -> b5f90cc8
-                   v Clyde JFC Mixed Yellow    -> c7b922d4
-```
-
-### 1.2 What the ladders look like now
-
-| Ladder | Teams | Games-played spread |
+| Rev | Proposed | Killed by |
 |---|---|---|
-| `b5f90cc8` Mixed Blue | 8 | 9, 10, 11, 12, 13 |
-| `c7b922d4` Mixed Red | 8 | 7, 10, 11, 12 |
-| `a5a8276d` Mixed | 17 | 0, 1 |
-| `cb7b3db3` Girls A | 12 | 4, 12, 15, 16 |
+| 1 | A mid-season split in SEJ 2026 U10 | The pattern spans all 18 seasons |
+| 2 | Colliding `age\|rawGrade` keys | SER 2026 has **0** colliding keys and drops 11.0%; WFNL 2026 has 1 and drops 1.3% |
+| 3 | Attribute by `m.gradeId` when the grade is **defunct** | Only **38.2%** of drops are in defunct grades |
+| 4 | One rule for listing and counting | A separate grading grade is its own competition and needs its own ladder |
+| 5 | Rules 3.1/3.2 as below, plus grading Scorers | Player records are stored per grade, not per season — §4 |
 
-Every one of these is wrong. Blue and Red carry uneven counts because each team
-keeps only the round 1–9 games whose opponent happened to end up in the same half.
-`a5a8276d` is **pure artefact** — 17 rows on 0 or 1 game, consisting entirely of
-the rename duplicates that v16 stops creating.
-
-### 1.3 The Girls A ladder is a different shape and must not be conflated
-
-`cb7b3db3` was not split. Its 12 rows are 6 real sides plus 6 `- LP` sides, which
-are the *same clubs* under renamed team ids. That is the rename problem, and v16
-plus a one-off cleanup (§5) resolves it without any of the below.
-
-**Only `a5a8276d` → `b5f90cc8`/`c7b922d4` is a split.** The fix must not treat a
-rename as a split or vice versa.
+Each of my three mechanisms was proposed before the thing it claimed to explain had
+been measured. The rules in §2 and §4 are Mark's.
 
 ---
 
-## 2. The tension
+## 2. Match records — two rules
 
-Two rules, each correct in its own case, and they disagree here.
+### 2.1 A GRADING grade is its own competition
 
-**One team, one ladder.** A promoted team must not appear on two ladders. This is
-why `matchGrade()` reads the roster rather than `m.gradeId`, and
-`verify-dashboard-grades.js` asserts it. Switching attribution to `m.gradeId`
-would reintroduce the defect the rule exists to prevent.
+Its games do not count towards the regular season, so it gets its own tab and its
+own standalone ladder, and its games count towards **that** ladder.
 
-**History belongs to the grade it was played in.** A round-3 game played in
-`a5a8276d` was a game in `a5a8276d`. Attributing it to a grade that did not exist
-in round 3 is what produces the dropped records.
+A team therefore appears on two ladders — grading and division. That is not the
+promotion defect; they are different competitions. "One team, one ladder" means one
+ladder *per grade series*.
 
-The difference is what happened to the *old* grade:
+### 2.2 Any other grade — list by `m.gradeId`, count only when both sides agree
 
-| | Promotion | Split |
+| Case | Sides resolve to | Ladder |
 |---|---|---|
-| The team | moves to a new grade | moves to a new grade |
-| The old grade | keeps playing, without it | stops playing entirely |
-| Correct attribution | current grade, all history | grade at time of play |
+| Neither team moved | same, equal to `m.gradeId` | counts |
+| Both moved to the same grade | same, different from `m.gradeId` | **counts** |
+| One team moved | different grades | listed only |
+| Both moved, to different grades | different grades | listed only |
 
-**That is a measurable distinction, and it is the crux.** In a promotion the old
-grade has later rounds with games. In a split it does not: `a5a8276d`'s last round
-with any game is 9, and rounds 11–14 have none.
+The ladder a result counts on is the **teams'** grade, never `m.gradeId`. The
+reverted Beta 0.135 attempt (`index.html` line 1223) made the ladder follow
+`m.gradeId` and split a promoted team across two division ladders. This does not.
 
----
+### 2.3 Detecting a grading grade — by NAME
 
-## 3. Options
+`/grading/i` on the grade name. Nothing structural separates a grading grade from a
+mid-season split; the defunct test measured 38% before dying. A competition wording
+it differently falls through to §2.2 — degraded, not wrong. SEJ 2026 Little Demons
+(`a5a8276d`, 42 records) takes the fallback deliberately.
 
-**Option 1 — attribute by `m.gradeId` when the stored grade is closed.**
-A grade is *closed* if it has no games in any round after the record's own round.
-Then a round-3 `a5a8276d` game is attributed to `a5a8276d`, both sides agree, and
-nothing is dropped. A promoted team's old grade is still open, so the existing
-roster behaviour is untouched and one-team-one-ladder holds.
-
-Cost: `a5a8276d` gains a real 9-round ladder for its 16 original teams, and Blue
-and Red show 4 rounds each. Three ladders where there is now one and a half. The
-age group gains a grade tab.
-
-**Option 2 — attribute by `m.gradeId` always, and enforce one-team-one-ladder at
-the tab level rather than the record level.** A team appears on each ladder it
-genuinely played in, and the "promoted team on two ladders" rule is re-expressed
-as "a team's *current* grade is the one its tab defaults to". Cleaner in principle,
-and it invalidates an existing verification assertion, so it needs that assertion
-rewritten rather than deleted — which is the kind of change that has previously
-been done for the wrong reason.
-
-**Option 3 — leave attribution alone and only stop the silent drop.** Count the
-dropped records and surface them in `audit-data.js`, changing no display. Smallest
-possible change; the 42 games stay off the screen but stop being invisible.
-
-**Option 4 — merge the split grades.** Treat Blue and Red as continuations of
-`a5a8276d` and show one 16-team ladder across all 14 rounds. Rejected: rounds
-11–14 were played in two separate competitions, so a combined table would assert
-games that were never possible.
+Case-insensitive substring, because `EFNL 2026 — U12 Girls (Grading)` already shows
+the format varies.
 
 ---
 
-## 4. Recommendation
+## 3. Measured scale (audit v14 §10)
 
-**Option 3 first, then Option 1.**
+```
+TOTAL   51973 records   48006 shown   3967 dropped   1514 defunct   2453 live   0 no grade
+```
 
-Option 3 is honest and cheap and can ship immediately: the audit reports the drop
-count per grade, so this stops being a thing found only by writing a bespoke probe.
-It also gives a number to watch — if the count is near zero everywhere but SEJ
-U10, Option 1's blast radius is one age group rather than the whole dataset.
-
-Option 1 is the real fix, and it should not be built until that number is known
-across all five organisations and all eighteen seasons. The "closed grade" rule is
-sound reasoning about SEJ 2026 U10 and **has not been tested against anything
-else**. Small-sample inference is exactly what this repo's working practice warns
-about, and I have already been wrong twice this session by reasoning ahead of
-measurement.
+7.6% of all stored records never reach the dashboard, in every season, 1.3% to
+12.7%. **Zero have no grade information**, so every drop is a real disagreement.
 
 ---
 
-## 5. Prerequisite: clean up the existing rename duplicates
+## 4. Player stats — one row per person per season
 
-Engine v16 stops new ones. The ones already stored have no `gameId`, so v16
-cannot match them and they persist.
+**The rule.** A player appears **once per season**, listed in the grade they ended
+the season in (or are in at the current round), with `gp` and `goals` **summed
+across every grade they played in that season**.
 
-A safe one-off rule exists: **within a (gradeId, round) where at least one record
-carries a `gameId`, any record without one is superseded.** A round that has been
-re-fetched under v16 has a `gameId` on every real game, so anything lacking one is
-a pre-v16 leftover. Needs its own script and verification; the rule is recorded
-here so it is not reinvented.
+### 4.1 What is actually stored contradicts that shape
 
-**Do not use "the API round response is authoritative" as the cleanup rule.**
-`dashboard_context.md` §8 states `discoverFixtureByRound` returns 0 games for
-completed rounds fetched in a prior run. The probe run of 2026-08-13 **contradicts
-that** — all 68 calls re-served full game lists for completed rounds, including
-rounds 1–9 of `a5a8276d`. One of those is wrong, and a deletion mechanism must not
-be built on a contested premise. Resolving that contradiction is its own task.
+Measured, audit v14 §11:
+
+```
+TOTAL   160158 people   18540 multi   1383 w/ grading   max 4 records
+```
+
+**18,540 person-seasons — 11.6% — hold more than one player record**, up to four in
+one season. Only 1,383 involve a grading grade, so this is overwhelmingly people
+playing in two ordinary grades, not a grading artefact. The examples are a group
+moving together:
+
+```
+WFNL 2026  6d0104cf-…  2 record(s): ee904d09, 7bfb9c19
+WFNL 2026  c26bee37-…  2 record(s): ee904d09, 7bfb9c19
+```
+
+`fetch-stats.js` stores **per grade**. So the page must aggregate; the stored shape
+is not going to change.
+
+### 4.2 Consequences
+
+**Scorers may currently show a person twice** — once per record — with each row
+carrying only that grade's goals. Not verified; it follows from the stored shape and
+must be checked by execution before anything is built on it.
+
+**A grading grade gets NO Scorers list.** Its player records fold into the person's
+row in their ending grade. §5 of revision 5 said a grading Scorers list could be
+built; that is now withdrawn — it can be, and under this rule it must not be.
+
+**Section 8's index sizing is wrong.** It counts records, not person-seasons:
+
+| | Reported | Correct |
+|---|---|---|
+| Rows | 179,620 | **160,158** |
+| Seasons per person | 2.54 | **2.27** |
+
+19,462 rows overstated. **D4's 5.67 MB estimate is built on the inflated figure**
+and needs recomputing before that decision is taken.
+
+### 4.3 Retraction
+
+I said `playerGrade()` was defective for preferring the roster over `p.gradeID`,
+calling it the mirror of the match defect. **That was wrong.** The roster gives the
+grade a player ended in, which is exactly what this rule wants. The precedence is
+correct and must not be inverted. What is missing is aggregation, not attribution.
 
 ---
 
-## 6. Open question
+## 5. What changes in `index.html`
 
-**Do you want Option 3 now — the audit reporting dropped records — and Option 1
-deferred until the count is known across all organisations and seasons?**
+`precomputeMatches` computes two values; it needs three.
 
-If yes, the next delivery is `audit-data.js` v13 plus `verify-audit.js`, reporting
-per grade: records stored, records that count, records dropped, and the grades each
-dropped record's two sides resolve to. Read-only, no display change, no migration.
+- `_valid` — already §2.2's eligibility test. **Unchanged.**
+- `_grade` — becomes the LISTING grade: `m.gradeId`, falling back to the roster
+  grade then `rawGrade`.
+- `_ladder` — new. `m.gradeId` for a grading grade per §2.1; otherwise the teams'
+  agreed grade; otherwise none.
 
-If you would rather go straight to Option 1, say so and I will write the build
-design — but I would want the drop count measured first even then, because it
-decides whether this is one age group or a systemic problem.
+**`matchGrade()` splits in two.** Its seventeen call sites do not all mean the same
+thing: 1384 wants the ladder grade; 1853, 1878, 2027, 2035 and 3953 want the listing
+grade; 2051 and 3069 already branch on validity. A single ambiguous `matchGrade()`
+is how the two meanings were conflated, so the rename is the point.
+
+**1629 and 2851** build the set of grades that get a tab. A record now contributes
+two, and both must produce one.
+
+**Scorers must aggregate per person per season** before rendering: group by `uuid`,
+sum `gp` and `goals`, and take the grade from `playerGrade()` on the record for the
+latest round.
+
+---
+
+## 6. Consequences to expect
+
+- Ladders will show uneven games-played counts, correctly. It looks like the SEJ
+  symptom that started this, so it must not read as broken.
+- New grade tabs appear for grading grades, with a ladder and results but no Scorers.
+- A team appears on two ladders where a separate grading grade exists. Intended.
+- Nothing is migrated, deleted or re-keyed. Reversible.
+
+---
+
+## 7. Verification
+
+`verify-dashboard-grades.js` runs the real page in a `vm`. Every assertion is a
+failure path:
+
+- Neither team moved → counts, listed under `m.gradeId`.
+- **Both moved to the same grade → COUNTS.** The case the current code loses.
+- One team moved → listed, not counted; the mover is on exactly one division ladder.
+- A grade matching `/grading/i` → its own ladder, its games count there.
+- A grade not so named whose teams all moved → fallback, no ladder, results listed.
+- **A promoted team appears on ONE division ladder** — existing assertion, must still
+  pass unchanged. If it fails, this is Beta 0.135 again.
+- **A player with two records in one season appears ONCE in Scorers**, with summed
+  `gp` and `goals`, in the grade of their latest round.
+- `render()` does not throw on a grading tab with no Scorers.
+- `precomputeMatches` runs after the roster on all three load paths.
+
+`audit-data.js` §10 is the measure of success: `shown` should rise by most of 3,967.
+
+---
+
+## 8. Build order
+
+1. `verify-dashboard-grades.js` — §7 assertions. Red until step 2.
+2. `index.html` — §5. Version badge.
+3. `audit-data.js` — correct §8's sizing to count person-seasons, not records.
+4. Run **Rebuild grade meta**; confirm grading grades have labels.
+5. Run **Audit Data**; compare §10 against §3.
+
+Steps 1 and 2 span `scripts/` and the repo root, so tests commit first.
+
+**Also outstanding, unrelated:** `verify-audit.js` has no assertions for §11 — the
+fixture's player records lack a `uuid`, so a first attempt passed vacuously. §11's
+figures should be treated as unverified until that is fixed.
