@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.166</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.167</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.166</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.167</span>
         </div>
 
 
@@ -1254,6 +1254,26 @@ function matchListGrade(m) {
 // The ladder is NEVER m.gradeId for an ordinary grade. A brief attempt at that
 // was reverted on 2026-08-12 because it split a promoted team across two ladders.
 // One team, one ladder — per grade series.
+// Does this result COUNT towards a ladder? One predicate, because there were
+// twelve call sites asking the question with matchIsValid() and matchIsValid()
+// does not answer it any more.
+//
+// It answered it correctly until Beta 0.166 gave grading grades their own ladder.
+// A grading game between two teams later placed in DIFFERENT divisions is not
+// "valid" by the sides-agree test, but it absolutely counts — on the grading
+// ladder, which owns every game in its rounds. The ladder filter was changed and
+// the results list was not, so the same game counted on the ladder while the row
+// beside it read "not counted". Visible on SER 2026 U13 round 1: Mordialloc,
+// Devon Meadows and Lyndhurst badged as uncounted, South Mornington and Clyde
+// not, purely by where the two clubs ended up.
+//
+// matchLadderGrade() already encodes the whole rule, so this asks it rather than
+// re-deriving it. grade_attribution_split_design.md §2.1.
+function matchCounts(m) {
+  const g = matchLadderGrade(m);
+  return g !== null && g !== undefined && g !== '';
+}
+
 function matchLadderGrade(m) {
   if (isGradingGrade(m.gradeId)) return m.gradeId;
   // The ROSTER decides, always. An earlier version returned `m._ladder || m._grade`
@@ -1587,7 +1607,7 @@ function getGOTWMatch(age) {
   const grades = activGrades(age);
   const validMatches = S.matches.filter(m =>
     matchesComp(m) &&
-    m.age === age && matchIsValid(m) && grades.has(matchListGrade(m))
+    m.age === age && matchCounts(m) && grades.has(matchListGrade(m))
   );
   if (!validMatches.length) return null;
 
@@ -1738,7 +1758,12 @@ function getAges() {
 function gradesForAge(age) {
   const gs = new Set();
   let comp = '';
-  S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>{
+  // NO counts filter here. A tab exists because a result is LISTED under that
+  // grade, not because it counts towards a ladder — grade_attribution_split_design.md
+  // §5. A grading game, or an ordinary game where one team moved, counts nowhere
+  // and must still have somewhere to appear. Filtering this on matchCounts made
+  // every such grade vanish from the tab strip along with its results.
+  S.matches.filter(m=>m.age===age&&matchesComp(m)).forEach(m=>{
     gs.add(matchListGrade(m));
     const lg = matchLadderGrade(m); if (lg) gs.add(lg);
     if (!comp) comp = m.compName || '';
@@ -1893,7 +1918,7 @@ function renderLadder(age) {
   // Header freezes at the highest home-and-away round for this age. Grades run
   // to 14, 15, 16, 17 or 18 depending on competition, so this is measured, not
   // assumed (design v2 §3.3).
-  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)&&matchIsValid(m)).map(m=>m.round),0);
+  const latestRound = Math.max(...S.matches.filter(m=>m.age===age&&matchesComp(m)&&!isFinalsMatch(m)&&matchCounts(m)).map(m=>m.round),0);
   document.getElementById('ldr-meta').textContent = maxRound ? `After R${maxRound}` : `After R${latestRound}`;
   // Note: when a finals round is selected the cutoff is blank, so the ladder
   // correctly shows the full home-and-away season rather than nothing.
@@ -2160,7 +2185,7 @@ function renderResults(age) {
   let matches = S.matches.filter(m => { if (!matchesComp(m)) return false;
     if (m.age !== age) return false;
     // Valid matches: filter by active grade. Invalid (greyed): always show regardless of grade filter.
-    if (matchIsValid(m)) {
+    if (matchCounts(m)) {
       const g = matchListGrade(m) || m.rawGrade || '';
       if (grades.size && g && !grades.has(g)) return false;
     }
@@ -2185,9 +2210,9 @@ function renderResults(age) {
     const rms = byRound[r];
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
-      const g = (matchIsValid(m) ? matchListGrade(m) : null) || m.rawGrade || '';
+      const g = (matchCounts(m) ? matchListGrade(m) : null) || m.rawGrade || '';
       const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
-      const valid = matchIsValid(m);
+      const valid = matchCounts(m);
       const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
@@ -2981,7 +3006,7 @@ function renderStats() {
   const allAges = getAges();
 
   // ── System totals (unfiltered) ──
-  const allValidMatches = S.matches.filter(m => matchIsValid(m) && !isFinalsMatch(m));
+  const allValidMatches = S.matches.filter(m => matchCounts(m) && !isFinalsMatch(m));
   const allGrades = new Set();
   const allTeams = new Set();
   allValidMatches.forEach(m => {
@@ -2997,7 +3022,7 @@ function renderStats() {
 
   // ── Current selection (filtered by comp + age) ──
   const ms = S.matches.filter(m =>
-    matchesComp(m) && matchIsValid(m) && !isFinalsMatch(m) &&
+    matchesComp(m) && matchCounts(m) && !isFinalsMatch(m) &&
     (!age || m.age === age)
   );
   const ts  = new Set([...ms.map(m=>m.home), ...ms.map(m=>m.away)]);
@@ -3157,7 +3182,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
   // Finals are shown in the results list below but excluded from the season
   // stat strip and home/away breakdown (design v2 §3.3).
-  matches.filter(m=>matchIsValid(m) && !isFinalsMatch(m)).forEach(m => {
+  matches.filter(m=>matchCounts(m) && !isFinalsMatch(m)).forEach(m => {
     const isHome = m.home === teamName;
     const tf = isHome ? m.hScore : m.aScore;
     const ta = isHome ? m.aScore : m.hScore;
@@ -3203,7 +3228,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const won = tf > ta, lost = ta > tf;
     const res = won ? 'W' : lost ? 'L' : 'D';
     const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
-    const valid = matchIsValid(m);
+    const valid = matchCounts(m);
     const g = valid ? matchListGrade(m) : m.rawGrade;
     const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
@@ -4046,7 +4071,7 @@ function populateGotwSelectors() {
 
 function renderGotwAges() {
   const comp = document.getElementById('gotw-comp-sel').value;
-  const ages = [...new Set(S.matches.filter(m=>m.compName===comp&&matchIsValid(m)).map(m=>m.age))];
+  const ages = [...new Set(S.matches.filter(m=>m.compName===comp&&matchCounts(m)).map(m=>m.age))];
   const AGE_ORDER = ['Senior Men','Senior Women','Reserve Men','Veterans','U19.5','U18 Girls','U17.5','U16','U16 Girls','U15','U14','U14 Girls','U13','U12','U12 Girls','U11'];
   ages.sort((a,b)=>{const ai=AGE_ORDER.indexOf(a),bi=AGE_ORDER.indexOf(b);if(ai!==-1&&bi!==-1)return ai-bi;if(ai!==-1)return -1;if(bi!==-1)return 1;return a.localeCompare(b);});
   const ageSel = document.getElementById('gotw-age-sel');
@@ -4059,7 +4084,7 @@ function renderGotwRounds() {
   const comp = document.getElementById('gotw-comp-sel').value;
   const age = document.getElementById('gotw-age-sel').value;
   // Keyed by roundKey so a Grand Final and Round 1 are distinct entries.
-  const pool = S.matches.filter(m=>m.compName===comp&&m.age===age&&matchIsValid(m));
+  const pool = S.matches.filter(m=>m.compName===comp&&m.age===age&&matchCounts(m));
   const byKey = new Map();
   pool.forEach(m => { const k = roundKey(m); if (!byKey.has(k)) byKey.set(k, m); });
   const opts = [...byKey.values()].sort((a,b)=>cmpRound(b,a));
@@ -4074,7 +4099,7 @@ function renderGotwPicker() {
   const rKey = document.getElementById('gotw-round-sel').value;
   if (!age || !rKey) return;
   const matches = S.matches
-    .filter(m=>m.compName===comp&&m.age===age&&roundKey(m)===rKey&&matchIsValid(m))
+    .filter(m=>m.compName===comp&&m.age===age&&roundKey(m)===rKey&&matchCounts(m))
     .sort((a,b)=>{
       // Sort by margin% ascending (closest first)
       const total = s => s.hScore + s.aScore;
