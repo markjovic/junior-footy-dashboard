@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.168</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.169</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.168</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.169</span>
         </div>
 
 
@@ -3587,13 +3587,23 @@ function renderPlayerGames(data, p) {
           // memory — a different competition, or a season not loaded — renders a
           // dash rather than a wrong figure.
           const stripAgeJ = n => n ? n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim() : '';
-          const rNum = parseInt(String(g.round?.name || '').match(/(\d+)/)?.[1] ?? '', 10);
+          // A FINALS round name carries no number — "Grand Final", "Preliminary
+          // Final", "Qualifying Final" — so parsing a round number finds nothing
+          // and every finals row rendered a dash. Finals are matched on the two
+          // team names alone, restricted to records flagged isFinals, which is
+          // unambiguous because a pair meets at most once in a finals series.
+          //
+          // Home-and-away rounds still match on the number, because two teams can
+          // meet twice in a season and the round is what tells them apart.
+          const rName = String(g.round?.name || '');
+          const rNum = parseInt(rName.match(/(\d+)/)?.[1] ?? '', 10);
+          const jh = stripAgeJ(home), ja = stripAgeJ(away);
+          const sameTeams = x => stripAgeJ(x.home) === jh && stripAgeJ(x.away) === ja;
+          const mm = Number.isNaN(rNum)
+            ? (S.matches || []).find(x => x.isFinals && sameTeams(x))
+            : (S.matches || []).find(x => !x.isFinals && x.round === rNum && sameTeams(x));
           let resStr = null, scoreStr = null;
-          if (!Number.isNaN(rNum)) {
-            const jh = stripAgeJ(home), ja = stripAgeJ(away);
-            const mm = (S.matches || []).find(x =>
-              !x.isFinals && x.round === rNum &&
-              stripAgeJ(x.home) === jh && stripAgeJ(x.away) === ja);
+          {
             const hs = mm && mm.hScore, as = mm && mm.aScore;
             if (hs !== null && hs !== undefined && as !== null && as !== undefined) {
               const f = isPlayerHome ? hs : as;
