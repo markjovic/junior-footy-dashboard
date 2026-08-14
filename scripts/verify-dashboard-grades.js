@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v3 2026-08-13 grade-attribution';
+const VERSION = 'verify-dashboard-grades v4 2026-08-13 grading-ladder';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -780,6 +780,77 @@ if (has('aggregatePlayers')) {
   ok('two different people sharing a name stay separate',
     JSON.parse(run(`JSON.stringify(aggregatePlayers(__p18b))`)).length === 2,
     'aggregating on name instead of uuid would merge them');
+}
+
+// ── 19. A grading ladder owns every game in its rounds ──────────────────────
+// grade_attribution_split_design.md §2.1. computeLadder required matchIsValid on
+// EVERY row, so a grading ladder kept only the games between teams later placed
+// in the same division. SER 2026 U13 showed teams on P=1 or 2 after four grading
+// games. A pure grading competition owns all of them.
+console.log('\n19  A grading ladder counts every game in its rounds');
+if (has('computeLadder') && has('isGradingGrade')) {
+  const g19 = (gid, rd, h, a, hs, as_) => ({
+    id: `EFNL 2026|U12|${gid}|${rd}|${h}|${a}`, compName: 'EFNL 2026', age: 'U12',
+    rawGrade: 'A', gradeId: gid, round: rd, home: h, away: a, hScore: hs, aScore: as_,
+  });
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|gGRD': { r: 0, lvl: 'junior', g: 'M', label: 'Grading', gradeId: 'gGRD', name: 'U12 Mixed Grading', grading: true },
+    'EFNL 2026|U12|gA':   { r: 1, lvl: 'junior', g: 'M', label: 'A', gradeId: 'gA', name: 'U12 Mixed A' },
+    'EFNL 2026|U12|gB':   { r: 2, lvl: 'junior', g: 'M', label: 'B', gradeId: 'gB', name: 'U12 Mixed B' },
+  }; rebuildGradeLabels();`);
+  // Alpha plays three grading games: one against a future A team, two against
+  // future B teams. All three must count on the grading ladder.
+  sandbox.__g19 = [
+    g19('gGRD', 1, 'Alpha', 'Bravo',   50, 10),
+    g19('gGRD', 2, 'Alpha', 'Charlie', 40, 20),
+    g19('gGRD', 3, 'Alpha', 'Delta',   30, 25),
+    // An ORDINARY-grade game where one team moved. matchIsValid is false, so it
+    // must NOT count on the gA ladder. Without this row, exempting EVERY grade
+    // from the validity check passed the whole suite — the grading rows never
+    // reach the gA ladder regardless, so they could not detect it.
+    g19('gA', 5, 'Alpha', 'Charlie', 60, 10),
+  ];
+  run(`S.matches = __g19.map(x => ({...x}));
+       S.roster = {
+         'EFNL 2026|Alpha|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+         'EFNL 2026|Bravo|U12':   { grade: 'A', gradeId: 'gA', age: 'U12' },
+         'EFNL 2026|Charlie|U12': { grade: 'B', gradeId: 'gB', age: 'U12' },
+         'EFNL 2026|Delta|U12':   { grade: 'B', gradeId: 'gB', age: 'U12' },
+       };
+       S.selComp = 'EFNL 2026'; S.selYear = '2026'; S.selRound = '';
+       precomputeMatches(S.matches);`);
+
+  ok('the grading grade is recognised from its gradeMeta flag',
+    run(`isGradingGrade('gGRD')`) === true);
+
+  // A ladder row is keyed `name`, and P is w+d+l — there is no `p` field. My
+  // first version of this test invented both and failed for its own reasons.
+  const rows = JSON.parse(run(`JSON.stringify(computeLadder('U12','gGRD',''))`));
+  const played = (r) => (r.w || 0) + (r.d || 0) + (r.l || 0);
+  const alpha = rows.find(r => r.name === 'Alpha') || {};
+  ok('Alpha played 3 grading games, not 1',
+    played(alpha) === 3,
+    `P=${played(alpha)} — 1 means matchIsValid is still filtering the ladder`);
+  ok('every grading team appears', rows.length === 4, String(rows.length));
+  ok('including the ones placed in a different division',
+    !!rows.find(r => r.name === 'Charlie') && !!rows.find(r => r.name === 'Delta'));
+
+  // Could that have failed? An ORDINARY grade must still require both sides to
+  // agree — this is the rule the grading case is an exception TO.
+  const aRows = JSON.parse(run(`JSON.stringify(computeLadder('U12','gA',''))`));
+  ok('an ordinary ladder does NOT gain the cross-division grading games',
+    !aRows.find(r => r.name === 'Charlie'),
+    'the exception must be scoped to grading grades only');
+  // An ordinary game where one team moved must not reach the A ladder. It is
+  // matchLadderGrade returning NULL that excludes it — not a separate validity
+  // test, which was redundant and has been removed. Asserted here so the removal
+  // is covered rather than assumed.
+  ok('an ordinary game with one mover reaches no ladder at all',
+    run(`matchLadderGrade(S.matches[3])`) === null,
+    String(run(`matchLadderGrade(S.matches[3])`)));
+  ok('so it is absent from the A ladder',
+    !aRows.find(r => r.name === 'Alpha'),
+    JSON.stringify(aRows.map(r => r.name)));
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v14 2026-08-13 player-records-per-season';
+const VERSION = 'audit-data v15 2026-08-13 scorers-rule';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -757,6 +757,10 @@ console.log('\n9  Cross-organisation key shapes (lastround_gotw_keying_design.md
 // proposes to key the fix on, so the split between defunct and live below is the
 // measurement that confirms or kills it.
 console.log('\n10  Records the dashboard never shows (grade_attribution_split_design.md)');
+console.log('    NOTE: this measures hg === ag from the ROSTER, which Beta 0.166');
+console.log('    deliberately did not change. It cannot show that change working —');
+console.log('    matchLadderGrade() lives in index.html and is not run here. Do not');
+console.log('    read a steady figure as the fix having failed.');
 {
   // Grade names, so a defunct grade id can be read rather than merely counted.
   // "U13 Mixed GRADING" is the whole reason this section exists, and a bare id
@@ -958,9 +962,11 @@ console.log('\n11  Player records per person per season');
     console.log(`     cannot be built. §3.1 applies to ladders and results only.`);
   } else {
     console.log(`\n  >> ${tM} person-season(s) have more than one record, ${tMG} of them`);
-    console.log(`     involving a grading grade. Grading appearances ARE separable by`);
-    console.log(`     gradeID, so a grading Scorers list can be built — but anything`);
-    console.log(`     summing gp or goals per season must group by gradeID or double-count.`);
+    console.log(`     involving a grading grade.`);
+    console.log(`     Scorers shows ONE row per person per season, in the grade they ended`);
+    console.log(`     in, with gp and goals SUMMED across grades — so index.html must`);
+    console.log(`     aggregate these before rendering, and a grading grade gets no Scorers`);
+    console.log(`     list of its own. grade_attribution_split_design.md §4.`);
     warn(`${tM} person-season(s) hold more than one player record. Section 8's index ` +
       `sizing counts records, not people per season, so its "seasons each" figure ` +
       `is inflated by these. grade_attribution_split_design.md §3.1`);
