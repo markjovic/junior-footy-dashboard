@@ -3440,17 +3440,6 @@ query publicProfileStatistics($profileID: ID!) {
                 date
                 home { ... on DiscoverTeam { id name } }
                 away { ... on DiscoverTeam { id name } }
-                # Score comes from PlayHQ WITH the game, not from a join against
-                # S.matches. The panel is a live fetch and covers competitions the
-                # dashboard never stores — Mason Savage's three F&DJFL rows are
-                # representative football, absent from S.matches entirely — so a
-                # join could never fill them. It also could not match on round:
-                # this query returns round.NAME ("Round 1") while a stored record
-                # has round 1, so every row came back blank.
-                result {
-                  home { goals behinds score }
-                  away { goals behinds score }
-                }
               }
               statistics { count details { value } }
             }
@@ -3583,17 +3572,35 @@ function renderPlayerGames(data, p) {
           const away = g.away?.name || '';
           const isPlayerHome = home === teamName;
 
-          // Result from the player's own team's perspective, never the home
-          // side's. A game with no result yet (or a bye) leaves both null and the
-          // row renders a dash.
-          const hs = g.result?.home?.score;
-          const as = g.result?.away?.score;
+          // Result and score from the player's own team's perspective, never the
+          // home side's.
+          //
+          // The game's own score is NOT available here. `result { home { score } }`
+          // was added to the query on 2026-08-16 and PlayHQ rejected it — the game
+          // type returned by gameStatistics does not carry that field, and a
+          // GraphQL validation error fails the WHOLE query, so the panel showed
+          // "No 2026 season stats found" for every player. Reverted.
+          //
+          // So the score is joined from S.matches, matching on the round NUMBER
+          // parsed out of round.name ("Round 1" -> 1) because that is what this
+          // query returns, and on both team names. A row whose match is not in
+          // memory — a different competition, or a season not loaded — renders a
+          // dash rather than a wrong figure.
+          const stripAgeJ = n => n ? n.replace(/\s+U\d+(?:\.\d+)?\s*/gi,' ').replace(/\s+/g,' ').trim() : '';
+          const rNum = parseInt(String(g.round?.name || '').match(/(\d+)/)?.[1] ?? '', 10);
           let resStr = null, scoreStr = null;
-          if (hs !== null && hs !== undefined && as !== null && as !== undefined) {
-            const f = isPlayerHome ? hs : as;
-            const a = isPlayerHome ? as : hs;
-            resStr = f > a ? 'W' : f < a ? 'L' : 'D';
-            scoreStr = `${f}–${a}`;
+          if (!Number.isNaN(rNum)) {
+            const jh = stripAgeJ(home), ja = stripAgeJ(away);
+            const mm = (S.matches || []).find(x =>
+              !x.isFinals && x.round === rNum &&
+              stripAgeJ(x.home) === jh && stripAgeJ(x.away) === ja);
+            const hs = mm && mm.hScore, as = mm && mm.aScore;
+            if (hs !== null && hs !== undefined && as !== null && as !== undefined) {
+              const f = isPlayerHome ? hs : as;
+              const a = isPlayerHome ? as : hs;
+              resStr = f > a ? 'W' : f < a ? 'L' : 'D';
+              scoreStr = `${f}–${a}`;
+            }
           }
 
           // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
