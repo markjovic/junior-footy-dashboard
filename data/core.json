@@ -20593,15 +20593,15 @@
     "SEJ 2026|Berwick Springs JFC Girls Blue|U10 Girls": "d175b7eb",
     "SEJ 2026|Cranbourne JFC Girls Blue|U10 Girls": "fb13976b"
   },
-  "lastUpdated": "2026-08-13T14:47:29.223Z",
-  "lastResultsFetch": "2026-08-13T14:47:29.223Z",
+  "lastUpdated": "2026-08-14T00:01:44.100Z",
+  "lastResultsFetch": "2026-08-14T00:01:44.100Z",
   "lastStatsFetch": "2026-08-12T17:35:06.918Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 951226
+      "bytes": 953066
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20625,7 +20625,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2428819
+      "bytes": 2433459
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
@@ -20685,7 +20685,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 364000
+      "bytes": 364760
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
@@ -20757,7 +20757,7 @@
       "file": "data/seasons/cda2f0ec-core.json",
       "seasonId": "cda2f0ec",
       "kind": "core",
-      "bytes": 1239781
+      "bytes": 1240981
     },
     {
       "file": "data/seasons/cda2f0ec-players.json",
