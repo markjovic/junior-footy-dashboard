@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v4 2026-08-13 gameid-dedup';
+const VERSION = 'verify-backfill v5 2026-08-13 grademeta-grading';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -572,6 +572,45 @@ console.log('\n9  Roster conflicts are detected on the grade id');
   r = rebuildRoster([R('Norwood', 'A1', 'A', 'gA', 1), R('Norwood', 'B1', 'B', 'gB', 5)]);
   ok('a later round supersedes an earlier grade', r['EFNL 2026|Norwood|U8'].gradeId === 'gB',
     JSON.stringify(r['EFNL 2026|Norwood|U8']));
+}
+
+// ── 10b. buildGradeMeta carries the grade NAME ──────────────────────────────
+// index.html identifies a GRADING grade by name and never loads grades.json, so
+// the name has to travel in gradeMeta. Without it every grading grade silently
+// behaves like an ordinary one — no error, no empty tab, just the wrong ladder.
+// grade_attribution_split_design.md §2.3.
+console.log('\n10b buildGradeMeta carries the grade name');
+{
+  const { buildGradeMeta } = require(path.join(TMP, 'scripts', 'lib', 'results-engine.js'));
+  const meta = buildGradeMeta([
+    { id: 'g1', compName: 'EFNL 2026', name: 'U13 Mixed GRADING', ageName: 'U13', genderName: 'Mixed' },
+    { id: 'g2', compName: 'EFNL 2026', name: 'U13 Mixed A', ageName: 'U13', genderName: 'Mixed' },
+  ]);
+  const byId = {};
+  for (const v of Object.values(meta)) if (v && v.gradeId) byId[v.gradeId] = v;
+  ok('the grade-id entry carries name', byId.g1 && byId.g1.name === 'U13 Mixed GRADING',
+    JSON.stringify(byId.g1));
+  ok('and it is the NAME, not the label',
+    byId.g1 && byId.g1.label !== byId.g1.name, JSON.stringify(byId.g1));
+  ok('an ordinary grade carries its name too',
+    byId.g2 && byId.g2.name === 'U13 Mixed A');
+  // r: 0 and grading: true. The rank sequence must be UNDISTURBED — this is the
+  // reasoning the original skip was protecting and it still has to hold.
+  ok('a grading grade is unranked', byId.g1 && byId.g1.r === 0, String(byId.g1 && byId.g1.r));
+  ok('and flagged, so r:0 is distinguishable from missing metadata',
+    byId.g1 && byId.g1.grading === true, JSON.stringify(byId.g1));
+  ok('the real grade keeps rank 1 — grading took no slot',
+    byId.g2 && byId.g2.r === 1, String(byId.g2 && byId.g2.r));
+  ok('an ordinary grade is NOT flagged', byId.g2 && byId.g2.grading === undefined);
+  // Could that have failed? The label is UNRELIABLE, not useless — for
+  // "U13 Mixed GRADING" labelOf happens to produce "Grading", so a label test
+  // would appear to work here and fail on a format where the label is "A". The
+  // flag is what identifies it, and this asserts the flag does not merely agree
+  // with the label by accident.
+  ok('the flag does not depend on the label matching',
+    byId.g1 && byId.g1.grading === true &&
+    byId.g2 && byId.g2.grading === undefined && /^[A-Z]$/.test(byId.g2.label || ''),
+    `g1.label=${byId.g1 && byId.g1.label} g2.label=${byId.g2 && byId.g2.label}`);
 }
 
 // ── 11. A past-dated round with no results must not stop the walk ───────────
