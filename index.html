@@ -1355,10 +1355,26 @@ function rebuildGradeLabels() {
   const grading = {};
   for (const [k, v] of Object.entries(S.gradeMeta || {})) {
     if (v && v.gradeId && v.label) idx[v.gradeId] = v.label;
-    if (v && v.gradeId && /grading/i.test(v.name || v.label || '')) grading[v.gradeId] = true;
+    // The FLAG, set by buildGradeMeta, not a name test repeated here. Two copies
+    // of the same regex in two languages is how the writer and the reader drift
+    // apart — which is exactly what happened to lastRound. `name` is kept as a
+    // fallback for entries written by engine v16, which carried the name but not
+    // the flag.
+    if (v && v.gradeId && (v.grading === true || /grading/i.test(v.name || ''))) {
+      grading[v.gradeId] = true;
+    }
   }
   S.gradeLabelById = idx;
   S.gradingGradeIds = grading;
+  // A gradeMeta with no `name` on any entry means it predates engine v17 and
+  // grading detection cannot work. Loud, because the failure is otherwise
+  // invisible: grading grades simply behave like ordinary ones.
+  const entries = Object.values(S.gradeMeta || {});
+  S.gradeMetaHasNames = entries.some(v => v && (v.name || v.grading));
+  if (entries.length && !S.gradeMetaHasNames) {
+    console.warn('gradeMeta predates engine v17 — no grade names or grading flags. ' +
+      'Run Rebuild grade meta; until then grading grades behave as ordinary ones.');
+  }
 }
 
 function gLabel(key) {
