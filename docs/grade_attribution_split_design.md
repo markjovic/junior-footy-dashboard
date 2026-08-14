@@ -1,8 +1,8 @@
 # Grade attribution: grading grades, teams that move, and player stats
 
 **Repo:** `markjovic/junior-footy-dashboard`
-**Drafted:** 2026-08-13. Revision 6.
-**Status:** APPROVED. §8 is build order. No open questions.
+**Drafted:** 2026-08-13. Revision 7 — BUILT.
+**Status:** BUILT and verified 2026-08-13. Beta 0.166, engine v17.
 **Supersedes** revisions 1–5. §1 records what was wrong in each, because the
 pattern in the errors cost four rewrites and is worth not repeating.
 
@@ -177,7 +177,17 @@ failure path:
 - `render()` does not throw on a grading tab with no Scorers.
 - `precomputeMatches` runs after the roster on all three load paths.
 
-`audit-data.js` §10 is the measure of success: `shown` should rise by most of 3,967.
+**§10 of `audit-data.js` is NOT the measure of success, and revision 6 was wrong to
+say so.** It tests `hg === ag` from the roster — the test Beta 0.166 deliberately
+leaves unchanged — so it will report 3,967 whatever happens. The change lives in
+`matchLadderGrade()`, in `index.html`, which the audit does not run. Making the
+audit measure it would mean duplicating page logic in a script, which is the drift
+that produced the `lastRound` defect.
+
+**The measure is the page**, confirmed 2026-08-13 on SER 2026 U13: a Grading tab
+appears beside Prem, Blue, Gold, Navy and Orange; the tier count did not inflate,
+so `r: 0` plus the flag is honoured; and the Grading tab carries no round tag,
+because `lastRound` tracks home-and-away rounds only.
 
 ---
 
