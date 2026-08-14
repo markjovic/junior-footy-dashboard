@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v12 2026-08-13 live-gaps-first';
+const VERSION = 'audit-data v13 2026-08-13 unattributed-rounds';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -166,6 +166,13 @@ console.log(`  ${'  players'.padEnd(24)} ${mb(playerBytes).padStart(9)}  ` +
 // ── 2. Every record must reach a manifest entry ──────────────────────────────
 console.log('\n2  Records against the manifest');
 const byComp = new Map();   // compName -> { matches, players, files:Set, ids:Map }
+// Records with no gradeId. They cannot be attributed to a grade, so they have no
+// round coverage to measure — reported as a total rather than bucketed under a
+// fallback key that merges unrelated grades. Declared HERE and not beside the
+// other section 4 counters: it is written inside the file loop above them, and a
+// const declared after its first use throws at run time where node --check
+// cannot see it. That is exactly what the first attempt at this change did.
+const unattributed = new Map();
 const manifestByComp = new Map();
 const manifestBySeason = new Map();
 for (const m of core.manifest) {
@@ -208,9 +215,29 @@ for (const [f, { payload }] of Object.entries(files)) {
       // Keyed exactly as results-engine.js keys knownRounds. Grouping on
       // rawGrade instead measures the union of every collapsed grade and hides
       // the per-grade gaps that drive re-fetching.
-      const key = `${c}|${rec.age}|${rec.gradeId || rec.rawGrade}`;
-      if (!b.rounds.has(key)) b.rounds.set(key, new Set());
-      b.rounds.get(key).add(rec.round);
+      //
+      // A record with NO gradeId is NOT bucketed at all. Falling back to
+      // rawGrade merged unrelated grades and invented gaps that do not exist:
+      // on 2026-08-13 this reported "LIVE YJFL 2026|U10| — has 1..14, missing
+      // 8, 9, 10, 11, 12, 13". That key is SIX POOLS — af1a61fe through
+      // 4a19ca7a, all parsing to an empty rawGrade — piled into one bucket
+      // where no single pool has a contiguous run. The gap was an artefact of
+      // this fallback, reported as a live grade costing re-fetches per run,
+      // next to a real one (SEJ cb7b3db3 missing round 10) it sat beside.
+      // report-grade-collisions.js measured 62 such keys across 121 shadowed
+      // grades, so this was never going to be a one-off.
+      //
+      // Counted and reported separately instead — see the unattributed total
+      // below. A record whose grade cannot be identified has no round coverage
+      // to measure, and guessing at one is worse than saying so.
+      if (rec.gradeId) {
+        const key = `${c}|${rec.age}|${rec.gradeId}`;
+        if (!b.rounds.has(key)) b.rounds.set(key, new Set());
+        b.rounds.get(key).add(rec.round);
+      } else {
+        const k = `${c}|${rec.age}|${rec.rawGrade || '(empty rawGrade)'}`;
+        unattributed.set(k, (unattributed.get(k) || 0) + 1);
+      }
     }
   }
   for (const rec of payload.players || []) {
@@ -308,7 +335,6 @@ console.log('\n4  Round coverage, per grade id — what the fetcher re-walks eve
 let gradesChecked = 0, gradesWithGaps = 0;
 const gapExamples = [];
 const allGaps = [];   // every gap, ranked before ten are printed
-const emptyGrade = new Map();
 // fetch-results.js takes its competition list from config.json, which holds only
 // the current seasons, so it never walks an archived season's rounds. A gap in a
 // retired season is worth knowing about but costs nothing per run — counting all
@@ -337,7 +363,6 @@ for (const [c, b] of byComp) {
     }
     // No grade id AND no rawGrade. parseGradeName collapsed the name and the
     // record has not been migrated, so nothing identifies its grade.
-    if (key.split('|')[2] === '') emptyGrade.set(c, (emptyGrade.get(c) || 0) + 1);
   }
 }
 
@@ -382,16 +407,21 @@ for (const g of gapExamples) warn(`round gap — ${g}`);
 if (gradesWithGaps > gapExamples.length) {
   warn(`${gradesWithGaps - gapExamples.length} further grade(s) with gaps, not listed`);
 }
-for (const [c, n] of emptyGrade) {
-  // The old wording said these grades "share a ladder until build-order step 6".
-  // Step 6 is done — index.html groups ladders by gradeId, which is what section
-  // 7 above measures at 99.91% — so that sentence had been wrong since Beta
-  // 0.133 and was printed on every run.
-  warn(`${c}: ${n} grade key(s) have neither a grade id nor a rawGrade — ` +
-       `parseGradeName collapsed the name and these records are not migrated. ` +
-       `Ladders group by gradeId, so they no longer merge on screen; the effect is ` +
-       `that these records are the "needs pass 2" rows in section 7. They self-heal ` +
-       `when a results run next fetches a real round for the grade`);
+// Records with no gradeId. Until v13 these were bucketed into the round-coverage
+// map under `compName|age|rawGrade`, which merged unrelated grades and invented
+// gaps: on 2026-08-13 that reported "LIVE YJFL 2026|U10| — has 1..14, missing 8,
+// 9, 10, 11, 12, 13", where that key is SIX POOLS (af1a61fe..4a19ca7a) piled
+// together and no single pool has a contiguous run. The gap was an artefact of
+// the fallback key, reported in the live section beside a real one.
+if (unattributed.size) {
+  const tot = [...unattributed.values()].reduce((a, b) => a + b, 0);
+  warn(`${tot} record(s) across ${unattributed.size} key(s) have NO gradeId, so they ` +
+       `cannot be attributed to a grade and have no round coverage. These are the ` +
+       `"needs pass 2" rows in section 7 and self-heal when a results run next ` +
+       `fetches a real round for the grade`);
+  for (const [k, n] of [...unattributed].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
+    warn(`  unattributed — ${k} — ${n} record(s)`);
+  }
 }
 
 // ── 5. grades.json coverage ──────────────────────────────────────────────────
@@ -699,6 +729,145 @@ console.log('\n9  Cross-organisation key shapes (lastround_gotw_keying_design.md
            `Unreachable, because the dashboard builds the key from a manifest compName.`);
     }
   }
+}
+
+// ── 10. Records the dashboard never shows ───────────────────────────────────
+// grade_attribution_split_design.md §2 and §5.
+//
+// index.html's precomputeMatches() sets `_valid = (hg === ag)` where each side's
+// grade comes from the ROSTER, and every ladder, scorer list and grade tab filters
+// on it. A record whose two sides resolve to different grades is discarded with no
+// error. report-grade-collisions.js v2 measured 3,967 such records — 7.6% of all
+// stored records, in every one of the eighteen seasons.
+//
+// WHY THIS IS HERE AND NOT IN THAT REPORT. Two earlier explanations were wrong:
+// a mid-season grade split, then colliding age|rawGrade keys. The control killed
+// the second — SER 2026 has ZERO colliding keys and drops 11.0%, WFNL 2026 has one
+// and drops 1.3%. The cause is GRADING ROUNDS: SER 2026's biggest offender is
+// grade 2e8ff182, "U13 Mixed GRADING". Everyone plays in the grading grade, gets
+// placed into divisions, and moves; the roster then resolves every team to its
+// final division, so every grading game has two sides in different grades.
+//
+// Grading rounds have nothing to do with grade-name collisions, so this belongs in
+// the audit — where it is watched every run — rather than bolted onto a report
+// named for something else.
+//
+// A grading grade and a pre-split grade share a property a promotion does not:
+// NO TEAM RESOLVES TO THEM ANY MORE. That "defunct" test is what §4 of the design
+// proposes to key the fix on, so the split between defunct and live below is the
+// measurement that confirms or kills it.
+console.log('\n10  Records the dashboard never shows (grade_attribution_split_design.md)');
+{
+  // Grade names, so a defunct grade id can be read rather than merely counted.
+  // "U13 Mixed GRADING" is the whole reason this section exists, and a bare id
+  // would have hidden it.
+  const gradeNameById = new Map();
+  for (const g of (readJson(GRADES_PATH) || [])) {
+    if (g && g.id) gradeNameById.set(g.id, `${g.compName || '?'} — ${g.name || '?'}`);
+  }
+  const rosterGrade = (roster, comp, name, age, rawGrade) => {
+    const e = roster[`${comp}|${name}|${age}`];
+    if (!e) return rawGrade;
+    return e.gradeId || e.grade || rawGrade;
+  };
+  const perComp = new Map();   // comp -> { total, counted, defunct, live }
+  const defunctGrades = new Map();  // gradeId -> dropped count
+  const liveGrades = new Map();
+  const examples = [];
+
+  for (const [, v] of Object.entries(files)) {
+    const roster = v.payload.roster || {};
+    // Every grade any team currently resolves to. A grade absent from this set is
+    // DEFUNCT: nobody is in it, so it cannot be a promotion's origin.
+    const liveSet = new Set();
+    for (const e of Object.values(roster)) {
+      const g = e && (e.gradeId || e.grade);
+      if (g) liveSet.add(g);
+    }
+    for (const m of v.payload.matches || []) {
+      if (m.isBye || m.isPartial || m.scheduled) continue;
+      const comp = m.compName || '(none)';
+      if (!perComp.has(comp)) perComp.set(comp, { total: 0, counted: 0, defunct: 0, live: 0, unresolved: 0 });
+      const c = perComp.get(comp);
+      c.total++;
+      const hg = rosterGrade(roster, comp, m.home, m.age, m.rawGrade);
+      const ag = rosterGrade(roster, comp, m.away, m.age, m.rawGrade);
+      // THREE outcomes, not two. Collapsing the third into "dropped" is what the
+      // first version of this section did, and it inflated the count with records
+      // that have no grade information at all rather than a conflict between two.
+      //   agree, non-empty  -> shown
+      //   neither resolves  -> UNRESOLVED. The page drops it too, but for a
+      //                        different reason and with a different fix, so it is
+      //                        counted separately.
+      //   they disagree     -> dropped, which is what the design is about.
+      if (hg === ag) {
+        if (hg === undefined || hg === null || hg === '') c.unresolved++;
+        else c.counted++;
+        continue;
+      }
+      const gid = m.gradeId || '';
+      const isDefunct = gid && !liveSet.has(gid);
+      if (isDefunct) { c.defunct++; defunctGrades.set(gid, (defunctGrades.get(gid) || 0) + 1); }
+      else { c.live++; liveGrades.set(gid || '(no gradeId)', (liveGrades.get(gid || '(no gradeId)') || 0) + 1); }
+      if (examples.length < 8) {
+        examples.push(`${comp} R${m.round} ${m.home} -> ${hg} v ${m.away} -> ${ag}` +
+          `  [stored ${gid || 'NONE'}, ${isDefunct ? 'DEFUNCT' : 'LIVE'}]`);
+      }
+    }
+  }
+
+  const wc = Math.max(14, ...[...perComp.keys()].map(k => k.length)) + 2;
+  console.log('  ' + 'season'.padEnd(wc) + 'records'.padStart(9) + 'shown'.padStart(9) +
+    'dropped'.padStart(9) + 'defunct'.padStart(9) + 'live'.padStart(7) +
+    'no grade'.padStart(10) + 'dropped %'.padStart(11));
+  let tT = 0, tD = 0, tDef = 0, tLive = 0, tU = 0;
+  for (const [comp, c] of [...perComp].sort()) {
+    const dropped = c.defunct + c.live;
+    tT += c.total; tD += dropped; tDef += c.defunct; tLive += c.live; tU += c.unresolved;
+    console.log('  ' + comp.padEnd(wc) + String(c.total).padStart(9) +
+      String(c.counted).padStart(9) + String(dropped).padStart(9) +
+      String(c.defunct).padStart(9) + String(c.live).padStart(7) +
+      String(c.unresolved).padStart(10) +
+      `${c.total ? ((dropped / c.total) * 100).toFixed(1) : '0.0'}%`.padStart(11));
+  }
+  console.log('  ' + 'TOTAL'.padEnd(wc) + String(tT).padStart(9) +
+    String(tT - tD).padStart(9) + String(tD).padStart(9) +
+    String(tDef).padStart(9) + String(tLive).padStart(7) +
+    String(tU).padStart(10) +
+    `${tT ? ((tD / tT) * 100).toFixed(1) : '0.0'}%`.padStart(11));
+
+  // THE ANSWER TO §5 CLAIM 2. If `live` is near zero, the defunct rule covers
+  // essentially every dropped record and the fix in §4 is sound. If it is
+  // material, those are promotions and need separate handling — the rule would
+  // fire where it should not.
+  console.log(`\n  ${tDef} dropped record(s) sit in a DEFUNCT grade (no team resolves to it)`);
+  console.log(`  ${tLive} sit in a LIVE grade — these are promotions, NOT grading rounds,`);
+  console.log(`  and the defunct rule would not fix them.`);
+  if (tU) {
+    console.log(`  ${tU} record(s) have NO grade on either side — neither the roster nor`);
+    console.log(`  rawGrade resolves them. The page drops these too, but they need grade`);
+    console.log(`  identity, not an attribution rule. Counted apart deliberately.`);
+  }
+  if (tD) {
+    console.log(`  defunct share of dropped: ${((tDef / tD) * 100).toFixed(1)}%`);
+  }
+  if (defunctGrades.size) {
+    console.log(`\n  worst defunct grades:`);
+    for (const [g, n] of [...defunctGrades].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+      console.log(`    ${String(n).padStart(6)}  ${g}  ${gradeNameById.get(g) || '(not in grades.json)'}`);
+    }
+  }
+  if (liveGrades.size) {
+    console.log(`\n  dropped in LIVE grades — investigate before trusting the rule:`);
+    for (const [g, n] of [...liveGrades].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+      console.log(`    ${String(n).padStart(6)}  ${g}  ${gradeNameById.get(g) || '(not in grades.json)'}`);
+    }
+  }
+  for (const e of examples) console.log(`    ${e}`);
+  if (tD) warn(`${tD} stored record(s) (${((tD / tT) * 100).toFixed(1)}%) never reach the ` +
+    `dashboard: their two sides resolve to different grades. ${tDef} are in defunct ` +
+    `grades (grading rounds and splits), ${tLive} in live grades (promotions). ` +
+    `grade_attribution_split_design.md`);
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────

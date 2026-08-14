@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-audit v3 2026-08-13 live-gaps-first';
+const VERSION = 'verify-audit v4 2026-08-13 unattributed-rounds';
 console.log(`=== ${VERSION} ===`);
 
 const AUDIT = path.join(__dirname, 'audit-data.js');
@@ -57,9 +57,9 @@ function clean() {
       meta: { seasonId: '2dcbf383', org: '383836bb', comps: ['EFNL 2026'],
               phases: { results: true, players: true, matches: 2, players_n: 1 } },
       matches: [
-        { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 1,
+        { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', gradeId: 'gA', round: 1,
           home: 'Blackburn', away: 'Norwood' },
-        { id: 'EFNL 2026|U12|A|2|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', round: 2,
+        { id: 'EFNL 2026|U12|A|2|a|b', compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', gradeId: 'gA', round: 2,
           home: 'Blackburn', away: 'Vermont' },
       ],
       players: [{ id: 'p1', compName: 'EFNL 2026' }],
@@ -70,13 +70,13 @@ function clean() {
       meta: { seasonId: '75d8a232', org: '383836bb', comps: ['EFNL 2025'],
               phases: { results: true, players: false, matches: 3, players_n: 0 } },
       matches: [
-        { id: 'EFNL 2025|U12|A|1|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 1,
+        { id: 'EFNL 2025|U12|A|1|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', gradeId: 'gA', round: 1,
           home: 'Blackburn', away: 'Norwood' },
-        { id: 'EFNL 2025|U12|A|2|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', round: 2,
+        { id: 'EFNL 2025|U12|A|2|a|b', compName: 'EFNL 2025', age: 'U12', rawGrade: 'A', gradeId: 'gA', round: 2,
           home: 'Blackburn', away: 'Vermont' },
         // U9 exists in 2025 and not in 2026 — the case round coverage cannot see.
         // Its rawGrade is empty, so it lands in the two-grade "U9|" collision.
-        { id: 'EFNL 2025|U9||1|a|b', compName: 'EFNL 2025', age: 'U9', rawGrade: '', round: 1,
+        { id: 'EFNL 2025|U9||1|a|b', compName: 'EFNL 2025', age: 'U9', rawGrade: '', gradeId: 'g', round: 1,
           home: 'Mitcham', away: 'Vermont' },
       ],
       players: [],
@@ -168,7 +168,7 @@ console.log('\n2  Each seeded defect is detected');
 seeded('records in the wrong file (retired records left in current)',
   fx => {
     fx.current.matches.push({ id: 'EFNL 2025|U12|A|3|a|b', compName: 'EFNL 2025',
-                              age: 'U12', rawGrade: 'A', round: 3 });
+                              age: 'U12', rawGrade: 'A', gradeId: 'gA', round: 3 });
     fx.current.meta.phases.matches = 3;   // now disagrees with what is in the file
   },
   /records are in season file 2dcbf383/);
@@ -218,7 +218,7 @@ console.log('\n3  Warnings are reported without failing');
 seeded('a missing round in a RETIRED season is reported as costing nothing', fx => {
   fx.archive.matches[1].round = 3;                       // 1 and 3 stored, 2 missing
   fx.archive.matches[1].id = 'EFNL 2025|U12|A|3|a|b';
-}, /retired .*EFNL 2025\|U12\|A — has 1\.\.3, missing 2/, 0);
+}, /retired .*EFNL 2025\|U12\|gA — has 1\.\.3, missing 2/, 0);
 
 seeded('and is NOT counted against the per-run cost', fx => {
   fx.archive.matches[1].round = 3;
@@ -236,17 +236,31 @@ seeded('a missing round in a LIVE season IS counted', fx => {
 seeded('and is labelled LIVE so the two cannot be confused', fx => {
   fx.current.matches[1].round = 3;
   fx.current.matches[1].id = 'EFNL 2026|U12|A|3|a|b';
-}, /LIVE .*EFNL 2026\|U12\|A — has 1\.\.3, missing 2/, 0);
+}, /LIVE .*EFNL 2026\|U12\|gA — has 1\.\.3, missing 2/, 0);
 
-seeded('a grade with neither an id nor a rawGrade is reported', fx => {
-  for (const m of fx.archive.matches) { m.rawGrade = ''; m.id = m.id.replace('|A|', '||'); }
-}, /neither a grade id nor a rawGrade/, 0);
+// A record with NO gradeId is no longer bucketed into round coverage at all —
+// bucketing it under `compName|age|rawGrade` merged unrelated grades and invented
+// gaps (six YJFL pools reported as one grade missing six rounds). It is counted
+// and reported as unattributed instead.
+seeded('a record with no gradeId is reported as unattributed', fx => {
+  for (const m of fx.archive.matches) { delete m.gradeId; }
+}, /record\(s\) across \d+ key\(s\) have NO gradeId/, 0);
 
-// The old wording claimed these grades "share a ladder until build-order step 6".
-// Step 6 has been done since Beta 0.133, so that sentence was wrong on every run.
-seeded('and does NOT claim they still share a ladder', fx => {
-  for (const m of fx.archive.matches) { m.rawGrade = ''; m.id = m.id.replace('|A|', '||'); }
-}, /Ladders group by gradeId, so they no longer merge on screen/, 0);
+seeded('the unattributed key is named so it can be found', fx => {
+  for (const m of fx.archive.matches) { delete m.gradeId; }
+}, /unattributed — EFNL 2025\|U12\|A — \d+ record/, 0);
+
+// And it must NOT appear as a round gap. This is the defect: those records used to
+// produce a phantom gap in the same list as real ones.
+{
+  const fxu = clean();
+  for (const m of fxu.archive.matches) { delete m.gradeId; }
+  write(fxu);
+  LAST = audit();
+  ok('a gradeId-less record produces NO round gap',
+    !/round gap — retired EFNL 2025/.test(LAST.out),
+    'bucketing it under rawGrade is what invented the YJFL 2026 phantom gap');
+}
 
 seeded('a season with no grades in grades.json', fx => {
   fx.grades = fx.grades.filter(g => g.seasonID !== '75d8a232');
@@ -314,7 +328,7 @@ ok('with one U9 grade there is no collision', !/1 records across 2 grades/.test(
 // neither pass 1 nor the registry can place it.
 const fx8 = clean();
 fx8.archive.matches.push({ id: 'EFNL 2025|U99|Z|1|a|b', compName: 'EFNL 2025',
-  age: 'U99', rawGrade: 'Z', round: 1, home: 'a', away: 'b' });
+  age: 'U99', rawGrade: 'Z', gradeId: 'gZ', round: 1, home: 'a', away: 'b' });
 fx8.archive.meta.phases.matches = 4;
 write(fx8);
 LAST = audit();
@@ -329,7 +343,7 @@ console.log('\n4c  Section 7 reports migration state');
 const fxMig = clean();
 // A migrated record: the id's third segment IS the grade id, and gradeId agrees.
 fxMig.current.matches[0] = { id: 'EFNL 2026|U12|g1|1|a|b', compName: 'EFNL 2026',
-  age: 'U12', rawGrade: 'A', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
+  age: 'U12', rawGrade: 'A', gradeId: 'gA', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
 write(fxMig);
 LAST = audit();
 ok('a migrated record is counted as migrated', /1 of 5 record\(s\) carry their PlayHQ grade id/.test(LAST.out),
@@ -340,7 +354,7 @@ ok('unmigrated records are still counted', /could be migrated offline right now/
 // rewritten — must NOT count as migrated.
 const fxHalf = clean();
 fxHalf.current.matches[0] = { id: 'EFNL 2026|U12|A|1|a|b', compName: 'EFNL 2026',
-  age: 'U12', rawGrade: 'A', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
+  age: 'U12', rawGrade: 'A', gradeId: 'gA', gradeId: 'g1', round: 1, home: 'a', away: 'b' };
 write(fxHalf);
 LAST = audit();
 ok('a gradeId with an unmigrated id does NOT count as done',
@@ -362,7 +376,7 @@ console.log('\n4c-bis  A live round gap is not crowded out by retired ones');
     const gid = `z${i}`;
     for (const rd of [1, 3]) {
       fxg.archive.matches.push({ id: `EFNL 2025|U13|${gid}|${rd}|a|b`, compName: 'EFNL 2025',
-        age: 'U13', rawGrade: 'A', gradeId: gid, round: rd, home: 'a', away: 'b' });
+        age: 'U13', rawGrade: 'A', gradeId: 'gA', gradeId: gid, round: rd, home: 'a', away: 'b' });
     }
   }
   fxg.archive.meta.phases.matches = fxg.archive.matches.length;
@@ -376,9 +390,9 @@ console.log('\n4c-bis  A live round gap is not crowded out by retired ones');
             phases: { results: true, players: false, matches: 2, players_n: 0 } },
     matches: [
       { id: 'EFNL 2027|U12|gx|1|a|b', compName: 'EFNL 2027', age: 'U12',
-        rawGrade: 'A', gradeId: 'gx', round: 1, home: 'a', away: 'b' },
+        rawGrade: 'A', gradeId: 'gA', gradeId: 'gx', round: 1, home: 'a', away: 'b' },
       { id: 'EFNL 2027|U12|gx|3|a|b', compName: 'EFNL 2027', age: 'U12',
-        rawGrade: 'A', gradeId: 'gx', round: 3, home: 'a', away: 'b' },
+        rawGrade: 'A', gradeId: 'gA', gradeId: 'gx', round: 3, home: 'a', away: 'b' },
     ],
     players: [], roster: {}, gradeMeta: {},
   };
@@ -451,6 +465,61 @@ seeded('a key naming a competition absent from the manifest is reported',
   ok('a wrong-shape key alone exits 0', LAST.code === 0, `exit ${LAST.code}`);
   LAST = audit({ AUDIT_STRICT: 'true' });
   ok('the same tree exits 1 under STRICT', LAST.code === 1, `exit ${LAST.code}`);
+}
+
+// ── 4e. Section 10: dropped records, defunct versus live ────────────────────
+// grade_attribution_split_design.md §5 claim 2. The whole proposed fix keys on
+// "is this grade defunct", so a section that cannot tell defunct from live would
+// give a confident wrong number. Reintroducing `isDefunct = true` passed the entire
+// suite before this was written.
+console.log('\n4e  Section 10 tells a DEFUNCT grade from a LIVE one');
+{
+  // Two teams whose roster entries point at DIFFERENT grades, with the record
+  // stored under a third grade nobody is in — a grading round.
+  const fxd = clean();
+  // Team names taken from the fixture's own records, not invented: the archive
+  // matches are Mitcham v Vermont. My first attempt keyed the roster on 'a'/'b'
+  // and nothing resolved, so nothing dropped and the test proved nothing.
+  for (const m of fxd.archive.matches) {
+    fxd.archive.roster[`EFNL 2025|${m.home}|${m.age}`] = { grade: 'A', gradeId: 'gDiv1', age: m.age };
+    fxd.archive.roster[`EFNL 2025|${m.away}|${m.age}`] = { grade: 'A', gradeId: 'gDiv2', age: m.age };
+  }
+  for (const m of fxd.archive.matches) { m.gradeId = 'gGRADING'; }
+  write(fxd);
+  LAST = audit();
+  ok('section 10 ran', /10  Records the dashboard never shows/.test(LAST.out));
+  ok('the record is counted as dropped',
+    /dropped record\(s\) sit in a DEFUNCT grade/.test(LAST.out));
+  ok('and it is classed DEFUNCT, since no team resolves to gGRADING',
+    /\[stored gGRADING, DEFUNCT\]/.test(LAST.out),
+    (LAST.out.match(/\[stored [^\]]*\]/) || ['none'])[0]);
+  ok('zero are classed LIVE', / 0 sit in a LIVE grade/.test(LAST.out),
+    (LAST.out.match(/\d+ sit in a LIVE grade/) || ['not reported'])[0]);
+
+  // Now the promotion case: the record is stored under a grade a team IS in.
+  // This must be LIVE, because the defunct rule must NOT fire on a promotion.
+  const fxl = clean();
+  for (const m of fxl.archive.matches) {
+    fxl.archive.roster[`EFNL 2025|${m.home}|${m.age}`] = { grade: 'A', gradeId: 'gA', age: m.age };
+    fxl.archive.roster[`EFNL 2025|${m.away}|${m.age}`] = { grade: 'B', gradeId: 'gB', age: m.age };
+  }
+  for (const m of fxl.archive.matches) { m.gradeId = 'gA'; }
+  write(fxl);
+  LAST = audit();
+  ok('a record stored under a grade a team IS in is classed LIVE',
+    /\[stored gA, LIVE\]/.test(LAST.out),
+    (LAST.out.match(/\[stored [^\]]*\]/) || ['none'])[0]);
+  ok('and the live count is non-zero',
+    !/ 0 sit in a LIVE grade/.test(LAST.out),
+    (LAST.out.match(/\d+ sit in a LIVE grade/) || ['not reported'])[0]);
+
+  // Could these have failed? A tree where both sides agree must drop nothing.
+  write(clean());
+  LAST = audit();
+  ok('a clean tree drops nothing at all',
+    /^\s*0 dropped record\(s\) sit in a DEFUNCT grade/m.test(LAST.out) ||
+    /  0 dropped record\(s\) sit in a DEFUNCT grade/.test(LAST.out),
+    (LAST.out.match(/\d+ dropped record\(s\) sit in a DEFUNCT/) || ['not reported'])[0]);
 }
 
 // ── 5. Could these have failed? ──────────────────────────────────────────────
