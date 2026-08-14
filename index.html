@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.167</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.168</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.167</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.168</span>
         </div>
 
 
@@ -3440,6 +3440,17 @@ query publicProfileStatistics($profileID: ID!) {
                 date
                 home { ... on DiscoverTeam { id name } }
                 away { ... on DiscoverTeam { id name } }
+                # Score comes from PlayHQ WITH the game, not from a join against
+                # S.matches. The panel is a live fetch and covers competitions the
+                # dashboard never stores — Mason Savage's three F&DJFL rows are
+                # representative football, absent from S.matches entirely — so a
+                # join could never fill them. It also could not match on round:
+                # this query returns round.NAME ("Round 1") while a stored record
+                # has round 1, so every row came back blank.
+                result {
+                  home { goals behinds score }
+                  away { goals behinds score }
+                }
               }
               statistics { count details { value } }
             }
@@ -3572,6 +3583,19 @@ function renderPlayerGames(data, p) {
           const away = g.away?.name || '';
           const isPlayerHome = home === teamName;
 
+          // Result from the player's own team's perspective, never the home
+          // side's. A game with no result yet (or a bye) leaves both null and the
+          // row renders a dash.
+          const hs = g.result?.home?.score;
+          const as = g.result?.away?.score;
+          let resStr = null, scoreStr = null;
+          if (hs !== null && hs !== undefined && as !== null && as !== undefined) {
+            const f = isPlayerHome ? hs : as;
+            const a = isPlayerHome ? as : hs;
+            resStr = f > a ? 'W' : f < a ? 'L' : 'D';
+            scoreStr = `${f}–${a}`;
+          }
+
           // Extract grade abbreviation — mirrors toRawGrade() in fetch-stats.js
           // Strip leading asterisk/wildcard PlayHQ sometimes prepends
           const gradeRaw = (gradeStat.grade?.name || '').replace(/^[*\s]+/, '').trim();
@@ -3596,6 +3620,7 @@ function renderPlayerGames(data, p) {
             gradeFullName: gradeRaw,
             compName: p?.compName || '',
             goals, bp,
+            res: resStr, score: scoreStr,
             isCurrentClub,
           });
         }
@@ -3637,38 +3662,6 @@ function renderPlayerGames(data, p) {
     return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
   }
 
-  // Score and result for one player-panel row, or null when the match is not in
-  // memory. grade_attribution_split_design.md — the panel renders from PLAYER
-  // records, which carry no score, so each row is joined to its match record by
-  // compName, round and the two team names.
-  //
-  // Three things this must survive, all present in real data:
-  //   * A round played in a DIFFERENT competition. Mason Savage's F&DJFL rows are
-  //     representative football inside the same season; those matches are not in
-  //     S.matches at all, so the columns must be blank rather than wrong.
-  //   * Team names stored cleaned, while the panel shows them stripped of age.
-  //     Both sides are put through stripAge before comparing.
-  //   * A finals round, where r.round is a token like "F:GF" and no numeric
-  //     comparison works.
-  const rowResult = (r) => {
-    const rh = stripAge(r.home), ra = stripAge(r.away);
-    const m = S.matches.find(x =>
-      x.compName === r.compName &&
-      String(x.isFinals ? `F:${x.finalsAbbrev || x.round}` : x.round) === String(r.round) &&
-      stripAge(x.home) === rh && stripAge(x.away) === ra);
-    if (!m) return null;
-    const hs = m.hScore, as = m.aScore;
-    if (hs === undefined || hs === null || as === undefined || as === null) return null;
-    const playerIsHome = stripAge(r.teamName) === rh;
-    const forS = playerIsHome ? hs : as;
-    const agS  = playerIsHome ? as : hs;
-    return {
-      score: `${forS}–${agS}`,
-      // Relative to the player's team, never to the home side.
-      res: forS > agS ? 'W' : forS < agS ? 'L' : 'D',
-    };
-  };
-
   const COLS = '60px 1fr 1fr 40px 18px 34px 52px 28px 28px';
   body.innerHTML = `<div style="display:grid;grid-template-columns:${COLS};padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Round</span>
@@ -3688,7 +3681,7 @@ function renderPlayerGames(data, p) {
     const playerTeamStyle = 'font-weight:600;color:var(--gold)';
     const oppStyle = 'color:var(--tx2)';
     const dimmed = !r.isCurrentClub;
-    const rr = rowResult(r);
+    const rr = r.res ? { res: r.res, score: r.score } : null;
 
     return `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
       <div>
@@ -3714,7 +3707,7 @@ function renderPlayerGames(data, p) {
     <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2)">TOTAL</div>
     <div></div><div></div><div></div><div></div>
     <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2);text-align:center">${
-      (() => { const t = rows.map(rowResult).filter(Boolean);
+      (() => { const t = rows.filter(x => x.res);
                return t.length ? `${t.filter(x=>x.res==='W').length}-${t.filter(x=>x.res==='L').length}-${t.filter(x=>x.res==='D').length}` : '–'; })()
     }</div>
     <div></div>
