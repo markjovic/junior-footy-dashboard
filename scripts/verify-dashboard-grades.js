@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v4 2026-08-13 grading-ladder';
+const VERSION = 'verify-dashboard-grades v5 2026-08-13 counted-flag';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -851,6 +851,56 @@ if (has('computeLadder') && has('isGradingGrade')) {
   ok('so it is absent from the A ladder',
     !aRows.find(r => r.name === 'Alpha'),
     JSON.stringify(aRows.map(r => r.name)));
+}
+
+// ── 20. "not counted" must agree with the ladder ────────────────────────────
+// The results list badged a row "not counted" from matchIsValid(), while the
+// ladder counted it via matchLadderGrade(). For a grading game between teams
+// later placed in different divisions those disagree, so the same game appeared
+// on the ladder AND was labelled uncounted beside it.
+console.log('\n20  The counted flag agrees with the ladder');
+ok('matchCounts exists', has('matchCounts'));
+if (has('matchCounts') && has('matchLadderGrade')) {
+  const g20 = (gid, rd, h, a) => ({
+    id: `EFNL 2026|U12|${gid}|${rd}|${h}|${a}`, compName: 'EFNL 2026', age: 'U12',
+    rawGrade: 'A', gradeId: gid, round: rd, home: h, away: a, hScore: 30, aScore: 20,
+  });
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|gGRD': { r: 0, lvl:'junior', g:'M', label:'Grading', gradeId:'gGRD', name:'U12 Mixed Grading', grading:true },
+    'EFNL 2026|U12|gA':   { r: 1, lvl:'junior', g:'M', label:'A', gradeId:'gA', name:'U12 Mixed A' },
+    'EFNL 2026|U12|gB':   { r: 2, lvl:'junior', g:'M', label:'B', gradeId:'gB', name:'U12 Mixed B' },
+  }; rebuildGradeLabels();`);
+  sandbox.__g20 = [
+    g20('gGRD', 1, 'Alpha', 'Charlie'),   // grading, teams end in DIFFERENT divisions
+    g20('gGRD', 2, 'Alpha', 'Bravo'),     // grading, teams end together
+    g20('gA',   5, 'Alpha', 'Charlie'),   // ordinary, one team moved
+  ];
+  run(`S.matches = __g20.map(x => ({...x}));
+       S.roster = {
+         'EFNL 2026|Alpha|U12':   { grade:'A', gradeId:'gA', age:'U12' },
+         'EFNL 2026|Bravo|U12':   { grade:'A', gradeId:'gA', age:'U12' },
+         'EFNL 2026|Charlie|U12': { grade:'B', gradeId:'gB', age:'U12' },
+       };
+       S.selComp = 'EFNL 2026'; precomputeMatches(S.matches);`);
+
+  // THE DEFECT. This is the row that read "not counted" while the grading ladder
+  // counted it.
+  ok('a grading game across two future divisions COUNTS',
+    run('matchCounts(S.matches[0])') === true,
+    'this is the row that was badged "not counted" on SER 2026 U13');
+  ok('and matchIsValid still says otherwise — the two are different questions',
+    run('matchIsValid(S.matches[0])') === false);
+  ok('a grading game between future division-mates counts too',
+    run('matchCounts(S.matches[1])') === true);
+  ok('an ordinary game with one mover does NOT count',
+    run('matchCounts(S.matches[2])') === false,
+    'the badge must still appear where it is correct');
+
+  // Could that have failed? matchCounts must agree with matchLadderGrade on
+  // every record — that agreement IS the fix.
+  ok('matchCounts agrees with matchLadderGrade on every record',
+    run(`S.matches.every(m => matchCounts(m) === (matchLadderGrade(m) != null))`),
+    'a second definition of "counts" is what caused this');
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
