@@ -3637,13 +3637,47 @@ function renderPlayerGames(data, p) {
     return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
   }
 
-  const COLS = '60px 1fr 1fr 40px 18px 28px 28px';
+  // Score and result for one player-panel row, or null when the match is not in
+  // memory. grade_attribution_split_design.md — the panel renders from PLAYER
+  // records, which carry no score, so each row is joined to its match record by
+  // compName, round and the two team names.
+  //
+  // Three things this must survive, all present in real data:
+  //   * A round played in a DIFFERENT competition. Mason Savage's F&DJFL rows are
+  //     representative football inside the same season; those matches are not in
+  //     S.matches at all, so the columns must be blank rather than wrong.
+  //   * Team names stored cleaned, while the panel shows them stripped of age.
+  //     Both sides are put through stripAge before comparing.
+  //   * A finals round, where r.round is a token like "F:GF" and no numeric
+  //     comparison works.
+  const rowResult = (r) => {
+    const rh = stripAge(r.home), ra = stripAge(r.away);
+    const m = S.matches.find(x =>
+      x.compName === r.compName &&
+      String(x.isFinals ? `F:${x.finalsAbbrev || x.round}` : x.round) === String(r.round) &&
+      stripAge(x.home) === rh && stripAge(x.away) === ra);
+    if (!m) return null;
+    const hs = m.hScore, as = m.aScore;
+    if (hs === undefined || hs === null || as === undefined || as === null) return null;
+    const playerIsHome = stripAge(r.teamName) === rh;
+    const forS = playerIsHome ? hs : as;
+    const agS  = playerIsHome ? as : hs;
+    return {
+      score: `${forS}–${agS}`,
+      // Relative to the player's team, never to the home side.
+      res: forS > agS ? 'W' : forS < agS ? 'L' : 'D',
+    };
+  };
+
+  const COLS = '60px 1fr 1fr 40px 18px 34px 52px 28px 28px';
   body.innerHTML = `<div style="display:grid;grid-template-columns:${COLS};padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Round</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Home</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Away</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Gr</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Comp</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Res</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Score</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);text-align:right">G</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:right">BP</span>
   </div>` + rows.map(r => {
@@ -3654,6 +3688,7 @@ function renderPlayerGames(data, p) {
     const playerTeamStyle = 'font-weight:600;color:var(--gold)';
     const oppStyle = 'color:var(--tx2)';
     const dimmed = !r.isCurrentClub;
+    const rr = rowResult(r);
 
     return `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
       <div>
@@ -3668,6 +3703,8 @@ function renderPlayerGames(data, p) {
       </div>
       <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--tx2);text-align:center;white-space:nowrap">${r.gradeName}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--gold)':rr.res==='L'?'var(--red)':'var(--tx2)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;color:var(--tx2);white-space:nowrap">${rr?rr.score:'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
@@ -3676,6 +3713,11 @@ function renderPlayerGames(data, p) {
   `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:7px 16px;gap:6px;font-size:11px;background:var(--s2);border-top:1px solid var(--b2)">
     <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2)">TOTAL</div>
     <div></div><div></div><div></div><div></div>
+    <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--tx2);text-align:center">${
+      (() => { const t = rows.map(rowResult).filter(Boolean);
+               return t.length ? `${t.filter(x=>x.res==='W').length}-${t.filter(x=>x.res==='L').length}-${t.filter(x=>x.res==='D').length}` : '–'; })()
+    }</div>
+    <div></div>
     <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);text-align:right">${rows.reduce((s,r)=>s+r.goals,0)||'–'}</div>
     <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${rows.reduce((s,r)=>s+r.bp,0)||'–'}</div>
   </div>`;
