@@ -119,7 +119,7 @@ Session management and transport for all PlayHQ API calls. Manages the three
 cookies PlayHQ requires (`phq_tier`, `phq_session`, `phq_sub`) in the
 documented order. All writers use this — never write a local `getSession()`.
 
-**`lib/results-engine.js`** — v14  
+**`lib/results-engine.js`** — v16  
 Core match processing. Called by `fetch-results.js` and `backfill.js`.  
 Key functions: `processGrade()`, `buildGradeMeta()`, `parseGradeName()`.  
 The grade identity migration pass 1/2/3 logic lives here.  
@@ -133,6 +133,19 @@ rawGrade`, the same expression the page uses — because for a promoted team tha
 differs from `m.gradeId`. Exported as `lastRoundKey()` so the promoted case can
 be unit-tested. The `writeLastRound` option is GONE: it existed only because the
 key had no competition, and both callers stopped passing it.
+v15 (2026-08-13): a round with games but no final result no longer stops the round
+walk when its latest GAME date is in the past. Such a round is a placeholder or an
+abandonment, not the leading edge of the season. SEJ 2026 round 10 of `cb7b3db3`
+is one PENDING dummy fixture, and it had stopped the walk permanently — rounds 11
+to 14 held eight real games that were never fetched.
+`unplayed_round_blocker_design.md`.
+v16 (2026-08-13): every record carries `gameId`, PlayHQ's own fixture id, and a
+re-fetch whose `gameId` matches a stored record SUPERSEDES it rather than adding
+a second one. The match id embeds both team names and PlayHQ renames teams
+mid-season, so a rename used to create a phantom duplicate — sixteen in SEJ
+`a5a8276d`, six in `cb7b3db3`, each inflating a ladder's P column by one. Records
+written before v16 have no `gameId`, so existing duplicates persist and need a
+one-off cleanup — see `grade_attribution_split_design.md` §5.
 
 ### 4.2 Writers
 
@@ -201,12 +214,16 @@ One-off migration (2026-08-12): moved data from `data/orgs/` to
 
 ### 4.3 Diagnostics and reporting
 
-**`audit-data.js`** — v11  
+**`audit-data.js`** — v12  
 Read-only. Reads `data/seasons` and reports: file sizes and the core/players
 split, per-season record counts, round gap analysis (live vs retired),
 `grades.json` coverage, grade identity migration state, a sized estimate
 of what a cross-season player search index would cost, and (v11) the shape of
-the `lastRound` and `gotwFlags` keys in `core.json`. Exits non-zero if
+the `lastRound` and `gotwFlags` keys in `core.json`.
+v12 (2026-08-13): round-gap examples are ranked LIVE first, then by rounds
+missing, before ten are printed. They used to be the first ten found in file-read
+order, so on 2026-08-13 one live gap and 67 retired ones produced ten retired
+examples — the only gap with a per-run cost was the one not shown. Exits non-zero if
 `AUDIT_STRICT=true` and any warnings are present. Run this after any major
 data change.
 
@@ -257,12 +274,12 @@ test is exactly the committed code.
 |---|---|---|
 | `verify-store.yml` *(umbrella)* | — | runs all 7 suites; fires on every push |
 | `verify-per-season.js` | 53 | `store.js` and `split-by-season.js` |
-| `verify-backfill.js` | 94 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
+| `verify-backfill.js` | 124 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
 | `verify-discover-seasons.js` | 20 | `discover-seasons.js` |
 | `verify-migrate-grade-ids.js` | 54 | `migrate-grade-ids.js` |
 | `verify-dashboard-grades.js` | 88 | `index.html` silent failures |
 | `verify-rebuild-grade-meta.js` | 22 | `rebuild-grade-meta.js` |
-| `verify-audit.js` | 52 | `audit-data.js` |
+| `verify-audit.js` | 58 | `audit-data.js` |
 
 `verify-dashboard-grades.js` covers only things that **fail silently**: a
 promoted team appearing on two ladders, a scorer filtered out because their
@@ -280,7 +297,7 @@ All workflows use `workflow_dispatch` unless noted.
 | Workflow | Script | Notes |
 |---|---|---|
 | `verify-store.yml` | all 7 verify-*.js | **Auto-runs on push to scripts/**, index.html, org-discovery.html |
-| `fetch-results.yml` | fetch-results.js | Three jobs: VIP-only, all, scheduled (Sa/Su via Cloudflare Worker) |
+| `fetch-results.yml` | fetch-results.js, fetch-stats.js, fetch-fixtures.js | Three CHAINED JOBS, not three run modes — see 5.1 |
 | `fetch-stats.yml` | fetch-stats.js | Has `include_retired` input for backfill |
 | `fetch-fixtures.yml` | fetch-fixtures.js | |
 | `backfill.yml` | backfill.js | Has `comp` filter and `dry_run` inputs |
@@ -294,6 +311,55 @@ All workflows use `workflow_dispatch` unless noted.
 | `audit-data.yml` | audit-data.js | Has `strict` and `org` inputs |
 | `report-grade-collisions.yml` | report-grade-collisions.js | Read-only |
 | `probe-ser-logos.yml` | probe-ser-logos.js | One-off; add to probes group and remove |
+
+### 5.1 `fetch-results.yml` inputs — read this before dispatching it
+
+Corrected 2026-08-13 against the real file. The previous entry said "three jobs:
+VIP-only, all, scheduled", which described neither the jobs nor the inputs and
+sent a dispatch looking for an "all" control that does not exist.
+
+**Three inputs:**
+
+| Input | Values | Default | Effect |
+|---|---|---|---|
+| `fetch` | `both`, `results`, `stats`, `fixtures` | `both` | which of the three jobs actually do work |
+| `vip_only` | `'false'`, `'true'` (strings) | `'false'` | sets `VIP_ONLY`; `'true'` limits to competitions with `vip: true` |
+| `include_retired` | `'false'`, `'true'` | `'false'` | sets `STATS_INCLUDE_RETIRED` — Phase B backfill only |
+
+**To fetch results for all five competitions: `fetch: both`, `vip_only: false`.**
+There is no "all" option. "All competitions" IS `vip_only: false`.
+
+**Three jobs, chained by `needs: fetch-results`:** `fetch-results`, `fetch-stats`,
+`fetch-fixtures`. Each reads the same `fetch` input and decides for itself whether
+to do work, so `fetch: results` still starts the other two — they exit at their own
+mode check. `fetch: both` runs results and stats but NOT fixtures, which only runs
+on `fetch: fixtures`.
+
+Each job commits separately with `git add -A data/` then
+`git pull --rebase -X theirs`, and only when its script exited 0.
+
+**Scheduling is external.** A Cloudflare Worker (`footy-cron`) triggers
+`workflow_dispatch` at AEST times; there is no GitHub Actions `schedule:` block.
+The first step logs the expected cron match, so an unexpected trigger time prints
+`NO MATCH` rather than failing.
+
+**Dead code in `fetch-stats`'s "Determine stats mode".** The scheduled branch ends
+`exit 0`, and two lines after it — a comment and `echo "vip_only=false"` — can
+never execute. Harmless, but the step does not do what reading the bottom of it
+suggests.
+
+### 5.2 Which rows above have been verified against the real file
+
+Verified: `fetch-results.yml`, `verify-store.yml`, `probe-team-join.yml`,
+`report-field-usage.yml` (new 2026-08-13), `probe-concurrent-comps.yml`
+(new 2026-08-13).
+
+**Not verified — carried forward and liable to the same drift the fetch-results row
+had:** `fetch-stats.yml`, `fetch-fixtures.yml`, `backfill.yml`,
+`discover-seasons.yml`, `discover-orgs.yml`, `build-club-index.yml`,
+`migrate-grade-ids.yml`, `rebuild-grade-meta.yml`, `split-by-season.yml`,
+`repo-tidy.yml`, `audit-data.yml`, `report-grade-collisions.yml`. Open the file
+before trusting a row.
 
 **Workflows to be deleted by repo-tidy (`storage2026,probes,historic`):**
 - `cleanup-obsolete.yml`, `split-data.yml`, `report-data-size.yml`
@@ -497,4 +563,6 @@ Cosmetic only after grade identity migration.
 | `docs/team_registry_design.md` | Team registry design (open questions remain) |
 | `docs/finals_support.md` | Finals view design |
 | `docs/lastround_gotw_keying_design.md` | lastRound / gotwFlags keying (built 2026-08-13) |
+| `docs/unplayed_round_blocker_design.md` | Placeholder rounds stopping the fetch (built 2026-08-13) |
+| `docs/grade_attribution_split_design.md` | Grade attribution across a mid-season split (OPEN) |
 | `docs/OUTSTANDING_TASKS.md` | Actions, questions, and decisions needed |
