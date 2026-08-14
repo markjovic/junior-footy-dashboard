@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v13 2026-08-13 unattributed-rounds';
+const VERSION = 'audit-data v14 2026-08-13 player-records-per-season';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -868,6 +868,114 @@ console.log('\n10  Records the dashboard never shows (grade_attribution_split_de
     `dashboard: their two sides resolve to different grades. ${tDef} are in defunct ` +
     `grades (grading rounds and splits), ${tLive} in live grades (promotions). ` +
     `grade_attribution_split_design.md`);
+}
+
+// ── 11. Player records per person per season ────────────────────────────────
+// grade_attribution_split_design.md §3.1 depends on an answer this gives.
+//
+// A grading grade is to get its own tab, ladder and SCORERS list. Whether the
+// Scorers part is achievable at all depends on how PlayHQ stores a player who
+// played grading and was then placed in a division:
+//
+//   TWO records in the season, one per gradeID  -> the grading goals are
+//     separable, so a grading Scorers list can be built. But anything summing gp
+//     or goals across a season double-counts unless it groups by gradeID, and
+//     section 8's cross-season index sizing assumes one record per person per
+//     season.
+//
+//   ONE record, folded  -> the grading goals are NOT separable and a grading
+//     Scorers list cannot be correct. §3.1 would then apply to ladders and
+//     results only, and that has to be written down rather than discovered.
+//
+// playerGrade() in index.html prefers the ROSTER over p.gradeID and returns early
+// when the roster answers with an id. For a graded-then-placed team the roster
+// answers with the DIVISION, so grading goals are currently attributed to the
+// division's Scorers — the mirror of the match-record defect in section 10.
+console.log('\n11  Player records per person per season');
+{
+  const gradeNameById = new Map();
+  for (const g of (readJson(GRADES_PATH) || [])) {
+    if (g && g.id) gradeNameById.set(g.id, g.name || '');
+  }
+  const isGrading = (gid) => /grading/i.test(gradeNameById.get(gid) || '');
+
+  const perComp = new Map();   // comp -> { people, multi, multiWithGrading, maxRecs }
+  const gradingGrades = new Map();   // gradeId -> player records
+  const examples = [];
+
+  for (const [, v] of Object.entries(files)) {
+    // uuid -> [records] within THIS season file.
+    const byPerson = new Map();
+    for (const rec of v.payload.players || []) {
+      if (!rec || !rec.uuid) continue;
+      if (!byPerson.has(rec.uuid)) byPerson.set(rec.uuid, []);
+      byPerson.get(rec.uuid).push(rec);
+      const gid = rec.gradeID || '';
+      if (gid && isGrading(gid)) gradingGrades.set(gid, (gradingGrades.get(gid) || 0) + 1);
+    }
+    for (const [uuid, recs] of byPerson) {
+      const comp = recs[0].compName || '(none)';
+      if (!perComp.has(comp)) {
+        perComp.set(comp, { people: 0, multi: 0, multiWithGrading: 0, maxRecs: 0 });
+      }
+      const c = perComp.get(comp);
+      c.people++;
+      if (recs.length > c.maxRecs) c.maxRecs = recs.length;
+      if (recs.length > 1) {
+        c.multi++;
+        const grades = recs.map(r => r.gradeID || '(none)');
+        if (grades.some(isGrading)) {
+          c.multiWithGrading++;
+          if (examples.length < 8) {
+            examples.push(`${comp}  ${uuid}  ${recs.length} record(s): ` +
+              grades.map(g => `${g}${isGrading(g) ? ' [GRADING]' : ''}`).join(', '));
+          }
+        } else if (examples.length < 8) {
+          examples.push(`${comp}  ${uuid}  ${recs.length} record(s): ${grades.join(', ')}`);
+        }
+      }
+    }
+  }
+
+  const wc = Math.max(14, ...[...perComp.keys()].map(k => k.length)) + 2;
+  console.log('  ' + 'season'.padEnd(wc) + 'people'.padStart(8) + 'multi'.padStart(8) +
+    'w/ grading'.padStart(12) + 'max recs'.padStart(10));
+  let tP = 0, tM = 0, tMG = 0, tMax = 0;
+  for (const [comp, c] of [...perComp].sort()) {
+    tP += c.people; tM += c.multi; tMG += c.multiWithGrading;
+    if (c.maxRecs > tMax) tMax = c.maxRecs;
+    console.log('  ' + comp.padEnd(wc) + String(c.people).padStart(8) +
+      String(c.multi).padStart(8) + String(c.multiWithGrading).padStart(12) +
+      String(c.maxRecs).padStart(10));
+  }
+  console.log('  ' + 'TOTAL'.padEnd(wc) + String(tP).padStart(8) +
+    String(tM).padStart(8) + String(tMG).padStart(12) + String(tMax).padStart(10));
+
+  // THE ANSWER §3.1 NEEDS.
+  if (!tM) {
+    console.log(`\n  >> ONE record per person per season, everywhere. Grading appearances are`);
+    console.log(`     FOLDED IN and cannot be separated, so a grading-grade Scorers list`);
+    console.log(`     cannot be built. §3.1 applies to ladders and results only.`);
+  } else {
+    console.log(`\n  >> ${tM} person-season(s) have more than one record, ${tMG} of them`);
+    console.log(`     involving a grading grade. Grading appearances ARE separable by`);
+    console.log(`     gradeID, so a grading Scorers list can be built — but anything`);
+    console.log(`     summing gp or goals per season must group by gradeID or double-count.`);
+    warn(`${tM} person-season(s) hold more than one player record. Section 8's index ` +
+      `sizing counts records, not people per season, so its "seasons each" figure ` +
+      `is inflated by these. grade_attribution_split_design.md §3.1`);
+  }
+
+  if (gradingGrades.size) {
+    console.log(`\n  player records in grading grades:`);
+    for (const [g, n] of [...gradingGrades].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+      console.log(`    ${String(n).padStart(6)}  ${g}  ${gradeNameById.get(g) || '?'}`);
+    }
+  } else {
+    console.log(`\n  NO player record carries a grading grade id. If grading grades have`);
+    console.log(`  results but no player records, Scorers cannot be built for them at all.`);
+  }
+  for (const e of examples) console.log(`    ${e}`);
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────
