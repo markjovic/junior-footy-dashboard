@@ -1481,7 +1481,19 @@ function computeLadder(age, grade, maxRound) {
     m.age === age &&
     matchesComp(m) &&
     !isFinalsMatch(m) &&
-    matchIsValid(m) &&
+    // matchIsValid is GONE from this filter, not made conditional.
+    //
+    // It was blocking grading ladders: a pure grading competition owns every game
+    // played in its rounds whatever division the two teams were later placed in,
+    // and requiring both sides to agree kept only the games between future
+    // division-mates. SER 2026 U13 showed teams on P=1 or 2 after four grading
+    // games. grade_attribution_split_design.md §2.1.
+    //
+    // And for every OTHER grade it was redundant: matchLadderGrade() already
+    // returns null when the two sides resolve differently, and null never equals
+    // a grade id. Measured 2026-08-13 — removing it entirely changed no ordinary
+    // ladder in the suite, because the comparison below had always been doing the
+    // work. One test is now doing one job.
     matchLadderGrade(m) === grade &&
     (maxRound === '' || m.round <= parseInt(maxRound))
   );
@@ -2065,11 +2077,34 @@ function renderFixtures(age) {
 }
 
 function renderScorers(age) {
-  const scorers = getTopScorers(age);
   const el = document.getElementById('scorers-body');
   const meta = document.getElementById('scorers-meta');
   const gradeStr = S.selGrades.size ? [...S.selGrades].join(', ') : 'All grades';
   meta.textContent = gradeStr;
+
+  // NO Scorers list on a grading grade. A player has ONE record per season, in
+  // the grade they ended in, with gp and goals summed across every grade they
+  // played — grade_attribution_split_design.md §4 — so grading appearances belong
+  // in that row, not in a list of their own.
+  //
+  // What appeared here before this guard was not a grading Scorers list at all.
+  // playerGrade() resolves through the roster and only falls back to p.gradeID
+  // when the team lookup FAILS, so everyone whose team resolved appeared under
+  // their division and only the unresolvable leftovers fell through to the
+  // grading grade. On SER 2026 U13 that was twelve players out of a pool that
+  // scored hundreds of goals, showing whole-season GP against a four-game
+  // competition. A residue of failed lookups, displayed as though it were a grade.
+  // Only when a grading grade is the ONLY thing selected. With no selection the
+  // view is "all grades" and the division scorers are correct; with a mixed
+  // selection the non-grading grades still have scorers to show.
+  const sel = [...S.selGrades];
+  if (sel.length && sel.every(g => isGradingGrade(g))) {
+    el.innerHTML = '<div class="empty"><p>Grading rounds have no separate scorers — ' +
+      'a player\'s goals are counted in the grade they ended the season in.</p></div>';
+    return;
+  }
+
+  const scorers = getTopScorers(age);
   if (!scorers.length) {
     // "Still arriving" and "there are none" look identical to a reader, and the
     // first is now the common case for the first few seconds after a page load.
