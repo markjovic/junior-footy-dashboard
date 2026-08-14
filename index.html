@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.165</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.166</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.165</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.166</span>
         </div>
 
 
@@ -823,7 +823,7 @@ let S = {
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
   // { "EFNL 2026|U12|3": "matchId", "EFNL 2026|U12|F:GF": "matchId" }
   // compName|age|roundKey -> matchId. The compName carries the season, so
-  // "EFNL 2026|U12|3" and "EFNL 2025|U12|3" are distinct. Before Beta 0.165 the
+  // "EFNL 2026|U12|3" and "EFNL 2025|U12|3" are distinct. Before Beta 0.166 the
   // key was age|roundKey with no competition, so every competition sharing an age
   // group collided on every round and setting one pick silently deleted another.
   // lastround_gotw_keying_design.md.
@@ -1212,18 +1212,58 @@ function matchIsValid(m) {
   return hGrade === aGrade && hGrade !== null && hGrade !== undefined;
 }
 
-// The grade a match COUNTS TOWARDS, which is the team's current grade — not the
-// grade the match was played in.
+// TWO questions, two answers. matchGrade() used to serve both and that is exactly
+// how they were conflated: seventeen call sites, some meaning "where is this
+// listed" and some meaning "what does it count towards". The name is gone on
+// purpose — a single ambiguous accessor is the defect, not a convenience.
+// grade_attribution_split_design.md §2.
+
+// Is this grade a GRADING series? Some competitions run grading as a separate
+// graded competition whose games do NOT count towards the regular season, so it
+// gets its own ladder and its games count towards THAT.
 //
-// A team appears on exactly one ladder. A team promoted from B to A has all its
-// matches counted on the A ladder; its earlier B results still SHOW, they just
-// do not count anywhere else. That is the rule in team_registry_design.md §3.4
-// and it is deliberate.
+// Detected BY NAME, deliberately. Nothing structural separates a grading grade
+// from a mid-season split — both look like "stored under grade X, teams now
+// elsewhere". A defunct-grade test was tried and measured 38%: one unplaced team
+// keeps a grading grade alive and the test stops firing. A competition that words
+// it differently falls through to the ordinary rule, which is degraded rather than
+// wrong. Case-insensitive substring because "U12 Girls (Grading)" and
+// "U13 Mixed GRADING" both occur.
+function isGradingGrade(gradeId) {
+  if (!gradeId) return false;
+  // Built once and cached alongside S.gradeLabelById, by the same function, for
+  // the same reason: a per-call scan of gradeMeta runs on every record.
+  return !!(S.gradingGradeIds && S.gradingGradeIds[gradeId]);
+}
+
+// The grade a match is LISTED under: m.gradeId, which is PlayHQ's own answer to
+// "which grade was this game played in". Ground truth, not inference. Falls back
+// to the roster grade and then rawGrade for records written before the grade
+// identity migration.
+function matchListGrade(m) {
+  return m.gradeId || m._grade || currentGrade(m.home, m.age, m.rawGrade, m.compName) || m.rawGrade;
+}
+
+// The grade a match COUNTS TOWARDS, or null for none.
 //
-// A brief attempt at returning m.gradeId here was reverted on 2026-08-12: it
-// split a promoted team across two ladders, which is not the design.
-function matchGrade(m) {
-  return m._grade !== undefined ? m._grade : currentGrade(m.home, m.age, m.rawGrade, m.compName);
+//   grading grade      -> itself. Its own competition, its own ladder.
+//   both sides agree   -> that grade. Includes both-moved-to-the-same-grade,
+//                         which the previous code discarded.
+//   sides disagree     -> NULL. Listed, not counted.
+//
+// The ladder is NEVER m.gradeId for an ordinary grade. A brief attempt at that
+// was reverted on 2026-08-12 because it split a promoted team across two ladders.
+// One team, one ladder — per grade series.
+function matchLadderGrade(m) {
+  if (isGradingGrade(m.gradeId)) return m.gradeId;
+  // The ROSTER decides, always. An earlier version returned `m._ladder || m._grade`
+  // on the cached path and fell back to m.gradeId through _grade, which put a
+  // promoted team's old-grade match on the old ladder — the Beta 0.135 behaviour
+  // reverted on 2026-08-12. Both paths now compute the same thing.
+  const hg = m._hg !== undefined ? m._hg : currentGrade(m.home, m.age, m.rawGrade, m.compName);
+  const ag = m._ag !== undefined ? m._ag : currentGrade(m.away, m.age, m.rawGrade, m.compName);
+  if (hg === null || hg === undefined || hg !== ag) return null;
+  return hg;
 }
 
 // _valid and _grade are cached on every record when it is loaded, and a cached
@@ -1241,8 +1281,45 @@ function precomputeMatches(list) {
     const hg = currentGrade(m.home, m.age, m.rawGrade, m.compName);
     const ag = currentGrade(m.away, m.age, m.rawGrade, m.compName);
     m._valid = (hg === ag && hg !== null && hg !== undefined);
+    // _grade is the LADDER grade — the teams' agreed grade. It is NOT the listing
+    // grade; matchListGrade() uses m.gradeId. Keeping the old name for the ladder
+    // value is deliberate: every existing reader of _grade meant the ladder.
     m._grade = hg || m.rawGrade;
+    m._hg = hg; m._ag = ag;
+    m._ladder = m._valid ? m._grade : null;
   }
+}
+
+// Scorers show ONE row per person per season, in the grade they ended in, with gp
+// and goals summed across every grade they played.
+//
+// fetch-stats.js stores player records PER GRADE. audit-data.js v14 section 11
+// measured 18,540 person-seasons holding more than one record, up to four, and
+// only 1,383 of those involve a grading grade — so this is overwhelmingly people
+// in two ordinary grades, not a grading artefact. Without this the same child is
+// listed twice with their goals split between the rows.
+//
+// Grouped on UUID, never on name: two different children called Sam Reid must not
+// merge, and in a dataset of 70,680 people that is not hypothetical.
+function aggregatePlayers(list) {
+  const byPerson = new Map();
+  for (const p of list || []) {
+    if (!p) continue;
+    const k = p.uuid || `${p.compName}|${p.teamRaw || p.team}|${p.name}`;
+    const prev = byPerson.get(k);
+    if (!prev) { byPerson.set(k, { ...p }); continue; }
+    prev.gp = (prev.gp || 0) + (p.gp || 0);
+    prev.goals = (prev.goals || 0) + (p.goals || 0);
+    prev.bestPlayer = (prev.bestPlayer || 0) + (p.bestPlayer || 0);
+    // The row shows the grade they ENDED in. A grading record must not win over
+    // the division record, and the division record is the one whose team is in
+    // the roster now — which is what playerGrade() resolves.
+    if (isGradingGrade(prev.gradeID) && !isGradingGrade(p.gradeID)) {
+      prev.gradeID = p.gradeID; prev.team = p.team; prev.teamRaw = p.teamRaw;
+      prev.rawGrade = p.rawGrade;
+    }
+  }
+  return [...byPerson.values()];
 }
 
 // ── Display ────────────────────────────────────────────────────────────────
@@ -1258,7 +1335,7 @@ function gradeLabelOf(comp, age, key) {
 
 // The label for a match, from the grade it counts towards.
 function matchGradeLabel(m) {
-  return gradeLabelOf(m.compName, m.age, matchGrade(m));
+  return gradeLabelOf(m.compName, m.age, matchListGrade(m));
 }
 
 // gradeId -> label, rebuilt whenever gradeMeta loads. PlayHQ grade ids are
@@ -1270,10 +1347,18 @@ function matchGradeLabel(m) {
 // through unchanged, because for those the key already IS the label.
 function rebuildGradeLabels() {
   const idx = {};
+  // Grading grades, indexed in the SAME pass. A separate walk would be a second
+  // place that has to be kept in step with this one, and two copies of a
+  // gradeMeta scan is how _grade and matchGrade drifted apart in the first place.
+  // The NAME is what identifies a grading grade — see isGradingGrade — so the
+  // gradeMeta entry must carry `name`. rebuild-grade-meta.js writes it.
+  const grading = {};
   for (const [k, v] of Object.entries(S.gradeMeta || {})) {
     if (v && v.gradeId && v.label) idx[v.gradeId] = v.label;
+    if (v && v.gradeId && /grading/i.test(v.name || v.label || '')) grading[v.gradeId] = true;
   }
   S.gradeLabelById = idx;
+  S.gradingGradeIds = grading;
 }
 
 function gLabel(key) {
@@ -1381,7 +1466,7 @@ function computeLadder(age, grade, maxRound) {
     matchesComp(m) &&
     !isFinalsMatch(m) &&
     matchIsValid(m) &&
-    matchGrade(m) === grade &&
+    matchLadderGrade(m) === grade &&
     (maxRound === '' || m.round <= parseInt(maxRound))
   );
 
@@ -1474,7 +1559,7 @@ function getGOTWMatch(age) {
   const grades = activGrades(age);
   const validMatches = S.matches.filter(m =>
     matchesComp(m) &&
-    m.age === age && matchIsValid(m) && grades.has(matchGrade(m))
+    m.age === age && matchIsValid(m) && grades.has(matchListGrade(m))
   );
   if (!validMatches.length) return null;
 
@@ -1510,7 +1595,7 @@ function getGOTWMatch(age) {
   const sorted = [...roundMatches].sort((a,b) => marginPct(a) - marginPct(b));
   const winner = sorted[0];
   // Nominees: closest game in each OTHER grade (not the winner's grade)
-  const nominees = getNominees(sorted.slice(1).filter(m => matchGrade(m) !== matchGrade(winner)));
+  const nominees = getNominees(sorted.slice(1).filter(m => matchListGrade(m) !== matchListGrade(winner)));
   return winner ? { match: winner, nominees, roundKey: rKey, roundText: rText } : null;
 }
 
@@ -1518,11 +1603,11 @@ function getNominees(matches) {
   // Return the closest game (by margin%) per grade, sorted by grade order
   const byGrade = {};
   matches.forEach(m => {
-    const g = matchGrade(m);
+    const g = matchListGrade(m);
     if (!byGrade[g] || marginPct(m) < marginPct(byGrade[g])) byGrade[g] = m;
   });
   return Object.values(byGrade).sort((a,b) =>
-    GRADE_ORDER.indexOf(gLabel(matchGrade(a))) - GRADE_ORDER.indexOf(gLabel(matchGrade(b)))
+    GRADE_ORDER.indexOf(gLabel(matchListGrade(a))) - GRADE_ORDER.indexOf(gLabel(matchListGrade(b)))
   );
 }
 
@@ -1626,7 +1711,8 @@ function gradesForAge(age) {
   const gs = new Set();
   let comp = '';
   S.matches.filter(m=>m.age===age&&matchesComp(m)&&matchIsValid(m)).forEach(m=>{
-    gs.add(matchGrade(m));
+    gs.add(matchListGrade(m));
+    const lg = matchLadderGrade(m); if (lg) gs.add(lg);
     if (!comp) comp = m.compName || '';
   });
   // Sorted by rank, not by the key. The key is an id and sorts meaninglessly.
@@ -1850,7 +1936,7 @@ function renderGOTW(age) {
   metaEl.textContent = m.isFinals ? gotwData.roundText : `R${m.round}`;
   const hWon = m.hScore > m.aScore, aWon = m.aScore > m.hScore;
   const margin = Math.abs(m.hScore - m.aScore);
-  const grade = matchGrade(m) || m.rawGrade || '';
+  const grade = matchListGrade(m) || m.rawGrade || '';
 
   bodyEl.innerHTML = `<div class="gotw-wrap">
     <div class="gotw-teams">
@@ -1875,7 +1961,7 @@ function renderGOTW(age) {
     <div class="gotw-meta"><span class="gtag gtag-${abbrevGrade(gLabel(grade)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(gLabel(grade))}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
-      ${gotwData.nominees.map(n=>{const ng=matchGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
+      ${gotwData.nominees.map(n=>{const ng=matchListGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
         <div style="display:flex;align-items:center;gap:5px">
           <span class="gtag gtag-${abbrevGrade(gLabel(ng)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(gLabel(ng))}</span>
           <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
@@ -2024,7 +2110,7 @@ function renderResults(age) {
     if (m.age !== age) return false;
     // Valid matches: filter by active grade. Invalid (greyed): always show regardless of grade filter.
     if (matchIsValid(m)) {
-      const g = matchGrade(m) || m.rawGrade || '';
+      const g = matchListGrade(m) || m.rawGrade || '';
       if (grades.size && g && !grades.has(g)) return false;
     }
     // The round filter holds a round key, so "Grand Final" and "Round 1" are
@@ -2032,7 +2118,7 @@ function renderResults(age) {
     if (S.selRound && roundKey(m) !== S.selRound) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
     return true;
-  }).sort((a,b)=>-cmpRound(a,b)||(GRADE_ORDER.indexOf(gLabel(matchGrade(a)))-GRADE_ORDER.indexOf(gLabel(matchGrade(b)))));
+  }).sort((a,b)=>-cmpRound(a,b)||(GRADE_ORDER.indexOf(gLabel(matchListGrade(a)))-GRADE_ORDER.indexOf(gLabel(matchListGrade(b)))));
 
   const el = document.getElementById('results-body');
   document.getElementById('results-meta').textContent = `${matches.length} match${matches.length!==1?'es':''}`;
@@ -2048,7 +2134,7 @@ function renderResults(age) {
     const rms = byRound[r];
     const rows = rms.map(m=>{
       const hWon=m.hScore>m.aScore, aWon=m.aScore>m.hScore;
-      const g = (matchIsValid(m) ? matchGrade(m) : null) || m.rawGrade || '';
+      const g = (matchIsValid(m) ? matchListGrade(m) : null) || m.rawGrade || '';
       const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
       const valid = matchIsValid(m);
       const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
@@ -2848,7 +2934,8 @@ function renderStats() {
   const allGrades = new Set();
   const allTeams = new Set();
   allValidMatches.forEach(m => {
-    allGrades.add(`${m.age}|${matchGrade(m)}`);
+    allGrades.add(`${m.age}|${matchListGrade(m)}`);
+    const lg2 = matchLadderGrade(m); if (lg2) allGrades.add(`${m.age}|${lg2}`);
     allTeams.add(m.home);
     allTeams.add(m.away);
   });
@@ -3066,7 +3153,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const res = won ? 'W' : lost ? 'L' : 'D';
     const resCol = won ? 'var(--green)' : lost ? 'var(--red)' : 'var(--orange)';
     const valid = matchIsValid(m);
-    const g = valid ? matchGrade(m) : m.rawGrade;
+    const g = valid ? matchListGrade(m) : m.rawGrade;
     const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
     const haLabel = isHome ? '🏠' : '✈';
     const haText = isHome ? 'Home' : 'Away';
@@ -3950,7 +4037,7 @@ function renderGotwPicker() {
     ? matches.map((m,i)=>{
         const total = m.hScore+m.aScore;
         const pct = total ? ((Math.abs(m.hScore-m.aScore)/total)*100).toFixed(1) : '–';
-        const g=matchGrade(m);
+        const g=matchListGrade(m);
         return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:12px;${i===0?'color:var(--gold)':''}">
           <input type="radio" name="gotw-pick" value="${m.id}" ${m.id===flaggedId?'checked':''}>
           <span style="flex:1">${m.home} ${m.hScore}–${m.aScore} ${m.away}</span>
@@ -3966,7 +4053,7 @@ async function saveGotwFlags() {
   const comp = document.getElementById('gotw-comp-sel').value;
   const age = document.getElementById('gotw-age-sel').value;
   const rKey = document.getElementById('gotw-round-sel').value;
-  // The key gained the competition in Beta 0.165. It was age|roundKey, so a pick
+  // The key gained the competition in Beta 0.166. It was age|roundKey, so a pick
   // for EFNL U12 round 3 and one for SEJ U12 round 3 were the same entry and the
   // second silently replaced the first. roundKey() still returns the bare number
   // for home-and-away rounds and F:<abbrev> for finals.
