@@ -26,7 +26,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v16 2026-08-13 gameid-dedup';
+const ENGINE_VERSION = 'v17 2026-08-13 grademeta-name';
 
 'use strict';
 
@@ -945,14 +945,35 @@ function buildGradeMeta(grades) {
 
   for (const g of grades) {
     const { age, rawGrade } = parseGradeName(g.name, g.ageName, g.genderName);
-    // Grading is a pre-season sorting pool, not a competitive tier. It would
-    // otherwise consume a rank slot and push every real grade down one.
-    if (rawGrade === 'Grading') continue;
+
+    // Grading is a pre-season sorting pool, not a competitive tier.
+    //
+    // Until v17 such a grade was SKIPPED entirely — no entry, no label, no rank —
+    // so it consumed no rank slot and did not push the real grades down. That
+    // reasoning still holds and is preserved below. What it also did, and what was
+    // not intended, is leave the grade with no metadata at all: the page could not
+    // label it, could not tell it from a grade whose metadata is simply missing,
+    // and grade_attribution_split_design.md §2.1 needs it to have its own tab and
+    // ladder.
+    //
+    // So it now gets an entry, with r: 0 and grading: true.
+    //   r: 0        keeps it OUT of the rank sequence. A, B, C, D stay 1..4 and a
+    //               team row still reads "2 of 4" rather than "2 of 5".
+    //   grading     distinguishes "deliberately unranked" from "no metadata yet",
+    //               which r: 0 alone cannot — gradeRankOf() already returns 0 for
+    //               both, and a reader could not tell them apart.
+    //
+    // The detection is the same exact match the skip used, widened to the formats
+    // actually in the data: "U13 Mixed GRADING", "U12 Girls (Grading)" and
+    // "U12 Mixed Grading" all occur across the five competitions, and an exact
+    // rawGrade === 'Grading' test caught only some of them.
+    const isGrading = /grading/i.test(g.name || '') || rawGrade === 'Grading';
 
     const key = `${g.compName}|${age}|${rawGrade}`;
     const ageKey = `${g.compName}|${age}`;
-    const r = (next.get(ageKey) || 0) + 1;
-    next.set(ageKey, r);
+    // A grading grade takes no slot, so the counter is not advanced.
+    const r = isGrading ? 0 : (next.get(ageKey) || 0) + 1;
+    if (!isGrading) next.set(ageKey, r);
 
     const entry = {
       r,
@@ -968,12 +989,27 @@ function buildGradeMeta(grades) {
     //
     // gradeMeta is derived and rebuilt in full on every run, so the two keys
     // cannot drift. The rawGrade key comes out once index.html reads the id.
-    meta[`${g.compName}|${age}|${g.id}`] = { ...entry, label: labelOf(g.name, age, rawGrade), gradeId: g.id };
+    // `name` is PlayHQ's verbatim grade name, carried so the page can identify a
+    // GRADING grade — index.html never loads grades.json, and a LABEL is no use
+    // for this: labels are "A", "Blue", "Division 1", never "U13 Mixed Grading".
+    // grade_attribution_split_design.md §2.3.
+    meta[`${g.compName}|${age}|${g.id}`] = {
+      ...entry,
+      label: labelOf(g.name, age, rawGrade),
+      gradeId: g.id,
+      // PlayHQ's verbatim name. index.html never loads grades.json, so this is
+      // the only way the page can identify a grading grade.
+      name: g.name || '',
+      ...(isGrading ? { grading: true } : {}),
+    };
 
     // Two PlayHQ grades parsing to one rawGrade key overwrite each other. That
     // is the collapse this whole migration exists to fix; the id key above is
     // unaffected, so this is now a display-only casualty and counted rather
     // than warned about 130 times a run.
+    // No rawGrade key for a grading grade. It is identified by its id, and a
+    // rawGrade key would collide with a real grade in the same age.
+    if (isGrading) continue;
     if (meta[key]) { rawCollapsed++; continue; }
     meta[key] = entry;
   }
