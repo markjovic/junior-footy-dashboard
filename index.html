@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.173</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.174</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.173</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.174</span>
         </div>
 
 
@@ -2915,15 +2915,40 @@ function renderFinalsByClub(pool) {
   }
 
   const blocks = entries.map(e => {
-    // Premiers first, then teams that reached a grand final, then the rest —
-    // with the grade's strength as the tiebreak within each band, and age after
-    // that. Sorting by age alone buried a top-grade premiership below an under-8
-    // team that lost its first final.
+    // Premiers first, then everyone else by HOW FAR THEY GOT, deepest first.
+    //
+    // Until Beta 0.174 this was three bands — premiers, grand finalists, and
+    // everyone else — with grade strength as the tiebreak inside each. That put a
+    // team knocked out in the first final above a lower-grade team still alive in
+    // a preliminary final, purely because its grade was stronger. Beaconsfield
+    // showed it plainly: U16 Girls A, U13 A and U12 A all lost their first final
+    // and sat above U17.5 C and U14 D, both of whom had won through to a
+    // preliminary final.
+    //
+    // Depth comes from globalGradeRoundIdx, which is already built above: it maps
+    // each round to a GLOBAL column, offset so every grade's grand final lands in
+    // the last column. So the index measures distance from the grand final and is
+    // comparable across grades with different numbers of finals rounds. Unplayed
+    // fixtures count, which is the point — a scheduled preliminary final is how we
+    // know the team is still alive.
+    //
+    // Premiers are still lifted out first, because a grand final winner and its
+    // loser share the same depth and only the result separates them.
+    const depthOf = t => {
+      const idx = globalGradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`);
+      if (!idx) return -1;
+      let d = -1;
+      for (const m of t.matches) {
+        const i = idx.get(m.round);
+        if (i !== undefined && i > d) d = i;
+      }
+      return d;
+    };
     e.teams.sort((a,b) => {
       const sa = a.status || teamStatus(a, pool), sb = b.status || teamStatus(b, pool);
-      const band = t => (t.wonGF ? 0 : t.inGF ? 1 : 2);
       const rank = t => gradeRankOf(t.comp, t.age, t.grade) || 99;
-      return (band(sa) - band(sb)) ||
+      return ((sa.wonGF ? 0 : 1) - (sb.wonGF ? 0 : 1)) ||
+             (depthOf(b) - depthOf(a)) ||
              (rank(a) - rank(b)) ||
              ageSort(a.age, b.age) ||
              String(a.grade).localeCompare(String(b.grade));
