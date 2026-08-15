@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.171</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.172</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.171</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.172</span>
         </div>
 
 
@@ -2011,12 +2011,12 @@ function renderGOTW(age) {
         <span class="gotw-name" style="${aWon?'color:var(--tx);font-weight:600':''};text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px">${m.away}</span>
       </div>
     </div>
-    <div class="gotw-meta"><span class="gtag gtag-${abbrevGrade(gLabel(grade)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(gLabel(grade))}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
+    <div class="gotw-meta"><span class="gtag gtag-neutral gtag-${abbrevGrade(gLabel(grade)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:9px">${abbrevGrade(gLabel(grade))}</span>${m.venue?`  &middot;  ${venueLink(m.venue, m.venueUrl)}`:''}</div>
     ${gotwData.nominees.length ? `<div class="gotw-nominees">
       <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-bottom:3px;letter-spacing:1px">CLOSEST BY GRADE</div>
       ${gotwData.nominees.map(n=>{const ng=matchListGrade(n)||n.rawGrade||'';return`<div class="gotw-nom">
         <div style="display:flex;align-items:center;gap:5px">
-          <span class="gtag gtag-${abbrevGrade(gLabel(ng)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(gLabel(ng))}</span>
+          <span class="gtag gtag-neutral gtag-${abbrevGrade(gLabel(ng)).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${abbrevGrade(gLabel(ng))}</span>
           <span><span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.home.replace(/'/g,"\\'")}','${ng}')">${n.home}</span> vs <span style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${n.away.replace(/'/g,"\\'")}','${ng}')">${n.away}</span></span>
         </div>
         <span class="gotw-nom-score">${n.hScore}–${n.aScore}</span>
@@ -2077,7 +2077,7 @@ function renderFixtures(age) {
       const timeStr = m.time ? m.time.slice(0,5) : '';
       return `<div class="match-row">
         <div class="mr-grade">
-          <span class="gtag ${gc}">${abbrevGrade(gLabel(g))}</span>
+          <span class="gtag gtag-neutral ${gc}">${abbrevGrade(gLabel(g))}</span>
         </div>
         <div class="mr-left">
           ${m.provisional && !m.hLogo ? '' : crestHTML(m.home, 16, 'mr-logo')}
@@ -2171,7 +2171,7 @@ function renderScorers(age) {
         <div class="s-name"><span onclick="openPlayerPanel('${p.uuid}')" style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${toProperCase(p.name)}</span>${transferBadge}</div>
         <div class="s-team" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\\'")}','${teamGrade}','${p.age}')">${displayTeam}</div>
       </div>
-      <span class="gtag ${gc}">${abbrevGrade(gLabel(teamGrade))}</span>
+      <span class="gtag gtag-neutral ${gc}">${abbrevGrade(gLabel(teamGrade))}</span>
       <div class="s-gp">${p.gp}</div>
       <div class="s-g">${p.goals}</div>
       <div class="s-gpg" style="text-align:right">${gpg}</div>
@@ -2217,7 +2217,7 @@ function renderResults(age) {
       const isGotw = S.gotwFlags[gotwKey] === m.id;
       return `<div class="match-row" style="${valid?'':'opacity:.5'}">
         <div class="mr-grade">
-          <span class="gtag ${gc}">${abbrevGrade(gLabel(g))}</span>
+          <span class="gtag gtag-neutral ${gc}">${abbrevGrade(gLabel(g))}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
           ${m.isFinals?`<span style="font-size:7px;color:var(--gold);letter-spacing:.5px;line-height:1.2">${m.finalsAbbrev||'F'}</span>`:''}
           ${!valid?`<span style="font-size:7px;color:var(--tx3);text-align:center;line-height:1.2">not<br>counted</span>`:''}
@@ -2523,7 +2523,7 @@ function renderFinalsByAge(pool) {
         <span></span>${keys.map(k => `<span class="fv-hdr">${roundLabel(byKey[k][0])}</span>`).join('')}</div>`;
 
       const body = `<div class="fv-row" style="${cols}">
-        <span class="gtag gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}" style="align-self:start">${abbrevGrade(gLabel(g))}</span>
+        <span class="gtag gtag-neutral gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}" style="align-self:start">${abbrevGrade(gLabel(g))}</span>
         ${keys.map(k => `<div class="fv-cell">${
           byKey[k].sort((x,y)=>(x.date||'').localeCompare(y.date||'')).map(m =>
             `<div style="margin-bottom:6px">${fvSide(m,'h')}${fvSide(m,'a')}` +
@@ -3236,7 +3236,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
     const isGotw = S.gotwFlags[gotwKey] === m.id;
     return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
-      <span class="gtag ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(gLabel(g))}</span>
+      <span class="gtag gtag-neutral ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(gLabel(g))}</span>
       <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
       <span style="font-size:10px;color:var(--tx3);text-align:center">${isHome?'🏠':'✈'}</span>
       <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
@@ -3246,7 +3246,7 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
         ${isGotw?`<span style="font-size:8px;color:var(--gold);background:var(--gold2);border:1px solid var(--gold3);border-radius:3px;padding:1px 4px;flex-shrink:0">GOTW</span>`:''}
         ${!valid?`<span style="font-size:8px;color:var(--tx3);flex-shrink:0">not counted</span>`:''}
       </div>
-      <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--gold)':lost?'var(--red)':'var(--tx)'};font-weight:600">${tf}–${ta}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:13px;text-align:center;color:${won?'var(--green)':lost?'var(--red)':'var(--orange)'};font-weight:600">${tf}–${ta}</span>
       <span style="font-size:9px;color:var(--tx3);text-align:left;white-space:nowrap">${tg}.${tb} – ${og}.${ob}</span>
       <span style="font-size:9px;color:var(--tx3);white-space:normal;line-height:1.4">${venueLink(m.venue, m.venueUrl)}</span>
     </div>`;
@@ -3493,7 +3493,7 @@ async function openPlayerPanel(uuid) {
   const drillTeam = p?.team || lookupTeam;
   const drillAge  = p?.age || '';
   document.getElementById('pm-meta').innerHTML = p
-    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${rawGradeResolved}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag ${gc}">${grade}</span>`
+    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${rawGradeResolved}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag gtag-neutral ${gc}">${grade}</span>`
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -3723,8 +3723,8 @@ function renderPlayerGames(data, p) {
         ? `<span class="gtag gtag-neutral gtag-${String(r.gradeName).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${r.gradeName}</span>`
         : ''}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
-      <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--gold)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
-      <div style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;color:var(--tx2);white-space:nowrap">${rr?rr.score:'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
