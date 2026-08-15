@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5431,
+        "matches": 5432,
         "players_n": 18117
       }
     },
@@ -20611,10 +20611,21 @@
     "EFNL 2026|Templestowe Senior Women|Senior Women": "225d5de5",
     "EFNL 2026|Upper Ferntree Gully Senior Women|Senior Women": "f6d97144",
     "EFNL 2026|Chirnside Park Veterans Women|Veterans": "3692eb03",
-    "EFNL 2026|South Belgrave Veterans Women|Veterans": "a9a17709"
+    "EFNL 2026|South Belgrave Veterans Women|Veterans": "a9a17709",
+    "EFNL 2026|The Basin Seniors|Senior Men": "f44925c0",
+    "EFNL 2026|Upper Ferntree Gully Seniors|Senior Men": "f6d97144",
+    "EFNL 2026|Croydon North MLOC Seniors|Senior Men": "706efe78",
+    "EFNL 2026|South Croydon Senior Women Blue|Senior Women": "70d6161b",
+    "EFNL 2026|Park Orchards Senior Women|Senior Women": "48b2041f",
+    "EFNL 2026|Waverley Blues Senior Women|Senior Women": "dd1c5fd9",
+    "EFNL 2026|Heathmont Senior Women|Senior Women": "483ed4c6",
+    "EFNL 2026|North Ringwood Senior Women Red|Senior Women": "9e3ed6a9",
+    "EFNL 2026|South Croydon Senior Women Red|Senior Women": "70d6161b",
+    "EFNL 2026|Blackburn Veteran Women|Veterans": "1c7b6fc1",
+    "EFNL 2026|Gembrook Cockatoo Veteran Women|Veterans": "ef1e2fbc"
   },
-  "lastUpdated": "2026-08-15T04:19:01.497Z",
-  "lastResultsFetch": "2026-08-15T04:19:01.497Z",
+  "lastUpdated": "2026-08-15T07:18:38.231Z",
+  "lastResultsFetch": "2026-08-15T07:18:38.231Z",
   "lastStatsFetch": "2026-08-14T00:46:35.735Z",
   "seasonFiles": [
     {
@@ -20645,7 +20656,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2436382
+      "bytes": 2437130
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
