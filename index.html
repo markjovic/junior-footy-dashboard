@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.172</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.173</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.172</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.173</span>
         </div>
 
 
@@ -2853,10 +2853,15 @@ function renderFinalsByClub(pool) {
       // A grand final win is the result of the season, so it is marked as such
       // rather than reading as one more W among four.
       const isFlag = winner && ab === 'GF';
+      // One palette across the whole page: green win, red loss, orange draw.
+      // The GOLD star stays on a grand final win — that is a premiership marker,
+      // not a result colour, and gold is what marks the top rank tag below too.
+      // A plain W was gold here and green everywhere else, and a draw was grey
+      // rather than orange.
       const res = isFlag ? '<span style="color:var(--gold);font-weight:700">★ W</span>'
-                : winner ? '<span style="color:var(--gold);font-weight:600">W</span>'
-                : mine < thrs ? '<span style="color:#ef4444;font-weight:600">L</span>'
-                : '<span style="color:var(--tx2);font-weight:600">D</span>';
+                : winner ? '<span style="color:var(--green);font-weight:600">W</span>'
+                : mine < thrs ? '<span style="color:var(--red);font-weight:600">L</span>'
+                : '<span style="color:var(--orange);font-weight:600">D</span>';
       return `<span style="min-width:0" title="${ab} v ${opp}">${tag}${res} ${mine}–${thrs}${oppLine}</span>`;
     }
 
