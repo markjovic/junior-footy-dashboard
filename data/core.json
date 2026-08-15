@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5432,
+        "matches": 5433,
         "players_n": 18117
       }
     },
@@ -20622,10 +20622,14 @@
     "EFNL 2026|North Ringwood Senior Women Red|Senior Women": "9e3ed6a9",
     "EFNL 2026|South Croydon Senior Women Red|Senior Women": "70d6161b",
     "EFNL 2026|Blackburn Veteran Women|Veterans": "1c7b6fc1",
-    "EFNL 2026|Gembrook Cockatoo Veteran Women|Veterans": "ef1e2fbc"
+    "EFNL 2026|Gembrook Cockatoo Veteran Women|Veterans": "ef1e2fbc",
+    "EFNL 2026|South Belgrave Senior Women|Senior Women": "a9a17709",
+    "EFNL 2026|Boronia Senior Women Brown|Senior Women": "6267edc4",
+    "EFNL 2026|Montrose Senior Women|Senior Women": "d3429a03",
+    "EFNL 2026|Blackburn Black Senior Women|Senior Women": "1c7b6fc1"
   },
-  "lastUpdated": "2026-08-15T07:18:38.231Z",
-  "lastResultsFetch": "2026-08-15T07:18:38.231Z",
+  "lastUpdated": "2026-08-15T10:18:21.847Z",
+  "lastResultsFetch": "2026-08-15T10:18:21.847Z",
   "lastStatsFetch": "2026-08-14T00:46:35.735Z",
   "seasonFiles": [
     {
@@ -20656,7 +20660,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2437130
+      "bytes": 2437724
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
