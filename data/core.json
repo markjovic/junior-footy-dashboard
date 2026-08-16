@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5433,
+        "matches": 5486,
         "players_n": 18174
       }
     },
@@ -20689,7 +20689,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2398344
+      "bytes": 2441740
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
@@ -20878,5 +20878,6 @@
       "bytes": 5658136
     }
   ],
-  "lastClubIndex": "2026-08-13T09:08:24.727Z"
+  "lastClubIndex": "2026-08-13T09:08:24.727Z",
+  "lastFixtureFetch": "2026-08-16T13:01:35.185Z"
 }
