@@ -339,7 +339,8 @@ body{overflow-x:hidden}
 .fv-out{font-size:9px;color:#ef4444;letter-spacing:.5px;text-transform:uppercase}
 /* ── Finals: club summary table ── */
 .fv-sum-wrap{background:var(--s1);border:1px solid var(--b1);border-radius:10px;
-  padding:4px 12px 8px;margin-bottom:14px;overflow-x:auto}
+  padding:2px 12px 4px;margin-bottom:14px}
+.fv-sum-body{overflow-x:auto}
 .fv-sum{width:100%;border-collapse:collapse;font-size:12px}
 .fv-sum th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;
   color:var(--tx3);font-weight:500;padding:8px 8px 6px;text-align:right;white-space:nowrap;
@@ -357,6 +358,17 @@ body{overflow-x:hidden}
   .fv-sum th,.fv-sum td{padding:6px 5px}
   .fv-sum th{font-size:8px;letter-spacing:.5px}
 }
+.fv-sum-hdr{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:9px 2px;
+  cursor:pointer;user-select:none}
+.fv-sum-hdr:hover .fv-sum-title{color:var(--tx)}
+.fv-sum-caret{font-size:9px;color:var(--tx3);width:10px}
+.fv-sum-title{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--tx2)}
+.fv-sum-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)}
+.fv-sum-body{padding-bottom:6px}
+.fv-sum-pct{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
+.fv-sum-nocrest{width:16px;height:16px;border-radius:50%;background:var(--s3);flex-shrink:0;
+  display:inline-block}
 /* ── Finals: by venue ── */
 .fvv-venue{padding:2px 0 8px;border-bottom:1px solid var(--b1);margin-bottom:6px}
 .fvv-venue:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
@@ -413,7 +425,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.177</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.178</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -753,7 +765,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.177</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.178</span>
         </div>
 
 
@@ -832,6 +844,7 @@ function saveFilters() {
       view:       S.view,
       finalsMode: S.finalsMode,
       venueGroup: S.venueGroup,
+      clubSummaryOpen: S.clubSummaryOpen,
       finalsSort: S.finalsSort,
       finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
@@ -905,6 +918,9 @@ let S = {
   // is on this Saturday" against "what is on at this ground" — and neither is a
   // filter, so this is a grouping switch rather than a sort.
   venueGroup: 'date',   // 'date' | 'venue'
+  // The club summary table starts CLOSED. The cards are what the by-club view is
+  // for; the table is a summary you open when you want it.
+  clubSummaryOpen: false,
   finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
   finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
@@ -2518,18 +2534,59 @@ function gradeTierCount(comp, age) {
 // competition chips, the young-age toggle, and the finals view's own gender and
 // level filters. The young-age toggle is what keeps the SEJ Lightning
 // Premiership grades out, since they are all U10.
+// The competition, age-visibility, gender and level filters — everything the
+// finals view scopes by EXCEPT whether a record is a final.
+//
+// Factored out because two pools need it and they must agree. finalsPool() adds
+// `isFinals`; enteredPool() does not, so the club summary can show how many teams
+// a club ENTERED under the same filters as the finals it reached. If these two
+// were written separately, a gender filter applied to one and not the other would
+// give a percentage over the wrong denominator — and 6 of 40 against 6 of 12 both
+// look like perfectly ordinary numbers.
+function finalsFilters(m) {
+  if (!matchesComp(m) || m.isBye || m.isPartial) return false;
+  if (!S.showAllAges && DEFAULT_HIDDEN_AGES.has(m.age)) return false;
+  // Default to 'all' rather than trusting the field to exist. An undefined
+  // filter would match nothing and empty the whole view with no explanation.
+  const g = S.finalsGender || 'all';
+  const l = S.finalsLevel  || 'all';
+  if (g !== 'all' && genderOf(m.compName, m.age, m.rawGrade) !== g) return false;
+  if (l !== 'all' && levelOf(m.compName, m.age, m.rawGrade) !== l) return false;
+  return true;
+}
+
 function finalsPool() {
-  return [...S.matches, ...S.fixtures].filter(m => {
-    if (!m.isFinals || !matchesComp(m) || m.isBye || m.isPartial) return false;
-    if (!S.showAllAges && DEFAULT_HIDDEN_AGES.has(m.age)) return false;
-    // Default to 'all' rather than trusting the field to exist. An undefined
-    // filter would match nothing and empty the whole view with no explanation.
-    const g = S.finalsGender || 'all';
-    const l = S.finalsLevel  || 'all';
-    if (g !== 'all' && genderOf(m.compName, m.age, m.rawGrade) !== g) return false;
-    if (l !== 'all' && levelOf(m.compName, m.age, m.rawGrade) !== l) return false;
-    return true;
-  });
+  return [...S.matches, ...S.fixtures].filter(m => m.isFinals && finalsFilters(m));
+}
+
+// Every record in scope, finals or not. The denominator for the club summary's
+// percentages: how many teams a club fielded, against how many reached finals.
+function enteredPool() {
+  return [...S.matches, ...S.fixtures].filter(finalsFilters);
+}
+
+// A team's identity for COUNTING, deliberately without the grade. A side that
+// played grading and was then placed in a division is ONE team the club entered,
+// not two — and the club card's own key carries rawGrade, so counting on that
+// would let a club's finals total exceed the number of teams it fielded and print
+// a percentage over 100.
+const teamCountKey = (comp, team, age) => `${comp}|${team}|${age}`;
+
+// clubId -> Set of team keys entered, under the current filters.
+function enteredTeamsByClub() {
+  const out = new Map();
+  for (const m of enteredPool()) {
+    for (const t of [m.home, m.away]) {
+      if (!t || t === '__bye__' || t === '__partial__') continue;
+      // A provisional placeholder ("Winner Game 1") is not a team anyone entered.
+      if (m.provisional && !S.teamClub[`${m.compName}|${t}|${m.age}`]) continue;
+      const id = clubIdOf(m.compName, t, m.age);
+      if (!id || !isClubOrg(id)) continue;
+      if (!out.has(id)) out.set(id, new Set());
+      out.get(id).add(teamCountKey(m.compName, t, m.age));
+    }
+  }
+  return out;
 }
 
 const isProvSide = (m, side) => !!m.provisional && !(side === 'h' ? m.hLogo : m.aLogo);
@@ -2947,6 +3004,16 @@ function renderFinalsByVenue(pool) {
 
 // The grouping switch. Same shape as setFinalsMode: reject an unknown value and
 // a no-op rather than re-rendering for nothing.
+// The club summary opens and closes. State lives in S because the finals body is
+// rebuilt by innerHTML on every render, so a <details> element's own open state
+// would be discarded each time and the section would snap shut on any filter
+// change.
+function toggleClubSummary() {
+  S.clubSummaryOpen = !S.clubSummaryOpen;
+  saveFilters();
+  render();
+}
+
 function setVenueGroup(g) {
   if (!['date','venue'].includes(g) || S.venueGroup === g) return;
   S.venueGroup = g;
@@ -3049,6 +3116,24 @@ function renderFinalsByClub(pool) {
     };
   });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
+
+  // ONE comparator, used by the cards below and by the summary table above them.
+  // The summary carries extra rows — clubs that entered teams and reached no
+  // finals — and if it sorted by its own rule the two lists would disagree about
+  // which club is "first" while sitting on the same screen.
+  const cmpEntries = (a, b) => {
+    if (S.finalsSort === 'name') return a.name.localeCompare(b.name);
+    const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+    const primary = S.finalsWeighted
+      ? (x,y) => cmpTiers(x[def.tiers], y[def.tiers])
+      : (x,y) => def.flat(y) - def.flat(x);
+    return primary(a,b) ||
+      b.premiers - a.premiers ||
+      b.inGF - a.inGF ||
+      b.teams.length - a.teams.length ||
+      a.name.localeCompare(b.name);
+  };
+
   if (S.finalsSort === 'name') {
     entries.sort((a,b) => a.name.localeCompare(b.name));
   } else {
@@ -3067,45 +3152,123 @@ function renderFinalsByClub(pool) {
   }
 
   // ── Club summary table ────────────────────────────────────────────────────
-  // One row per club, four measures, above the cards. It answers at a glance
-  // what the cards answer in detail: who has how many teams alive, who is in
-  // grand finals, and who has won them.
+  // One row per club, above the cards. It answers at a glance what the cards
+  // answer in detail: who entered how many teams, how many of them reached the
+  // finals, who is still alive, who is in grand finals, who has won them.
   //
-  // It reuses `entries` — the SAME array the cards below are built from, already
-  // sorted by the same fv-sort control. Deriving it separately would be a second
-  // aggregation over the same pool, and two counts of one thing drift: that is
-  // exactly how _grade and matchGrade came apart. The dropdown's five options are
-  // already Alphabetical / teams / remaining / GF / premierships, so the table's
-  // column order and the sort control were designed against each other rather
-  // than one being bolted on.
+  // IT INCLUDES CLUBS THAT REACHED NO FINALS AT ALL. A table of only the
+  // successful clubs makes every club look successful, and the percentages have
+  // no meaning without the clubs that entered teams and got nowhere. Those rows
+  // come from enteredTeamsByClub(), which applies finalsFilters() — the SAME
+  // competition, age, gender and level scoping as finalsPool() — so a junior-only
+  // view compares junior teams against junior finals and not against everything.
   //
-  // Totals are summed from the rows rather than recomputed from the pool, for
-  // the same reason.
-  const sumOf = (f) => entries.reduce((n, e) => n + f(e), 0);
-  const summary = entries.length ? `<div class="fv-sum-wrap">
+  // The percentage on every column is against ENTERED, so the columns read down
+  // consistently: of the teams this club put in, this many reached finals, this
+  // many are still alive, this many made a grand final, this many won one.
+  //
+  // Counting identity is comp|team|age with NO grade — teamCountKey. A side that
+  // played grading and was then placed in a division is one team entered, and the
+  // card's own key carries rawGrade, so counting on that would let a club's finals
+  // total exceed the teams it fielded and print a percentage over 100.
+  const enteredBy = enteredTeamsByClub();
+
+  // Deduped to the same identity as the denominator, so numerator and denominator
+  // are the same kind of thing. `topGrade` counts finals teams in a grade PlayHQ
+  // ranks strongest in its age — gradeRankOf returns 1 for those — which is the
+  // measure of whether a club competes at the top rather than merely in volume.
+  const summaryOf = (e) => {
+    const keyset = (pred) => new Set(e.teams.filter(t => !pred || pred(t))
+      .map(t => teamCountKey(t.comp, t.team, t.age)));
+    return {
+      id: e.id, name: e.name, e,
+      entered:   (enteredBy.get(e.id) || new Set()).size,
+      inFinals:  keyset(null).size,
+      remaining: keyset(t => t.status.remaining).size,
+      inGF:      keyset(t => t.status.inGF).size,
+      premiers:  keyset(t => t.status.wonGF).size,
+      topGrade:  keyset(t => gradeRankOf(t.comp, t.age, t.grade) === 1).size,
+    };
+  };
+
+  // Clubs with finals teams, then the clubs that entered and reached none. A club
+  // filter means the reader is looking at one club, so the no-finals rows are
+  // dropped rather than left as a wall of zeros around it.
+  const summaryRows = entries.map(summaryOf);
+  if (!S.selClub) {
+    const shown = new Set(entries.map(e => e.id));
+    for (const [id, teamsIn] of enteredBy) {
+      if (shown.has(id)) continue;
+      // Shaped like an `entries` row so cmpEntries can sort it beside the others
+      // rather than the two being ordered by different rules on one screen.
+      const zero = { id, name: clubNameOf(id) || id, teams: [], remaining: 0, inGF: 0,
+        premiers: 0, tiersAll: {}, tiersRemaining: {}, tiersGF: {}, tiersPremiers: {} };
+      summaryRows.push({ id, name: zero.name, e: zero, entered: teamsIn.size,
+        inFinals: 0, remaining: 0, inGF: 0, premiers: 0, topGrade: 0 });
+    }
+    summaryRows.sort((x, y) => cmpEntries(x.e, y.e));
+  }
+
+  // "5 (28%)". A zero prints as a dash with no percentage — "0 (0%)" is two ways
+  // of saying nothing and makes the filled cells harder to pick out. Rounded to a
+  // whole number: a decimal implies a precision that a count out of eleven does
+  // not have.
+  const pctCell = (n, of, cls) => {
+    if (!n) return `<td class="${cls || ''}"><span class="fv-sum-zero">–</span></td>`;
+    const pct = of ? Math.round((n / of) * 100) : 0;
+    return `<td class="${cls || ''}">${n}` +
+      (of ? ` <span class="fv-sum-pct">(${pct}%)</span>` : '') + `</td>`;
+  };
+
+  const tot = (f) => summaryRows.reduce((n, r) => n + f(r), 0);
+  const totEntered = tot(r => r.entered);
+
+  const summaryBody = summaryRows.map(r => `<tr>
+    <td style="text-align:left"><span class="fv-sum-club">${
+      r.e.teams.length ? crestHTML(r.e.teams[0].team, 16, 'tlogo')
+                       : '<span class="fv-sum-nocrest"></span>'}<span>${r.name}</span></span></td>
+    <td>${r.entered || '<span class="fv-sum-zero">–</span>'}</td>
+    ${pctCell(r.inFinals,  r.entered)}
+    ${pctCell(r.topGrade,  r.entered)}
+    ${pctCell(r.remaining, r.entered)}
+    ${pctCell(r.inGF,      r.entered)}
+    ${pctCell(r.premiers,  r.entered, r.premiers ? 'fv-sum-prem' : '')}
+  </tr>`).join('');
+
+  // COLLAPSED BY DEFAULT. The cards below are the point of this view; the table
+  // is a summary you open when you want it. The open state lives in S rather than
+  // in a <details> element, because the body is rebuilt by innerHTML on every
+  // render and an element's own open state would be thrown away each time.
+  const sumOpen = !!S.clubSummaryOpen;
+  const summary = summaryRows.length ? `<div class="fv-sum-wrap">
+    <div class="fv-sum-hdr" onclick="toggleClubSummary()" role="button" tabindex="0"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleClubSummary();}">
+      <span class="fv-sum-caret">${sumOpen ? '▾' : '▸'}</span>
+      <span class="fv-sum-title">Club summary</span>
+      <span class="fv-sum-sub">${summaryRows.length} club${summaryRows.length !== 1 ? 's' : ''} &middot; ${totEntered} team${totEntered !== 1 ? 's' : ''} entered &middot; ${tot(r => r.inFinals)} in finals</span>
+    </div>
+    <div class="fv-sum-body" style="display:${sumOpen ? '' : 'none'}">
     <table class="fv-sum">
       <thead><tr>
         <th style="text-align:left">Club</th>
-        <th title="Teams that reached the finals">Teams</th>
+        <th title="Teams the club entered, under the current filters">Entered</th>
+        <th title="Teams that reached the finals">Finals</th>
+        <th title="Teams in the strongest grade for their age">Top grade</th>
         <th title="Teams not yet eliminated and not yet in a grand final">Remaining</th>
         <th title="Teams named in a grand final, played or scheduled">GF</th>
         <th title="Teams that have won a grand final">Premierships</th>
       </tr></thead>
-      <tbody>${entries.map(e => `<tr>
-        <td style="text-align:left"><span class="fv-sum-club">${crestHTML(e.teams[0].team, 16, 'tlogo')}<span>${e.name}</span></span></td>
-        <td>${e.teams.length}</td>
-        <td>${e.remaining || '<span class="fv-sum-zero">–</span>'}</td>
-        <td>${e.inGF || '<span class="fv-sum-zero">–</span>'}</td>
-        <td class="${e.premiers ? 'fv-sum-prem' : ''}">${e.premiers || '<span class="fv-sum-zero">–</span>'}</td>
-      </tr>`).join('')}</tbody>
+      <tbody>${summaryBody}</tbody>
       <tfoot><tr>
-        <td style="text-align:left">${entries.length} club${entries.length !== 1 ? 's' : ''}</td>
-        <td>${sumOf(e => e.teams.length)}</td>
-        <td>${sumOf(e => e.remaining)}</td>
-        <td>${sumOf(e => e.inGF)}</td>
-        <td>${sumOf(e => e.premiers)}</td>
+        <td style="text-align:left">${summaryRows.length} club${summaryRows.length !== 1 ? 's' : ''}</td>
+        <td>${totEntered}</td>
+        ${pctCell(tot(r => r.inFinals),  totEntered)}
+        ${pctCell(tot(r => r.topGrade),  totEntered)}
+        ${pctCell(tot(r => r.remaining), totEntered)}
+        ${pctCell(tot(r => r.inGF),      totEntered)}
+        ${pctCell(tot(r => r.premiers),  totEntered)}
       </tr></tfoot>
-    </table></div>` : '';
+    </table></div></div>` : '';
 
   // ── Columns per CARD, ending at the grand final ───────────────────────────
   // Two earlier attempts were wrong in opposite directions. Columns shared
@@ -4867,6 +5030,7 @@ async function init() {
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (['age','club','venue','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
       if (['date','venue'].includes(f.venueGroup)) S.venueGroup = f.venueGroup;
+      if (typeof f.clubSummaryOpen === 'boolean') S.clubSummaryOpen = f.clubSummaryOpen;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
         S.finalsSort = f.finalsSort;
       }
