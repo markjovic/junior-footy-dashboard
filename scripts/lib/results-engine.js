@@ -26,7 +26,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v17 2026-08-13 grademeta-name';
+const ENGINE_VERSION = 'v18 2026-08-16 fixture-supersede';
 
 'use strict';
 
@@ -1358,6 +1358,11 @@ async function run(o) {
   let updatedCount = 0;
   let renamedCount = 0;
   const renameExamples = [];
+  // Fixture records that a real result superseded this run. Counted and printed
+  // because the flag they carried made them invisible on the page while the log
+  // reported a clean run — the failure had no signal of its own at either end.
+  let promotedFixtures = 0;
+  const promotedExamples = [];
   let fetchError = null;
   let resultsGradeIdx = 0;
   let consecutive403s = 0;
@@ -1429,9 +1434,54 @@ async function run(o) {
       }
       if (byId.has(m.id)) {
         const prev = byId.get(m.id);
-        const changed = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
-        byId.set(m.id, { ...prev, ...m });
-        if (changed) updatedCount++;
+        const scoreChanged = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
+
+        // FIXTURE SUPERSEDED BY A RESULT (v18).
+        //
+        // fetch-fixtures.js writes a scheduled record under the SAME match id this
+        // builds — same compName, age, gradeId, round token and sorted team pair.
+        // So when the game is played, the result lands here on the `byId.has`
+        // branch and merges into the fixture record.
+        //
+        // The merge below is `{ ...prev, ...m }`, and a RESULT RECORD HAS NO
+        // `scheduled` KEY AT ALL — there is nothing in `m` to overwrite
+        // `prev.scheduled`, so `true` survives the spread and the record stays
+        // classified as a fixture forever, with correct scores sitting inside it.
+        //
+        // What that looks like on the page: index.html splits on this exact flag —
+        //   S.fixtures = d.matches.filter(m => m.scheduled)
+        //   S.matches  = d.matches.filter(m => !m.isBye && !m.scheduled)
+        // so the record never reaches S.matches and renderResults cannot show it.
+        // It does reach finalsPool() through S.fixtures, but isPlayed() is
+        // `!m.scheduled && ...`, so the finals view draws it as an unplayed fixture
+        // with two blank score cells.
+        //
+        // And it never self-corrects. The scores were merged in on the FIRST run
+        // after the game, so every later run finds prev[k] === m[k], reports
+        // `0 new, 0 updated`, and the workflow skips the commit — the log reads
+        // exactly like a run with nothing to do. Measured 2026-08-16 on EFNL 2026
+        // Veterans: four Semi Finals records stored with full scores, hScore 59/33/
+        // 86/68, all four carrying `scheduled: true`, none on screen.
+        //
+        // `provisional` goes with it. Its readers are `isProvSide()`, which tests
+        // `m.provisional && !m.hLogo`, and the logo strip below runs on records that
+        // are no longer scheduled — so a surviving flag would render a PLAYED team
+        // as a greyed "Winner Game 1" placeholder the moment its logos were
+        // stripped. `time` is deliberately KEPT: nothing misreads it and it is real
+        // information the results query does not return.
+        const wasScheduled = prev.scheduled === true;
+        const rec = { ...prev, ...m };
+        if (wasScheduled) {
+          delete rec.scheduled;
+          delete rec.provisional;
+          promotedFixtures++;
+          if (promotedExamples.length < 8) promotedExamples.push(rec.id);
+        }
+        byId.set(m.id, rec);
+        // The promotion is itself a change, even when every score already matched.
+        // Without this the repair run reports no changes and is never committed,
+        // which is the state this defect has been sitting in.
+        if (scoreChanged || wasScheduled) updatedCount++;
       } else {
         byId.set(m.id, m);
         newCount++;
@@ -1452,6 +1502,18 @@ async function run(o) {
       console.log(`  ... ${renamedCount - renameExamples.length} more`);
     }
   }
+  // Fixture records promoted to results. A non-zero count on the FIRST run after
+  // v18 is the backlog being repaired; a non-zero count on every run thereafter is
+  // normal and simply means games were played since the last run.
+  if (promotedFixtures) {
+    console.log(`Promoted ${promotedFixtures} stored fixture(s) to results ` +
+      `— scheduled flag cleared, now visible on the page:`);
+    for (const e of promotedExamples) console.log(`  ${e}`);
+    if (promotedFixtures > promotedExamples.length) {
+      console.log(`  ... ${promotedFixtures - promotedExamples.length} more`);
+    }
+  }
+
   // Duplicates that were already on disk before this ran. These are the ones a
   // rename created BEFORE gameId existed to catch it; they are removed only when
   // their round is re-fetched, so a persistent count here means rounds that no
