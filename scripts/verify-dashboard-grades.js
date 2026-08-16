@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v6 2026-08-16 venue-and-club-summary';
+const VERSION = 'verify-dashboard-grades v7 2026-08-16 club-summary-denominators';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -1043,82 +1043,198 @@ if (has('renderFinalsByVenue') && has('setVenueGroup')) {
   run(`S.finalsMode = 'venue'; S.venueGroup = 'date';`);
 }
 
-// ── 22. The club summary agrees with the cards below it ─────────────────────
-// The summary is built from the SAME `entries` array as the cards. If it were
-// ever derived separately the two could disagree, and a table that quietly
-// contradicts the thing under it is worse than no table: both look plausible.
-// This is the shape that let _grade and matchGrade drift apart.
-console.log('\n22  The club summary totals agree with the club cards');
+// ── 22. The club summary: denominators, percentages and the collapse ────────
+// The summary is built from the SAME `entries` array as the cards and sorted by
+// the SAME comparator. If either were derived separately the two could disagree,
+// and a table that quietly contradicts the thing under it is worse than no table:
+// both look plausible. That is the shape that let _grade and matchGrade drift.
+//
+// Beta 0.178 added three things that fail silently:
+//
+//   CLUBS WITH NO FINALISTS. They come from enteredPool(), not finalsPool(). If
+//   they were dropped the table would show only successful clubs and every club
+//   would look successful — and the percentages would have no denominator worth
+//   having. A missing row looks exactly like a club that entered nothing.
+//
+//   THE DENOMINATOR ITSELF. Counting identity is comp|team|age with no grade. On
+//   the card's own key — which carries rawGrade — a side that played grading and
+//   was then placed in a division counts twice, so a club's finals total can
+//   exceed the teams it entered and print a percentage over 100.
+//
+//   THE FILTER AGREEING ACROSS BOTH POOLS. finalsFilters() is shared. If the
+//   gender or level filter applied to one pool and not the other, 6 of 40 and
+//   6 of 12 would both render as perfectly ordinary numbers.
+console.log('\n22  The club summary: denominators, percentages and the collapse');
+ok('finalsFilters exists', has('finalsFilters'));
+ok('enteredPool exists', has('enteredPool'));
+ok('toggleClubSummary exists', has('toggleClubSummary'));
 {
-  // Built here rather than inside run(): section 15 already declares `const M` at
-  // the top level of the shared sandbox, and a second declaration of the same
-  // name throws before a single assertion runs. A sandbox is shared state.
-  const m22 = (ab, r, h, a, hs, as) => ({ id:'s'+ab+h, compName:'EFNL 2026', age:'U12',
-    rawGrade:'A', gradeId:'g1', round:r, home:h, away:a, hScore:hs, aScore:as,
-    isFinals:true, finalsAbbrev:ab, date:'2026-09-01' });
-  sandbox.__c22 = [ m22('SF',1,'Norwood','Vermont',50,40), m22('GF',3,'Norwood','Kew',60,50) ];
-
-  run(`S.gradeMeta = { 'EFNL 2026|U12|g1': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g1' } };
+  // Two clubs reach finals and two do NOT. Norwood enters three teams and gets
+  // two into the finals, so its percentage is 67% rather than the 100% every
+  // club would show if only finalists were listed.
+  const f22 = (isF, ab, r, h, a, hs, as) => ({ id:'s'+(ab||'')+r+h, compName:'EFNL 2026',
+    age:'U12', rawGrade:'A', gradeId:'g1', round:r, home:h, away:a, hScore:hs, aScore:as,
+    ...(isF ? { isFinals:true, finalsAbbrev:ab } : {}), date:'2026-09-01' });
+  sandbox.__c22 = [
+    f22(true,  'SF', 1, 'Norwood',   'Vermont', 50, 40),
+    f22(true,  'GF', 3, 'Norwood',   'Kew',     60, 50),
+    // Home and away only — these two clubs entered teams and reached no finals.
+    f22(false, '',   1, 'Norwood B', 'Croydon', 30, 20),
+    f22(false, '',   1, 'Ringwood',  'Croydon', 25, 15),
+    // Norwood ALSO played in the grading grade. It is ONE team the club entered,
+    // and counting on a key that carries the grade makes it two — which is what
+    // pushes a percentage over 100 in production. Without this record the
+    // denominator's identity cannot be tested at all: every team here would sit
+    // in exactly one grade and both keys would agree.
+    { ...f22(false, '', 1, 'Norwood', 'Vermont', 20, 18),
+      id:'grading1', rawGrade:'Grading', gradeId:'gGRD' },
+    // A DIFFERENT COMPETITION. finalsFilters() must exclude it from both pools:
+    // if enteredPool() skipped the filters this club would appear as a fifth row
+    // and inflate the totals, and nothing on screen would say why.
+    { ...f22(false, '', 1, 'Ivanhoe', 'Kew East', 40, 30),
+      id:'yjfl1', compName:'YJFL 2026' },
+  ];
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|g1': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g1', name:'U12 Mixed A' },
+    // buildGradeMeta writes the rawGrade key too, and gradeRankOf is called with
+    // t.grade — a rawGrade. Without this the Top grade column and the weighted
+    // tiers both read 0 and the assertions below would pass on nothing.
+    'EFNL 2026|U12|A':  { r:1, lvl:'junior', g:'M' },
+  };
   rebuildGradeLabels();
-  S.clubs = { c1: { name: 'Norwood', type: 'CLUB' }, c2: { name: 'Vermont', type: 'CLUB' } };
+  S.clubs = { c1:{name:'Norwood',type:'CLUB'}, c2:{name:'Vermont',type:'CLUB'},
+              c3:{name:'Croydon',type:'CLUB'}, c4:{name:'Ringwood',type:'CLUB'},
+              c5:{name:'Ivanhoe',type:'CLUB'} };
   S.teamClub = { 'EFNL 2026|Norwood|U12':'c1', 'EFNL 2026|Kew|U12':'c1',
-                 'EFNL 2026|Vermont|U12':'c2' };
-  S.roster = { 'EFNL 2026|Norwood|U12':{grade:'A',gradeId:'g1',age:'U12'},
-               'EFNL 2026|Kew|U12':{grade:'A',gradeId:'g1',age:'U12'},
-               'EFNL 2026|Vermont|U12':{grade:'A',gradeId:'g1',age:'U12'} };
+                 'EFNL 2026|Norwood B|U12':'c1', 'EFNL 2026|Vermont|U12':'c2',
+                 'EFNL 2026|Croydon|U12':'c3', 'EFNL 2026|Ringwood|U12':'c4',
+                 'YJFL 2026|Ivanhoe|U12':'c5', 'YJFL 2026|Kew East|U12':'c5' };
+  S.roster = {};
+  for (const t of ['Norwood','Kew','Norwood B','Vermont','Croydon','Ringwood'])
+    S.roster['EFNL 2026|'+t+'|U12'] = { grade:'A', gradeId:'g1', age:'U12' };
+  for (const t of ['Ivanhoe','Kew East'])
+    S.roster['YJFL 2026|'+t+'|U12'] = { grade:'A', gradeId:'g1', age:'U12' };
   S.matches = __c22.map(x => ({...x}));
   S.fixtures = []; precomputeMatches(S.matches);
   S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
   S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
-  S.finalsSort='premiers'; S.finalsWeighted=false;
+  S.finalsSort='premiers'; S.finalsWeighted=false; S.clubSummaryOpen=true;
   S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
   S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  // The fixture is real: two clubs must have finals teams and two must not, or
+  // the no-finalist row is untested and every assertion below is about one case.
+  ok('the finals pool holds only the two finals records',
+    run('finalsPool().length') === 2, String(run('finalsPool().length')));
+  // Five of the six records are EFNL; the YJFL one must be filtered out of both
+  // pools by finalsFilters(). If this reads 6 the competition filter is not being
+  // applied to the denominator.
+  ok('the entered pool holds the five in-scope records, not the YJFL one',
+    run('enteredPool().length') === 5, String(run('enteredPool().length')));
+  ok('and the two pools use the same filter',
+    run(`enteredPool().every(finalsFilters) && finalsPool().every(finalsFilters)`),
+    'a filter applied to one pool and not the other gives a wrong denominator');
 
   let threw = null;
   try { run('render();'); } catch (e) { threw = e.message; }
   ok('render() does not throw with the summary table', !threw, threw || 'clean');
-
   const out = threw ? '' : run(`document.getElementById('finals-body').innerHTML`);
-  ok('the summary table was drawn', /class="fv-sum"/.test(out),
-    'the table is the addition under test');
-  ok('and the club cards are still below it', /class="fv-club"/.test(out),
-    'the summary must ADD to the by-club view, not replace it');
+
+  ok('the summary table was drawn', /class="fv-sum"/.test(out));
+  ok('and the club cards are still below it', /class="fv-club"/.test(out));
   ok('the summary comes BEFORE the cards',
     out.indexOf('class="fv-sum"') !== -1 &&
     out.indexOf('class="fv-sum"') < out.indexOf('class="fv-club"'),
     'a summary printed under the detail it summarises is not a summary');
 
-  // Every club with a team in finals must have a row. A club silently missing
-  // from the table is the failure that looks like a shorter, tidier table.
-  ok('every club in the pool has a summary row',
-    /Norwood/.test(out) && /Vermont/.test(out),
-    'a missing row looks exactly like a club with no finals teams');
-
-  // THE agreement assertion. The footer totals are summed from the rows, so they
-  // must equal the per-club figures the cards are built from.
+  // ── Rows ──
   const rows = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
-  const bodyCells = [...rows.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(tr =>
+  const cells = [...rows.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(tr =>
     [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
-      td[1].replace(/<[^>]*>/g, '').trim()));
-  ok('the table has one row per club', bodyCells.length === 2, `${bodyCells.length} row(s)`);
+      td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()));
+  const byName = {};
+  cells.forEach(r => { byName[r[0]] = r; });
+
+  // THE assertion this whole change turns on.
+  ok('a club that reached NO finals still has a row',
+    !!byName['Croydon'] && !!byName['Ringwood'],
+    `${JSON.stringify(Object.keys(byName))} — without these the percentages have no denominator`);
+  ok('all four in-scope clubs are listed, and only those',
+    cells.length === 4, `${cells.length} row(s): ${JSON.stringify(Object.keys(byName))}`);
+  ok('the out-of-scope competition contributed no row',
+    !byName['Ivanhoe'], 'YJFL is not the selected competition');
+  // Every lookup below assumes these rows exist. A missing row must fail with a
+  // readable message rather than throwing on a property of undefined — a suite
+  // that crashes says less than one that fails.
+  const row = (n) => byName[n] || [];
+
+  // Columns: 0 Club, 1 Entered, 2 Finals, 3 Top grade, 4 Remaining, 5 GF, 6 Premierships
+  const num = (v) => { const m = String(v).match(/^(\d+)/); return m ? Number(m[1]) : 0; };
+  ok('Norwood entered three teams', num(row('Norwood')[1]) === 3, row('Norwood')[1]);
+  ok('two of them reached the finals', num(row('Norwood')[2]) === 2, row('Norwood')[2]);
+  ok('a no-finals club still shows the teams it entered',
+    num(row('Croydon')[1]) === 1, row('Croydon')[1]);
+  ok('and shows a dash rather than a zero in the finals column',
+    /^–$/.test(row('Croydon')[2]), `"${row('Croydon')[2]}"`);
+
+  // ── Percentages ──
+  // 2 of 3 is 67%. If the denominator were the finals teams it would read 100%,
+  // which is the number a table of finalists only would print for every club.
+  ok('the percentage is against teams ENTERED, not teams in finals',
+    /^2 \(67%\)$/.test(row('Norwood')[2]),
+    `"${row('Norwood')[2]}" — 100% here means the denominator is wrong`);
+  ok('the top-grade column counts and shows a percentage',
+    /^2 \(67%\)$/.test(row('Norwood')[3]), `"${row('Norwood')[3]}"`);
+  ok('a premiership is counted and shown as a share of teams entered',
+    /^1 \(33%\)$/.test(row('Norwood')[6]), `"${row('Norwood')[6]}"`);
+  ok('a zero cell carries no percentage',
+    !/%/.test(row('Croydon')[6]), `"${row('Croydon')[6]}"`);
+
+  // ── Totals ──
   const foot = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
   const footCells = [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
-    td[1].replace(/<[^>]*>/g, '').trim());
-  const num = (v) => (v === '–' || v === '' ? 0 : Number(v));
-  for (let col = 1; col <= 4; col++) {
-    const summed = bodyCells.reduce((n, r) => n + num(r[col]), 0);
+    td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+  for (let col = 1; col <= 6; col++) {
+    const summed = cells.reduce((n, r) => n + num(r[col]), 0);
     ok(`column ${col}: the total equals the sum of the rows`,
       summed === num(footCells[col]),
-      `rows sum to ${summed}, footer says ${footCells[col]}`);
+      `rows sum to ${summed}, footer says "${footCells[col]}"`);
   }
+  ok('six teams entered in total', num(footCells[1]) === 6, footCells[1]);
 
-  // Could that have failed? Norwood won the GF and Vermont did not, so the
-  // premierships column must NOT be uniform — a table of all-zeros or all-ones
-  // would satisfy the totals check while measuring nothing.
-  const prem = bodyCells.map(r => num(r[4]));
-  ok('the premierships column distinguishes the two clubs',
+  // Could these have failed? The premierships column must distinguish the clubs —
+  // a uniform column satisfies every totals check for free.
+  const prem = cells.map(r => num(r[6]));
+  ok('the premierships column distinguishes the clubs',
     prem.includes(1) && prem.includes(0),
     `${JSON.stringify(prem)} — a uniform column passes the totals check for free`);
+  // And the entered column must not simply equal the finals column, or the
+  // percentages are all 100% and prove nothing.
+  ok('entered and finals are genuinely different numbers',
+    cells.some(r => num(r[1]) !== num(r[2])),
+    'if these always matched, every percentage would read 100%');
+
+  // ── The collapse ──
+  ok('the summary is expanded when S.clubSummaryOpen is true',
+    /<div class="fv-sum-body" style="display:">/.test(out) || /fv-sum-body" style="display:"/.test(out),
+    'open state comes from S, not from a <details> element');
+  ok('and the caret points down when open', /▾/.test(out));
+  run(`S.clubSummaryOpen = false; render();`);
+  const closed = run(`document.getElementById('finals-body').innerHTML`);
+  ok('closing hides the body', /fv-sum-body" style="display:none"/.test(closed),
+    'the table must collapse, not disappear entirely');
+  ok('the header survives the collapse so it can be reopened',
+    /fv-sum-hdr/.test(closed) && /▸/.test(closed),
+    'a collapsed section with no header cannot be expanded again');
+  ok('the summary line is readable while collapsed',
+    /teams entered/.test(closed),
+    'the point of a collapsed header is that it still says something');
+  // The toggle must actually flip the state — a handler that only re-renders
+  // would leave the section stuck shut and look like a dead control.
+  run('toggleClubSummary();');
+  ok('toggleClubSummary flips the state', run('S.clubSummaryOpen') === true,
+    String(run('S.clubSummaryOpen')));
+  run(`S.clubSummaryOpen = false;`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
