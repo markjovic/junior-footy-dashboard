@@ -20634,8 +20634,8 @@
     "EFNL 2026|Donvale Reserves|Reserve Men": "a016282f",
     "EFNL 2026|Whitehorse Pioneers Reserves|Reserve Men": "f64b7521"
   },
-  "lastUpdated": "2026-08-16T05:18:19.041Z",
-  "lastResultsFetch": "2026-08-16T05:18:19.041Z",
+  "lastUpdated": "2026-08-16T06:18:38.767Z",
+  "lastResultsFetch": "2026-08-16T06:18:38.767Z",
   "lastStatsFetch": "2026-08-15T14:08:56.457Z",
   "seasonFiles": [
     {
@@ -20666,7 +20666,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2437848
+      "bytes": 2437887
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
