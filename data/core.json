@@ -20630,8 +20630,8 @@
     "EFNL 2026|Mooroolbark Senior Women|Senior Women": "34253694",
     "EFNL 2026|East Ringwood Women - Senior|Senior Women": "f24f2f00"
   },
-  "lastUpdated": "2026-08-16T01:18:13.927Z",
-  "lastResultsFetch": "2026-08-16T01:18:13.927Z",
+  "lastUpdated": "2026-08-16T02:18:05.336Z",
+  "lastResultsFetch": "2026-08-16T02:18:05.336Z",
   "lastStatsFetch": "2026-08-15T14:08:56.457Z",
   "seasonFiles": [
     {
@@ -20662,7 +20662,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2437743
+      "bytes": 2437770
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
