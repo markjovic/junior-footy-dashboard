@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v15 2026-08-13 scorers-rule';
+const VERSION = 'audit-data v16 2026-08-16 lastround-retired';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -666,10 +666,28 @@ console.log('\n8  A cross-season search index, sized');
     }
   }
   const people = byUuid.size;
-  console.log(`  ${withUuid} player-season record(s) with a uuid, ${noUuid} without`);
+  // PERSON-SEASONS, not records. fetch-stats.js stores one record PER GRADE, so a
+  // child who played in two grades in one season has two records and one
+  // person-season — section 11 measured 18,540 such person-seasons. Dividing
+  // records by people therefore overstated the average: measured 2.54 against a
+  // true 2.27 on the real tree, and 2.40 against 2.00 on the verification fixture.
+  //
+  // The INDEX SIZE below was never affected, and an earlier note in
+  // OUTSTANDING_TASKS.md claiming it was has been retracted. `seasons` is a Set,
+  // so a second record in the same season adds no entry, and the serialised index
+  // carries exactly one entry per person-season. This is a reporting fix, not a
+  // sizing one — it does not move the megabyte figure the decision turns on.
+  const personSeasons = [...byUuid.values()].reduce((n, v) => n + v.seasons.size, 0);
+  console.log(`  ${withUuid} player record(s) with a uuid, ${noUuid} without`);
+  console.log(`  ${personSeasons} person-season(s) — a person in two grades in one`);
+  console.log(`    season is two records and ONE person-season`);
   console.log(`  ${people} DISTINCT people`);
   if (people) {
-    console.log(`  ${(withUuid / people).toFixed(2)} season(s) each on average`);
+    console.log(`  ${(personSeasons / people).toFixed(2)} season(s) each on average`);
+    if (withUuid !== personSeasons) {
+      console.log(`    (${withUuid - personSeasons} record(s) are a second or later grade ` +
+        `within a season the person already appears in)`);
+    }
   }
 
   // Two shapes, both measured by serialising the real thing rather than by
@@ -693,21 +711,23 @@ console.log('\n8  A cross-season search index, sized');
 // lastround_gotw_keying_design.md. Added as a ninth section rather than inserted
 // near the other core.json checks, so no existing section number moves.
 //
-// lastRound must be compName|age|gradeToken; gotwFlags must be
-// compName|age|roundKey. Neither carried a competition until 2026-08-13.
+// gotwFlags must be compName|age|roundKey. It did not carry a competition until
+// 2026-08-13.
 //
-// This is here because BOTH failure modes are silent. A lastRound key the
-// dashboard cannot build renders no round number on the grade tab, and a
-// gotwFlags key it cannot build falls through to the automatic closest-margin
-// pick. Neither raises anything on screen — the lastRound mismatch went unnoticed
-// from Beta 0.133 until it was found by reading the two files side by side. This
-// is the only place a stale key can announce itself.
+// This is here because the failure mode is silent: a gotwFlags key the dashboard
+// cannot build falls through to the automatic closest-margin pick, which looks
+// entirely normal. Nothing on screen says the administrator's choice was lost, so
+// this is the only place a stale key can announce itself.
+//
+// lastRound was checked here too until 2026-08-16. It is retired — engine v19
+// stopped writing it and Beta 0.176 removed its only reader — so a shape check on
+// it would report on a key nothing builds. A stale map may still sit in core.json
+// until store.js drops it from CORE_KEYS; it is inert, and reported below as INFO
+// rather than checked for shape.
 console.log('\n9  Cross-organisation key shapes (lastround_gotw_keying_design.md)');
 {
   const compNames = new Set((core.manifest || []).filter(m => m.compName).map(m => m.compName));
   const SHAPES = [
-    { key: 'lastRound', shape: 'compName|age|gradeId',
-      repair: 'a full (non-VIP) results run rebuilds it' },
     { key: 'gotwFlags', shape: 'compName|age|roundKey',
       repair: 'these are set from the dashboard, so a wrong one must be re-picked' },
   ];
@@ -728,6 +748,17 @@ console.log('\n9  Cross-organisation key shapes (lastround_gotw_keying_design.md
            `manifest — e.g. ${unknownComp.slice(0, 3).map(k => `"${k}"`).join(', ')}. ` +
            `Unreachable, because the dashboard builds the key from a manifest compName.`);
     }
+  }
+
+  // RETIRED. Not a shape check — there is no correct shape for a key with no
+  // reader. INFO rather than a warning because it costs nothing and cannot be
+  // repaired from here: it goes when store.js drops it from CORE_KEYS.
+  const retired = Object.keys(core.lastRound || {}).length;
+  console.log(`  lastRound  ${String(retired).padStart(5)} key(s) — RETIRED, no reader ` +
+    `since Beta 0.176, no writer since engine v19`);
+  if (retired) {
+    info(`core.lastRound holds ${retired} key(s) and is inert. Nothing reads or writes ` +
+         `it. Removed when scripts/lib/store.js drops it from CORE_KEYS.`);
   }
 }
 
