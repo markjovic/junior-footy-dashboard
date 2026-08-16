@@ -337,6 +337,25 @@ body{overflow-x:hidden}
 .fv-prov{color:var(--tx3);font-style:italic}
 .fv-date{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace;margin-top:3px}
 .fv-out{font-size:9px;color:#ef4444;letter-spacing:.5px;text-transform:uppercase}
+/* ── Finals: by venue ── */
+.fvv-venue{padding:2px 0 8px;border-bottom:1px solid var(--b1);margin-bottom:6px}
+.fvv-venue:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
+.fvv-vhdr{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:8px 0 6px;font-size:13px;font-weight:500}
+.fvv-suburb{font-size:10px;color:var(--tx3);font-weight:400}
+.fvv-count{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)}
+/* time | age | grade | round | teams */
+.fvv-row{display:grid;grid-template-columns:44px 74px 46px 34px minmax(0,1fr);
+  gap:12px;align-items:start;padding:7px 0;border-bottom:1px solid var(--b1);font-size:12px}
+.fvv-row:last-child{border-bottom:0}
+.fvv-time{font-family:'DM Mono',monospace;font-size:11px;color:var(--tx2);font-variant-numeric:tabular-nums}
+.fvv-age{font-size:11px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fvv-rnd{font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:.5px}
+.fvv-teams{min-width:0;line-height:1.5}
+@media(max-width:768px){
+  .fvv-row{grid-template-columns:40px 1fr;gap:6px 10px}
+  .fvv-age,.fvv-rnd{grid-column:2}
+  .fvv-teams{grid-column:1/-1}
+}
 .fv-club{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--b1);margin-bottom:2px}
 .fv-club-name{font-size:14px;font-weight:500}
 /* grade | winner | score | loser | venue+time */
@@ -374,7 +393,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.175</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.176</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -551,6 +570,7 @@ body{overflow-x:hidden}
           <span class="fv-switch">
             <button id="fvm-age"     class="on" onclick="setFinalsMode('age')">BY AGE GROUP</button>
             <button id="fvm-club"             onclick="setFinalsMode('club')">BY CLUB</button>
+            <button id="fvm-venue"            onclick="setFinalsMode('venue')">BY VENUE</button>
             <button id="fvm-winners"          onclick="setFinalsMode('winners')">WINNERS</button>
           </span>
           <span class="fv-switch">
@@ -705,7 +725,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.175</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.176</span>
         </div>
 
 
@@ -850,7 +870,7 @@ let S = {
   yearLoading: false,
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
-  finalsMode: 'age',    // 'age' | 'club' | 'winners'
+  finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
   finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
@@ -859,11 +879,6 @@ let S = {
   selTeam: '',
   selLdrGrade: null,
   // { 'compName|age|gradeId': roundNumber } — highest home-and-away round per
-  // grade. The key is built here and in results-engine.js and the two MUST agree:
-  // they did not from Beta 0.133 until 0.165 (writer age|rawGrade, reader
-  // compName|age|gradeId), so the round number on the grade tabs rendered as an
-  // empty string for months without anything reporting an error.
-  lastRound: {},
   adminOpen: false,
   pendingMatches: [],
   pendingPlayers: [],
@@ -1928,12 +1943,12 @@ function renderLadder(age) {
     // competition on every render and runs before renderLadder() on every path,
     // and if the competition list is empty there are no grades and this loop does
     // not run. An empty first segment could never match a written key anyway.
-    const key = `${S.selComp}|${age}|${g}`;
-    const lr = S.lastRound[key];
-    // Renamed from roundLabel to avoid shadowing the global roundLabel() helper.
-    const lrTag = lr ? ` <span style="font-size:9px;opacity:0.6;font-weight:400">R${lr}</span>` : '';
+    // The round tag that used to sit here is GONE (Beta 0.176). It rendered
+    // nothing at all from Beta 0.133 until 0.165 because the writer and the reader
+    // built different keys, and once it worked it was not worth the space.
+    // `lastRound` is retired with it — nothing reads it now.
     return `<button class="ldr-tab${g===S.selLdrGrade?' on':''}" style="${g===S.selLdrGrade?`color:${GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#fff'}`:''}"
-      onclick="selLdrGrade('${g}')">${abbrevGrade(gLabel(g)||'Premier')}${lrTag}</button>`;
+      onclick="selLdrGrade('${g}')">${abbrevGrade(gLabel(g)||'Premier')}</button>`;
   }).join('');
 
   document.getElementById('ldr-bodies').innerHTML = grades.map(g => {
@@ -2341,7 +2356,7 @@ function setFinalsSort(v) {
 }
 
 function setFinalsMode(m) {
-  if (!['age','club','winners'].includes(m) || S.finalsMode === m) return;
+  if (!['age','club','venue','winners'].includes(m) || S.finalsMode === m) return;
   S.finalsMode = m;
   saveFilters();
   render();
@@ -2356,7 +2371,7 @@ function applyViewChrome() {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', (id === 'vsw-finals') === finals);
   });
-  [['fvm-age','age'],['fvm-club','club'],['fvm-winners','winners']].forEach(([id,v]) => {
+  [['fvm-age','age'],['fvm-club','club'],['fvm-venue','venue'],['fvm-winners','winners']].forEach(([id,v]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', S.finalsMode === v);
   });
@@ -2712,6 +2727,127 @@ function renderFinalsWinners(pool) {
   return head + blocks;
 }
 
+// ── By venue ──
+// Every finals match, grouped by DATE and then by VENUE, ordered by start time.
+// The question this answers is "where do I need to be, and when" — so it is the
+// only finals mode that is not organised around a team, a club or a grade.
+//
+// THREE ORDERING DECISIONS, none of them arbitrary:
+//
+//   DATE ascending. The other modes read backwards from the Grand Final because
+//   they are about how a campaign ended. This one is a schedule, and a schedule
+//   runs forwards. Undated matches sort LAST under a "Date TBC" heading rather
+//   than first, because an empty string sorts before every real date and would
+//   otherwise put the unknowns at the top of the page.
+//
+//   VENUE alphabetical within a date. There is no meaningful ranking between
+//   grounds, and alphabetical is the order someone scanning for a ground name
+//   expects.
+//
+//   TIME ascending within a venue, then by grade strength for matches sharing a
+//   start time. A venue with no time on any match keeps its records in round
+//   order, which is the only other thing that could be meant.
+//
+// Dates are split on "-" and compared as strings — YYYY-MM-DD sorts correctly
+// lexically, and working_practice.md forbids new Date(string) for parsing.
+// Times are "HH:MM:SS" and sort the same way.
+function renderFinalsByVenue(pool) {
+  // A match with no venue is still a real fixture and must not vanish. PlayHQ
+  // leaves the allocation empty until a ground is assigned, which is common for
+  // a final whose participants are not yet known.
+  const VENUE_TBC = 'Venue TBC';
+  const DATE_TBC  = 'Date TBC';
+
+  const byDate = {};
+  for (const m of pool) {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || '')) ? m.date : DATE_TBC;
+    (byDate[d] = byDate[d] || []).push(m);
+  }
+
+  // Real dates ascending; the TBC bucket last whatever it is called.
+  const dates = Object.keys(byDate).sort((a, b) => {
+    if (a === DATE_TBC) return 1;
+    if (b === DATE_TBC) return -1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  if (!dates.length) return '';
+
+  // "Saturday 23 August". Built from the parts, never from new Date(string) —
+  // Date.UTC on the split parts is the arithmetic-safe form the working practice
+  // requires, and it also avoids a timezone shifting the day by one.
+  const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MONTHS = ['January','February','March','April','May','June','July','August',
+                  'September','October','November','December'];
+  const longDate = (iso) => {
+    if (iso === DATE_TBC) return DATE_TBC;
+    const [y, mo, d] = iso.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, mo - 1, d));
+    return `${DAYS[dt.getUTCDay()]} ${d} ${MONTHS[mo - 1]}`;
+  };
+
+  const timeOf = (m) => (m.time ? String(m.time).slice(0, 5) : '');
+
+  return dates.map(dateKey => {
+    const dayMatches = byDate[dateKey];
+
+    const byVenue = {};
+    for (const m of dayMatches) {
+      const v = (m.venue || '').trim() || VENUE_TBC;
+      (byVenue[v] = byVenue[v] || []).push(m);
+    }
+    const venues = Object.keys(byVenue).sort((a, b) => {
+      if (a === VENUE_TBC) return 1;
+      if (b === VENUE_TBC) return -1;
+      return a.localeCompare(b);
+    });
+
+    const venueBlocks = venues.map(v => {
+      const ms = byVenue[v].slice().sort((x, y) => {
+        const tx = timeOf(x), ty = timeOf(y);
+        // A match with no time sorts after one that has a time on the same day.
+        if (tx && ty && tx !== ty) return tx < ty ? -1 : 1;
+        if (tx && !ty) return -1;
+        if (!tx && ty) return 1;
+        return gradeSortPos(x.compName, x.age, x.gradeId || x.rawGrade)
+             - gradeSortPos(y.compName, y.age, y.gradeId || y.rawGrade)
+             || cmpRound(x, y);
+      });
+
+      // The venue link is taken from the first record that carries one. Every
+      // record at a ground should hold the same coordinates, but a fixture
+      // written before the venue was allocated may have the name and no URL.
+      const withUrl = ms.find(m => m.venueUrl);
+      const heading = v === VENUE_TBC
+        ? `<span style="color:var(--tx3);font-style:italic">${VENUE_TBC}</span>`
+        : venueLink(v, withUrl ? withUrl.venueUrl : '');
+      const suburb = (ms.find(m => m.vSuburb) || {}).vSuburb || '';
+
+      const rows = ms.map(m => {
+        const g = matchListGrade(m) || m.rawGrade || '';
+        const label = abbrevGrade(gLabel(g));
+        const gc = `gtag-${label.replace(/[^A-Za-z0-9]/g, '')}`;
+        const t = timeOf(m);
+        return `<div class="fvv-row">
+          <span class="fvv-time">${t || '—'}</span>
+          <span class="fvv-age">${m.age}</span>
+          <span class="gtag gtag-neutral ${gc}">${label}</span>
+          <span class="fvv-rnd">${m.finalsAbbrev || 'F'}</span>
+          <span class="fvv-teams">${fvSide(m, 'h')}${fvSide(m, 'a')}</span>
+        </div>`;
+      }).join('');
+
+      return `<div class="fvv-venue">
+        <div class="fvv-vhdr">${heading}${suburb ? `<span class="fvv-suburb">${suburb}</span>` : ''}
+          <span class="fvv-count">${ms.length} match${ms.length !== 1 ? 'es' : ''}</span></div>
+        ${rows}</div>`;
+    }).join('');
+
+    return `<div class="fv-age"><span>${longDate(dateKey)}</span>
+      <span class="fv-meta">${venues.length} venue${venues.length !== 1 ? 's' : ''} &middot; ${dayMatches.length} match${dayMatches.length !== 1 ? 'es' : ''}</span></div>
+      <div class="fv-card">${venueBlocks}</div>`;
+  }).join('');
+}
+
 // ── By club ──
 function renderFinalsByClub(pool) {
   // team key -> { comp, age, grade, team, clubId, matches[] }
@@ -3045,6 +3181,7 @@ function renderFinalsView() {
 
   body.innerHTML =
     S.finalsMode === 'club'    ? renderFinalsByClub(pool)  :
+    S.finalsMode === 'venue'   ? renderFinalsByVenue(pool) :
     S.finalsMode === 'winners' ? renderFinalsWinners(pool) :
                                  renderFinalsByAge(pool);
 }
@@ -3591,10 +3728,6 @@ function renderPlayerGames(data, p) {
   const body = document.getElementById('pm-body');
   const seasons = data?.data?.publicProfileStatistics?.seasonStatistics || [];
 
-  // Find current season data
-  const currentSeasonIDs = new Set(
-    Object.values(S.lastRound || {}).length ? [] : []
-  );
   // Use all 2026 seasons
   const season2026 = seasons.find(s => s.name === '2026');
   if (!season2026?.statistics?.length) {
@@ -4389,7 +4522,7 @@ async function loadStoredData() {
   if (!S.selYear) S.selYear = loadedYears[loadedYears.length - 1] || null;
 
   // Cross-organisation keys and the freshness timestamps live in core.json.
-  for (const k of ['clubs','teamClub','teamOrg','compLogos','teamLogos','gotwFlags','lastRound',
+  for (const k of ['clubs','teamClub','teamOrg','compLogos','teamLogos','gotwFlags',
                    'lastUpdated','lastResultsFetch','lastStatsFetch','lastFixtureFetch','lastClubIndex']) {
     if (core[k] !== undefined) d[k] = core[k];
   }
@@ -4471,7 +4604,6 @@ async function init() {
         }
         if (d.players?.length) S.players = d.players;
         if (d.gotwFlags && Object.keys(d.gotwFlags).length) S.gotwFlags = d.gotwFlags;
-        if (d.lastRound && Object.keys(d.lastRound).length) S.lastRound = d.lastRound;
         if (d.compLogos && Object.keys(d.compLogos).length) S.compLogos = d.compLogos;
         if (d.teamLogos && Object.keys(d.teamLogos).length) S.teamLogos = d.teamLogos;
         if (d.gradeMeta && Object.keys(d.gradeMeta).length) { S.gradeMeta = d.gradeMeta; rebuildGradeLabels(); }
@@ -4541,7 +4673,7 @@ async function init() {
       }
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
-      if (['age','club','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
+      if (['age','club','venue','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
         S.finalsSort = f.finalsSort;
       }
