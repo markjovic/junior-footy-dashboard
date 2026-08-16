@@ -337,6 +337,26 @@ body{overflow-x:hidden}
 .fv-prov{color:var(--tx3);font-style:italic}
 .fv-date{font-size:10px;color:var(--tx3);font-family:'DM Mono',monospace;margin-top:3px}
 .fv-out{font-size:9px;color:#ef4444;letter-spacing:.5px;text-transform:uppercase}
+/* ── Finals: club summary table ── */
+.fv-sum-wrap{background:var(--s1);border:1px solid var(--b1);border-radius:10px;
+  padding:4px 12px 8px;margin-bottom:14px;overflow-x:auto}
+.fv-sum{width:100%;border-collapse:collapse;font-size:12px}
+.fv-sum th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;
+  color:var(--tx3);font-weight:500;padding:8px 8px 6px;text-align:right;white-space:nowrap;
+  border-bottom:1px solid var(--b1)}
+.fv-sum td{padding:6px 8px;border-top:1px solid var(--b1);text-align:right;color:var(--tx2);
+  font-variant-numeric:tabular-nums}
+.fv-sum tbody tr:hover{background:var(--s2)}
+.fv-sum tfoot td{border-top:1px solid var(--b2);color:var(--tx3);font-family:'DM Mono',monospace;
+  font-size:11px}
+.fv-sum-club{display:flex;align-items:center;gap:7px;min-width:0}
+.fv-sum-club span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv-sum-zero{color:var(--tx3)}
+.fv-sum-prem{color:var(--gold);font-weight:600}
+@media(max-width:768px){
+  .fv-sum th,.fv-sum td{padding:6px 5px}
+  .fv-sum th{font-size:8px;letter-spacing:.5px}
+}
 /* ── Finals: by venue ── */
 .fvv-venue{padding:2px 0 8px;border-bottom:1px solid var(--b1);margin-bottom:6px}
 .fvv-venue:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}
@@ -393,7 +413,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.176</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.177</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -440,6 +460,10 @@ body{overflow-x:hidden}
     <div class="fgroup">
       <div class="flabel">Round</div>
       <select class="fsel" id="round-sel" onchange="onFilter()"><option value="">All rounds</option></select>
+    </div>
+    <div class="fgroup" id="fv-jump-group" style="display:none">
+      <div class="flabel" id="fv-jump-label">Jump to date</div>
+      <select class="fsel" id="fv-jump" onchange="jumpToFinalsGroup(this.value)"></select>
     </div>
     <div class="fgroup">
       <div class="flabel">Team</div>
@@ -583,6 +607,10 @@ body{overflow-x:hidden}
             <button id="fvl-junior"            onclick="setFinalsLevel('junior')">JUNIOR</button>
             <button id="fvl-senior"            onclick="setFinalsLevel('senior')">SENIOR</button>
           </span>
+          <span class="fv-switch" id="fv-group-wrap" style="display:none">
+            <button id="fvgr-date"  class="on" onclick="setVenueGroup('date')">DATE &rsaquo; VENUE</button>
+            <button id="fvgr-venue"            onclick="setVenueGroup('venue')">VENUE &rsaquo; DATE</button>
+          </span>
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
             <option value="name">Alphabetical</option>
@@ -725,7 +753,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.176</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.177</span>
         </div>
 
 
@@ -803,6 +831,7 @@ function saveFilters() {
       selTeam:   S.selTeam,
       view:       S.view,
       finalsMode: S.finalsMode,
+      venueGroup: S.venueGroup,
       finalsSort: S.finalsSort,
       finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
@@ -871,6 +900,11 @@ let S = {
   selRound: '',
   view:       'dash',   // 'dash' | 'finals'
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
+  // Which way round the BY VENUE view nests. 'date' groups by date and then by
+  // venue; 'venue' the other way. Both orderings answer a real question — "what
+  // is on this Saturday" against "what is on at this ground" — and neither is a
+  // filter, so this is a grouping switch rather than a sort.
+  venueGroup: 'date',   // 'date' | 'venue'
   finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
   finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
@@ -2375,7 +2409,16 @@ function applyViewChrome() {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', S.finalsMode === v);
   });
-  const inClubMode = finals && S.finalsMode === 'club';
+  const inClubMode  = finals && S.finalsMode === 'club';
+  // The grouping switch belongs to the venue mode only, the same way fv-sort
+  // belongs to the club mode only.
+  const inVenueMode = finals && S.finalsMode === 'venue';
+  const gwrap = document.getElementById('fv-group-wrap');
+  if (gwrap) gwrap.style.display = inVenueMode ? '' : 'none';
+  [['fvgr-date','date'],['fvgr-venue','venue']].forEach(([id,v]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', (S.venueGroup || 'date') === v);
+  });
   const sortSel = document.getElementById('fv-sort');
   if (sortSel) {
     sortSel.style.display = inClubMode ? '' : 'none';
@@ -2400,6 +2443,10 @@ function applyViewChrome() {
   groups.forEach(g => {
     const label = g.querySelector('.flabel')?.textContent || '';
     if (['Age group','Grade','Round'].includes(label)) g.style.display = finals ? 'none' : '';
+    // The jump group is owned by syncFinalsJump, which knows whether any groups
+    // were actually rendered. Leaving it to this loop would show an empty
+    // dropdown in every finals mode.
+    if (g.id === 'fv-jump-group' && !finals) g.style.display = 'none';
   });
   const teamLabel = [...groups].map(g => g.querySelector('.flabel'))
     .find(l => l && (l.textContent === 'Team' || l.textContent === 'Club'));
@@ -2728,83 +2775,124 @@ function renderFinalsWinners(pool) {
 }
 
 // ── By venue ──
-// Every finals match, grouped by DATE and then by VENUE, ordered by start time.
-// The question this answers is "where do I need to be, and when" — so it is the
-// only finals mode that is not organised around a team, a club or a grade.
+// Every finals match, grouped two levels deep by DATE and VENUE, ordered by
+// start time. The question this answers is "where do I need to be, and when" —
+// the only finals mode not organised around a team, a club or a grade.
 //
-// THREE ORDERING DECISIONS, none of them arbitrary:
+// EITHER NESTING. S.venueGroup decides which is the outer level:
+//   'date'   what is on this Saturday, and at which grounds
+//   'venue'  what is on at this ground, and on which days
+// Neither is a filter and neither hides anything — the same matches appear both
+// ways — so this is a grouping switch, not a sort. Both are wanted: the first is
+// how you plan a day, the second how you plan around one ground.
 //
-//   DATE ascending. The other modes read backwards from the Grand Final because
-//   they are about how a campaign ended. This one is a schedule, and a schedule
-//   runs forwards. Undated matches sort LAST under a "Date TBC" heading rather
-//   than first, because an empty string sorts before every real date and would
-//   otherwise put the unknowns at the top of the page.
+// ORDERING, applied to whichever level it belongs to:
 //
-//   VENUE alphabetical within a date. There is no meaningful ranking between
-//   grounds, and alphabetical is the order someone scanning for a ground name
-//   expects.
+//   DATE ascending. The other finals modes read backwards from the Grand Final
+//   because they are about how a campaign ended. This one is a schedule, and a
+//   schedule runs forwards. Undated matches sort LAST under "Date TBC" rather
+//   than first, because an empty string sorts before every real date and the
+//   naive ordering would put the unknowns at the top of the page.
 //
-//   TIME ascending within a venue, then by grade strength for matches sharing a
-//   start time. A venue with no time on any match keeps its records in round
-//   order, which is the only other thing that could be meant.
+//   VENUE alphabetical. There is no meaningful ranking between grounds, and
+//   alphabetical is the order someone scanning for a ground name expects.
+//   "Venue TBC" sorts last, for the same reason as the date.
+//
+//   TIME ascending within the innermost group, then grade strength, then round
+//   for matches sharing a start time. A group with no time on any match keeps
+//   round order, which is the only other thing that could be meant.
 //
 // Dates are split on "-" and compared as strings — YYYY-MM-DD sorts correctly
 // lexically, and working_practice.md forbids new Date(string) for parsing.
 // Times are "HH:MM:SS" and sort the same way.
+const VENUE_TBC = 'Venue TBC';
+const DATE_TBC  = 'Date TBC';
+
+// A match with no venue or no date is still a real fixture and must not vanish.
+// PlayHQ leaves the allocation empty until a ground is assigned, which is common
+// for a final whose participants are not yet known.
+const venueKeyOf = (m) => (m.venue || '').trim() || VENUE_TBC;
+const dateKeyOf  = (m) => /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || '')) ? m.date : DATE_TBC;
+
+// TBC last in both, whichever level it lands on.
+function cmpDateKey(a, b) {
+  if (a === DATE_TBC) return 1;
+  if (b === DATE_TBC) return -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+function cmpVenueKey(a, b) {
+  if (a === VENUE_TBC) return 1;
+  if (b === VENUE_TBC) return -1;
+  return a.localeCompare(b);
+}
+
+// "Saturday 23 August". Built from the split parts through Date.UTC, never
+// new Date(string) — which is the rule, and also avoids a timezone shifting the
+// day by one.
+const FV_DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const FV_MONTHS = ['January','February','March','April','May','June','July','August',
+                   'September','October','November','December'];
+function longDateLabel(iso) {
+  if (iso === DATE_TBC) return DATE_TBC;
+  const [y, mo, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return `${FV_DAYS[dt.getUTCDay()]} ${d} ${FV_MONTHS[mo - 1]}`;
+}
+
+// A DOM id for a group heading, so the sidebar jump can scroll to it. Derived
+// from the key rather than from the loop index: an index would change whenever a
+// filter removed a group, and a stale saved selection would then scroll
+// somewhere arbitrary rather than simply missing.
+const fvGroupId = (key) => 'fvg-' + String(key).replace(/[^A-Za-z0-9]/g, '_');
+
+const fvTimeOf = (m) => (m.time ? String(m.time).slice(0, 5) : '');
+
+// The outer groups currently on screen, in display order. Written by
+// renderFinalsByVenue and read by the sidebar jump, so the list can never
+// disagree with the headings it scrolls to.
+let fvGroupIndex = [];
+
 function renderFinalsByVenue(pool) {
-  // A match with no venue is still a real fixture and must not vanish. PlayHQ
-  // leaves the allocation empty until a ground is assigned, which is common for
-  // a final whose participants are not yet known.
-  const VENUE_TBC = 'Venue TBC';
-  const DATE_TBC  = 'Date TBC';
+  const byDateFirst = (S.venueGroup || 'date') !== 'venue';
+  const outerKey  = byDateFirst ? dateKeyOf  : venueKeyOf;
+  const innerKey  = byDateFirst ? venueKeyOf : dateKeyOf;
+  const cmpOuter  = byDateFirst ? cmpDateKey : cmpVenueKey;
+  const cmpInner  = byDateFirst ? cmpVenueKey : cmpDateKey;
+  const outerLbl  = byDateFirst ? longDateLabel : (v => v);
+  const innerLbl  = byDateFirst ? (v => v) : longDateLabel;
 
-  const byDate = {};
-  for (const m of pool) {
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(m.date || '')) ? m.date : DATE_TBC;
-    (byDate[d] = byDate[d] || []).push(m);
-  }
+  const outer = {};
+  for (const m of pool) (outer[outerKey(m)] = outer[outerKey(m)] || []).push(m);
+  const outerKeys = Object.keys(outer).sort(cmpOuter);
 
-  // Real dates ascending; the TBC bucket last whatever it is called.
-  const dates = Object.keys(byDate).sort((a, b) => {
-    if (a === DATE_TBC) return 1;
-    if (b === DATE_TBC) return -1;
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
-  if (!dates.length) return '';
+  fvGroupIndex = [];
+  if (!outerKeys.length) return '';
 
-  // "Saturday 23 August". Built from the parts, never from new Date(string) —
-  // Date.UTC on the split parts is the arithmetic-safe form the working practice
-  // requires, and it also avoids a timezone shifting the day by one.
-  const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const MONTHS = ['January','February','March','April','May','June','July','August',
-                  'September','October','November','December'];
-  const longDate = (iso) => {
-    if (iso === DATE_TBC) return DATE_TBC;
-    const [y, mo, d] = iso.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, mo - 1, d));
-    return `${DAYS[dt.getUTCDay()]} ${d} ${MONTHS[mo - 1]}`;
-  };
+  const html = outerKeys.map(ok => {
+    const groupMatches = outer[ok];
+    const inner = {};
+    for (const m of groupMatches) (inner[innerKey(m)] = inner[innerKey(m)] || []).push(m);
+    const innerKeys = Object.keys(inner).sort(cmpInner);
 
-  const timeOf = (m) => (m.time ? String(m.time).slice(0, 5) : '');
+    fvGroupIndex.push({ key: ok, label: outerLbl(ok), n: groupMatches.length });
 
-  return dates.map(dateKey => {
-    const dayMatches = byDate[dateKey];
+    // The maps link follows the VENUE to whichever level is showing it. In
+    // venue-first the outer heading is the ground, so the link belongs there;
+    // leaving it on the inner heading dropped it entirely, because the inner
+    // heading is then a date. Found by rendering both nestings side by side.
+    const outerWithUrl = groupMatches.find(m => m.venueUrl);
+    const outerHead = byDateFirst
+      ? outerLbl(ok)
+      : (ok === VENUE_TBC
+          ? `<span style="color:var(--tx3);font-style:italic">${VENUE_TBC}</span>`
+          : venueLink(ok, outerWithUrl ? outerWithUrl.venueUrl : ''));
+    const outerSuburb = byDateFirst
+      ? '' : ((groupMatches.find(m => m.vSuburb) || {}).vSuburb || '');
 
-    const byVenue = {};
-    for (const m of dayMatches) {
-      const v = (m.venue || '').trim() || VENUE_TBC;
-      (byVenue[v] = byVenue[v] || []).push(m);
-    }
-    const venues = Object.keys(byVenue).sort((a, b) => {
-      if (a === VENUE_TBC) return 1;
-      if (b === VENUE_TBC) return -1;
-      return a.localeCompare(b);
-    });
-
-    const venueBlocks = venues.map(v => {
-      const ms = byVenue[v].slice().sort((x, y) => {
-        const tx = timeOf(x), ty = timeOf(y);
-        // A match with no time sorts after one that has a time on the same day.
+    const blocks = innerKeys.map(ik => {
+      const ms = inner[ik].slice().sort((x, y) => {
+        const tx = fvTimeOf(x), ty = fvTimeOf(y);
+        // A match with no time sorts after one that has a time.
         if (tx && ty && tx !== ty) return tx < ty ? -1 : 1;
         if (tx && !ty) return -1;
         if (!tx && ty) return 1;
@@ -2813,22 +2901,27 @@ function renderFinalsByVenue(pool) {
              || cmpRound(x, y);
       });
 
-      // The venue link is taken from the first record that carries one. Every
-      // record at a ground should hold the same coordinates, but a fixture
-      // written before the venue was allocated may have the name and no URL.
+      // The venue link comes from the first record at that ground carrying one.
+      // Every record at one ground should hold the same coordinates, but a
+      // fixture written before the venue was allocated may have the name and no
+      // URL. When the venue is the OUTER group the link belongs on the outer
+      // heading, so this is resolved from whichever level is showing the venue.
+      const venueName = byDateFirst ? ik : ok;
       const withUrl = ms.find(m => m.venueUrl);
-      const heading = v === VENUE_TBC
-        ? `<span style="color:var(--tx3);font-style:italic">${VENUE_TBC}</span>`
-        : venueLink(v, withUrl ? withUrl.venueUrl : '');
-      const suburb = (ms.find(m => m.vSuburb) || {}).vSuburb || '';
+      const isTbc = (byDateFirst ? ik === VENUE_TBC : ik === DATE_TBC);
+      const headTxt = byDateFirst
+        ? (isTbc ? `<span style="color:var(--tx3);font-style:italic">${VENUE_TBC}</span>`
+                 : venueLink(venueName, withUrl ? withUrl.venueUrl : ''))
+        : (isTbc ? `<span style="color:var(--tx3);font-style:italic">${DATE_TBC}</span>`
+                 : innerLbl(ik));
+      const suburb = byDateFirst ? ((ms.find(m => m.vSuburb) || {}).vSuburb || '') : '';
 
       const rows = ms.map(m => {
         const g = matchListGrade(m) || m.rawGrade || '';
         const label = abbrevGrade(gLabel(g));
         const gc = `gtag-${label.replace(/[^A-Za-z0-9]/g, '')}`;
-        const t = timeOf(m);
         return `<div class="fvv-row">
-          <span class="fvv-time">${t || '—'}</span>
+          <span class="fvv-time">${fvTimeOf(m) || '—'}</span>
           <span class="fvv-age">${m.age}</span>
           <span class="gtag gtag-neutral ${gc}">${label}</span>
           <span class="fvv-rnd">${m.finalsAbbrev || 'F'}</span>
@@ -2837,15 +2930,66 @@ function renderFinalsByVenue(pool) {
       }).join('');
 
       return `<div class="fvv-venue">
-        <div class="fvv-vhdr">${heading}${suburb ? `<span class="fvv-suburb">${suburb}</span>` : ''}
+        <div class="fvv-vhdr">${headTxt}${suburb ? `<span class="fvv-suburb">${suburb}</span>` : ''}
           <span class="fvv-count">${ms.length} match${ms.length !== 1 ? 'es' : ''}</span></div>
         ${rows}</div>`;
     }).join('');
 
-    return `<div class="fv-age"><span>${longDate(dateKey)}</span>
-      <span class="fv-meta">${venues.length} venue${venues.length !== 1 ? 's' : ''} &middot; ${dayMatches.length} match${dayMatches.length !== 1 ? 'es' : ''}</span></div>
-      <div class="fv-card">${venueBlocks}</div>`;
+    const unit = byDateFirst ? 'venue' : 'date';
+    return `<div class="fv-age" id="${fvGroupId(ok)}"><span>${outerHead}${
+      outerSuburb ? `<span class="fvv-suburb" style="margin-left:8px">${outerSuburb}</span>` : ''}</span>
+      <span class="fv-meta">${innerKeys.length} ${unit}${innerKeys.length !== 1 ? 's' : ''} &middot; ${groupMatches.length} match${groupMatches.length !== 1 ? 'es' : ''}</span></div>
+      <div class="fv-card">${blocks}</div>`;
   }).join('');
+
+  return html;
+}
+
+// The grouping switch. Same shape as setFinalsMode: reject an unknown value and
+// a no-op rather than re-rendering for nothing.
+function setVenueGroup(g) {
+  if (!['date','venue'].includes(g) || S.venueGroup === g) return;
+  S.venueGroup = g;
+  saveFilters();
+  render();
+}
+
+// Scroll to an outer group. scrollIntoView rather than a hash, because a hash
+// would push a history entry for every jump and put the whole finals view behind
+// a Back button that does not restore it.
+function jumpToFinalsGroup(key) {
+  if (!key) return;
+  const el = document.getElementById(fvGroupId(key));
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // The sidebar overlays the page on a narrow screen, so it has to close or the
+  // target is scrolled to and then covered.
+  if (window.innerWidth <= 768) {
+    const sb = document.getElementById('sidebar');
+    if (sb && sb.classList.contains('open')) toggleSidebar();
+  }
+}
+
+// Fill the jump list from what was actually rendered. Called after the view is
+// built, never before: deriving the options from the pool independently would be
+// a second implementation of the grouping and the two would drift.
+function syncFinalsJump() {
+  const wrap = document.getElementById('fv-jump-group');
+  const sel  = document.getElementById('fv-jump');
+  const lbl  = document.getElementById('fv-jump-label');
+  if (!wrap || !sel) return;
+  const show = S.view === 'finals' && S.finalsMode === 'venue' && fvGroupIndex.length > 0;
+  wrap.style.display = show ? '' : 'none';
+  if (!show) return;
+  const byDateFirst = (S.venueGroup || 'date') !== 'venue';
+  if (lbl) lbl.textContent = byDateFirst ? 'Jump to date' : 'Jump to venue';
+  const html = `<option value="">${fvGroupIndex.length} ${byDateFirst ? 'date' : 'venue'}${fvGroupIndex.length !== 1 ? 's' : ''}…</option>` +
+    fvGroupIndex.map(g =>
+      `<option value="${String(g.key).replace(/"/g, '&quot;')}">${g.label} (${g.n})</option>`).join('');
+  // Rebuilt only when it changed, so an open dropdown is not collapsed under the
+  // user by an unrelated re-render.
+  if (sel.dataset.last !== html) { sel.innerHTML = html; sel.dataset.last = html; }
+  sel.value = '';
 }
 
 // ── By club ──
@@ -2921,6 +3065,47 @@ function renderFinalsByClub(pool) {
       b.teams.length - a.teams.length ||
       a.name.localeCompare(b.name));
   }
+
+  // ── Club summary table ────────────────────────────────────────────────────
+  // One row per club, four measures, above the cards. It answers at a glance
+  // what the cards answer in detail: who has how many teams alive, who is in
+  // grand finals, and who has won them.
+  //
+  // It reuses `entries` — the SAME array the cards below are built from, already
+  // sorted by the same fv-sort control. Deriving it separately would be a second
+  // aggregation over the same pool, and two counts of one thing drift: that is
+  // exactly how _grade and matchGrade came apart. The dropdown's five options are
+  // already Alphabetical / teams / remaining / GF / premierships, so the table's
+  // column order and the sort control were designed against each other rather
+  // than one being bolted on.
+  //
+  // Totals are summed from the rows rather than recomputed from the pool, for
+  // the same reason.
+  const sumOf = (f) => entries.reduce((n, e) => n + f(e), 0);
+  const summary = entries.length ? `<div class="fv-sum-wrap">
+    <table class="fv-sum">
+      <thead><tr>
+        <th style="text-align:left">Club</th>
+        <th title="Teams that reached the finals">Teams</th>
+        <th title="Teams not yet eliminated and not yet in a grand final">Remaining</th>
+        <th title="Teams named in a grand final, played or scheduled">GF</th>
+        <th title="Teams that have won a grand final">Premierships</th>
+      </tr></thead>
+      <tbody>${entries.map(e => `<tr>
+        <td style="text-align:left"><span class="fv-sum-club">${crestHTML(e.teams[0].team, 16, 'tlogo')}<span>${e.name}</span></span></td>
+        <td>${e.teams.length}</td>
+        <td>${e.remaining || '<span class="fv-sum-zero">–</span>'}</td>
+        <td>${e.inGF || '<span class="fv-sum-zero">–</span>'}</td>
+        <td class="${e.premiers ? 'fv-sum-prem' : ''}">${e.premiers || '<span class="fv-sum-zero">–</span>'}</td>
+      </tr>`).join('')}</tbody>
+      <tfoot><tr>
+        <td style="text-align:left">${entries.length} club${entries.length !== 1 ? 's' : ''}</td>
+        <td>${sumOf(e => e.teams.length)}</td>
+        <td>${sumOf(e => e.remaining)}</td>
+        <td>${sumOf(e => e.inGF)}</td>
+        <td>${sumOf(e => e.premiers)}</td>
+      </tr></tfoot>
+    </table></div>` : '';
 
   // ── Columns per CARD, ending at the grand final ───────────────────────────
   // Two earlier attempts were wrong in opposite directions. Columns shared
@@ -3133,7 +3318,7 @@ function renderFinalsByClub(pool) {
         ${orphans.map(t => teamRow(t, globalTotal, globalGradeRoundIdx.get(`${t.comp}|${t.age}|${t.grade}`) || new Map())).join('')}</div>`
     : '';
 
-  return blocks + orphanNote;
+  return summary + blocks + orphanNote;
 }
 
 function renderFinalsView() {
@@ -3145,6 +3330,8 @@ function renderFinalsView() {
   if (!pool.length) {
     body.innerHTML = '<div class="empty"><p>No finals matches yet for the selected competition.</p></div>';
     if (meta) meta.textContent = '';
+    fvGroupIndex = [];
+    syncFinalsJump();
     return;
   }
 
@@ -3179,11 +3366,16 @@ function renderFinalsView() {
     nPrem      ? `<span style="color:var(--gold)">${nPrem} premier${nPrem!==1?'s':''}</span>` : '',
   ].filter(Boolean).join(' &middot; ');
 
+  // fvGroupIndex is reset by renderFinalsByVenue and stale in every other mode,
+  // so it is cleared here rather than trusted.
+  if (S.finalsMode !== 'venue') fvGroupIndex = [];
   body.innerHTML =
     S.finalsMode === 'club'    ? renderFinalsByClub(pool)  :
     S.finalsMode === 'venue'   ? renderFinalsByVenue(pool) :
     S.finalsMode === 'winners' ? renderFinalsWinners(pool) :
                                  renderFinalsByAge(pool);
+  // AFTER the body: the list is built from what was rendered, not from the pool.
+  syncFinalsJump();
 }
 
 function renderStats() {
@@ -4674,6 +4866,7 @@ async function init() {
 
       if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
       if (['age','club','venue','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
+      if (['date','venue'].includes(f.venueGroup)) S.venueGroup = f.venueGroup;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
         S.finalsSort = f.finalsSort;
       }
