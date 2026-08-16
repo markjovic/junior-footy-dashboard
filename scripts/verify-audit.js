@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-audit v4 2026-08-13 unattributed-rounds';
+const VERSION = 'verify-audit v5 2026-08-16 lastround-retired';
 console.log(`=== ${VERSION} ===`);
 
 const AUDIT = path.join(__dirname, 'audit-data.js');
@@ -44,6 +44,8 @@ function clean() {
       ],
       // Both correctly shaped. Section 9 checking an EMPTY map would pass
       // whatever it did, so the clean case has to carry real keys.
+      // Retired as of audit v16. Kept in the fixture deliberately: section 9
+      // reports it as INFO, and an empty map could not show that firing.
       lastRound: { 'EFNL 2026|U12|g1': 2, 'EFNL 2025|U12|g2': 2 },
       gotwFlags: { 'EFNL 2026|U12|2': 'EFNL 2026|U12|A|2|a|b' },
       seasonFiles: [
@@ -420,51 +422,160 @@ console.log('\n4c-bis  A live round gap is not crowded out by retired ones');
 }
 
 // ── 4d. Cross-organisation key shapes ───────────────────────────────────────
-// lastround_gotw_keying_design.md. Section 9 exists because both failure modes
-// are silent: a lastRound key the page cannot build renders no round number on
-// the grade tab, and a gotwFlags key it cannot build falls through to the
-// automatic pick. Neither shows an error, so the audit is the only place a stale
-// key can announce itself — and an audit nobody has seen fire is worth nothing.
+// lastround_gotw_keying_design.md. Section 9 exists because the failure mode is
+// silent: a gotwFlags key the page cannot build falls through to the automatic
+// pick, so nothing on screen says the administrator's choice was lost. An audit
+// nobody has seen fire is worth nothing, so every branch is driven here.
+//
+// lastRound was checked alongside it until 2026-08-16 and is now RETIRED — engine
+// v19 stopped writing it, Beta 0.176 removed its only reader. The shape
+// assertions for it are gone; what replaces them is the assertion that it is
+// reported as retired rather than silently dropped from the output.
 console.log('\n4d  Section 9 checks the cross-organisation key shapes');
 write(clean());
 LAST = audit();
 ok('section 9 ran', /9  Cross-organisation key shapes/.test(LAST.out));
 ok('a correctly shaped tree raises no shape warning',
   !/are not compName/.test(LAST.out) && LAST.code === 0, `exit ${LAST.code}`);
-ok('and it counted the keys it checked',
-  /lastRound\s+2 key\(s\), 2 in the/.test(LAST.out),
-  (LAST.out.match(/lastRound\s+\d+ key\(s\)[^\n]*/) || ['not reported'])[0]);
-ok('gotwFlags is checked too',
+ok('gotwFlags is counted',
   /gotwFlags\s+1 key\(s\), 1 in the/.test(LAST.out),
   (LAST.out.match(/gotwFlags\s+\d+ key\(s\)[^\n]*/) || ['not reported'])[0]);
 
-// A pre-2026-08-13 two-segment lastRound key. This is the exact shape the engine
-// wrote from Beta 0.133 until v14 and that the dashboard could never read.
-seeded('a two-segment lastRound key is reported',
-  fx => { fx.core.lastRound['U12|A'] = 14; },
-  /core\.lastRound: 1 of 3 key\(s\) are not compName\|age\|gradeId/, 0);
+// The retired key must be REPORTED, not silently absent. A key that vanishes from
+// the output looks identical to a key that is empty, and this one is neither — it
+// still holds two entries in the fixture.
+ok('lastRound is reported as RETIRED',
+  /lastRound\s+2 key\(s\) — RETIRED/.test(LAST.out),
+  (LAST.out.match(/lastRound[^\n]*/) || ['not reported'])[0]);
+ok('and it is NOT shape-checked any more',
+  !/core\.lastRound: .* are not compName/.test(LAST.out),
+  'a shape check on a key with no reader reports on nothing');
 
-// The same defect on the other key.
+// Could that have failed? With no lastRound at all the RETIRED line must still
+// print, reporting zero — otherwise the assertion above only passes for a tree
+// that happens to carry the stale key.
+{
+  const fxr = clean();
+  delete fxr.core.lastRound;
+  write(fxr);
+  LAST = audit();
+  ok('the RETIRED line prints even with the key absent',
+    /lastRound\s+0 key\(s\) — RETIRED/.test(LAST.out),
+    (LAST.out.match(/lastRound[^\n]*/) || ['not reported'])[0]);
+  ok('and an absent retired key raises nothing', LAST.code === 0, `exit ${LAST.code}`);
+}
+
+// A two-segment gotwFlags key — the pre-2026-08-13 shape the page could not build.
 seeded('a two-segment gotwFlags key is reported',
   fx => { fx.core.gotwFlags['U12|3'] = 'EFNL 2026|U12|A|3|a|b'; },
   /core\.gotwFlags: 1 of 2 key\(s\) are not compName\|age\|roundKey/, 0);
 
-// Right shape, wrong competition: three segments but naming a season that is not
-// in the manifest, so the page can never build it.
+// Right shape, wrong competition: three segments but naming a season absent from
+// the manifest, so the page can never build it.
 seeded('a key naming a competition absent from the manifest is reported',
-  fx => { fx.core.lastRound['SEJ 2019|U12|g9'] = 5; },
-  /core\.lastRound: 1 key\(s\) name a competition absent from the manifest/, 0);
+  fx => { fx.core.gotwFlags['SEJ 2019|U12|3'] = 'SEJ 2019|U12|A|3|a|b'; },
+  /core\.gotwFlags: 1 key\(s\) name a competition absent from the manifest/, 0);
 
 // Could these have failed? Both are WARNINGS, so they must not fail the run on
 // their own — and must fail it under STRICT, like every other warning.
 {
   const fxk = clean();
-  fxk.core.lastRound['U12|A'] = 14;
+  fxk.core.gotwFlags['U12|3'] = 'EFNL 2026|U12|A|3|a|b';
   write(fxk);
   LAST = audit();
   ok('a wrong-shape key alone exits 0', LAST.code === 0, `exit ${LAST.code}`);
   LAST = audit({ AUDIT_STRICT: 'true' });
   ok('the same tree exits 1 under STRICT', LAST.code === 1, `exit ${LAST.code}`);
+}
+
+// ── 4d-bis. Section 8 sizes on PERSON-SEASONS, and section 11 counts them ────
+// Both sections were unverified until 2026-08-16, and both failed the same way
+// when a first attempt was made: the clean fixture's player records carry no
+// `uuid`, so section 8 counted zero people and section 11 zero person-seasons.
+// Every assertion passed against nothing. working_practice.md records that shape
+// — "a fixture must be the shape the code really produces" — and this is it.
+//
+// The fixture below is deliberately arithmetic that distinguishes the two
+// readings. fetch-stats.js stores one record PER GRADE:
+//
+//   alice  2026 gA, 2026 gB, 2025 gA   -> 3 records, 2 person-seasons
+//   bob    2026 gA                     -> 1 record,  1 person-season
+//   cara   2025 gA                     -> 1 record,  1 person-season
+//
+//   records = 5, person-seasons = 4, people = 3
+//   average AS IT SHOULD BE  = 4/3 = 1.33
+//   average IF IT COUNTS RECORDS = 5/3 = 1.67
+//
+// Those two numbers differ, which is the whole point — the previous code printed
+// the second while labelling it the first.
+console.log('\n4d-bis  Section 8 divides by person-seasons, not records');
+{
+  const P = (uuid, name, gradeID) => ({ id: uuid + gradeID, uuid, name, gradeID,
+    compName: '', age: 'U12', team: 'Blackburn', teamRaw: 'Blackburn', rawGrade: 'A',
+    gp: 5, goals: 2 });
+  const fx8 = clean();
+  fx8.current.players = [
+    { ...P('u-alice', 'Alice', 'gA'), compName: 'EFNL 2026' },
+    { ...P('u-alice', 'Alice', 'gB'), compName: 'EFNL 2026' },
+    { ...P('u-bob',   'Bob',   'gA'), compName: 'EFNL 2026' },
+  ];
+  fx8.archive.players = [
+    { ...P('u-alice', 'Alice', 'gA'), compName: 'EFNL 2025' },
+    { ...P('u-cara',  'Cara',  'gA'), compName: 'EFNL 2025' },
+  ];
+  // The manifest claims 2025 has no players; it now has two, and an unrelated
+  // phase mismatch would fail assertions that are not about section 8.
+  fx8.core.manifest[1].phases.players = true;
+  fx8.archive.meta.phases.players = true;
+  fx8.archive.meta.phases.players_n = 2;
+  fx8.current.meta.phases.players_n = 3;
+  write(fx8);
+  LAST = audit();
+
+  // The fixture is real: without uuids every assertion below passes vacuously.
+  ok('the fixture carries uuids, so section 8 has something to count',
+    /5 player record\(s\) with a uuid/.test(LAST.out),
+    (LAST.out.match(/\d+ player record\(s\) with a uuid[^\n]*/) || ['not reported'])[0]);
+  ok('person-seasons are counted and reported',
+    /4 person-season\(s\)/.test(LAST.out),
+    (LAST.out.match(/\d+ person-season\(s\)[^\n]*/) || ['not reported'])[0]);
+  ok('distinct people are counted',
+    /3 DISTINCT people/.test(LAST.out),
+    (LAST.out.match(/\d+ DISTINCT people/) || ['not reported'])[0]);
+
+  // THE assertion. 1.33 is person-seasons/people; 1.67 is records/people.
+  ok('the average divides by PERSON-SEASONS',
+    /1\.33 season\(s\) each on average/.test(LAST.out),
+    (LAST.out.match(/[\d.]+ season\(s\) each on average/) || ['not reported'])[0]);
+  ok('and NOT by records',
+    !/1\.67 season\(s\) each on average/.test(LAST.out),
+    '1.67 is records/people — the figure this fix removed');
+  ok('the gap between the two is explained, not silent',
+    /1 record\(s\) are a second or later grade/.test(LAST.out),
+    (LAST.out.match(/\d+ record\(s\) are a second or later grade[^\n]*/) || ['not reported'])[0]);
+
+  // Section 11 over the same fixture. It reported zero people before this,
+  // because the clean fixture had no uuid on any player record.
+  //
+  // SLICED, not matched against the whole output. Section 10 prints a table whose
+  // rows also begin "EFNL 2026" followed by numbers, so a bare regex over LAST.out
+  // reports section 10's row while asserting on section 11's — the assertion is
+  // right and the failure message points at the wrong table, which is worse than
+  // no message at all.
+  const s11 = LAST.out.slice(LAST.out.indexOf('11  Player records per person per season'));
+  const row11 = (s11.match(/EFNL 2026\s+\d+\s+\d+\s+\d+\s+\d+/) || ['no EFNL 2026 row'])[0];
+  ok('section 11 counts real people now',
+    /11  Player records per person per season/.test(LAST.out) &&
+    !/TOTAL\s+0\s+0\s+0\s+0/.test(s11),
+    `${row11} — a TOTAL row of zeros is the vacuous pass this fixture exists to stop`);
+  ok('section 11 sees the person holding two records in one season',
+    /EFNL 2026\s+2\s+1\s/.test(s11), row11);
+  ok('and reports a maximum of two records for one person-season',
+    /EFNL 2026\s+2\s+1\s+\d+\s+2/.test(s11), row11);
+  ok('the person-season total agrees with section 8',
+    /1 person-season\(s\) have more than one record/.test(s11),
+    (s11.match(/\d+ person-season\(s\) have more than one record/) || ['not reported'])[0]);
+  ok('none of this is an error', LAST.code === 0, `exit ${LAST.code}`);
 }
 
 // ── 4e. Section 10: dropped records, defunct versus live ────────────────────

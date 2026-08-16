@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v6 2026-08-16 fixture-supersede';
+const VERSION = 'verify-backfill v7 2026-08-16 lastround-removed';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -196,19 +196,6 @@ function reset(manifest) {
     // Two competitions' worth of each collision-prone core key, so a scoped run
     // that replaces rather than merges is visible.
     compLogos: { 'EFNL 2026': 'http://x/efnl.png', 'YJFL 2026': 'http://x/yjfl.png' },
-    // Three deliberately different lastRound entries, because engine v14 must
-    // treat them three different ways in one pass:
-    //   EFNL 2026  covered by a VIP-only run  -> REBUILT, 14 must become 1
-    //   YJFL 2026  not covered by a VIP run   -> KEPT at 16
-    //   U12|A      pre-v14 two-segment key    -> DROPPED
-    // The legacy key is the one that catches a naive merge: its first segment is
-    // an age, an age is never a compName, so a keep-if-not-covered test alone
-    // preserves it forever.
-    lastRound: {
-      'EFNL 2026|U12|6f964e7b': 14,
-      'YJFL 2026|U14|9a9a9a9a': 16,
-      'U12|A': 14,
-    },
     teamLogos: { 'Ivanhoe': 'http://x/iv.png' },
   }, null, 2));
   fs.writeFileSync(CONFIG(), JSON.stringify({
@@ -302,22 +289,9 @@ ok('per-season completeness recorded',
 console.log('\n2  Nothing outside the backfilled season was touched');
 const core1 = read(CORE);
 ok('YJFL file still has its match', read(YJFL_CUR).matches.length === 1);
-// Engine v13 refused to write lastRound at all from a backfill, because the key
-// had no season in it and a retired season's rounds would have overwritten the
-// live season's value for the same age and grade name. v14's key carries the
-// compName, and the compName carries the season, so the backfilled season writes
-// its own entry and cannot reach the live one.
-ok('the backfilled season got its OWN lastRound entry',
-  core1.lastRound['EFNL 2025|U12|1debae74'] === 1, JSON.stringify(core1.lastRound));
-ok('the LIVE season entry is untouched at 14',
-  core1.lastRound['EFNL 2026|U12|6f964e7b'] === 14,
-  'a backfill must not reach the live season — this is what writeLastRound:false used to buy');
-ok("lastRound kept the other organisation's entry",
-  core1.lastRound['YJFL 2026|U14|9a9a9a9a'] === 16, JSON.stringify(core1.lastRound));
-ok('the pre-v14 two-segment key was DROPPED, not kept',
-  core1.lastRound['U12|A'] === undefined,
-  'an age is never a compName, so keep-if-not-covered alone would preserve it forever');
-ok('and the drop was reported', /dropped 1 pre-v14 key/.test(r.out));
+// lastRound was asserted here until it was removed in engine v19. compLogos
+// below carries the same coverage: it is the other core key assigned wholesale,
+// it had the identical merge-not-replace defect, and it is still written.
 ok('compLogos kept both competitions',
   Object.keys(core1.compLogos).length >= 2, JSON.stringify(Object.keys(core1.compLogos)));
 ok('grades.json holds the 2025 grades',
@@ -341,52 +315,25 @@ ok('season-ended guard NOT bypassed', !/season-ended guard BYPASSED/.test(r.out)
 ok('2026 matches written to current', read(EFNL_CUR).matches.length === 2,
   `${read(EFNL_CUR).matches.length} matches`);
 const core4 = read(CORE);
-// THIS ASSERTION IS THE OPPOSITE OF v13's. Up to v13 a VIP-only run left
-// lastRound entirely alone, because the key had no competition and a scoped run
-// could only compute a partial map. v14's key carries the competition and the
-// merge is per competition, so a VIP-only run MUST now rebuild the competitions
-// it covered and keep every other competition exactly as stored. Both halves are
-// asserted: rebuilding without keeping is the defect that has been fixed four
-// times in four writers, and keeping without rebuilding is the stale-value bug
-// the flag existed to tolerate.
-ok('VIP-only run REBUILT its own competition — 14 became 1',
-  core4.lastRound['EFNL 2026|U12|6f964e7b'] === 1,
-  `${JSON.stringify(core4.lastRound)} — 14 here means the scoped run did not write`);
-ok('VIP-only run KEPT the competition it could not see',
-  core4.lastRound['YJFL 2026|U14|9a9a9a9a'] === 16,
-  'this is the merge-not-replace defect, fixed four times in four writers');
-ok('VIP-only run reported one covered competition',
-  /lastRound: 1 rebuilt for 1 covered competition\(s\), 1 kept/.test(r.out));
-ok('no YJFL key was invented from a scope that never saw YJFL matches',
-  !Object.keys(core4.lastRound).some(k => k === 'YJFL 2026|U12|9a9a9a9a'),
-  JSON.stringify(Object.keys(core4.lastRound)));
+// A scoped run must MERGE, not replace. compLogos is the surviving witness for
+// this now that lastRound is gone: it is a core key assigned wholesale, a
+// VIP-only run discovers one competition's grades, and replacing would reduce a
+// two-entry map to one. That is the defect fixed four times in four writers.
 ok('compLogos MERGED — YJFL entry survived a VIP-only run',
   core4.compLogos['YJFL 2026'] === 'http://x/yjfl.png', 'this is the second fix');
 
-// ── 4a. A full run rebuilds lastRound, and must not ratchet ─────────────────
-console.log('\n4a  A full run rebuilds lastRound from every competition');
+// ── 4a. A full run covers every competition ─────────────────────────────────
+// This section asserted lastRound's rebuild-and-do-not-ratchet behaviour until
+// engine v19 removed the key. What is left is the property that mattered
+// independently of it: an unscoped run reaches both competitions.
+console.log('\n4a  A full run covers every competition');
 reset();
 r = run('fetch-results.js', {});   // no VIP_ONLY — covers both competitions
 ok('exit 0', r.code === 0, `exit ${r.code}`);
-const core4a = read(CORE);
-ok('lastRound rebuilt from this season, not ratcheted up',
-  core4a.lastRound['EFNL 2026|U12|6f964e7b'] === 1,
-  `${JSON.stringify(core4a.lastRound)} — 14 here would mean a stale value survived`);
-ok('the other competition is present, not deleted',
-  core4a.lastRound['YJFL 2026|U12|9a9a9a9a'] === 1, JSON.stringify(core4a.lastRound));
-// The YJFL fixture has one PRE-EXISTING stored match at U14 round 16 with no
-// gradeId on it. The roster therefore has no gradeId for those teams either, so
-// rosterGrade() falls back to the rawGrade — exactly as index.html does. The key
-// is keyed on 'B', not on a grade id, and that is correct rather than a gap.
-ok('a record with no gradeId keys on its rawGrade, matching the reader',
-  core4a.lastRound['YJFL 2026|U14|B'] === 16, JSON.stringify(core4a.lastRound));
-ok('every key has exactly three segments',
-  Object.keys(core4a.lastRound).every(k => k.split('|').length === 3),
-  JSON.stringify(Object.keys(core4a.lastRound)));
-ok('every key starts with a compName that has a year in it',
-  Object.keys(core4a.lastRound).every(k => /^[A-Z]+ \d{4}\|/.test(k)),
-  JSON.stringify(Object.keys(core4a.lastRound)));
 ok('both competitions were fetched', /2 competition-season\(s\)/.test(r.out));
+ok('and both compLogos survive an unscoped run',
+  Object.keys(read(CORE).compLogos).length >= 2,
+  JSON.stringify(Object.keys(read(CORE).compLogos)));
 
 // ── 5. Failure path: a live season ───────────────────────────────────────────
 console.log('\n5  Guards must refuse rather than produce something wrong');
@@ -445,16 +392,14 @@ ok('the live season file is untouched — backfill never fetches it',
   read(EFNL_CUR).matches.length === 0, `${read(EFNL_CUR).matches.length} matches`);
 ok('no archived record leaked into current',
   !read(EFNL_CUR).matches.some(m => String(m.compName).match(/202[45]/)));
-// "all" backfills 2025 and 2024. Each writes its own season's entry; neither may
-// touch the live 2026 season or the other organisation.
+// "all" backfills 2025 and 2024. Neither may reach the live season's records or
+// the other organisation's file — asserted on the season files themselves now
+// that lastRound is gone.
 {
-  const lr = read(CORE).lastRound;
-  ok('each backfilled season has its own entry',
-    lr['EFNL 2025|U12|1debae74'] === 1 && lr['EFNL 2024|U12|25a4f589'] === 1,
-    JSON.stringify(lr));
-  ok('the live season is still 14 after two backfills',
-    lr['EFNL 2026|U12|6f964e7b'] === 14, JSON.stringify(lr));
-  ok('the other organisation is still 16', lr['YJFL 2026|U14|9a9a9a9a'] === 16);
+  ok('the live season file was not rewritten with archived records',
+    read(EFNL_CUR).matches.length === 0, `${read(EFNL_CUR).matches.length}`);
+  ok('the other organisation still has exactly its own match',
+    read(YJFL_CUR).matches.length === 1, `${read(YJFL_CUR).matches.length}`);
 }
 
 // ── 8a. A failure part-way through stops and keeps what was written ──────────
@@ -775,55 +720,6 @@ console.log('\n12  A renamed team supersedes rather than duplicates');
   }
 }
 
-// ── 10. lastRoundKey resolves through the ROSTER, not the record ─────────────
-// The network stub serves one grade per season, so no run() test can produce a
-// promoted team, and the whole suite passed with the roster lookup replaced by
-// m.gradeId. That made the roster resolution an untested guard, so it is tested
-// directly here — the same way buildGradeMeta and rebuildRoster are above.
-console.log('\n10  lastRound keys on the grade a team is in NOW');
-{
-  const { lastRoundKey, rebuildRoster } = require(path.join(TMP, 'scripts', 'lib', 'results-engine.js'));
-
-  // A promotion: Norwood plays grade B in R1 and grade A in R5. rebuildRoster
-  // takes the later round, so the roster says A. index.html therefore counts
-  // Norwood on the A ladder for BOTH matches.
-  const M = (rg, gid, rd) => ({ compName: 'EFNL 2026', age: 'U12', rawGrade: rg,
-    gradeId: gid, round: rd, home: 'Norwood', away: 'Vermont', isFinals: false });
-  const roster = rebuildRoster([M('B', 'gB', 1), M('A', 'gA', 5)]);
-  ok('the roster says the team is in the LATER grade',
-    roster['EFNL 2026|Norwood|U12'].gradeId === 'gA',
-    JSON.stringify(roster['EFNL 2026|Norwood|U12']));
-
-  // The round-1 record still carries gradeId gB. Keying on the record would file
-  // it under gB — a key index.html never builds, so no round tag renders and it
-  // looks like a grade that has not played yet.
-  ok('the R1 record keys on gA, not on its own gB',
-    lastRoundKey(M('B', 'gB', 1), 'home', roster) === 'EFNL 2026|U12|gA',
-    lastRoundKey(M('B', 'gB', 1), 'home', roster));
-  ok('and so does the R5 record',
-    lastRoundKey(M('A', 'gA', 5), 'home', roster) === 'EFNL 2026|U12|gA');
-
-  // Could that have failed? A team that was never promoted must key on its own
-  // grade, or the assertion above would pass for the wrong reason.
-  const plain = rebuildRoster([M('A', 'gA', 1)]);
-  ok('an unpromoted team keys on its own grade',
-    lastRoundKey(M('A', 'gA', 1), 'home', plain) === 'EFNL 2026|U12|gA');
-
-  // No gradeId anywhere: falls back to rawGrade, exactly as rosterGrade() does.
-  const noId = rebuildRoster([{ compName: 'YJFL 2026', age: 'U14', rawGrade: 'B',
-    round: 16, home: 'Ivanhoe', away: 'Kew', isFinals: false }]);
-  ok('with no gradeId it falls back to rawGrade',
-    lastRoundKey({ compName: 'YJFL 2026', age: 'U14', rawGrade: 'B', round: 16,
-      home: 'Ivanhoe', away: 'Kew' }, 'home', noId) === 'YJFL 2026|U14|B');
-
-  // A team absent from the roster must still produce a three-segment key rather
-  // than "undefined" anywhere in it.
-  ok('a team missing from the roster still yields three segments',
-    lastRoundKey(M('A', 'gA', 1), 'home', {}) === 'EFNL 2026|U12|A');
-  ok('the away side is keyed too, not just home',
-    lastRoundKey(M('A', 'gA', 5), 'away', roster).split('|').length === 3);
-}
-
 // ── 13. A result must CLEAR the scheduled flag on the fixture it supersedes ──
 // Engine v18. fetch-fixtures.js writes a scheduled record under the SAME match id
 // the results engine builds, so when the game is played the result merges into it
@@ -966,11 +862,8 @@ console.log('\n13  A result clears the scheduled flag on the fixture it supersed
 console.log('\n7  The fixture is real');
 reset();
 ok('core seeded with two compLogos', Object.keys(read(CORE).compLogos).length === 2);
-ok('core seeded with three lastRound keys', Object.keys(read(CORE).lastRound).length === 3,
-  JSON.stringify(Object.keys(read(CORE).lastRound)));
-ok('one seeded key is a pre-v14 two-segment key',
-  Object.keys(read(CORE).lastRound).filter(k => k.split('|').length === 2).length === 1,
-  'without this the drop test above proves nothing');
+ok('core seeds no lastRound key', read(CORE).lastRound === undefined,
+  'removed with engine v19 — a seed here would make the removal untestable');
 ok('EFNL current starts empty', read(EFNL_CUR).matches.length === 0);
 ok('archive genuinely absent', !fs.existsSync(EFNL_ARC));
 
