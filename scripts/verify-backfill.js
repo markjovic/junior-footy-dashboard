@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v5 2026-08-13 grademeta-grading';
+const VERSION = 'verify-backfill v6 2026-08-16 fixture-supersede';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -822,6 +822,145 @@ console.log('\n10  lastRound keys on the grade a team is in NOW');
     lastRoundKey(M('A', 'gA', 1), 'home', {}) === 'EFNL 2026|U12|A');
   ok('the away side is keyed too, not just home',
     lastRoundKey(M('A', 'gA', 5), 'away', roster).split('|').length === 3);
+}
+
+// ── 13. A result must CLEAR the scheduled flag on the fixture it supersedes ──
+// Engine v18. fetch-fixtures.js writes a scheduled record under the SAME match id
+// the results engine builds, so when the game is played the result merges into it
+// at `{ ...prev, ...m }`. A result record has no `scheduled` key, so there is
+// nothing to overwrite `prev.scheduled` and `true` survives the spread.
+//
+// index.html splits on exactly that flag —
+//   S.matches = d.matches.filter(m => !m.isBye && !m.scheduled)
+// — so the record never reaches the results list, and isPlayed() is
+// `!m.scheduled && ...`, so the finals view draws it as an unplayed fixture with
+// blank scores. Correct scores, stored, invisible.
+//
+// AND IT NEVER SELF-CORRECTED. The scores merged in on the first run after the
+// game, so every later run found prev[k] === m[k], reported `0 new, 0 updated`,
+// and the workflow skipped the commit. The log was indistinguishable from a run
+// with genuinely nothing to do, which is why this survived from whenever
+// fetch-fixtures.js began writing finals fixtures until 2026-08-16.
+//
+// Measured on EFNL 2026 Veterans: four Semi Finals records stored with hScore
+// 59, 33, 86 and 68, all four carrying `scheduled: true`, none on screen.
+//
+// THE FIXTURE SEEDS THE SCORES THE STUB WILL RETURN. That is the whole point: if
+// the seeded scores differed, `scoreChanged` alone would count the update and the
+// test would pass against the old code.
+console.log('\n13  A result clears the scheduled flag on the fixture it supersedes');
+{
+  // The ids the engine builds for the stub's two round-1 games. cleanTeam strips
+  // the U12 suffix and the pair is sorted, so these are Blackburn|Norwood and
+  // Mitcham|Vermont — not the home/away order.
+  const ID1 = 'EFNL 2026|U12|6f964e7b|1|Blackburn|Norwood';
+  const ID2 = 'EFNL 2026|U12|6f964e7b|1|Mitcham|Vermont';
+  const contaminated = () => ([
+    { id: ID1, compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', gradeId: '6f964e7b',
+      round: 1, gameId: 'g1-r1-6f964e7b', home: 'Blackburn', away: 'Norwood',
+      hScore: 65, hG: 10, hB: 5, aScore: 51, aG: 8, aB: 3,
+      date: '2025-04-05', time: '12:30:00', scheduled: true },
+    { id: ID2, compName: 'EFNL 2026', age: 'U12', rawGrade: 'A', gradeId: '6f964e7b',
+      round: 1, gameId: 'g2-r1-6f964e7b', home: 'Vermont', away: 'Mitcham',
+      hScore: 78, hG: 12, hB: 6, aScore: 26, aG: 4, aB: 2,
+      date: '2025-04-05', time: '12:30:00', scheduled: true },
+  ]);
+  const byId = (p) => Object.fromEntries((read(p).matches || []).map(m => [m.id, m]));
+
+  reset();
+  writeSeason('2dcbf383', '383836bb', ['EFNL 2026'], { matches: contaminated() });
+
+  // The fixture is real: both seeded records must actually be flagged, or every
+  // assertion below passes for the wrong reason.
+  {
+    const b = byId(EFNL_CUR);
+    ok('seeded two records, both flagged scheduled',
+      !!b[ID1] && !!b[ID2] && b[ID1].scheduled === true && b[ID2].scheduled === true,
+      'the defect cannot be reproduced without this');
+    ok('and their scores already match what the stub returns',
+      b[ID1].hScore === 65 && b[ID1].aScore === 51,
+      'if they differed, scoreChanged alone would count the update and prove nothing');
+  }
+
+  const r = run('fetch-results.js', { VIP_ONLY: 'true' });
+  ok('exit 0 — the promotion is a change worth committing', r.code === 0,
+    `exit ${r.code}. Exit 2 means the repair is computed and then thrown away, ` +
+    `which is the state the defect sat in`);
+
+  const after = byId(EFNL_CUR);
+  ok('the first record is no longer flagged scheduled',
+    after[ID1] && after[ID1].scheduled === undefined,
+    JSON.stringify(after[ID1] && after[ID1].scheduled));
+  ok('and neither is the second',
+    after[ID2] && after[ID2].scheduled === undefined,
+    JSON.stringify(after[ID2] && after[ID2].scheduled));
+  ok('the promotion was reported, not silent',
+    /Promoted \d+ stored fixture\(s\) to results/.test(r.out),
+    'a record changing class without a log line is how this went unnoticed');
+  ok('the record count did NOT grow',
+    (read(EFNL_CUR).matches || []).filter(m => !m.isBye && !m.isPartial).length === 2,
+    'a promotion must supersede in place, never add beside');
+  ok('scores survived the promotion',
+    after[ID1].hScore === 65 && after[ID1].aScore === 51,
+    `${after[ID1].hScore}-${after[ID1].aScore}`);
+  ok('gameId survived the promotion', after[ID1].gameId === 'g1-r1-6f964e7b',
+    String(after[ID1].gameId));
+
+  // index.html's own split, run over what was actually written. This is the
+  // assertion that matches the symptom: a promoted record must land in S.matches.
+  const stored = read(EFNL_CUR).matches || [];
+  ok('both records now reach S.matches',
+    stored.filter(m => !m.isBye && !m.scheduled).length === 2,
+    `${stored.filter(m => !m.isBye && !m.scheduled).length} — this is the page-side split verbatim`);
+  ok('and neither is left in S.fixtures',
+    stored.filter(m => m.scheduled).length === 0,
+    `${stored.filter(m => m.scheduled).length}`);
+
+  // A promoted record must also read as PLAYED, which is a separate test from the
+  // split: the finals view uses isPlayed(), not the S.matches filter.
+  const isPlayed = m => !m.scheduled && m.hScore !== null && m.hScore !== undefined;
+  ok('a promoted record reads as played, so the finals view shows its score',
+    stored.every(m => m.isBye || m.isPartial || isPlayed(m)),
+    'blank score cells in the finals view are this test failing');
+
+  // `provisional` must go with the flag. isProvSide() tests
+  // `m.provisional && !m.hLogo`, and the logo strip runs on records that are no
+  // longer scheduled — so a surviving flag renders a PLAYED team as a greyed
+  // "Winner Game 1" placeholder the moment its logos are stripped.
+  reset();
+  writeSeason('2dcbf383', '383836bb', ['EFNL 2026'], {
+    matches: contaminated().map(m => ({ ...m, provisional: true })),
+  });
+  run('fetch-results.js', { VIP_ONLY: 'true' });
+  ok('provisional is cleared along with scheduled',
+    (read(EFNL_CUR).matches || []).every(m => m.provisional === undefined),
+    'otherwise a played team renders as a placeholder once its logos are stripped');
+
+  // COULD THESE HAVE FAILED? A run with nothing to promote must promote nothing,
+  // or the log assertion above fires on every run and means nothing at all.
+  reset();
+  run('fetch-results.js', { VIP_ONLY: 'true' });
+  const r2 = run('fetch-results.js', { VIP_ONLY: 'true' });
+  ok('a run with no scheduled records promotes nothing',
+    !/Promoted \d+ stored fixture/.test(r2.out),
+    'the promotion path must not fire on ordinary results');
+  ok('and that run still reports no changes',
+    r2.code === 2, `exit ${r2.code} — an ordinary re-run must not be made to look dirty`);
+
+  // A genuine score change must still count on its own, independently of any
+  // promotion. Seed a scheduled record with WRONG scores: both conditions are
+  // true at once and the record must still be promoted and corrected.
+  reset();
+  writeSeason('2dcbf383', '383836bb', ['EFNL 2026'], {
+    matches: contaminated().map(m => ({ ...m, hScore: 1, aScore: 1 })),
+  });
+  run('fetch-results.js', { VIP_ONLY: 'true' });
+  {
+    const b = byId(EFNL_CUR);
+    ok('a stale scheduled record is both corrected and promoted',
+      b[ID1].hScore === 65 && b[ID1].scheduled === undefined,
+      `${b[ID1].hScore}, scheduled=${b[ID1].scheduled}`);
+  }
 }
 
 console.log('\n7  The fixture is real');
