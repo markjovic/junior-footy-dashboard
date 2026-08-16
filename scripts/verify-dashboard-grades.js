@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v5 2026-08-13 counted-flag';
+const VERSION = 'verify-dashboard-grades v6 2026-08-16 venue-and-club-summary';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -901,6 +901,224 @@ if (has('matchCounts') && has('matchLadderGrade')) {
   ok('matchCounts agrees with matchLadderGrade on every record',
     run(`S.matches.every(m => matchCounts(m) === (matchLadderGrade(m) != null))`),
     'a second definition of "counts" is what caused this');
+}
+
+// ── 21. The BY VENUE view, both nestings ────────────────────────────────────
+// Beta 0.176 added the mode and 0.177 the grouping switch, and until this section
+// neither had ever been executed by a test — exactly the gap section 15 was
+// written to close for the club view, where a missing sort entry threw inside
+// render() and left the page on its loading overlay.
+//
+// FOUR things here fail quietly and none of them look wrong on screen:
+//
+//   render() throwing in one nesting only. The page hangs, and it hangs only for
+//   whoever had the other grouping saved in their filters.
+//
+//   The jump list naming a group that has no heading to scroll to. The dropdown
+//   looks populated and simply does nothing when used.
+//
+//   The venue link vanishing in venue-first. Found by hand on 2026-08-16: the
+//   outer heading was plain text and the inner heading had become a date, so
+//   venueUrl had nowhere to render. A missing link is invisible — the ground name
+//   is still there, just no longer clickable.
+//
+//   An undated match sorting FIRST. An empty string sorts before every real date,
+//   so the naive ordering silently promotes "Date TBC" to the top of a schedule.
+//
+// Ordering and layout beyond that are visible in a second and are not tested.
+console.log('\n21  The by-venue view renders in both nestings');
+ok('renderFinalsByVenue exists', has('renderFinalsByVenue'));
+ok('setVenueGroup exists', has('setVenueGroup'));
+ok('syncFinalsJump exists', has('syncFinalsJump'));
+if (has('renderFinalsByVenue') && has('setVenueGroup')) {
+  run(`S.gradeMeta = {
+    'EFNL 2026|Veterans|gM': { r: 1, lvl:'senior', g:'M', label:'Men',   gradeId:'gM', name:'Veterans Men' },
+    'EFNL 2026|Veterans|gW': { r: 1, lvl:'senior', g:'F', label:'Women', gradeId:'gW', name:'Veterans Women' },
+  }; rebuildGradeLabels();
+  S.roster = {
+    'EFNL 2026|Ringwood|Veterans': { grade:'Men', gradeId:'gM', age:'Veterans' },
+    'EFNL 2026|Croydon|Veterans':  { grade:'Men', gradeId:'gM', age:'Veterans' },
+    'EFNL 2026|Blackburn|Veterans':{ grade:'Women', gradeId:'gW', age:'Veterans' },
+    'EFNL 2026|Gembrook|Veterans': { grade:'Women', gradeId:'gW', age:'Veterans' },
+  };`);
+
+  // Shapes taken from real stored records: a dated+timed result, a dated result
+  // with an EMPTY time string, a scheduled provisional GF, and an UNDATED one.
+  sandbox.__v21 = [
+    { id:'v1', compName:'EFNL 2026', age:'Veterans', rawGrade:'Men', gradeId:'gM', round:1,
+      isFinals:true, finalsAbbrev:'SF', home:'Ringwood', away:'Croydon',
+      hScore:68, hG:10, hB:8, aScore:34, aG:5, aB:4,
+      date:'2026-08-14', time:'', venue:'Quambee Reserve', vSuburb:'North Ringwood',
+      venueUrl:'https://maps.google.com/?q=-37.78,145.24' },
+    { id:'v2', compName:'EFNL 2026', age:'Veterans', rawGrade:'Women', gradeId:'gW', round:1,
+      isFinals:true, finalsAbbrev:'SF', home:'Blackburn', away:'Gembrook',
+      hScore:59, hG:8, hB:11, aScore:4, aG:0, aB:4,
+      date:'2026-08-15', time:'12:30:00', venue:'Morton Park', vSuburb:'Blackburn' },
+    { id:'v3', compName:'EFNL 2026', age:'Veterans', rawGrade:'Men', gradeId:'gM', round:2,
+      isFinals:true, finalsAbbrev:'GF', home:'Winner Game 1', away:'Winner Game 2',
+      scheduled:true, provisional:true, date:'2026-08-23', time:'14:00:00', venue:'Morton Park' },
+    // No date and no venue: must land in Date TBC / Venue TBC, and LAST.
+    { id:'v4', compName:'EFNL 2026', age:'Veterans', rawGrade:'Women', gradeId:'gW', round:2,
+      isFinals:true, finalsAbbrev:'GF', home:'Winner Game 1', away:'Winner Game 2',
+      scheduled:true, provisional:true, date:'', time:'', venue:'' },
+    // "Yarra Park" sorts AFTER "Venue TBC" alphabetically, and that is the whole
+    // reason it is here. Without a venue past V the TBC-last guard is unreachable:
+    // every other ground in the fixture starts with M or Q, so Venue TBC lands
+    // last by plain alphabetical order and the assertion passes whether the guard
+    // exists or not. Verified by removing the guard — the suite stayed green until
+    // this record was added.
+    { id:'v5', compName:'EFNL 2026', age:'Veterans', rawGrade:'Men', gradeId:'gM', round:1,
+      isFinals:true, finalsAbbrev:'SF', home:'Ringwood', away:'Croydon',
+      hScore:40, hG:6, hB:4, aScore:30, aG:4, aB:6,
+      date:'2026-08-16', time:'10:00:00', venue:'Yarra Park', vSuburb:'East Melbourne' },
+  ];
+  run(`S.matches   = __v21.filter(m => !m.scheduled).map(x => ({...x}));
+       S.fixtures  = __v21.filter(m =>  m.scheduled).map(x => ({...x}));
+       precomputeMatches(S.matches);
+       S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='venue';
+       S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+       S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+       S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  // The fixture is real: without a non-empty pool everything below passes on an
+  // empty string.
+  ok('the pool has all five finals records',
+    run('finalsPool().length') === 5, String(run('finalsPool().length')));
+
+  for (const g of ['date', 'venue']) {
+    run(`S.venueGroup = ${JSON.stringify(g)};`);
+    let threw = null;
+    try { run('render();'); } catch (e) { threw = e.message; }
+    ok(`render() does not throw grouped by ${g}`, !threw, threw || 'clean');
+    if (threw) continue;
+
+    const out = run(`document.getElementById('finals-body').innerHTML`);
+    ok(`grouped by ${g}: something was drawn`, out.length > 400, `${out.length} chars`);
+
+    // Every match must appear in BOTH nestings — a grouping is not a filter.
+    ok(`grouped by ${g}: every match is still present`,
+      /Ringwood/.test(out) && /Blackburn/.test(out) && /Winner Game 1/.test(out),
+      'a grouping switch must not drop records');
+
+    // THE JUMP LIST. Every entry must name a heading that exists, or the
+    // dropdown silently scrolls nowhere.
+    const keys = run(`fvGroupIndex.map(x => x.key)`);
+    const ids  = run(`fvGroupIndex.map(x => fvGroupId(x.key))`);
+    ok(`grouped by ${g}: the jump list is populated`, keys.length > 0, `${keys.length} group(s)`);
+    ok(`grouped by ${g}: every jump target has a heading to scroll to`,
+      ids.every(id => out.includes(`id="${id}"`)),
+      `${JSON.stringify(ids)} — an id with no heading is a dropdown that does nothing`);
+
+    // The undated match must be LAST, not first. An empty string sorts before
+    // every real date, so this is the ordering that goes wrong by default.
+    const tbcAt = out.indexOf(g === 'date' ? '>Date TBC<' : '>Venue TBC<');
+    ok(`grouped by ${g}: the TBC group is present`, tbcAt !== -1,
+      'the undated/unallocated match must still be shown');
+    if (tbcAt !== -1) {
+      // The comparison that can actually fail. For DATES, every real key starts
+      // with a digit and "Date TBC" with a letter, so TBC lands last by plain
+      // string order and the guard is belt and braces — this assertion protects
+      // the observable ordering rather than the guard itself. For VENUES it is a
+      // real test: "Yarra Park" sorts after "Venue TBC" alphabetically, so only
+      // the guard puts TBC last.
+      const realAt = out.indexOf(g === 'date' ? '>Friday 14 August<' : 'Yarra Park');
+      ok(`grouped by ${g}: TBC sorts AFTER every real group`,
+        realAt !== -1 && realAt < tbcAt,
+        `last real group at ${realAt}, TBC at ${tbcAt}`);
+    }
+
+    // The maps link follows the venue to whichever level shows it. This is the
+    // defect found by hand: in venue-first the link had nowhere to render.
+    ok(`grouped by ${g}: the venue link survives`,
+      out.includes('maps.google.com'),
+      'Quambee Reserve carries a venueUrl — a missing link is invisible on screen');
+  }
+
+  // Could these have failed? A mode that is not 'venue' must clear the jump list,
+  // or a stale one keeps offering groups that are no longer on the page.
+  run(`S.finalsMode = 'age'; render();`);
+  ok('leaving the venue mode clears the jump list',
+    run('fvGroupIndex.length') === 0,
+    `${run('fvGroupIndex.length')} — a stale list points at headings that are gone`);
+  run(`S.finalsMode = 'venue'; S.venueGroup = 'date';`);
+}
+
+// ── 22. The club summary agrees with the cards below it ─────────────────────
+// The summary is built from the SAME `entries` array as the cards. If it were
+// ever derived separately the two could disagree, and a table that quietly
+// contradicts the thing under it is worse than no table: both look plausible.
+// This is the shape that let _grade and matchGrade drift apart.
+console.log('\n22  The club summary totals agree with the club cards');
+{
+  // Built here rather than inside run(): section 15 already declares `const M` at
+  // the top level of the shared sandbox, and a second declaration of the same
+  // name throws before a single assertion runs. A sandbox is shared state.
+  const m22 = (ab, r, h, a, hs, as) => ({ id:'s'+ab+h, compName:'EFNL 2026', age:'U12',
+    rawGrade:'A', gradeId:'g1', round:r, home:h, away:a, hScore:hs, aScore:as,
+    isFinals:true, finalsAbbrev:ab, date:'2026-09-01' });
+  sandbox.__c22 = [ m22('SF',1,'Norwood','Vermont',50,40), m22('GF',3,'Norwood','Kew',60,50) ];
+
+  run(`S.gradeMeta = { 'EFNL 2026|U12|g1': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g1' } };
+  rebuildGradeLabels();
+  S.clubs = { c1: { name: 'Norwood', type: 'CLUB' }, c2: { name: 'Vermont', type: 'CLUB' } };
+  S.teamClub = { 'EFNL 2026|Norwood|U12':'c1', 'EFNL 2026|Kew|U12':'c1',
+                 'EFNL 2026|Vermont|U12':'c2' };
+  S.roster = { 'EFNL 2026|Norwood|U12':{grade:'A',gradeId:'g1',age:'U12'},
+               'EFNL 2026|Kew|U12':{grade:'A',gradeId:'g1',age:'U12'},
+               'EFNL 2026|Vermont|U12':{grade:'A',gradeId:'g1',age:'U12'} };
+  S.matches = __c22.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.finalsSort='premiers'; S.finalsWeighted=false;
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw with the summary table', !threw, threw || 'clean');
+
+  const out = threw ? '' : run(`document.getElementById('finals-body').innerHTML`);
+  ok('the summary table was drawn', /class="fv-sum"/.test(out),
+    'the table is the addition under test');
+  ok('and the club cards are still below it', /class="fv-club"/.test(out),
+    'the summary must ADD to the by-club view, not replace it');
+  ok('the summary comes BEFORE the cards',
+    out.indexOf('class="fv-sum"') !== -1 &&
+    out.indexOf('class="fv-sum"') < out.indexOf('class="fv-club"'),
+    'a summary printed under the detail it summarises is not a summary');
+
+  // Every club with a team in finals must have a row. A club silently missing
+  // from the table is the failure that looks like a shorter, tidier table.
+  ok('every club in the pool has a summary row',
+    /Norwood/.test(out) && /Vermont/.test(out),
+    'a missing row looks exactly like a club with no finals teams');
+
+  // THE agreement assertion. The footer totals are summed from the rows, so they
+  // must equal the per-club figures the cards are built from.
+  const rows = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
+  const bodyCells = [...rows.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(tr =>
+    [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
+      td[1].replace(/<[^>]*>/g, '').trim()));
+  ok('the table has one row per club', bodyCells.length === 2, `${bodyCells.length} row(s)`);
+  const foot = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
+  const footCells = [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
+    td[1].replace(/<[^>]*>/g, '').trim());
+  const num = (v) => (v === '–' || v === '' ? 0 : Number(v));
+  for (let col = 1; col <= 4; col++) {
+    const summed = bodyCells.reduce((n, r) => n + num(r[col]), 0);
+    ok(`column ${col}: the total equals the sum of the rows`,
+      summed === num(footCells[col]),
+      `rows sum to ${summed}, footer says ${footCells[col]}`);
+  }
+
+  // Could that have failed? Norwood won the GF and Vermont did not, so the
+  // premierships column must NOT be uniform — a table of all-zeros or all-ones
+  // would satisfy the totals check while measuring nothing.
+  const prem = bodyCells.map(r => num(r[4]));
+  ok('the premierships column distinguishes the two clubs',
+    prem.includes(1) && prem.includes(0),
+    `${JSON.stringify(prem)} — a uniform column passes the totals check for free`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
