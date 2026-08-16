@@ -374,7 +374,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.174</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.175</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -705,7 +705,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.174</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.175</span>
         </div>
 
 
@@ -2053,7 +2053,21 @@ function renderFixtures(age) {
   const fixtures = S.fixtures.filter(m => {
     if (m.age !== age) return false;
     if (!matchesComp(m)) return false;
-    if (grades.size && m.rawGrade && !grades.has(m.rawGrade)) return false;
+    // JOIN ON THE GRADE ID, exactly as renderResults does.
+    //
+    // This tested `grades.has(m.rawGrade)` until Beta 0.175. activGrades() returns
+    // gradesForAge(), which is built from matchListGrade()/matchLadderGrade() and
+    // therefore holds PlayHQ grade IDs — never "A", "Premier" or "Blue". A fixture
+    // record's rawGrade is one of those strings, so the test could not match and
+    // EVERY fixture in a migrated grade was filtered out. With 99.91% of records
+    // migrated that is effectively all of them, and the section then hides itself
+    // on the empty-list guard below, so it failed completely silently.
+    //
+    // It was invisible for as long as it was because the section only has
+    // something to show when fixtures exist ahead of the results — through the
+    // home-and-away season fetch-results had usually caught up.
+    const fg = matchListGrade(m) || m.rawGrade || '';
+    if (grades.size && fg && !grades.has(fg)) return false;
     if (S.selTeam && m.home !== S.selTeam && m.away !== S.selTeam) return false;
     return true;
   }).sort((a, b) => (a.date || '').localeCompare(b.date || '') || cmpRound(a, b));
@@ -2070,7 +2084,11 @@ function renderFixtures(age) {
 
   body.innerHTML = rounds.map(r => {
     const rows = byRound[r].map(m => {
-      const g = m.rawGrade || '';
+      // The grade ID, for the same reason as the filter above: gLabel() maps an ID
+      // to its label, and a bare rawGrade both mislabels the tag (blank for the 83
+      // grades whose rawGrade is empty) and hands openTeamDrilldown a key it does
+      // not use anywhere else. renderResults passes the ID here.
+      const g = matchListGrade(m) || m.rawGrade || '';
       const gc = `gtag-${abbrevGrade(gLabel(g)).replace(/[^A-Za-z0-9]/g,'')}`;
       const dateParts = m.date ? m.date.split('-') : null;
       const dateStr = dateParts ? `${dateParts[2]}/${dateParts[1]}` : 'TBC';
