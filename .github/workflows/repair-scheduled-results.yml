@@ -1,0 +1,71 @@
+# .github/workflows/repair-scheduled-results.yml
+#
+# Clears the `scheduled` flag from stored records that are actually results.
+# One-off repair for the pre-engine-v18 backlog, but idempotent and safe to
+# re-run: a second run finds nothing and writes nothing.
+#
+# Makes NO PlayHQ calls. It reads and rewrites stored JSON only, so it needs no
+# session and cannot be rate limited.
+#
+# Run it as a DRY RUN first and read the counts. Only then run with apply.
+
+name: Repair Scheduled Results
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Write the changes. Leave false for a dry run.'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      comp:
+        description: 'Limit to one competition, e.g. "EFNL 2026". Blank = every stored season.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Repair
+        env:
+          REPAIR_APPLY: ${{ inputs.apply }}
+          REPAIR_COMP: ${{ inputs.comp }}
+        run: node scripts/repair-scheduled-results.js
+
+      # Only on apply, and only when something actually changed. store.save
+      # rewrites only files whose contents differ, so a no-op run leaves the tree
+      # clean and this step commits nothing.
+      #
+      # `git add -A data/` rather than a bare pathspec: the root-level data.json,
+      # grades.json and clubs.json moved into data/ on 2026-08-11 and any workflow
+      # still naming them without a path fails with exit 128.
+      - name: Commit
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Repair: clear scheduled flag on stored results"
+          git pull --rebase -X theirs
+          git push
