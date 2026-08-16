@@ -20632,8 +20632,8 @@
     "EFNL 2026|Rowville U19 Men Gold|U19.5": "7ed5ab85",
     "EFNL 2026|Donvale|U19.5": "a016282f"
   },
-  "lastUpdated": "2026-08-16T03:18:33.295Z",
-  "lastResultsFetch": "2026-08-16T03:18:33.295Z",
+  "lastUpdated": "2026-08-16T04:18:50.860Z",
+  "lastResultsFetch": "2026-08-16T04:18:50.860Z",
   "lastStatsFetch": "2026-08-15T14:08:56.457Z",
   "seasonFiles": [
     {
@@ -20664,7 +20664,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2437789
+      "bytes": 2437809
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
