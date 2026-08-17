@@ -32,12 +32,38 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v10 2026-08-17 tiers-and-grading-visitors';
+const VERSION = 'verify-dashboard-grades v11 2026-08-17 rank-column';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
 if (!fs.existsSync(HTML)) { console.error('FATAL: index.html not found.'); process.exit(1); }
 const html = fs.readFileSync(HTML, 'utf8');
+
+// Parse the club summary table, resolving columns by HEADER NAME rather than by
+// position.
+//
+// Beta 0.182 added a leading "#" column and FIFTEEN assertions failed at once,
+// every one of them because an index moved by one. The assertions were right and
+// their parsing was brittle: a test that has to be edited whenever a column is
+// inserted will eventually be edited wrongly. Resolving by name costs nothing and
+// the next column added or reordered breaks nothing.
+function summaryTable(out) {
+  const cellsOf = (block) => [...String(block).matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
+    .map(tr => [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+      .map(td => td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()));
+  const heads = [...String((out.match(/<thead>([\s\S]*?)<\/thead>/) || ['',''])[1])
+    .matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(h => h[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+  const col = {};
+  heads.forEach((h, i) => { col[h.toLowerCase()] = i; });
+  const rows = cellsOf((out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1]);
+  const foot = cellsOf((out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1])[0] || [];
+  const get = (row, name) => (row || [])[col[String(name).toLowerCase()]];
+  const byClub = {};
+  for (const r of rows) byClub[get(r, 'club')] = r;
+  return { heads, col, rows, foot, get, byClub };
+}
+const cellNum = (v) => { const m = String(v).match(/^(\d+)/); return m ? Number(m[1]) : 0; };
 
 const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 if (!blocks.length) { console.error('FATAL: no inline script found in index.html.'); process.exit(1); }
@@ -1147,13 +1173,14 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
     out.indexOf('class="fv-sum"') < out.indexOf('class="fv-club"'),
     'a summary printed under the detail it summarises is not a summary');
 
-  // ── Rows ──
-  const rows = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
-  const cells = [...rows.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(tr =>
-    [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
-      td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()));
-  const byName = {};
-  cells.forEach(r => { byName[r[0]] = r; });
+  // ── Rows ── resolved by header name, so a new column cannot break this.
+  const T = summaryTable(out);
+  const cells = T.rows;
+  const byName = T.byClub;
+  ok('the table exposes the columns this section asserts on',
+    ['club','entered','finals','top grade','remaining','gf','premierships']
+      .every(h => T.col[h] !== undefined),
+    JSON.stringify(T.heads));
 
   // THE assertion this whole change turns on.
   ok('a club that reached NO finals still has a row',
@@ -1167,51 +1194,50 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   // readable message rather than throwing on a property of undefined — a suite
   // that crashes says less than one that fails.
   const row = (n) => byName[n] || [];
+  const cell = (n, h) => T.get(row(n), h);
 
   // Columns: 0 Club, 1 Entered, 2 Finals, 3 Top grade, 4 Remaining, 5 GF, 6 Premierships
   const num = (v) => { const m = String(v).match(/^(\d+)/); return m ? Number(m[1]) : 0; };
-  ok('Norwood entered three teams', num(row('Norwood')[1]) === 3, row('Norwood')[1]);
-  ok('two of them reached the finals', num(row('Norwood')[2]) === 2, row('Norwood')[2]);
+  ok('Norwood entered three teams', num(cell('Norwood','entered')) === 3, cell('Norwood','entered'));
+  ok('two of them reached the finals', num(cell('Norwood','finals')) === 2, cell('Norwood','finals'));
   ok('a no-finals club still shows the teams it entered',
-    num(row('Croydon')[1]) === 1, row('Croydon')[1]);
+    num(cell('Croydon','entered')) === 1, cell('Croydon','entered'));
   ok('and shows a dash rather than a zero in the finals column',
-    /^–$/.test(row('Croydon')[2]), `"${row('Croydon')[2]}"`);
+    /^–$/.test(cell('Croydon','finals')), `"${cell('Croydon','finals')}"`);
 
   // ── Percentages ──
   // 2 of 3 is 67%. If the denominator were the finals teams it would read 100%,
   // which is the number a table of finalists only would print for every club.
   ok('the percentage is against teams ENTERED, not teams in finals',
-    /^2 \(67%\)$/.test(row('Norwood')[2]),
-    `"${row('Norwood')[2]}" — 100% here means the denominator is wrong`);
+    /^2 \(67%\)$/.test(cell('Norwood','finals')),
+    `"${cell('Norwood','finals')}" — 100% here means the denominator is wrong`);
   ok('the top-grade column counts and shows a percentage',
-    /^2 \(67%\)$/.test(row('Norwood')[3]), `"${row('Norwood')[3]}"`);
+    /^2 \(67%\)$/.test(cell('Norwood','top grade')), `"${cell('Norwood','top grade')}"`);
   ok('a premiership is counted and shown as a share of teams entered',
-    /^1 \(33%\)$/.test(row('Norwood')[6]), `"${row('Norwood')[6]}"`);
+    /^1 \(33%\)$/.test(cell('Norwood','premierships')), `"${cell('Norwood','premierships')}"`);
   ok('a zero cell carries no percentage',
-    !/%/.test(row('Croydon')[6]), `"${row('Croydon')[6]}"`);
+    !/%/.test(cell('Croydon','premierships')), `"${cell('Croydon','premierships')}"`);
 
-  // ── Totals ──
-  const foot = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
-  const footCells = [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
-    td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
-  for (let col = 1; col <= 6; col++) {
-    const summed = cells.reduce((n, r) => n + num(r[col]), 0);
-    ok(`column ${col}: the total equals the sum of the rows`,
-      summed === num(footCells[col]),
-      `rows sum to ${summed}, footer says "${footCells[col]}"`);
+  // ── Totals ── every numeric column, found by name.
+  for (const h of ['entered','finals','top grade','remaining','gf','premierships']) {
+    const summed = cells.reduce((n, r) => n + num(T.get(r, h)), 0);
+    ok(`the ${h} total equals the sum of its rows`,
+      summed === num(T.get(T.foot, h)),
+      `rows sum to ${summed}, footer says "${T.get(T.foot, h)}"`);
   }
-  ok('six teams entered in total', num(footCells[1]) === 6, footCells[1]);
+  ok('six teams entered in total', num(T.get(T.foot,'entered')) === 6,
+    String(T.get(T.foot,'entered')));
 
   // Could these have failed? The premierships column must distinguish the clubs —
   // a uniform column satisfies every totals check for free.
-  const prem = cells.map(r => num(r[6]));
+  const prem = cells.map(r => num(T.get(r,'premierships')));
   ok('the premierships column distinguishes the clubs',
     prem.includes(1) && prem.includes(0),
     `${JSON.stringify(prem)} — a uniform column passes the totals check for free`);
   // And the entered column must not simply equal the finals column, or the
   // percentages are all 100% and prove nothing.
   ok('entered and finals are genuinely different numbers',
-    cells.some(r => num(r[1]) !== num(r[2])),
+    cells.some(r => num(T.get(r,'entered')) !== num(T.get(r,'finals'))),
     'if these always matched, every percentage would read 100%');
 
   // ── The collapse ──
@@ -1595,23 +1621,10 @@ if (has('setFinalsSortBasis')) {
   S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
 
   const order = () => {
-    const out = run(`document.getElementById('finals-body').innerHTML`);
-    const body = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
-    return [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-      .map(tr => (tr[1].match(/<span>([^<]+)<\/span>/) || ['',''])[1].trim())
-      .filter(Boolean);
+    const T = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+    return T.rows.map(r => T.get(r, 'club')).filter(Boolean);
   };
-  const cells = () => {
-    const out = run(`document.getElementById('finals-body').innerHTML`);
-    const body = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
-    const o = {};
-    for (const tr of body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
-      const c = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
-        .map(td => td[1].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim());
-      o[c[0]] = c;
-    }
-    return o;
-  };
+  const table = () => summaryTable(run(`document.getElementById('finals-body').innerHTML`));
 
   let threw = null;
   try { run('render();'); } catch (e) { threw = e.message; }
@@ -1619,13 +1632,14 @@ if (has('setFinalsSortBasis')) {
 
   // The fixture is real: the two clubs must differ on BOTH count and share, or
   // neither ordering below proves anything.
-  const c = cells();
+  const T24 = table();
+  const cv = (club, h) => T24.get(T24.byClub[club], h);
   ok('Alpha entered ten teams and reached three grand finals',
-    /^10$/.test((c['Alpha']||[])[1] || '') && /^3 \(30%\)$/.test((c['Alpha']||[])[5] || ''),
-    `entered "${(c['Alpha']||[])[1]}", GF "${(c['Alpha']||[])[5]}"`);
+    /^10$/.test(cv('Alpha','entered') || '') && /^3 \(30%\)$/.test(cv('Alpha','gf') || ''),
+    `entered "${cv('Alpha','entered')}", GF "${cv('Alpha','gf')}"`);
   ok('Beta entered two and reached two',
-    /^2$/.test((c['Beta']||[])[1] || '') && /^2 \(100%\)$/.test((c['Beta']||[])[5] || ''),
-    `entered "${(c['Beta']||[])[1]}", GF "${(c['Beta']||[])[5]}"`);
+    /^2$/.test(cv('Beta','entered') || '') && /^2 \(100%\)$/.test(cv('Beta','gf') || ''),
+    `entered "${cv('Beta','entered')}", GF "${cv('Beta','gf')}"`);
   ok('so a count and a share MUST disagree about first place',
     3 > 2 && (2/2) > (3/10),
     'if this were false the assertions below would pass on either basis');
@@ -1778,13 +1792,122 @@ console.log('\n25  The rank denominator and grading-pool visitors');
 
   // The denominator of every percentage moves with it: two clubs entered, not
   // three. This is what the defect actually cost on screen.
-  const foot = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
-  const footCells = [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
-    td[1].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim());
-  ok('the summary counts two clubs, not three', /^2 clubs$/.test(footCells[0] || ''),
-    `"${footCells[0]}"`);
-  ok('and two teams entered, not three', /^2$/.test(footCells[1] || ''),
-    `"${footCells[1]}" — the visitor inflated every percentage in the table`);
+  const T25 = summaryTable(out);
+  ok('the summary counts two clubs, not three',
+    /^2 clubs$/.test(T25.get(T25.foot, 'club') || ''),
+    `"${T25.get(T25.foot, 'club')}"`);
+  ok('and two teams entered, not three',
+    /^2$/.test(T25.get(T25.foot, 'entered') || ''),
+    `"${T25.get(T25.foot, 'entered')}" — the visitor inflated every percentage in the table`);
+}
+
+// ── 26. The rank column ─────────────────────────────────────────────────────
+// Beta 0.182. A position number per row, so a change of sort shows WHERE a club
+// ranks rather than only reordering the rows.
+//
+// Two silent failure modes, and the fixture is built to separate them:
+//
+//   RANKING ON cmpEntries INSTEAD OF THE MEASURE. cmpEntries always separates two
+//   clubs — on premierships, then on name — so every rank would be distinct and
+//   the column would be the row number. It would look completely correct.
+//
+//   TIES NOT SHARED. Two clubs level on the chosen measure showing 3 and 4 asserts
+//   a difference that does not exist on the measure the reader picked, and what
+//   actually separated them is invisible on screen.
+//
+// The fixture gives Beta and Cee the SAME number of premierships and the same
+// everything else that the measure sees, so they must tie — and Alpha ahead of
+// both, so the club after the tie must be 4 rather than 3.
+console.log('\n26  The rank column');
+{
+  const f26 = (age, gid, ab, r, h, a, hs, as) => ({ id:'r'+age+ab+h, compName:'EFNL 2026',
+    age, rawGrade:'A', gradeId:gid, round:r, home:h, away:a, hScore:hs, aScore:as,
+    isFinals:true, finalsAbbrev:ab, date:'2026-09-20' });
+  // Alpha wins two grand finals; Beta and Cee win one each; Dee wins none.
+  sandbox.__c26 = [
+    f26('U12','g12','GF',3,'A1','D1',60,20),
+    f26('U13','g13','GF',3,'A2','D2',55,30),
+    f26('U14','g14','GF',3,'B1','D3',50,40),
+    f26('U15','g15','GF',3,'C1','D4',45,44),
+  ];
+  run(`S.gradeMeta = {};
+  for (const [age,gid] of [['U12','g12'],['U13','g13'],['U14','g14'],['U15','g15']]) {
+    S.gradeMeta['EFNL 2026|'+age+'|'+gid] = { r:1, lvl:'junior', g:'M', label:'A', gradeId:gid };
+    S.gradeMeta['EFNL 2026|'+age+'|A']    = { r:1, lvl:'junior', g:'M' };
+  }
+  rebuildGradeLabels();
+  S.clubs = { cA:{name:'Alpha',type:'CLUB'}, cB:{name:'Beta',type:'CLUB'},
+              cC:{name:'Cee',type:'CLUB'},   cD:{name:'Dee',type:'CLUB'} };
+  S.teamClub = {}; S.roster = {};
+  for (const [t,club,age,gid] of [['A1','cA','U12','g12'],['A2','cA','U13','g13'],
+      ['B1','cB','U14','g14'],['C1','cC','U15','g15'],
+      ['D1','cD','U12','g12'],['D2','cD','U13','g13'],['D3','cD','U14','g14'],['D4','cD','U15','g15']]) {
+    S.teamClub['EFNL 2026|'+t+'|'+age] = club;
+    S.roster['EFNL 2026|'+t+'|'+age] = { grade:'A', gradeId:gid, age };
+  }
+  S.matches = __c26.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.showAllTeams=false; S.finalsWeighted=false; S.clubSummaryOpen=true;
+  S.finalsSort='premiers'; S.finalsSortBasis='count';
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw with the rank column', !threw, threw || 'clean');
+  const T = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+
+  ok('there is a rank column', T.col['#'] !== undefined, JSON.stringify(T.heads));
+  const rank = (club) => T.get(T.byClub[club], '#');
+
+  // The fixture is real: the premiership counts must be 2,1,1,0 or nothing below
+  // distinguishes a shared rank from a distinct one.
+  ok('Alpha has two premierships and Beta and Cee one each',
+    cellNum(T.get(T.byClub['Alpha'],'premierships')) === 2 &&
+    cellNum(T.get(T.byClub['Beta'],'premierships')) === 1 &&
+    cellNum(T.get(T.byClub['Cee'],'premierships')) === 1,
+    `${T.get(T.byClub['Alpha'],'premierships')} / ${T.get(T.byClub['Beta'],'premierships')} / ${T.get(T.byClub['Cee'],'premierships')}`);
+
+  ok('the leader is ranked 1', rank('Alpha') === '1', String(rank('Alpha')));
+  ok('two clubs level on the measure SHARE rank 2',
+    rank('Beta') === '2' && rank('Cee') === '2',
+    `Beta "${rank('Beta')}", Cee "${rank('Cee')}" — distinct numbers here means the rank ` +
+    `is being taken from cmpEntries, which always separates two clubs`);
+  ok('and the club after the tie is 4, not 3',
+    rank('Dee') === '4',
+    `"${rank('Dee')}" — 3 is dense ranking, which hides how many clubs are ahead`);
+
+  // Could that have failed? The ranks must not simply be the row numbers.
+  const ranks = T.rows.map(r => T.get(r, '#'));
+  ok('the ranks are not just 1,2,3,4',
+    ranks.join(',') !== '1,2,3,4',
+    `${JSON.stringify(ranks)} — row numbers would satisfy every assertion above except the tie`);
+
+  // The rank must FOLLOW the sort. Switching measure has to renumber, or the
+  // column is decoration that happens to agree with the default sort.
+  run(`S.finalsSort = 'teams'; render();`);
+  const T2 = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+  ok('Dee leads on teams in finals, so it is now ranked 1',
+    T2.get(T2.byClub['Dee'], '#') === '1',
+    `"${T2.get(T2.byClub['Dee'], '#')}" — Dee has four teams in finals to Alpha's two`);
+  ok('and the previous leader is no longer 1',
+    T2.get(T2.byClub['Alpha'], '#') !== '1',
+    'a rank that does not move with the sort is decoration');
+
+  // Alphabetical is an ordering, not a ranking: every pair ties on the measure, so
+  // a number would read as "everyone is first".
+  run(`S.finalsSort = 'name'; render();`);
+  const T3 = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+  ok('the alphabetical sort shows a dash rather than a rank',
+    T3.rows.every(r => /^–$/.test(T3.get(r, '#') || '')),
+    JSON.stringify(T3.rows.map(r => T3.get(r, '#'))));
+  ok('and the rows are still in alphabetical order',
+    T3.rows.map(r => T3.get(r,'club')).join('|') === 'Alpha|Beta|Cee|Dee',
+    JSON.stringify(T3.rows.map(r => T3.get(r,'club'))));
+
+  run(`S.finalsSort = 'premiers';`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
