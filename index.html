@@ -18,14 +18,17 @@
 :root{--bg:#09090e;--s1:#111118;--s2:#18181f;--s3:#20202a;--s4:#28283a;--b1:rgba(255,255,255,0.06);--b2:rgba(255,255,255,0.11);--b3:rgba(255,255,255,0.18);--tx:#e8e8f0;--tx2:rgba(232,232,240,0.58);--tx3:rgba(232,232,240,0.32);--gold:#f0c040;--gold2:rgba(240,192,64,0.12);--gold3:rgba(240,192,64,0.25);--green:#22c55e;--red:#ef4444;--orange:#f97316;--blue:#60a5fa;--purple:#a78bfa;--r:7px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5}
-/* clip, NOT hidden. Both stop sideways scrolling and look identical, but `hidden`
-   makes the element a scrollport, and a position:sticky descendant then anchors to
-   IT instead of the page. This element and .main below were why the club summary's
-   sticky headings did nothing in Beta 0.182 — the CSS on the heading itself was
-   correct the whole time. `clip` is the one overflow value that clips without
-   creating a scroll container, and it is the reason overflow-y can stay visible
-   here; with `hidden` the other axis is forced to auto. */
-body{overflow-x:clip}
+/* hidden, and it MUST stay hidden. `overflow-x:hidden` computes overflow-y to
+   auto, which makes body the page's scroll container — and `.hdr` is a direct
+   child of body and sticks to it. Changing this to `clip` in Beta 0.183 removed
+   the scrollport the page header was sticking to, so the header scrolled away and
+   left a 52px band above the club summary's sticky heading with rows visibly
+   passing through it.
+
+   Sticking to body is not the problem `clip` solves. Body SCROLLS, so anchoring
+   to it is the same as anchoring to the page. The problem is an ancestor that
+   creates a scrollport and then never scrolls — see .main below. */
+body{overflow-x:hidden}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--b3);border-radius:2px}
@@ -45,6 +48,12 @@ body{overflow-x:clip}
 /* ── Layout ── */
 .layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 52px)}
 .sidebar{border-right:1px solid var(--b1);padding:16px 12px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
+/* clip, NOT hidden. This was `overflow:hidden`, which made .main a scrollport
+   that never scrolls — so the club summary's sticky headings anchored to it and
+   sat still, looking exactly like headings that were never sticky. `clip` is the
+   one overflow value that clips without creating a scroll container, which is why
+   overflow-y can stay visible here; with `hidden` the other axis is forced to
+   auto. Fixed 2026-08-17. */
 .main{padding:20px;overflow-x:clip;overflow-y:visible;min-width:0}
 
 /* ── Sidebar ── */
@@ -467,7 +476,7 @@ body{overflow-x:clip}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.183</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.184</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -815,7 +824,7 @@ body{overflow-x:clip}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.183</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.184</span>
         </div>
 
 
