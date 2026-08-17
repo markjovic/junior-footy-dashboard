@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v11 2026-08-17 rank-column';
+const VERSION = 'verify-dashboard-grades v12 2026-08-17 sticky-ancestors';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -1313,10 +1313,52 @@ console.log('\n22a  The sticky column headings are not disabled by an ancestor s
   ok('they carry an opaque background',
     /\.fv-sum th\{[^}]*background:var\(--s1\)/.test(desktop),
     'rows show through a transparent heading as they pass beneath it');
-  ok('no ancestor creates a scrollport on desktop',
-    !/\.fv-sum-body\{[^}]*overflow/.test(desktop) && !/\.fv-sum-wrap\{[^}]*overflow/.test(desktop),
-    'overflow on .fv-sum-body or .fv-sum-wrap anchors sticky to that box instead of the page, ' +
-    'and the headings stop moving without anything appearing to break');
+  // THE WHOLE ANCESTOR CHAIN, not just the two boxes nearest the table.
+  //
+  // The first version of this assertion checked .fv-sum-body and .fv-sum-wrap —
+  // the two I had just edited — and passed while the headings did not stick at
+  // all, because the real scrollport was `.main{overflow:hidden}` two levels up
+  // and `body{overflow-x:hidden}` above that. Asserting the thing you just fixed
+  // is not the same as asserting the requirement, and the difference cost a
+  // release. Beta 0.182 shipped with a sticky rule that could never fire.
+  //
+  // The requirement: NO element between the page and the table may create a
+  // scrollport. `auto`, `scroll` and `hidden` all do. `clip` and `visible` do not
+  // — `clip` is the value that clips without scrolling, which is why it is what
+  // body and .main now use.
+  //
+  // The chain is `body > .layout > .main > #finals-view > #finals-body > the
+  // table`, taken from the markup. If the markup changes, this list must change
+  // with it — stated here so it is updated rather than quietly bypassed.
+  const ANCESTORS = ['body', '\\.layout', '\\.main', '#finals-view',
+                     '\\.fv-sum-wrap', '\\.fv-sum-body'];
+  const BAD = /overflow(-x|-y)?\s*:\s*(auto|scroll|hidden)/;
+  // Anchored to a rule BOUNDARY. An unanchored `body\\{` matches inside
+  // `.fv-sum-body{`, which is clean, so the real `body` rule was never examined
+  // and the assertion passed with body{overflow-x:hidden} in place. Caught by
+  // reintroducing that exact defect and watching the suite stay green.
+  const BOUNDARY = '(?:^|[}\\n;,])\\s*';
+  // EVERY rule for the selector, not the first. A stylesheet may declare a
+  // selector more than once, and this one does: `body{height:100%;...}` sits well
+  // above `body{overflow-x:clip}`. String.match returns the FIRST, so the
+  // overflow declaration was never examined and the assertion passed with
+  // body{overflow-x:hidden} in place. Found by reintroducing that exact defect —
+  // the third time in this suite that taking the first match has hidden a real
+  // failure.
+  const declsFor = (sel) => [...desktop.matchAll(
+    new RegExp(BOUNDARY + sel + '\\s*\\{([^}]*)\\}', 'g'))].map(m => m[1]);
+  for (const sel of ANCESTORS) {
+    const all = declsFor(sel);
+    const bad = all.map(d => (d.match(BAD) || [])[0]).filter(Boolean);
+    ok(`${sel.replace(/\\/g,'')} does not create a scrollport`,
+      bad.length === 0,
+      `${bad.join(', ') || 'none'} across ${all.length} rule(s) — auto, scroll and hidden ` +
+      `all anchor a sticky descendant to this element, which never scrolls, so the ` +
+      `headings sit still and nothing appears to be broken`);
+  }
+  ok('the chain was actually found in the stylesheet, not silently absent',
+    ANCESTORS.filter(sel => declsFor(sel).length > 0).length >= 4,
+    'a selector that is not in the CSS passes the loop above for free');
 }
 
 // ── 23. Columns run GF first; ladder positions; the ALL TEAMS switch ────────
