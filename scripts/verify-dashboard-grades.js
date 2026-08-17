@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v12 2026-08-17 sticky-ancestors';
+const VERSION = 'verify-dashboard-grades v13 2026-08-17 sticky-offset-tracks-header';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -77,8 +77,22 @@ const noop = () => {};
 // to the next and any assertion about highlighting passes or fails at random.
 const el = () => {
   const classes = new Set();
+  // A CSS custom property store, so setProperty/getPropertyValue round-trip. The
+  // sticky-offset code writes --sticky-top on documentElement and reads it back to
+  // avoid redundant writes; with a bare {} for style it would write every frame
+  // and, worse, the test could not observe what it wrote.
+  const props = new Map();
   return {
-    style: {}, dataset: {}, addEventListener: noop, appendChild: noop, setAttribute: noop,
+    style: {
+      setProperty: (k, v) => props.set(k, String(v)),
+      getPropertyValue: (k) => props.get(k) || '',
+      removeProperty: (k) => props.delete(k),
+    },
+    // Overridable per element by a test that needs to place it on screen. jsdom
+    // and this harness both do zero layout, so any assertion about position has to
+    // supply the geometry it is asserting on.
+    getBoundingClientRect: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }),
+    dataset: {}, addEventListener: noop, appendChild: noop, setAttribute: noop,
     innerHTML: '', textContent: '', value: '', children: [], querySelectorAll: () => [],
     classList: {
       add: (c) => classes.add(c),
@@ -89,6 +103,10 @@ const el = () => {
     },
   };
 };
+const listeners = {};
+// Fire every handler registered for an event, so a test can drive the page the way
+// a browser would rather than calling internals directly.
+const fireEvent = (ev) => (listeners[ev] || []).forEach(fn => fn({ type: ev }));
 const elCache = new Map();
 const elById = (id) => { if (!elCache.has(id)) elCache.set(id, el()); return elCache.get(id); };
 const sandbox = {
@@ -97,11 +115,22 @@ const sandbox = {
     getElementById: elById, querySelector: () => el(), querySelectorAll: () => [],
     createElement: () => el(), addEventListener: noop, body: el(), documentElement: el(),
   },
+  // Listeners are RECORDED rather than dropped. index.html registers scroll and
+  // resize handlers at the top level, and a noop stub both hid a load-time crash
+  // (`window.addEventListener is not a function`) and made the handlers untestable.
+  addEventListener: (ev, fn) => { (listeners[ev] = listeners[ev] || []).push(fn); },
+  removeEventListener: (ev, fn) => {
+    listeners[ev] = (listeners[ev] || []).filter(f => f !== fn);
+  },
   window: {}, navigator: { userAgent: 'node' }, location: { protocol: 'https:', search: '' },
   localStorage: { getItem: () => null, setItem: noop, removeItem: noop },
   fetch: () => Promise.reject(new Error('no network in the harness')),
   setTimeout: noop, setInterval: noop, clearTimeout: noop, clearInterval: noop,
-  requestAnimationFrame: noop, indexedDB: undefined, matchMedia: () => ({ matches: false, addEventListener: noop }),
+  // Runs the callback SYNCHRONOUSLY and returns a truthy handle. A noop meant every
+  // rAF-throttled function was queued and never executed, so the code under test
+  // did nothing and the assertions measured the initial state.
+  requestAnimationFrame: (fn) => { fn(0); return 1; },
+  cancelAnimationFrame: noop, indexedDB: undefined, matchMedia: () => ({ matches: false, addEventListener: noop }),
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
@@ -1307,9 +1336,10 @@ console.log('\n22a  The sticky column headings are not disabled by an ancestor s
 
   ok('the headings are declared sticky', /\.fv-sum th\{[^}]*position:sticky/.test(desktop),
     'without this the request was not implemented at all');
-  ok('and offset below the page header, not under it',
-    /\.fv-sum th\{[^}]*top:52px/.test(desktop),
-    '.hdr is sticky at top:0 and 52px tall, so top:0 here hides the headings behind it');
+  ok('the offset comes from --sticky-top, with 52px only as a first-paint fallback',
+    /\.fv-sum th\{[^}]*top:var\(--sticky-top,\s*52px\)/.test(desktop),
+    'a literal 52px leaves the headings floating once the page header releases — ' +
+    'see section 22b');
   ok('they carry an opaque background',
     /\.fv-sum th\{[^}]*background:var\(--s1\)/.test(desktop),
     'rows show through a transparent heading as they pass beneath it');
@@ -1382,6 +1412,75 @@ console.log('\n22a  The sticky column headings are not disabled by an ancestor s
   ok('and .hdr is sticky at the top, which is what 52px measures from',
     /\.hdr\{[^}]*position:sticky/.test(desktop) && /\.hdr\{[^}]*top:0/.test(desktop),
     (desktop.match(/\.hdr\{[^}]*/) || ['no .hdr rule'])[0].slice(0, 80));
+}
+
+// ── 22b. The sticky offset follows the page header ──────────────────────────
+// .hdr is sticky at top:0, but ONLY until its containing block runs out: body is
+// height:100%, and a sticky element cannot leave its containing block, so the page
+// header releases after roughly one viewport and scrolls away. Anything pinned a
+// constant 52px below it is then floating in mid-air with club rows passing above
+// it — reported from the live page on 2026-08-17.
+//
+// syncStickyTop() keeps --sticky-top equal to the header's BOTTOM EDGE, clamped at
+// zero. This is driven here the way a browser drives it: register the handlers by
+// loading the page, place the header with a stubbed rect, then fire a real scroll
+// event. Calling syncStickyTop() directly would skip the listener registration,
+// which is the half most likely to be forgotten.
+console.log('\n22b  The sticky offset follows the page header down');
+ok('syncStickyTop exists', has('syncStickyTop'));
+if (has('syncStickyTop')) {
+  const hdr = { bottom: 52 };
+  // document.querySelector('.hdr') returns a fresh stub each call, so the rect has
+  // to be injected at the source.
+  run(`document.querySelector = (sel) => ({
+    getBoundingClientRect: () => ({ top: __hdrTop, bottom: __hdrBottom,
+      left: 0, right: 0, width: 0, height: 52 }),
+  });`);
+  const place = (bottom) => {
+    sandbox.__hdrTop = bottom - 52;
+    sandbox.__hdrBottom = bottom;
+  };
+  const offset = () => run(`document.documentElement.style.getPropertyValue('--sticky-top')`);
+
+  // The fixture is real: a scroll listener must have been registered at load, or
+  // firing the event proves nothing.
+  ok('a scroll listener was registered when the page loaded',
+    (listeners.scroll || []).length > 0,
+    `${(listeners.scroll || []).length} listener(s) — without one the offset never updates`);
+  ok('and a resize listener too',
+    (listeners.resize || []).length > 0,
+    'a window resize moves the header without scrolling');
+
+  place(52); fireEvent('scroll');
+  ok('with the header fully visible the offset is its bottom edge',
+    offset() === '52px', `"${offset()}"`);
+
+  // Mid-release: the header is half off screen, so the headings must sit at 26,
+  // not snap between 52 and 0. This is what distinguishes tracking the rect from
+  // toggling a class at a threshold.
+  place(26); fireEvent('scroll');
+  ok('part-way through the release the offset follows continuously',
+    offset() === '26px',
+    `"${offset()}" — 52 or 0 here means it is switching at a threshold, not tracking`);
+
+  place(0); fireEvent('scroll');
+  ok('once the header reaches the top edge the offset is zero',
+    offset() === '0px', `"${offset()}"`);
+
+  // THE REPORTED BUG. The header is gone, its bottom is negative, and the headings
+  // must be at the very top rather than 52px — or lower — down the page.
+  place(-180); fireEvent('scroll');
+  ok('with the header scrolled away the offset is clamped to zero',
+    offset() === '0px',
+    `"${offset()}" — a negative offset pulls the headings off screen, and 52px is ` +
+    `the bug: floating with rows visible above`);
+
+  // Could these have failed? The value must actually move, or a stuck '0px' would
+  // satisfy the two assertions above on its own.
+  place(52); fireEvent('scroll');
+  ok('and it comes back when the header does',
+    offset() === '52px',
+    `"${offset()}" — a value that only ever decreases would pass everything above`);
 }
 
 // ── 23. Columns run GF first; ladder positions; the ALL TEAMS switch ────────
