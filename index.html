@@ -379,6 +379,9 @@ body{overflow-x:hidden}
   font-size:11px}
 .fv-sum-club{display:flex;align-items:center;gap:7px;min-width:0}
 .fv-sum-club span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv-sum-rank{width:2.4em;text-align:right;font-family:'DM Mono',monospace;
+  font-size:11px;color:var(--tx3);padding-right:4px !important}
+.fv-sum-rank-tied{opacity:.45}
 .fv-sum-zero{color:var(--tx3)}
 .fv-sum-prem{color:var(--gold);font-weight:600}
 @media(max-width:768px){
@@ -457,7 +460,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.181</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.182</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -805,7 +808,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.181</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.182</span>
         </div>
 
 
@@ -3334,12 +3337,14 @@ function renderFinalsByClub(pool) {
     (enteredBy.get(id) || new Set()).size || 0;
   for (const e of entries) e.entered = enteredCount(e.id);
 
-  // ONE comparator, used by the cards below and by the summary table above them.
-  // The summary carries extra rows — clubs that entered teams and reached no
-  // finals — and if it sorted by its own rule the two lists would disagree about
-  // which club is "first" while sitting on the same screen.
-  const cmpEntries = (a, b) => {
-    if (S.finalsSort === 'name') return a.name.localeCompare(b.name);
+  // THE PRIMARY MEASURE ONLY, separated from the tiebreaks below because the rank
+  // column needs it on its own. Two clubs level on the measure the reader CHOSE
+  // must show the same rank — printing 3 and 4 asserts a difference that does not
+  // exist on that measure, and the thing that separated them (a premiership count,
+  // then a name) is invisible on screen. Returns 0 for the alphabetical sort,
+  // which is an ordering rather than a ranking.
+  const primaryCmp = (x, y) => {
+    if (S.finalsSort === 'name') return 0;
     const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
 
     // COUNT or SHARE. "Most GF appearances" and "the highest proportion of teams
@@ -3356,12 +3361,18 @@ function renderFinalsByClub(pool) {
       if (!n) return 0;
       return e.entered ? n / e.entered : -1;
     };
-    const primary = S.finalsWeighted
-      ? (x,y) => cmpTiers(x[def.tiers], y[def.tiers])
-      : S.finalsSortBasis === 'pct'
-        ? (x,y) => share(y) - share(x)
-        : (x,y) => def.flat(y) - def.flat(x);
-    return primary(a,b) ||
+    if (S.finalsWeighted) return cmpTiers(x[def.tiers], y[def.tiers]);
+    if (S.finalsSortBasis === 'pct') return share(y) - share(x);
+    return def.flat(y) - def.flat(x);
+  };
+
+  // ONE comparator, used by the cards below and by the summary table above them.
+  // The summary carries extra rows — clubs that entered teams and reached no
+  // finals — and if it sorted by its own rule the two lists would disagree about
+  // which club is "first" while sitting on the same screen.
+  const cmpEntries = (a, b) => {
+    if (S.finalsSort === 'name') return a.name.localeCompare(b.name);
+    return primaryCmp(a, b) ||
       b.premiers - a.premiers ||
       b.inGF - a.inGF ||
       b.teams.length - a.teams.length ||
@@ -3429,6 +3440,29 @@ function renderFinalsByClub(pool) {
     summaryRows.sort((x, y) => cmpEntries(x.e, y.e));
   }
 
+  // ── Rank, assigned AFTER the sort ─────────────────────────────────────────
+  // Standard competition ranking: 1, 2, 2, 4. Clubs level on the chosen measure
+  // share a number and the next club takes the position it actually occupies, so
+  // the gap says how many are ahead of it. Dense ranking (1, 2, 2, 3) would hide
+  // that.
+  //
+  // The tie test is primaryCmp — the measure the reader picked — NOT cmpEntries,
+  // which always separates two clubs on premierships and then on name. Using
+  // cmpEntries would make every rank distinct and the column would just be the row
+  // number, which tells you nothing you cannot already see.
+  //
+  // Alphabetical gets no rank at all: primaryCmp returns 0 for every pair there,
+  // so every club would tie at 1, which is worse than an honest dash.
+  const rankable = S.finalsSort !== 'name';
+  {
+    let lastRank = 0;
+    summaryRows.forEach((r, i) => {
+      if (!rankable) { r.rank = 0; return; }
+      if (i > 0 && primaryCmp(summaryRows[i - 1].e, r.e) === 0) r.rank = lastRank;
+      else { r.rank = i + 1; lastRank = r.rank; }
+    });
+  }
+
   // "5 (28%)". A zero prints as a dash with no percentage — "0 (0%)" is two ways
   // of saying nothing and makes the filled cells harder to pick out. Rounded to a
   // whole number: a decimal implies a precision that a count out of eleven does
@@ -3443,7 +3477,17 @@ function renderFinalsByClub(pool) {
   const tot = (f) => summaryRows.reduce((n, r) => n + f(r), 0);
   const totEntered = tot(r => r.entered);
 
-  const summaryBody = summaryRows.map(r => `<tr>
+  // A tied rank is dimmed on the second and later rows sharing it, so a repeated
+  // number reads as "level with the one above" rather than as a mistake.
+  const rankCell = (r, i) => {
+    if (!r.rank) return '<td class="fv-sum-rank"><span class="fv-sum-zero">–</span></td>';
+    const tied = i > 0 && summaryRows[i - 1].rank === r.rank;
+    return `<td class="fv-sum-rank${tied ? ' fv-sum-rank-tied' : ''}"` +
+      `${tied ? ' title="Level with the club above on this measure"' : ''}>${r.rank}</td>`;
+  };
+
+  const summaryBody = summaryRows.map((r, i) => `<tr>
+    ${rankCell(r, i)}
     <td style="text-align:left"><span class="fv-sum-club">${
       r.e.teams.length ? crestHTML(r.e.teams[0].team, 16, 'tlogo')
                        : '<span class="fv-sum-nocrest"></span>'}<span>${r.name}</span></span></td>
@@ -3470,6 +3514,7 @@ function renderFinalsByClub(pool) {
     <div class="fv-sum-body" style="display:${sumOpen ? '' : 'none'}">
     <table class="fv-sum">
       <thead><tr>
+        <th class="fv-sum-rank" title="Position on the current sort. Clubs level on that measure share a number.">#</th>
         <th style="text-align:left">Club</th>
         <th title="Teams the club entered, under the current filters">Entered</th>
         <th title="Teams that reached the finals">Finals</th>
@@ -3480,6 +3525,7 @@ function renderFinalsByClub(pool) {
       </tr></thead>
       <tbody>${summaryBody}</tbody>
       <tfoot><tr>
+        <td class="fv-sum-rank"></td>
         <td style="text-align:left">${summaryRows.length} club${summaryRows.length !== 1 ? 's' : ''}</td>
         <td>${totEntered}</td>
         ${pctCell(tot(r => r.inFinals),  totEntered)}
