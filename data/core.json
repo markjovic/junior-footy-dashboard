@@ -998,7 +998,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2034,
+        "matches": 2035,
         "players_n": 6759
       }
     },
@@ -1087,7 +1087,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 801,
+        "matches": 803,
         "players_n": 2085
       }
     },
@@ -1494,7 +1494,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2168,
+        "matches": 2186,
         "players_n": 8822
       }
     },
@@ -20662,17 +20662,31 @@
     "SER 2026|Rosebud JFC Girls|U14 Girls": "8307d2cb",
     "SER 2026|Rosebud JFC Boys|U17.5": "8307d2cb",
     "SER 2026|Frankston Dolphins JFC Girls|U18.5 Girls": "024cc769",
-    "SER 2026|Mt Martha JFC U18 Girls|U18.5 Girls": "f9f163a0"
+    "SER 2026|Mt Martha JFC U18 Girls|U18.5 Girls": "f9f163a0",
+    "WFNL 2026|Caroline Springs Lakers Mixed|U10": "37e2c50d",
+    "WFNL 2026|Laverton Magpies Mixed|U10": "89457385",
+    "WFNL 2026|Werribee Centrals Juniors Mixed|U10": "0fd554ad",
+    "WFNL 2026|North Sunshine Mixed|U10": "3e859b6f",
+    "WFNL 2026|Sunshine Heights FC Mixed|U10": "9d6635d0",
+    "WFNL 2026|Glen Orden Mixed|U10": "1b729ed1",
+    "WFNL 2026|Tarneit Football Club Mixed|U10": "ccee46d8",
+    "WFNL 2026|Point Cook Mixed Simon|U10": "de6464f6",
+    "WFNL 2026|Truganina Thunder Mixed|U10": "3bdc9b65",
+    "WFNL 2026|Werribee Districts Mixed|U10": "a3dd148f",
+    "WFNL 2026|Williamstown Juniors Mixed Gold|U10": "72fabf33",
+    "WFNL 2026|YSE Mixed Red|U10": "10f7bb91",
+    "WFNL 2026|Newport Power Mixed 2 (Raph/Gary)|U10": "c59adf26",
+    "SEJ 2026|Lyndhurst FNC Mixed|U11": "489af3fa"
   },
-  "lastUpdated": "2026-08-16T17:30:11.862Z",
-  "lastResultsFetch": "2026-08-16T17:30:11.862Z",
+  "lastUpdated": "2026-08-17T02:29:02.037Z",
+  "lastResultsFetch": "2026-08-17T02:29:02.037Z",
   "lastStatsFetch": "2026-08-16T14:13:22.746Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 987490
+      "bytes": 995704
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20684,7 +20698,7 @@
       "file": "data/seasons/263ca13b-core.json",
       "seasonId": "263ca13b",
       "kind": "core",
-      "bytes": 922231
+      "bytes": 922762
     },
     {
       "file": "data/seasons/263ca13b-players.json",
@@ -20756,7 +20770,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 369799
+      "bytes": 370886
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
