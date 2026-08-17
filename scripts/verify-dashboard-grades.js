@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v8 2026-08-16 gf-first-and-ladder-pos';
+const VERSION = 'verify-dashboard-grades v10 2026-08-17 tiers-and-grading-visitors';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -1237,6 +1237,62 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   run(`S.clubSummaryOpen = false;`);
 }
 
+// ── 22a. The sticky headings are not silently disabled ──────────────────────
+// This is a CSS assertion, which working_practice.md is otherwise against, and
+// the exception is deliberate: it is not judging whether a layout reads well, it
+// is asserting one mechanical interaction that has a known and invisible failure.
+//
+// `position:sticky` anchors to the nearest ANCESTOR WITH A SCROLLPORT, not to the
+// page. `overflow-x:auto` computes overflow-y to auto as well, so putting it back
+// on .fv-sum-body makes that element the scrollport — and since its height is its
+// content it never scrolls vertically, so the headings sit still at the top of the
+// box looking exactly like headings that were never sticky. Nothing errors, the
+// table renders perfectly, and the feature is gone.
+//
+// Cost of this assertion, stated so the next reader can weigh it: it must be
+// updated if the summary's CSS is restructured. It is worth that because the
+// alternative is finding out by scrolling, months later.
+console.log('\n22a  The sticky column headings are not disabled by an ancestor scrollport');
+{
+  const css = (html.match(/<style>([\s\S]*?)<\/style>/) || ['',''])[1];
+  // EVERY @media block removed, by brace matching — not sliced at the first one.
+  // The first attempt cut the stylesheet at the earliest max-width:768px query,
+  // which sits well above the summary's rules, so the "desktop" half did not
+  // contain the rule under test and all three assertions failed while the code was
+  // correct. A test that fails on working code is as bad as one that passes on
+  // broken code, and this one wasted a run before it was caught.
+  let desktop = '';
+  for (let i = 0; i < css.length; ) {
+    const at = css.indexOf('@media', i);
+    if (at === -1) { desktop += css.slice(i); break; }
+    desktop += css.slice(i, at);
+    const open = css.indexOf('{', at);
+    if (open === -1) break;
+    let depth = 0, j = open;
+    for (; j < css.length; j++) {
+      if (css[j] === '{') depth++;
+      else if (css[j] === '}') { depth--; if (!depth) break; }
+    }
+    i = j + 1;
+  }
+  ok('the stylesheet was found and media blocks stripped',
+    desktop.includes('.fv-sum th{') && !/@media/.test(desktop),
+    `${desktop.length} chars, contains .fv-sum th: ${desktop.includes('.fv-sum th{')}`);
+
+  ok('the headings are declared sticky', /\.fv-sum th\{[^}]*position:sticky/.test(desktop),
+    'without this the request was not implemented at all');
+  ok('and offset below the page header, not under it',
+    /\.fv-sum th\{[^}]*top:52px/.test(desktop),
+    '.hdr is sticky at top:0 and 52px tall, so top:0 here hides the headings behind it');
+  ok('they carry an opaque background',
+    /\.fv-sum th\{[^}]*background:var\(--s1\)/.test(desktop),
+    'rows show through a transparent heading as they pass beneath it');
+  ok('no ancestor creates a scrollport on desktop',
+    !/\.fv-sum-body\{[^}]*overflow/.test(desktop) && !/\.fv-sum-wrap\{[^}]*overflow/.test(desktop),
+    'overflow on .fv-sum-body or .fv-sum-wrap anchors sticky to that box instead of the page, ' +
+    'and the headings stop moving without anything appearing to break');
+}
+
 // ── 23. Columns run GF first; ladder positions; the ALL TEAMS switch ────────
 // Three changes in Beta 0.179, each of which fails quietly:
 //
@@ -1475,6 +1531,260 @@ ok('ordinal exists', has('ordinal'));
   // cells — if extraTeams were merged into e.teams it would be counted as a
   // finalist and the header would say so.
   run(`S.showAllTeams = false;`);
+}
+
+// ── 24. Sorting on VALUES or on SHARE ───────────────────────────────────────
+// "Most GF appearances" and "the highest proportion of teams entered that reached
+// a grand final" are different questions, and a big club wins the first almost by
+// size alone. Beta 0.180 makes the basis pickable.
+//
+// This fails SILENTLY: a wrong order is still an order. Nothing on screen says
+// which question was answered, so a basis that is ignored, or applied to one of
+// the two lists and not the other, reads as a perfectly ordinary ranking.
+//
+// THE FIXTURE IS BUILT TO SEPARATE THE TWO. Alpha enters ten teams and gets three
+// into grand finals; Beta enters two and gets both there.
+//
+//   on VALUES  Alpha (3) then Beta (2) then Cee (1)
+//   on SHARE   Beta (100%) then Cee (100%) then Alpha (30%)
+//
+// Alpha moves from FIRST to LAST between the two, which is the only arrangement
+// that cannot be satisfied by an implementation that quietly ignores the basis.
+console.log('\n24  The club summary sorts on values or on share');
+ok('setFinalsSortBasis exists', has('setFinalsSortBasis'));
+if (has('setFinalsSortBasis')) {
+  const gf = (age, gid, h, a, hs, as) => ({ id:'gf'+age+h, compName:'EFNL 2026', age,
+    rawGrade:'A', gradeId:gid, round:3, home:h, away:a, hScore:hs, aScore:as,
+    isFinals:true, finalsAbbrev:'GF', date:'2026-09-20' });
+  const ha = (age, gid, h, a) => ({ id:'ha'+age+h+a, compName:'EFNL 2026', age,
+    rawGrade:'A', gradeId:gid, round:1, home:h, away:a, hScore:30, aScore:20,
+    date:'2026-05-01' });
+  const pad = [];
+  // Seven more Alpha teams, entered and nowhere near a final. Without these Alpha
+  // would enter three and the two orderings would coincide.
+  for (let i = 4; i <= 10; i++) pad.push(ha('U12', 'g12', 'A' + i, 'A' + (i === 10 ? 4 : i + 1)));
+  sandbox.__c23 = [
+    gf('U12', 'g12', 'A1', 'A2', 60, 50),
+    gf('U13', 'g13', 'A3', 'B1', 40, 55),
+    gf('U14', 'g14', 'B2', 'C1', 70, 30),
+    ...pad,
+  ];
+  const teamsAll = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10','B1','B2','C1'];
+  run(`S.gradeMeta = {};
+  for (const [age, gid] of [['U12','g12'],['U13','g13'],['U14','g14']]) {
+    S.gradeMeta['EFNL 2026|'+age+'|'+gid] = { r:1, lvl:'junior', g:'M', label:'A', gradeId:gid };
+    S.gradeMeta['EFNL 2026|'+age+'|A']    = { r:1, lvl:'junior', g:'M' };
+  }
+  rebuildGradeLabels();
+  S.clubs = { cA:{name:'Alpha',type:'CLUB'}, cB:{name:'Beta',type:'CLUB'}, cC:{name:'Cee',type:'CLUB'} };
+  S.teamClub = {}; S.roster = {};
+  for (const t of ${JSON.stringify(teamsAll)}) {
+    const club = t[0] === 'A' ? 'cA' : t[0] === 'B' ? 'cB' : 'cC';
+    for (const [age, gid] of [['U12','g12'],['U13','g13'],['U14','g14']]) {
+      S.teamClub['EFNL 2026|'+t+'|'+age] = club;
+      S.roster['EFNL 2026|'+t+'|'+age] = { grade:'A', gradeId:gid, age };
+    }
+  }
+  S.matches = __c23.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.showAllTeams=false; S.finalsWeighted=false; S.clubSummaryOpen=true;
+  S.finalsSort='gf'; S.finalsSortBasis='count';
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  const order = () => {
+    const out = run(`document.getElementById('finals-body').innerHTML`);
+    const body = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
+    return [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
+      .map(tr => (tr[1].match(/<span>([^<]+)<\/span>/) || ['',''])[1].trim())
+      .filter(Boolean);
+  };
+  const cells = () => {
+    const out = run(`document.getElementById('finals-body').innerHTML`);
+    const body = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
+    const o = {};
+    for (const tr of body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+      const c = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+        .map(td => td[1].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim());
+      o[c[0]] = c;
+    }
+    return o;
+  };
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw on the count basis', !threw, threw || 'clean');
+
+  // The fixture is real: the two clubs must differ on BOTH count and share, or
+  // neither ordering below proves anything.
+  const c = cells();
+  ok('Alpha entered ten teams and reached three grand finals',
+    /^10$/.test((c['Alpha']||[])[1] || '') && /^3 \(30%\)$/.test((c['Alpha']||[])[5] || ''),
+    `entered "${(c['Alpha']||[])[1]}", GF "${(c['Alpha']||[])[5]}"`);
+  ok('Beta entered two and reached two',
+    /^2$/.test((c['Beta']||[])[1] || '') && /^2 \(100%\)$/.test((c['Beta']||[])[5] || ''),
+    `entered "${(c['Beta']||[])[1]}", GF "${(c['Beta']||[])[5]}"`);
+  ok('so a count and a share MUST disagree about first place',
+    3 > 2 && (2/2) > (3/10),
+    'if this were false the assertions below would pass on either basis');
+
+  const byCount = order();
+  ok('on VALUES the biggest count leads', byCount[0] === 'Alpha',
+    JSON.stringify(byCount));
+
+  run(`S.finalsSortBasis = 'pct'; render();`);
+  const byPct = order();
+  ok('on % the best share leads', byPct[0] === 'Beta', JSON.stringify(byPct));
+  ok('and the big club drops to LAST', byPct[byPct.length - 1] === 'Alpha',
+    `${JSON.stringify(byPct)} — Alpha first on both bases means the basis is ignored`);
+  ok('the two orderings are genuinely different',
+    byCount.join('|') !== byPct.join('|'),
+    `${JSON.stringify(byCount)} vs ${JSON.stringify(byPct)}`);
+
+  // The CARDS are sorted by the same comparator, so they must move too — a basis
+  // that reorders the table and not the cards puts two contradictory rankings on
+  // one screen.
+  {
+    const out = run(`document.getElementById('finals-body').innerHTML`);
+    const cardNames = [...out.matchAll(/class="fv-club-name">([^<]+)</g)].map(m => m[1].trim());
+    ok('the club CARDS follow the same basis as the table',
+      cardNames[0] === byPct[0],
+      `cards ${JSON.stringify(cardNames)} vs table ${JSON.stringify(byPct)}`);
+  }
+
+  // Choosing % turns weighted OFF, because both decide how to compare the same
+  // measure and leaving both on would make one control silently inert.
+  run(`S.finalsWeighted = true; S.finalsSortBasis = 'count'; setFinalsSortBasis('pct');`);
+  ok('choosing % clears the weighted flag', run('S.finalsWeighted') === false,
+    String(run('S.finalsWeighted')));
+  ok('and the basis took', run('S.finalsSortBasis') === 'pct', String(run('S.finalsSortBasis')));
+
+  // Could that have failed? An unknown basis must be rejected rather than stored,
+  // or a bad saved filter puts the view into a state no control can leave.
+  run(`setFinalsSortBasis('sideways');`);
+  ok('an unknown basis is rejected', run('S.finalsSortBasis') === 'pct',
+    String(run('S.finalsSortBasis')));
+
+  run(`S.finalsSortBasis = 'count'; S.finalsSort = 'premiers';`);
+}
+
+// ── 25. The rank denominator, and grading-pool visitors ─────────────────────
+// Two defects reported from the live page on 2026-08-17, both silent, and both
+// passing the entire suite as it stood.
+//
+// (a) THE "4 of 8" TAG COUNTED EVERY GRADE TWICE. buildGradeMeta writes each
+//     ranked grade under BOTH its PlayHQ grade id and its parsed rawGrade, so
+//     gradeTierCount's `startsWith(prefix)` saw two entries per grade. U14 with
+//     grades A to D reported eight. A rank out of a wrong total is still a
+//     plausible-looking tag, which is why nothing caught it.
+//
+// (b) CLUBS FROM OTHER LEAGUES WERE COUNTED AS HAVING ENTERED. Grading pools run
+//     jointly across leagues and then split out, so EFNL's own records contain
+//     games played by YJFL and Outer East clubs' teams. Those records pass every
+//     filter — the compName really is EFNL — and teamClub correctly resolves each
+//     team to a club that is not an EFNL club. The summary listed dozens of them
+//     and every percentage was over an inflated denominator.
+//
+// THE FIXTURE MIRRORS PRODUCTION'S DUAL KEYING. A fixture with only id keys would
+// report the right number for the wrong reason and (a) could not be tested at all.
+console.log('\n25  The rank denominator and grading-pool visitors');
+{
+  const AGES = { U14: ['g14a','g14b','g14c','g14d'] };
+  const gm = {};
+  ['A','B','C','D'].forEach((lbl, i) => {
+    const id = AGES.U14[i];
+    // Both keys, exactly as buildGradeMeta writes them: the id entry carries
+    // gradeId/label/name, the rawGrade entry is the bare { r, lvl, g }.
+    gm[`EFNL 2026|U14|${id}`] = { r: i + 1, lvl:'junior', g:'M', label: lbl,
+                                  gradeId: id, name: `U14 Mixed ${lbl}` };
+    gm[`EFNL 2026|U14|${lbl}`] = { r: i + 1, lvl:'junior', g:'M' };
+  });
+  // A grading grade: id key only, r:0, flagged. It must NOT add a rank slot.
+  gm['EFNL 2026|U14|g14grd'] = { r: 0, lvl:'junior', g:'M', label:'Grading',
+                                 gradeId:'g14grd', name:'U14 Mixed Grading', grading: true };
+
+  const M = (gid, raw, r, h, a, extra) => ({ id:'m'+gid+r+h, compName:'EFNL 2026',
+    age:'U14', rawGrade:raw, gradeId:gid, round:r, home:h, away:a,
+    hScore:50, aScore:40, date:'2026-06-01', ...(extra || {}) });
+  sandbox.__c25 = [
+    // Inside and Other play the GRADING pool and then real football.
+    M('g14grd','Grading',1,'Inside','Visitor'),
+    M('g14grd','Grading',1,'Other','Visitor'),
+    M('g14d','D',1,'Inside','Other'),
+    // Inside reaches a grand final in grade D, so it gets a row with a rank tag.
+    M('g14d','D',3,'Inside','Other',{ isFinals:true, finalsAbbrev:'GF' }),
+  ];
+  sandbox.__gm25 = gm;
+  run(`S.gradeMeta = __gm25; rebuildGradeLabels();
+  S.clubs = { cI:{name:'Inside JFC',type:'CLUB'}, cO:{name:'Other JFC',type:'CLUB'},
+              cV:{name:'Visitor JFC (Yarra Junior Football League (YJFL))',type:'CLUB'} };
+  S.teamClub = { 'EFNL 2026|Inside|U14':'cI', 'EFNL 2026|Other|U14':'cO',
+                 'EFNL 2026|Visitor|U14':'cV' };
+  S.roster = { 'EFNL 2026|Inside|U14':{grade:'D',gradeId:'g14d',age:'U14'},
+               'EFNL 2026|Other|U14':{grade:'D',gradeId:'g14d',age:'U14'},
+               'EFNL 2026|Visitor|U14':{grade:'Grading',gradeId:'g14grd',age:'U14'} };
+  S.matches = __c25.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.showAllTeams=false; S.finalsWeighted=false; S.clubSummaryOpen=true;
+  S.finalsSort='premiers'; S.finalsSortBasis='count';
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  // The fixture is real: without the dual keys (a) is untestable, and without a
+  // recognised grading grade (b) is.
+  ok('the fixture is dual-keyed the way buildGradeMeta writes it',
+    run(`Object.keys(S.gradeMeta).filter(k => k.startsWith('EFNL 2026|U14|')).length`) === 9,
+    `${run(`Object.keys(S.gradeMeta).filter(k => k.startsWith('EFNL 2026|U14|')).length`)} keys — 4 grades x2, plus grading`);
+  ok('the grading grade is recognised as one',
+    run(`isGradingGrade('g14grd')`) === true,
+    'without this every record counts as ranked and the visitor is never excluded');
+
+  // ── (a) the denominator ──
+  ok('gradeTierCount counts FOUR ranked grades, not eight',
+    run(`gradeTierCount('EFNL 2026','U14')`) === 4,
+    `${run(`gradeTierCount('EFNL 2026','U14')`)} — 8 is every grade counted twice, 5 includes the grading grade`);
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw', !threw, threw || 'clean');
+  const out = threw ? '' : run(`document.getElementById('finals-body').innerHTML`);
+
+  ok('a team in grade D is tagged 4/4 on its row',
+    /Grade 4 of 4 in U14/.test(out),
+    (out.match(/Grade \d+ of \d+ in U14/) || ['no rank tag'])[0]);
+  ok('and no "of 8" tag appears anywhere',
+    !/of 8 in U14/.test(out), 'the doubled denominator is back');
+
+  // ── (b) grading-pool visitors ──
+  ok('a club seen ONLY in the grading pool is not listed',
+    !/Visitor JFC/.test(out),
+    'a joint grading pool must not make another league\'s club look like an entrant');
+  ok('a club that played grading AND real football IS listed',
+    /Inside JFC/.test(out) && /Other JFC/.test(out),
+    'the test is whether the team played outside the pool, not what its club is called');
+
+  // Could that have failed? The visitor must actually be IN the pool, or the
+  // exclusion is being credited for a team that was never there.
+  ok('the visitor really is in the entered pool records',
+    run(`enteredPool().some(m => m.home === 'Visitor' || m.away === 'Visitor')`),
+    'if it were filtered earlier this assertion would pass for the wrong reason');
+  ok('and it resolves to a club, so only the grading rule can exclude it',
+    run(`!!clubIdOf('EFNL 2026','Visitor','U14')`),
+    'an unresolved club is dropped by a different guard entirely');
+
+  // The denominator of every percentage moves with it: two clubs entered, not
+  // three. This is what the defect actually cost on screen.
+  const foot = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
+  const footCells = [...foot.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td =>
+    td[1].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim());
+  ok('the summary counts two clubs, not three', /^2 clubs$/.test(footCells[0] || ''),
+    `"${footCells[0]}"`);
+  ok('and two teams entered, not three', /^2$/.test(footCells[1] || ''),
+    `"${footCells[1]}" — the visitor inflated every percentage in the table`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
