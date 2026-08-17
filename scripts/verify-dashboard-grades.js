@@ -1330,7 +1330,19 @@ console.log('\n22a  The sticky column headings are not disabled by an ancestor s
   // The chain is `body > .layout > .main > #finals-view > #finals-body > the
   // table`, taken from the markup. If the markup changes, this list must change
   // with it — stated here so it is updated rather than quietly bypassed.
-  const ANCESTORS = ['body', '\\.layout', '\\.main', '#finals-view',
+  // BODY IS NOT IN THIS LIST, and that is the correction Beta 0.184 makes.
+  //
+  // The requirement is not "no ancestor creates a scrollport". It is "no ancestor
+  // creates a scrollport AND THEN NEVER SCROLLS". Body scrolls — it IS the page —
+  // so a sticky element anchored to it behaves exactly as if anchored to the
+  // viewport. `.main` does not scroll, which is what made it fatal.
+  //
+  // Beta 0.183 changed body from `overflow-x:hidden` to `clip` to satisfy the
+  // earlier, cruder version of this rule. That removed the scrollport `.hdr` was
+  // sticking to, so the page header scrolled away and left a 52px band above the
+  // summary heading with rows passing through it. The test drove a regression,
+  // which is worse than no test: it was confidently wrong.
+  const ANCESTORS = ['\\.layout', '\\.main', '#finals-view',
                      '\\.fv-sum-wrap', '\\.fv-sum-body'];
   const BAD = /overflow(-x|-y)?\s*:\s*(auto|scroll|hidden)/;
   // Anchored to a rule BOUNDARY. An unanchored `body\\{` matches inside
@@ -1359,6 +1371,17 @@ console.log('\n22a  The sticky column headings are not disabled by an ancestor s
   ok('the chain was actually found in the stylesheet, not silently absent',
     ANCESTORS.filter(sel => declsFor(sel).length > 0).length >= 4,
     'a selector that is not in the CSS passes the loop above for free');
+
+  // BODY MUST REMAIN A SCROLLPORT. `.hdr` is a direct child of body and sticks to
+  // it, and the summary heading's top:52px offset assumes the header is there. If
+  // body stops scrolling, the header goes with it and the offset points at nothing.
+  ok('body still creates the page scrollport that .hdr sticks to',
+    declsFor('body').some(d => /overflow-x\s*:\s*hidden/.test(d)),
+    `${JSON.stringify(declsFor('body'))} — clip here removes the scrollport and the ` +
+    `page header scrolls away, leaving a gap above the summary heading`);
+  ok('and .hdr is sticky at the top, which is what 52px measures from',
+    /\.hdr\{[^}]*position:sticky/.test(desktop) && /\.hdr\{[^}]*top:0/.test(desktop),
+    (desktop.match(/\.hdr\{[^}]*/) || ['no .hdr rule'])[0].slice(0, 80));
 }
 
 // ── 23. Columns run GF first; ladder positions; the ALL TEAMS switch ────────
