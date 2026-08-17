@@ -374,19 +374,30 @@ body{overflow-x:hidden}
    genuinely does not fit and the box is short enough that sticking matters less. */
 .fv-sum-body{padding-bottom:6px}
 .fv-sum{width:100%;border-collapse:collapse;font-size:12px}
-/* STICKY COLUMN HEADINGS. top is 52px, the height of .hdr, which is itself
-   sticky at 0 — without the offset the headings slide underneath it.
+/* STICKY COLUMN HEADINGS.
 
-   It stops on its own at the bottom of the box, with no scroll listener and no
-   height measurement: a sticky element cannot leave its containing block, and
-   thead's is the table. So scrolling past the summary takes the headings with it,
-   which is the behaviour wanted.
+   top comes from --sticky-top, which syncStickyTop() keeps equal to the BOTTOM
+   EDGE of .hdr on every frame that scrolls. It is not a constant 52px, because
+   .hdr does not stay put: its containing block is body, body is height:100%, and
+   a sticky element cannot leave its containing block — so the page header
+   releases after roughly one viewport and scrolls away. With a fixed 52px the
+   column headings then hung 52px down the page with club rows passing above
+   them. Tracking the header's actual bottom edge means they sit under it while it
+   is there and rise to the very top once it is gone, following it continuously
+   rather than snapping.
+
+   The fallback of 52px is the header's height, so the headings are in the right
+   place on the first paint, before any scroll event has fired.
+
+   It stops on its own at the bottom of the box, with no height measurement: a
+   sticky element cannot leave its containing block, and thead's is the table. So
+   scrolling past the summary takes the headings with it, which is what is wanted.
 
    The background must be opaque or the rows show through as they pass beneath.
-   z-index sits below .hdr's 200 so the page header still wins. */
+   z-index sits below .hdr's 200 so the page header still wins while it is up. */
 .fv-sum th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;
   color:var(--tx3);font-weight:500;padding:8px 8px 6px;text-align:right;white-space:nowrap;
-  border-bottom:1px solid var(--b1);position:sticky;top:52px;z-index:3;
+  border-bottom:1px solid var(--b1);position:sticky;top:var(--sticky-top,52px);z-index:3;
   background:var(--s1)}
 .fv-sum td{padding:6px 8px;border-top:1px solid var(--b1);text-align:right;color:var(--tx2);
   font-variant-numeric:tabular-nums}
@@ -476,7 +487,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.184</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.185</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -824,7 +835,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.184</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.185</span>
         </div>
 
 
@@ -3231,6 +3242,49 @@ function setFinalsSortBasis(b) {
   render();
 }
 
+// --sticky-top follows the BOTTOM EDGE of the page header.
+//
+// .hdr is sticky at top:0, but only until its containing block runs out: body is
+// height:100%, and a sticky element cannot leave its containing block, so the
+// header releases after about one viewport and scrolls away. Anything pinned a
+// constant 52px below it is then floating, with content visible above it.
+//
+// Reading the rect each frame rather than toggling a class at a threshold gives
+// the exact offset DURING the release, so the headings track the header down
+// instead of jumping when it finally goes. Clamped at 0 — once the header is
+// above the viewport its bottom is negative, and the headings belong at the top.
+//
+// rAF-throttled and written only when the value changes, so a scroll produces one
+// style write per frame at most and none at all once the header has gone.
+let _stickyTopRaf = 0;
+function syncStickyTop() {
+  const hdr = document.querySelector('.hdr');
+  const px = hdr ? Math.max(0, Math.round(hdr.getBoundingClientRect().bottom)) : 0;
+  const next = px + 'px';
+  const root = document.documentElement;
+  if (root.style.getPropertyValue('--sticky-top') !== next) {
+    root.style.setProperty('--sticky-top', next);
+  }
+}
+// The flag is RAISED BEFORE scheduling and cleared by the callback itself, not
+// assigned from requestAnimationFrame's return value. Assigning the return value
+// works only while rAF is asynchronous: if the callback runs synchronously it
+// clears the flag first and the assignment then sets it back to a truthy handle,
+// after which every later frame is skipped and the offset freezes. It froze at
+// 52px — the exact symptom being fixed — and only showed up because the
+// verification harness runs rAF synchronously.
+function queueStickyTop() {
+  if (_stickyTopRaf) return;
+  _stickyTopRaf = 1;
+  const tick = () => { _stickyTopRaf = 0; syncStickyTop(); };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(tick);
+  else setTimeout(tick, 16);
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('scroll', queueStickyTop, { passive: true });
+  window.addEventListener('resize', queueStickyTop, { passive: true });
+}
+
 function toggleClubSummary() {
   S.clubSummaryOpen = !S.clubSummaryOpen;
   saveFilters();
@@ -5292,6 +5346,12 @@ function loadPlayers() {
 // INIT
 // ═══════════════════════════════════════
 async function init() {
+  // Set the sticky offset before anything renders. The CSS fallback of 52px is
+  // correct at the top of the page, but a reload part-way down a long finals view
+  // restores the scroll position without firing a scroll event, so the headings
+  // would sit 52px down with nothing above them until the first scroll.
+  syncStickyTop();
+
   // Always load from storage first
   const [matches,players,roster,gotwFlags] = await Promise.all([
     sGet(SK.matches), sGet(SK.players), sGet(SK.roster), sGet(SK.gotw)
