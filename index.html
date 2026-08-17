@@ -349,11 +349,29 @@ body{overflow-x:hidden}
 /* ── Finals: club summary table ── */
 .fv-sum-wrap{background:var(--s1);border:1px solid var(--b1);border-radius:10px;
   padding:2px 12px 4px;margin-bottom:14px}
-.fv-sum-body{overflow-x:auto}
+/* NO overflow here on desktop, deliberately. `overflow-x:auto` computes
+   overflow-y to auto as well, which makes this element a scroll container — and a
+   sticky child then anchors to IT rather than to the page. The container's height
+   is its content, so it never scrolls vertically and the header sits still at the
+   top of the box looking exactly like a header that is not sticky at all. The
+   horizontal scroll is restored under the mobile query below, where the table
+   genuinely does not fit and the box is short enough that sticking matters less. */
+.fv-sum-body{padding-bottom:6px}
 .fv-sum{width:100%;border-collapse:collapse;font-size:12px}
+/* STICKY COLUMN HEADINGS. top is 52px, the height of .hdr, which is itself
+   sticky at 0 — without the offset the headings slide underneath it.
+
+   It stops on its own at the bottom of the box, with no scroll listener and no
+   height measurement: a sticky element cannot leave its containing block, and
+   thead's is the table. So scrolling past the summary takes the headings with it,
+   which is the behaviour wanted.
+
+   The background must be opaque or the rows show through as they pass beneath.
+   z-index sits below .hdr's 200 so the page header still wins. */
 .fv-sum th{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;
   color:var(--tx3);font-weight:500;padding:8px 8px 6px;text-align:right;white-space:nowrap;
-  border-bottom:1px solid var(--b1)}
+  border-bottom:1px solid var(--b1);position:sticky;top:52px;z-index:3;
+  background:var(--s1)}
 .fv-sum td{padding:6px 8px;border-top:1px solid var(--b1);text-align:right;color:var(--tx2);
   font-variant-numeric:tabular-nums}
 .fv-sum tbody tr:hover{background:var(--s2)}
@@ -366,6 +384,12 @@ body{overflow-x:hidden}
 @media(max-width:768px){
   .fv-sum th,.fv-sum td{padding:6px 5px}
   .fv-sum th{font-size:8px;letter-spacing:.5px}
+  /* Seven columns do not fit a phone, so the horizontal scroll comes back — and
+     with it the sticky headings stop sticking, because this element becomes the
+     scroll container. A readable table that does not stick beats a sticking one
+     with three columns off the side. */
+  .fv-sum-body{overflow-x:auto}
+  .fv-sum th{position:static}
 }
 .fv-sum-hdr{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:9px 2px;
   cursor:pointer;user-select:none}
@@ -374,7 +398,6 @@ body{overflow-x:hidden}
 .fv-sum-title{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;
   text-transform:uppercase;color:var(--tx2)}
 .fv-sum-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)}
-.fv-sum-body{padding-bottom:6px}
 .fv-sum-pct{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
 .fv-sum-nocrest{width:16px;height:16px;border-radius:50%;background:var(--s3);flex-shrink:0;
   display:inline-block}
@@ -434,7 +457,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.179</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.181</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -636,6 +659,10 @@ body{overflow-x:hidden}
             <button id="fvgr-date"  class="on" onclick="setVenueGroup('date')">DATE &rsaquo; VENUE</button>
             <button id="fvgr-venue"            onclick="setVenueGroup('venue')">VENUE &rsaquo; DATE</button>
           </span>
+          <span class="fv-switch" id="fv-basis-wrap" style="display:none">
+            <button id="fvb-count" class="on" onclick="setFinalsSortBasis('count')">VALUES</button>
+            <button id="fvb-pct"              onclick="setFinalsSortBasis('pct')">%</button>
+          </span>
           <select class="fsel" id="fv-sort" onchange="setFinalsSort(this.value)"
                   style="display:none;width:auto;font-size:11px;padding:4px 6px">
             <option value="name">Alphabetical</option>
@@ -778,7 +805,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.179</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.181</span>
         </div>
 
 
@@ -859,6 +886,7 @@ function saveFilters() {
       venueGroup: S.venueGroup,
       clubSummaryOpen: S.clubSummaryOpen,
       showAllTeams: S.showAllTeams,
+      finalsSortBasis: S.finalsSortBasis,
       finalsSort: S.finalsSort,
       finalsWeighted: S.finalsWeighted,
       finalsGender: S.finalsGender,
@@ -939,6 +967,10 @@ let S = {
   // that did. Off by default — the view is about the finals, and every club's
   // full entry list is a much longer page.
   showAllTeams: false,
+  // Sort the club summary and cards on raw COUNTS or on the SHARE of teams
+  // entered. A big club wins a count almost by size alone, so both readings are
+  // wanted. Mutually exclusive with finalsWeighted — see setFinalsSortBasis.
+  finalsSortBasis: 'count',   // 'count' | 'pct'
   finalsSort: 'name',   // which measure to order by — see FINALS_SORTS
   finalsWeighted: false,// compare that measure tier by tier rather than as a flat count
   finalsGender: 'all',  // 'all' | 'M' | 'F'
@@ -2462,6 +2494,14 @@ function applyViewChrome() {
   const aOn  = document.getElementById('fvat-on');
   if (aOff) aOff.classList.toggle('on', !S.showAllTeams);
   if (aOn)  aOn.classList.toggle('on',  !!S.showAllTeams);
+  // The basis switch belongs to the club mode, like the sort select. It is hidden
+  // on the alphabetical sort, where neither a count nor a share means anything.
+  const bwrap = document.getElementById('fv-basis-wrap');
+  if (bwrap) bwrap.style.display = (inClubMode && S.finalsSort !== 'name') ? '' : 'none';
+  [['fvb-count','count'],['fvb-pct','pct']].forEach(([id,v]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', (S.finalsSortBasis || 'count') === v);
+  });
   const gwrap = document.getElementById('fv-group-wrap');
   if (gwrap) gwrap.style.display = inVenueMode ? '' : 'none';
   [['fvgr-date','date'],['fvgr-venue','venue']].forEach(([id,v]) => {
@@ -2556,10 +2596,29 @@ function gradeRankOf(comp, age, grade) {
 
 // How many ranked grades exist in that competition and age, so a rank can be
 // shown as "2 of 4" rather than a bare number.
+// HOW MANY RANKED GRADES an age group has, for the "4 of 8" tag.
+//
+// This counted every gradeMeta key under `comp|age|` and was DOUBLE, because
+// buildGradeMeta writes each ranked grade TWICE: once under the PlayHQ grade id
+// and once under the parsed rawGrade, so index.html kept working through the
+// grade identity migration. U14 with grades A to D reported 8, and a team in D
+// read "4/8" — a rank out of a total that does not exist. Measured against EFNL
+// 2026 on 2026-08-17: U14 4 grades reported 8, U19.5 5 reported 10, Reserve Men
+// 5 reported 10.
+//
+// Counting only entries that carry `gradeId` deduplicates exactly, because the
+// rawGrade entry is `{ r, lvl, g }` and has no id. `r > 0` then drops grading
+// grades, which take no rank slot by design (engine v17) — a grading grade in the
+// age would otherwise make "4 of 4" read "4 of 5" with no fifth tier to point at.
 function gradeTierCount(comp, age) {
   const prefix = `${comp}|${age}|`;
+  const meta = S.gradeMeta || {};
   let n = 0;
-  for (const k in (S.gradeMeta || {})) if (k.startsWith(prefix)) n++;
+  for (const k in meta) {
+    if (!k.startsWith(prefix)) continue;
+    const e = meta[k];
+    if (e && e.gradeId && e.r > 0) n++;
+  }
   return n;
 }
 
@@ -2647,7 +2706,39 @@ function ladderPosOf(age, ladderGrade, team) {
 // The grade is the LADDER grade — currentGrade() through the roster, the same
 // expression the ladders group by — not the record's rawGrade, because a promoted
 // team belongs to the grade it is in now.
+// ⚠️ A TEAM SEEN ONLY IN A GRADING POOL DID NOT ENTER THIS COMPETITION.
+//
+// Grading pools are run jointly across leagues and then split out. EFNL 2026's
+// records therefore contain games played by YJFL and Outer East clubs' teams, and
+// those records pass every filter here: the compName IS "EFNL 2026", so
+// matchesComp accepts them, and `teamClub` correctly resolves each team to its own
+// club — which is not an EFNL club. The club summary listed dozens of clubs that
+// never entered a team in the competition, inflating the denominator of every
+// percentage in the table.
+//
+// The test is STRUCTURAL, not the club's name. PlayHQ club names carry a parent
+// association in brackets — "Belgrave Football Netball Club (Outer East Senior
+// Football)" — but a club can legitimately field juniors in one league and seniors
+// in another, so the bracket says nothing about whether THIS team entered THIS
+// competition. What does say it is whether the team ever played outside the
+// grading pool: a team that entered plays home-and-away or finals as well, and a
+// visitor to the grading pool plays nothing else.
+//
+// Both passes run over the whole pool before anything is decided, because a
+// team's first record may be its grading one and a single pass would have to
+// judge it before seeing the rest.
 function enteredTeamDetail() {
+  // Pass 1: which team-keys have at least one NON-grading record.
+  const ranked = new Set();
+  for (const m of enteredPool()) {
+    if (isGradingGrade(matchListGrade(m))) continue;
+    for (const t of [m.home, m.away]) {
+      if (!t || t === '__bye__' || t === '__partial__') continue;
+      ranked.add(teamCountKey(m.compName, t, m.age));
+    }
+  }
+
+  // Pass 2: build the rows, keeping only those team-keys.
   const seen = new Map();   // teamCountKey -> team object
   for (const m of enteredPool()) {
     for (const t of [m.home, m.away]) {
@@ -2655,6 +2746,7 @@ function enteredTeamDetail() {
       if (m.provisional && !S.teamClub[`${m.compName}|${t}|${m.age}`]) continue;
       const key = teamCountKey(m.compName, t, m.age);
       if (seen.has(key)) continue;
+      if (!ranked.has(key)) continue;   // grading pool visitor
       const clubId = clubIdOf(m.compName, t, m.age);
       if (!clubId || !isClubOrg(clubId)) continue;
       seen.set(key, {
@@ -3107,6 +3199,19 @@ function setShowAllTeams(v) {
   render();
 }
 
+// VALUES or %. Weighted is turned OFF when % is chosen, because both answer the
+// same question — how to compare two clubs on the chosen measure — and leaving
+// both on would mean one of the two controls silently did nothing. Making them
+// exclusive is honest about that; disabling the control would hide it.
+function setFinalsSortBasis(b) {
+  if (!['count','pct'].includes(b)) return;
+  if (S.finalsSortBasis === b) return;
+  S.finalsSortBasis = b;
+  if (b === 'pct') S.finalsWeighted = false;
+  saveFilters();
+  render();
+}
+
 function toggleClubSummary() {
   S.clubSummaryOpen = !S.clubSummaryOpen;
   saveFilters();
@@ -3220,6 +3325,15 @@ function renderFinalsByClub(pool) {
   });
   if (S.selClub) entries = entries.filter(e => e.teams.some(t => t.team === S.selClub));
 
+  // Computed BEFORE the sort, not with the summary table below it. A percentage
+  // sort needs a denominator per club at comparison time, and reading it from a
+  // map built later would silently compare against undefined — which sorts every
+  // club equal and looks like a stable order rather than a broken one.
+  const enteredBy = enteredTeamsByClub();
+  const enteredCount = (id) => (enteredBy.get(id) || []).length ||
+    (enteredBy.get(id) || new Set()).size || 0;
+  for (const e of entries) e.entered = enteredCount(e.id);
+
   // ONE comparator, used by the cards below and by the summary table above them.
   // The summary carries extra rows — clubs that entered teams and reached no
   // finals — and if it sorted by its own rule the two lists would disagree about
@@ -3227,9 +3341,26 @@ function renderFinalsByClub(pool) {
   const cmpEntries = (a, b) => {
     if (S.finalsSort === 'name') return a.name.localeCompare(b.name);
     const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
+
+    // COUNT or SHARE. "Most GF appearances" and "the highest proportion of teams
+    // entered that reached a GF" are different questions, and a big club will win
+    // the first almost by size alone — six of forty beats two of three on a count
+    // and loses badly on a share. Both are worth asking, so the basis is picked
+    // rather than assumed.
+    //
+    // A club with nothing entered scores -1 rather than dividing by zero, so it
+    // sorts last instead of becoming NaN — and NaN in a comparator does not throw,
+    // it just returns a nonsense order that looks like an arbitrary one.
+    const share = (e) => {
+      const n = def.flat(e);
+      if (!n) return 0;
+      return e.entered ? n / e.entered : -1;
+    };
     const primary = S.finalsWeighted
       ? (x,y) => cmpTiers(x[def.tiers], y[def.tiers])
-      : (x,y) => def.flat(y) - def.flat(x);
+      : S.finalsSortBasis === 'pct'
+        ? (x,y) => share(y) - share(x)
+        : (x,y) => def.flat(y) - def.flat(x);
     return primary(a,b) ||
       b.premiers - a.premiers ||
       b.inGF - a.inGF ||
@@ -3237,22 +3368,8 @@ function renderFinalsByClub(pool) {
       a.name.localeCompare(b.name);
   };
 
-  if (S.finalsSort === 'name') {
-    entries.sort((a,b) => a.name.localeCompare(b.name));
-  } else {
-    const def = FINALS_SORTS[S.finalsSort] || FINALS_SORTS.teams;
-    // Weighted compares the chosen measure tier by tier; flat compares totals.
-    // Either way the tiebreaks below keep equal clubs in a stable order.
-    const primary = S.finalsWeighted
-      ? (a,b) => cmpTiers(a[def.tiers], b[def.tiers])
-      : (a,b) => def.flat(b) - def.flat(a);
-    entries.sort((a,b) =>
-      primary(a,b) ||
-      b.premiers - a.premiers ||
-      b.inGF - a.inGF ||
-      b.teams.length - a.teams.length ||
-      a.name.localeCompare(b.name));
-  }
+  entries.sort(cmpEntries);
+
 
   // ── Club summary table ────────────────────────────────────────────────────
   // One row per club, above the cards. It answers at a glance what the cards
@@ -3274,7 +3391,6 @@ function renderFinalsByClub(pool) {
   // played grading and was then placed in a division is one team entered, and the
   // card's own key carries rawGrade, so counting on that would let a club's finals
   // total exceed the teams it fielded and print a percentage over 100.
-  const enteredBy = enteredTeamsByClub();
 
   // Deduped to the same identity as the denominator, so numerator and denominator
   // are the same kind of thing. `topGrade` counts finals teams in a grade PlayHQ
@@ -3305,7 +3421,8 @@ function renderFinalsByClub(pool) {
       // Shaped like an `entries` row so cmpEntries can sort it beside the others
       // rather than the two being ordered by different rules on one screen.
       const zero = { id, name: clubNameOf(id) || id, teams: [], remaining: 0, inGF: 0,
-        premiers: 0, tiersAll: {}, tiersRemaining: {}, tiersGF: {}, tiersPremiers: {} };
+        premiers: 0, entered: teamsIn.length || teamsIn.size || 0,
+        tiersAll: {}, tiersRemaining: {}, tiersGF: {}, tiersPremiers: {} };
       summaryRows.push({ id, name: zero.name, e: zero, entered: teamsIn.length,
         inFinals: 0, remaining: 0, inGF: 0, premiers: 0, topGrade: 0 });
     }
@@ -5213,6 +5330,7 @@ async function init() {
       if (['date','venue'].includes(f.venueGroup)) S.venueGroup = f.venueGroup;
       if (typeof f.clubSummaryOpen === 'boolean') S.clubSummaryOpen = f.clubSummaryOpen;
       if (typeof f.showAllTeams === 'boolean') S.showAllTeams = f.showAllTeams;
+      if (['count','pct'].includes(f.finalsSortBasis)) S.finalsSortBasis = f.finalsSortBasis;
       if (f.finalsSort && Object.prototype.hasOwnProperty.call(FINALS_SORTS, f.finalsSort)) {
         S.finalsSort = f.finalsSort;
       }
