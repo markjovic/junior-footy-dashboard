@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v7 2026-08-16 club-summary-denominators';
+const VERSION = 'verify-dashboard-grades v8 2026-08-16 gf-first-and-ladder-pos';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -1235,6 +1235,246 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   ok('toggleClubSummary flips the state', run('S.clubSummaryOpen') === true,
     String(run('S.clubSummaryOpen')));
   run(`S.clubSummaryOpen = false;`);
+}
+
+// ── 23. Columns run GF first; ladder positions; the ALL TEAMS switch ────────
+// Three changes in Beta 0.179, each of which fails quietly:
+//
+//   COLUMN ORDER REVERSED. Column 0 is now the grand final for every grade. The
+//   depth sort reads the same index, so it had to invert with it — a sort that
+//   silently reversed would put the teams knocked out FIRST at the top of every
+//   card, which reads as a plausible ordering rather than an obvious fault.
+//
+//   LADDER POSITION. A wrong position looks exactly like a right one. It is
+//   memoised per render, so the cache is also a place a stale figure could hide.
+//
+//   ALL TEAMS. The non-finalists are held on `extraTeams`, NOT merged into
+//   `e.teams` — every existing figure is computed from `e.teams`, and folding
+//   them in would restate all of them at once: a club with two of eleven teams in
+//   the finals would begin reporting eleven.
+console.log('\n23  GF-first columns, ladder positions, and the ALL TEAMS switch');
+ok('ladderPosOf exists', has('ladderPosOf'));
+ok('setShowAllTeams exists', has('setShowAllTeams'));
+ok('ordinal exists', has('ordinal'));
+{
+  // Ordinals first — the teens are what a naive implementation gets wrong.
+  ok('ordinal handles 1, 2, 3', run(`[ordinal(1),ordinal(2),ordinal(3)].join(',')`) === '1st,2nd,3rd');
+  ok('ordinal handles the teens', run(`[ordinal(11),ordinal(12),ordinal(13)].join(',')`) === '11th,12th,13th',
+    run(`[ordinal(11),ordinal(12),ordinal(13)].join(',')`));
+  ok('ordinal handles 21 and 22', run(`[ordinal(21),ordinal(22)].join(',')`) === '21st,22nd');
+
+  // A four-team grade with a full home-and-away season, then a finals series.
+  // Alpha finishes top, Delta bottom — so a ladder position is checkable rather
+  // than merely present.
+  const ha = (r, h, a, hs, as) => ({ id:`h${r}${h}${a}`, compName:'EFNL 2026', age:'U12',
+    rawGrade:'A', gradeId:'g1', round:r, home:h, away:a, hScore:hs, aScore:as, date:'2026-05-01' });
+  // finalsName is what roundLabel() prints, and PlayHQ supplies it. Without it
+  // every cell reads "GF" or "QF" — strings that appear all over the markup — and
+  // the column-order assertions below could not locate anything.
+  const FNAME = { QF:'Qualifying Final', PF:'Preliminary Final', GF:'Grand Final' };
+  const finIn = (age, gid) => (ab, r, h, a, hs, as) => ({ id:`f${age}${ab}${h}`,
+    compName:'EFNL 2026', age, rawGrade:'A', gradeId:gid, round:r, home:h, away:a,
+    hScore:hs, aScore:as, isFinals:true, finalsAbbrev:ab, finalsName:FNAME[ab],
+    date:'2026-09-01' });
+  const g14 = finIn('U14','g14');
+  const g16 = finIn('U16','g16');
+  const fin = (ab, r, h, a, hs, as) => ({ id:`f${ab}${h}`, compName:'EFNL 2026', age:'U12',
+    rawGrade:'A', gradeId:'g1', round:r, home:h, away:a, hScore:hs, aScore:as,
+    isFinals:true, finalsAbbrev:ab, finalsName:FNAME[ab], date:'2026-09-01' });
+  sandbox.__c23 = [
+    // Alpha 3 wins, Bravo 2, Charlie 1, Delta 0.
+    ha(1,'Alpha','Delta',100,10), ha(1,'Bravo','Charlie',80,40),
+    ha(2,'Alpha','Charlie',90,20), ha(2,'Bravo','Delta',70,30),
+    ha(3,'Alpha','Bravo',60,50),  ha(3,'Charlie','Delta',55,45),
+    // Finals: a three-round series. Alpha wins the QF and goes straight to the
+    // GF — a BYE in the middle column, which is the gap that must survive.
+    fin('QF', 1, 'Alpha',  'Delta',  70, 40),
+    fin('PF', 2, 'Bravo',  'Charlie',65, 55),
+    fin('GF', 3, 'Alpha',  'Bravo',  80, 60),
+    // Echo entered and reached no finals at all.
+    ha(1,'Echo','Alpha',20,90), ha(2,'Echo','Bravo',25,85),
+
+    // ── A SECOND AND THIRD GRADE, so DEPTH can be told from grade strength ──
+    // Alpha FC has three teams in finals. Neither of the two below won a grand
+    // final, so the premier band cannot decide their order — only depth can:
+    //   Alpha C (U16) wins its QF and loses the PF -> column 1
+    //   Alpha B (U14) loses its QF                 -> column 2
+    // Column 0 is the grand final, so the SMALLER index is the deeper run and
+    // Alpha C must sort above Alpha B. With the depth sort left uninverted after
+    // the columns were reversed, that order flips — and a card listing the team
+    // knocked out first at the top reads as perfectly plausible.
+    g14('QF', 1, 'Golf',    'Alpha B', 60, 40),
+    g14('PF', 2, 'Hotel',   'Golf',    70, 50),
+    g14('GF', 3, 'Hotel',   'India',   80, 60),
+    g16('QF', 1, 'Alpha C', 'Juliet',  75, 45),
+    g16('PF', 2, 'Kilo',    'Alpha C', 65, 55),
+    g16('GF', 3, 'Kilo',    'Mike',    90, 70),
+    // And a fourth Alpha team that reached no finals, so the club has BOTH kinds
+    // and the card header has two different numbers to report.
+    { id:'ha18', compName:'EFNL 2026', age:'U18', rawGrade:'A', gradeId:'g18',
+      round:1, home:'Alpha D', away:'Lima', hScore:30, aScore:20, date:'2026-05-01' },
+  ];
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|g1':  { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g1',  name:'U12 Mixed A' },
+    'EFNL 2026|U12|A':   { r:1, lvl:'junior', g:'M' },
+    'EFNL 2026|U14|g14': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g14', name:'U14 Mixed A' },
+    'EFNL 2026|U14|A':   { r:1, lvl:'junior', g:'M' },
+    'EFNL 2026|U16|g16': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g16', name:'U16 Mixed A' },
+    'EFNL 2026|U16|A':   { r:1, lvl:'junior', g:'M' },
+    'EFNL 2026|U18|g18': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g18', name:'U18 Mixed A' },
+    'EFNL 2026|U18|A':   { r:1, lvl:'junior', g:'M' },
+  };
+  rebuildGradeLabels();
+  S.clubs = { cA:{name:'Alpha FC',type:'CLUB'}, cB:{name:'Bravo FC',type:'CLUB'},
+              cC:{name:'Charlie FC',type:'CLUB'}, cD:{name:'Delta FC',type:'CLUB'},
+              cE:{name:'Echo FC',type:'CLUB'}, cX:{name:'Others FC',type:'CLUB'} };
+  S.teamClub = { 'EFNL 2026|Alpha|U12':'cA','EFNL 2026|Bravo|U12':'cB',
+                 'EFNL 2026|Charlie|U12':'cC','EFNL 2026|Delta|U12':'cD',
+                 'EFNL 2026|Echo|U12':'cE',
+                 'EFNL 2026|Alpha B|U14':'cA','EFNL 2026|Alpha C|U16':'cA',
+                 'EFNL 2026|Alpha D|U18':'cA' };
+  for (const [t,a] of [['Golf','U14'],['Hotel','U14'],['India','U14'],
+                       ['Juliet','U16'],['Kilo','U16'],['Mike','U16'],['Lima','U18']])
+    S.teamClub['EFNL 2026|'+t+'|'+a] = 'cX';
+  S.roster = {};
+  for (const t of ['Alpha','Bravo','Charlie','Delta','Echo'])
+    S.roster['EFNL 2026|'+t+'|U12'] = { grade:'A', gradeId:'g1', age:'U12' };
+  for (const [t,a,g] of [['Alpha B','U14','g14'],['Golf','U14','g14'],['Hotel','U14','g14'],
+                         ['India','U14','g14'],['Alpha C','U16','g16'],['Juliet','U16','g16'],
+                         ['Kilo','U16','g16'],['Mike','U16','g16'],
+                         ['Alpha D','U18','g18'],['Lima','U18','g18']])
+    S.roster['EFNL 2026|'+t+'|'+a] = { grade:'A', gradeId:g, age:a };
+  S.matches = __c23.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.finalsSort='premiers'; S.finalsWeighted=false; S.clubSummaryOpen=false;
+  S.showAllTeams=false;
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  // ── Ladder positions ──
+  run('resetLadderPos();');
+  ok('the ladder puts Alpha first',   run(`ladderPosOf('U12','g1','Alpha')`) === 1,
+    String(run(`ladderPosOf('U12','g1','Alpha')`)));
+  // Echo plays two games and loses both, so the ladder has FIVE teams. Delta and
+  // Echo both finish winless and are separated on percentage — Delta 85 for 225
+  // against, Echo 45 for 175 — which is why the order is checked rather than
+  // assumed.
+  ok('Delta is fourth',  run(`ladderPosOf('U12','g1','Delta')`) === 4,
+    String(run(`ladderPosOf('U12','g1','Delta')`)));
+  ok('and Echo is last of the five', run(`ladderPosOf('U12','g1','Echo')`) === 5,
+    String(run(`ladderPosOf('U12','g1','Echo')`)));
+  ok('a team that never played returns 0, not a position',
+    run(`ladderPosOf('U12','g1','Nobody')`) === 0);
+  ok('an unknown grade returns 0 rather than throwing',
+    run(`ladderPosOf('U12','gZZZ','Alpha')`) === 0);
+  // Could that have failed? The positions must differ, or any constant passes.
+  ok('positions are not all the same number',
+    run(`new Set(['Alpha','Bravo','Charlie','Delta','Echo'].map(t => ladderPosOf('U12','g1',t))).size > 1`),
+    'a ladder that returned one number for everyone would satisfy the checks above');
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw with positions and reversed columns', !threw, threw || 'clean');
+  const out = threw ? '' : run(`document.getElementById('finals-body').innerHTML`);
+
+  // SLICED past the summary table. The summary lists every club including the
+  // ones with no finalists, and it sits in the DOM even when collapsed — so a
+  // search over the whole body finds "Echo FC" there and proves nothing about the
+  // cards. Same mistake as the section 10/11 table confusion.
+  const cardsOnly = (h) => h.slice(h.indexOf('</table>') + 1 || 0);
+  const cardOf = (h, club) => {
+    const i = h.indexOf(club);
+    if (i === -1) return '';
+    const j = h.indexOf('class="fv-card"', i);
+    return h.slice(i, j === -1 ? h.length : j);
+  };
+
+  // ── GF first, and the bye gap in the middle ──
+  // Alpha's card: QF in the LAST column, GF in the FIRST, and the middle column
+  // blank because it had a bye through the preliminary final.
+  const alphaCard = (out.match(/<div class="fv-card">(?:(?!<div class="fv-card">)[\s\S])*?Alpha FC[\s\S]*?<\/div>\s*<\/div>/) || [''])[0]
+    || out.slice(out.indexOf('Alpha FC'));
+  const gfAt = alphaCard.indexOf('Grand Final');
+  const qfAt = alphaCard.indexOf('Qualifying Final');
+  ok('the grand final is rendered on Alpha\'s row', gfAt !== -1);
+  ok('the qualifying final is too', qfAt !== -1);
+  ok('the GRAND FINAL comes before the qualifying final in the markup',
+    gfAt !== -1 && qfAt !== -1 && gfAt < qfAt,
+    `GF at ${gfAt}, QF at ${qfAt} — column 0 must be the grand final`);
+  ok('the bye between them is a gap, not a closed-up row',
+    /color:var\(--b2\)">·<\/span>/.test(alphaCard),
+    'a team that skipped a round keeps its blank column');
+
+  // ── Depth sort inverted with the columns ──
+  // Alpha won the GF, Echo played no finals. Alpha must be first in its card and
+  // the premier must not be sorted below a team knocked out earlier.
+  // DEPTH, tested between two teams that neither won nor lost a grand final, so
+  // the premier band cannot be doing the work. Alpha C reached a preliminary
+  // final; Alpha B lost its qualifying final.
+  const alphaFC = cardOf(cardsOnly(out), 'Alpha FC');
+  const u16At = alphaFC.indexOf('U16 A');
+  const u14At = alphaFC.indexOf('U14 A');
+  ok('both of the non-premier Alpha teams are on the card',
+    u16At !== -1 && u14At !== -1, `U16 at ${u16At}, U14 at ${u14At}`);
+  ok('the DEEPER run sorts above the shallower one',
+    u16At !== -1 && u14At !== -1 && u16At < u14At,
+    `U16 (reached a PF) at ${u16At}, U14 (lost its QF) at ${u14At} — ` +
+    `column 0 is the grand final, so the deeper run is the SMALLER index`);
+  ok('and the premier is still above both',
+    alphaFC.indexOf('U12 A') !== -1 && alphaFC.indexOf('U12 A') < u16At,
+    'premiers are lifted out before depth is compared');
+
+  // The RENDERED position, not just the function. Alpha finished top of the U12
+  // ladder, so its row must carry a 1st tag.
+  ok('a ladder position is rendered on the row',
+    /class="fv-pos fv-pos-1"[^>]*>1st</.test(alphaFC) || /fv-pos-1[^>]*>1st</.test(alphaFC),
+    'the minor premier must be marked on its own row, not only computed');
+  ok('and a position appears for more than one team',
+    (cardsOnly(out).match(/class="fv-pos/g) || []).length > 3,
+    'one tag could be a coincidence of a single row');
+
+  // ── ALL TEAMS off ──
+  ok('with the switch off, a club with no finalists has no CARD',
+    !/Echo FC/.test(cardsOnly(out)),
+    'Echo reached no finals and the switch is off');
+  ok('and no "did not reach the finals" heading appears',
+    !/did not reach the finals/.test(out));
+
+  // ── ALL TEAMS on ──
+  run(`S.showAllTeams = true; render();`);
+  const all = run(`document.getElementById('finals-body').innerHTML`);
+  ok('with the switch on, the no-finals club gets a CARD',
+    /Echo FC/.test(cardsOnly(all)), 'this is the whole point of the switch');
+  ok('and its team is listed by name', /Echo</.test(all) || />Echo/.test(all));
+  ok('the non-finalists are introduced, not silently appended',
+    /did not reach the finals/.test(all));
+  ok('a finalist club still shows its finals rows', /Grand Final/.test(all));
+
+  // THE assertion that protects every existing figure. Charlie reached a
+  // preliminary final, so cC has one team in finals and none outside it; Delta
+  // played the QF. Alpha's club has one finals team and must still say so.
+  // THE assertion that catches extraTeams being merged into e.teams. Alpha FC has
+  // THREE teams in finals and a fourth that reached none. If the non-finalists
+  // were folded in, both numbers move together and the card would read 4 of 5.
+  const alphaAll = cardOf(cardsOnly(all), 'Alpha FC');
+  ok('the card header counts finals teams and entered teams separately',
+    /3 of 4 teams in finals/.test(alphaAll),
+    (alphaAll.match(/\d+ of \d+ teams? in finals/) || ['not reported'])[0] +
+    ' — merging extraTeams into e.teams moves both numbers at once');
+  // extraTeams must NOT be counted as finalists. Echo has a card and a row, and
+  // the summary must still report it as reaching no finals — if extraTeams were
+  // merged into e.teams this would read 1.
+  const echoRow = (all.match(/<tr>(?:(?!<\/tr>)[\s\S])*?Echo FC[\s\S]*?<\/tr>/) || [''])[0]
+    .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  ok('the summary still reports Echo as reaching no finals',
+    /Echo FC 1 –/.test(echoRow), `"${echoRow}"`);
+
+  // Could that have failed? With the switch on, Echo has a row and NO finals
+  // cells — if extraTeams were merged into e.teams it would be counted as a
+  // finalist and the header would say so.
+  run(`S.showAllTeams = false;`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
