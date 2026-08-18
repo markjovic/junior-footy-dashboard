@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v15 2026-08-17 top-grade-per-measure';
+const VERSION = 'verify-dashboard-grades v16 2026-08-18 topgrade-sort';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -1272,9 +1272,9 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   ok('the gold top-grade figure rides beside the Finals count',
     /^2 \(67%\)$/.test(T.getTop('Norwood','finals') || ''),
     `"${T.getTop('Norwood','finals')}" — both of Norwood's finalists are in grade A`);
-  ok('and beside the Entered count, without a percentage on the denominator',
-    /^3$/.test(T.getTop('Norwood','entered') || ''),
-    `"${T.getTop('Norwood','entered')}"`);
+  ok('and beside the Entered count, with its own share of teams entered',
+    /^3 \(100%\)$/.test(T.getTop('Norwood','entered') || ''),
+    `"${T.getTop('Norwood','entered')}" — all three of Norwood's teams are grade A`);
   ok('a club with no top-grade teams shows no gold figure at all',
     !T.getTop('Croydon','finals'),
     `"${T.getTop('Croydon','finals')}" — a second dash would double the table in dashes`);
@@ -2044,6 +2044,14 @@ console.log('\n27  The gold top-grade figure');
     g27('U12','g12a','A','',  1,'T3','T2',30,25),
     // A B-grade team that DOES reach a grand final. Gold must not count it.
     g27('U13','g13b','B','GF',3,'L1','L2',50,45),
+    // THREE top-grade teams that reach no finals at all, at a club with no finals
+    // record of any kind. This is what makes the topgrade sort testable: the club
+    // leads that measure while sitting last on every other one, so a sort that
+    // cannot see a no-finals club's entered teams drops it to the bottom. Without
+    // these records `enteredTop` could be missing from the zero row and nothing
+    // would notice.
+    g27('U12','g12a','A','',  1,'N1','N2',30,20),
+    g27('U12','g12a','A','',  2,'N3','N1',25,22),
   ];
   run(`S.gradeMeta = {
     'EFNL 2026|U12|g12a': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g12a' },
@@ -2052,14 +2060,19 @@ console.log('\n27  The gold top-grade figure');
     'EFNL 2026|U13|B':    { r:2, lvl:'junior', g:'M' },
   };
   rebuildGradeLabels();
-  S.clubs = { cA:{name:'Alpha',type:'CLUB'}, cZ:{name:'Zed',type:'CLUB'} };
+  S.clubs = { cA:{name:'Alpha',type:'CLUB'}, cZ:{name:'Zed',type:'CLUB'},
+              cN:{name:'Nofinals',type:'CLUB'} };
   S.teamClub = { 'EFNL 2026|T1|U12':'cA', 'EFNL 2026|T3|U12':'cA', 'EFNL 2026|L1|U13':'cA',
-                 'EFNL 2026|T2|U12':'cZ', 'EFNL 2026|L2|U13':'cZ' };
+                 'EFNL 2026|T2|U12':'cZ', 'EFNL 2026|L2|U13':'cZ',
+                 'EFNL 2026|N1|U12':'cN', 'EFNL 2026|N2|U12':'cN', 'EFNL 2026|N3|U12':'cN' };
   S.roster = { 'EFNL 2026|T1|U12':{grade:'A',gradeId:'g12a',age:'U12'},
                'EFNL 2026|T2|U12':{grade:'A',gradeId:'g12a',age:'U12'},
                'EFNL 2026|T3|U12':{grade:'A',gradeId:'g12a',age:'U12'},
                'EFNL 2026|L1|U13':{grade:'B',gradeId:'g13b',age:'U13'},
-               'EFNL 2026|L2|U13':{grade:'B',gradeId:'g13b',age:'U13'} };
+               'EFNL 2026|L2|U13':{grade:'B',gradeId:'g13b',age:'U13'},
+               'EFNL 2026|N1|U12':{grade:'A',gradeId:'g12a',age:'U12'},
+               'EFNL 2026|N2|U12':{grade:'A',gradeId:'g12a',age:'U12'},
+               'EFNL 2026|N3|U12':{grade:'A',gradeId:'g12a',age:'U12'} };
   S.matches = __c27.map(x => ({...x}));
   S.fixtures = []; precomputeMatches(S.matches);
   S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
@@ -2079,8 +2092,57 @@ console.log('\n27  The gold top-grade figure');
   // failure mode above is untestable.
   ok('Alpha entered three teams', /^3$/.test(T.get(T.byClub['Alpha'],'entered') || ''),
     `"${T.get(T.byClub['Alpha'],'entered')}"`);
+  ok('the gold Entered percentage is a share of teams entered',
+    /^2 \(67%\)$/.test(T.getTop('Alpha','entered') || ''),
+    `"${T.getTop('Alpha','entered')}" — 2 of 3 entered is 67%`);
+
+  // ── The topgrade SORT ──
+  // It sorts on teams ENTERED in the top grade, not teams that reached finals
+  // there, which is the one thing the other four measures cannot show: a club can
+  // field several top-grade sides and win nothing.
+  ok('there is a top-grade sort option', run(`!!FINALS_SORTS.topgrade`), 'missing');
+  // Wrapped, because a measure reading the wrong field throws on a bare object and
+  // a stack trace says less than a failed assertion.
+  const flatOf = (obj) => {
+    try { return run(`FINALS_SORTS.topgrade.flat(${JSON.stringify(obj)})`); }
+    catch (e) { return `threw: ${e.message}`; }
+  };
+  ok('and it reads teams entered in the top grade, not finalists',
+    flatOf({ enteredTop: 4, teams: [1,2], inGF: 9 }) === 4,
+    `${flatOf({ enteredTop: 4, teams: [1,2], inGF: 9 })} — 2 means it is counting finalists`);
+  ok('a club with the field absent scores zero rather than undefined',
+    flatOf({}) === 0,
+    `${flatOf({})} — undefined in a comparator sorts every club equal`);
+
+  run(`setFinalsSort('topgrade'); render();`);
+  const TS = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+  ok('the sort was accepted', run(`S.finalsSort`) === 'topgrade', String(run(`S.finalsSort`)));
+  // Nofinals entered three top-grade teams and reached no finals, so it must LEAD
+  // this measure while sitting last on every other one. A sort that cannot read a
+  // no-finals club's entered teams drops it to the bottom instead.
+  ok('the club with the most top-grade teams leads, even with no finals record',
+    TS.get(TS.rows[0], 'club') === 'Nofinals',
+    `${JSON.stringify(TS.rows.map(r => TS.get(r,'club')))} — Nofinals has 3 grade-A teams`);
+  ok('and the rank column renumbers on the new measure',
+    TS.get(TS.byClub['Nofinals'], '#') === '1' && TS.get(TS.byClub['Alpha'], '#') === '2',
+    `Nofinals "${TS.get(TS.byClub['Nofinals'], '#')}", Alpha "${TS.get(TS.byClub['Alpha'], '#')}"`);
+  ok('the same club is NOT first on premierships, so the measure moved something',
+    (() => { run(`setFinalsSort('premiers'); render();`);
+      const TP = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+      return TP.get(TP.rows[0], 'club') !== 'Nofinals'; })(),
+    'if one club led every measure the sort could be ignored and still pass');
+  run(`setFinalsSort('topgrade'); render();`);
+
+  // Could that have failed? The premierships sort puts Alpha first too, so the
+  // measure must be shown to move something. Sorting by remaining — where both
+  // clubs are level at zero — must fall through to the tiebreaks and NOT crash.
+  run(`setFinalsSort('remaining'); render();`);
+  ok('a measure on which every club is level still renders',
+    summaryTable(run(`document.getElementById('finals-body').innerHTML`)).rows.length === 3,
+    'a comparator returning 0 for every pair must not throw or drop rows');
+  run(`setFinalsSort('topgrade');`);
   ok('two of them are top grade, and one of those never reached finals',
-    /^2$/.test(T.getTop('Alpha','entered') || ''),
+    /^2 \(67%\)$/.test(T.getTop('Alpha','entered') || ''),
     `"${T.getTop('Alpha','entered')}" — T1 and T3 are grade A; T3 played no final`);
 
   ok('the Top grade column is gone', T.col['top grade'] === undefined,
