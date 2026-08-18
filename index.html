@@ -491,7 +491,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.186</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.187</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -704,6 +704,7 @@ body{overflow-x:hidden}
             <option value="remaining">Most remaining</option>
             <option value="gf">Most GF appearances</option>
             <option value="premiers">Most premierships</option>
+            <option value="topgrade">Most teams in top grade</option>
           </select>
           <span class="fv-switch" id="fv-weight-wrap" style="display:none">
             <button id="fvw-off" class="on" onclick="setFinalsWeighted(false)"
@@ -839,7 +840,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.186</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.187</span>
         </div>
 
 
@@ -2461,6 +2462,16 @@ const FINALS_SORTS = {
   remaining: { label: 'remaining',       flat: e => e.remaining,    tiers: 'tiersRemaining' },
   gf:        { label: 'GF appearances',  flat: e => e.inGF,         tiers: 'tiersGF' },
   premiers:  { label: 'premierships',    flat: e => e.premiers,     tiers: 'tiersPremiers' },
+  // Teams ENTERED in the strongest grade for their age, not teams that reached
+  // finals there. It measures where a club competes rather than how it went, which
+  // is the one thing the other four cannot show: a club can field four top-grade
+  // sides and win nothing.
+  //
+  // `tiers` is tiersAll only so the weighted comparison has something to read. The
+  // weighting exists to rank a club's finalists BY grade, and this measure is
+  // already defined as one grade, so weighting it says nothing — hence the note in
+  // applyViewChrome that turns the control off here.
+  topgrade:  { label: 'teams in top grade', flat: e => e.enteredTop || 0, tiers: 'tiersAll' },
   name:      null, // alphabetical — never weighted, never falls through
 };
 
@@ -2532,6 +2543,11 @@ function applyViewChrome() {
   // on the alphabetical sort, where neither a count nor a share means anything.
   const bwrap = document.getElementById('fv-basis-wrap');
   if (bwrap) bwrap.style.display = (inClubMode && S.finalsSort !== 'name') ? '' : 'none';
+  // The grade weighting ranks a club's finalists BY grade. The topgrade measure is
+  // already defined as one grade, so weighting it compares nothing — the control is
+  // hidden rather than left on screen doing nothing.
+  const wwrap = document.getElementById('fv-weight-wrap');
+  if (wwrap && inClubMode && S.finalsSort === 'topgrade') wwrap.style.display = 'none';
   [['fvb-count','count'],['fvb-pct','pct']].forEach(([id,v]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', (S.finalsSortBasis || 'count') === v);
@@ -3409,7 +3425,15 @@ function renderFinalsByClub(pool) {
   const enteredBy = enteredTeamsByClub();
   const enteredCount = (id) => (enteredBy.get(id) || []).length ||
     (enteredBy.get(id) || new Set()).size || 0;
-  for (const e of entries) e.entered = enteredCount(e.id);
+  const isTop = (t) => gradeRankOf(t.comp, t.age, t.grade) === 1;
+  for (const e of entries) {
+    const list = enteredBy.get(e.id) || [];
+    e.entered = enteredCount(e.id);
+    // Attached here, not in summaryOf, because the topgrade SORT reads it and the
+    // sort runs first. Computing it twice in two places is how two figures for one
+    // thing start to disagree.
+    e.enteredTop = list.filter(isTop).length;
+  }
 
   // THE PRIMARY MEASURE ONLY, separated from the tiebreaks below because the rank
   // column needs it on its own. Two clubs level on the measure the reader CHOSE
@@ -3490,7 +3514,6 @@ function renderFinalsByClub(pool) {
   //
   // A grade is top when gradeRankOf returns 1 — PlayHQ's strongest for that age.
   // Grading grades rank 0 and are never top.
-  const isTop = (t) => gradeRankOf(t.comp, t.age, t.grade) === 1;
   const summaryOf = (e) => {
     const keyset = (pred) => new Set(e.teams.filter(t => !pred || pred(t))
       .map(t => teamCountKey(t.comp, t.team, t.age)));
@@ -3503,7 +3526,7 @@ function renderFinalsByClub(pool) {
       // The top-grade denominator comes from the ENTERED list, not from e.teams —
       // a club can enter a top-grade team that never reaches the finals, and it
       // must still be counted here or the gold column starts at the wrong total.
-      enteredTop:   enteredTeams.filter(isTop).length,
+      enteredTop:   e.enteredTop != null ? e.enteredTop : enteredTeams.filter(isTop).length,
       inFinals:     keyset(null).size,
       inFinalsTop:  topset(null).size,
       remaining:    keyset(t => t.status.remaining).size,
@@ -3525,13 +3548,19 @@ function renderFinalsByClub(pool) {
       if (shown.has(id)) continue;
       // Shaped like an `entries` row so cmpEntries can sort it beside the others
       // rather than the two being ordered by different rules on one screen.
+      // Shaped like an `entries` row so cmpEntries can sort it beside the others.
+      // `enteredTop` belongs on the ENTRY as well as on the summary row, because
+      // the topgrade sort reads it through FINALS_SORTS.topgrade.flat(e) — a club
+      // that entered four top-grade sides and reached no finals must still sort
+      // above one that entered none, and without this it would compare as
+      // undefined and land wherever the tiebreaks put it.
+      const topN = teamsIn.filter(isTop).length;
       const zero = { id, name: clubNameOf(id) || id, teams: [], remaining: 0, inGF: 0,
-        premiers: 0, entered: teamsIn.length || teamsIn.size || 0,
+        premiers: 0, entered: teamsIn.length || teamsIn.size || 0, enteredTop: topN,
         tiersAll: {}, tiersRemaining: {}, tiersGF: {}, tiersPremiers: {} };
       summaryRows.push({ id, name: zero.name, e: zero, entered: teamsIn.length,
         inFinals: 0, inFinalsTop: 0, remaining: 0, remainingTop: 0,
-        inGF: 0, inGFTop: 0, premiers: 0, premiersTop: 0,
-        enteredTop: teamsIn.filter(isTop).length });
+        inGF: 0, inGFTop: 0, premiers: 0, premiersTop: 0, enteredTop: topN });
     }
     summaryRows.sort((x, y) => cmpEntries(x.e, y.e));
   }
@@ -3601,7 +3630,10 @@ function renderFinalsByClub(pool) {
       r.e.teams.length ? crestHTML(r.e.teams[0].team, 16, 'tlogo')
                        : '<span class="fv-sum-nocrest"></span>'}<span>${r.name}</span></span></td>
     <td>${r.entered
-      ? `${r.entered}${r.enteredTop ? `<span class="fv-sum-top" title="In the strongest grade for their age">${r.enteredTop}</span>` : ''}`
+      ? `${r.entered}${r.enteredTop
+          ? `<span class="fv-sum-top" title="In the strongest grade for their age">${r.enteredTop}` +
+            ` <span class="fv-sum-pct">(${Math.round((r.enteredTop / r.entered) * 100)}%)</span></span>`
+          : ''}`
       : '<span class="fv-sum-zero">–</span>'}</td>
     ${pctCell(r.inFinals,  r.inFinalsTop,  r.entered)}
     ${pctCell(r.remaining, r.remainingTop, r.entered)}
@@ -3637,7 +3669,9 @@ function renderFinalsByClub(pool) {
         <td class="fv-sum-rank"></td>
         <td style="text-align:left">${summaryRows.length} club${summaryRows.length !== 1 ? 's' : ''}</td>
         <td>${totEntered}${tot(r => r.enteredTop)
-          ? `<span class="fv-sum-top">${tot(r => r.enteredTop)}</span>` : ''}</td>
+          ? `<span class="fv-sum-top">${tot(r => r.enteredTop)}` +
+            ` <span class="fv-sum-pct">(${Math.round((tot(r => r.enteredTop) / totEntered) * 100)}%)</span></span>`
+          : ''}</td>
         ${pctCell(tot(r => r.inFinals),  tot(r => r.inFinalsTop),  totEntered)}
         ${pctCell(tot(r => r.remaining), tot(r => r.remainingTop), totEntered)}
         ${pctCell(tot(r => r.inGF),      tot(r => r.inGFTop),      totEntered)}
