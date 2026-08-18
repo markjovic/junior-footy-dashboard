@@ -429,6 +429,10 @@ body{overflow-x:hidden}
   text-transform:uppercase;color:var(--tx2)}
 .fv-sum-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)}
 .fv-sum-pct{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
+/* The top-grade subset, on its own line beneath the total so a cell never grows
+   sideways — the table already scrolls horizontally on a phone. */
+.fv-sum-top{display:block;color:var(--gold);font-size:11px;line-height:1.35}
+.fv-sum-top .fv-sum-pct{color:var(--gold);opacity:.75}
 .fv-sum-nocrest{width:16px;height:16px;border-radius:50%;background:var(--s3);flex-shrink:0;
   display:inline-block}
 /* ── Finals: by venue ── */
@@ -487,7 +491,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.185</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.186</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -835,7 +839,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.185</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.186</span>
         </div>
 
 
@@ -3474,20 +3478,40 @@ function renderFinalsByClub(pool) {
   // total exceed the teams it fielded and print a percentage over 100.
 
   // Deduped to the same identity as the denominator, so numerator and denominator
-  // are the same kind of thing. `topGrade` counts finals teams in a grade PlayHQ
-  // ranks strongest in its age — gradeRankOf returns 1 for those — which is the
-  // measure of whether a club competes at the top rather than merely in volume.
+  // are the same kind of thing.
+  //
+  // EVERY measure carries a TOP-GRADE figure beside it (Beta 0.186), rather than
+  // top grade being a column of its own. As a single column it could only describe
+  // one measure — it described Finals — and said nothing about whether the teams
+  // that went deep were the strong ones. Beside each measure it answers that
+  // directly: of the teams this club entered, how many were in the strongest grade
+  // for their age, and how many of THOSE reached finals, are still alive, made a
+  // grand final, won one.
+  //
+  // A grade is top when gradeRankOf returns 1 — PlayHQ's strongest for that age.
+  // Grading grades rank 0 and are never top.
+  const isTop = (t) => gradeRankOf(t.comp, t.age, t.grade) === 1;
   const summaryOf = (e) => {
     const keyset = (pred) => new Set(e.teams.filter(t => !pred || pred(t))
       .map(t => teamCountKey(t.comp, t.team, t.age)));
+    const topset = (pred) => new Set(e.teams.filter(t => isTop(t) && (!pred || pred(t)))
+      .map(t => teamCountKey(t.comp, t.team, t.age)));
+    const enteredTeams = enteredBy.get(e.id) || [];
     return {
       id: e.id, name: e.name, e,
-      entered:   (enteredBy.get(e.id) || []).length,
-      inFinals:  keyset(null).size,
-      remaining: keyset(t => t.status.remaining).size,
-      inGF:      keyset(t => t.status.inGF).size,
-      premiers:  keyset(t => t.status.wonGF).size,
-      topGrade:  keyset(t => gradeRankOf(t.comp, t.age, t.grade) === 1).size,
+      entered:      enteredTeams.length,
+      // The top-grade denominator comes from the ENTERED list, not from e.teams —
+      // a club can enter a top-grade team that never reaches the finals, and it
+      // must still be counted here or the gold column starts at the wrong total.
+      enteredTop:   enteredTeams.filter(isTop).length,
+      inFinals:     keyset(null).size,
+      inFinalsTop:  topset(null).size,
+      remaining:    keyset(t => t.status.remaining).size,
+      remainingTop: topset(t => t.status.remaining).size,
+      inGF:         keyset(t => t.status.inGF).size,
+      inGFTop:      topset(t => t.status.inGF).size,
+      premiers:     keyset(t => t.status.wonGF).size,
+      premiersTop:  topset(t => t.status.wonGF).size,
     };
   };
 
@@ -3505,7 +3529,9 @@ function renderFinalsByClub(pool) {
         premiers: 0, entered: teamsIn.length || teamsIn.size || 0,
         tiersAll: {}, tiersRemaining: {}, tiersGF: {}, tiersPremiers: {} };
       summaryRows.push({ id, name: zero.name, e: zero, entered: teamsIn.length,
-        inFinals: 0, remaining: 0, inGF: 0, premiers: 0, topGrade: 0 });
+        inFinals: 0, inFinalsTop: 0, remaining: 0, remainingTop: 0,
+        inGF: 0, inGFTop: 0, premiers: 0, premiersTop: 0,
+        enteredTop: teamsIn.filter(isTop).length });
     }
     summaryRows.sort((x, y) => cmpEntries(x.e, y.e));
   }
@@ -3537,11 +3563,24 @@ function renderFinalsByClub(pool) {
   // of saying nothing and makes the filled cells harder to pick out. Rounded to a
   // whole number: a decimal implies a precision that a count out of eleven does
   // not have.
-  const pctCell = (n, of, cls) => {
+  // "2 (33%)  1 (17%)" — the second figure in gold is the top-grade subset.
+  //
+  // BOTH percentages are a share of TEAMS ENTERED, the same denominator as every
+  // other cell in the row, so the whole table reads against one number. The gold
+  // figure is therefore directly comparable with the white one beside it: 2 (33%)
+  // with 1 (17%) says half this club's finalists were top grade, without the
+  // reader having to hold a second denominator in their head.
+  //
+  // A zero prints as a dash with no percentage — "0 (0%)" is two ways of saying
+  // nothing and makes the filled cells harder to pick out. A zero TOP-GRADE figure
+  // prints nothing at all rather than a second dash, which would double the
+  // table's width in dashes for a club with no top-grade teams.
+  const pctCell = (n, top, of, cls) => {
     if (!n) return `<td class="${cls || ''}"><span class="fv-sum-zero">–</span></td>`;
-    const pct = of ? Math.round((n / of) * 100) : 0;
-    return `<td class="${cls || ''}">${n}` +
-      (of ? ` <span class="fv-sum-pct">(${pct}%)</span>` : '') + `</td>`;
+    const pc = (v) => of ? ` <span class="fv-sum-pct">(${Math.round((v / of) * 100)}%)</span>` : '';
+    return `<td class="${cls || ''}">${n}${pc(n)}` +
+      (top ? `<span class="fv-sum-top" title="In the strongest grade for their age">${top}${pc(top)}</span>` : '') +
+      `</td>`;
   };
 
   const tot = (f) => summaryRows.reduce((n, r) => n + f(r), 0);
@@ -3561,12 +3600,13 @@ function renderFinalsByClub(pool) {
     <td style="text-align:left"><span class="fv-sum-club">${
       r.e.teams.length ? crestHTML(r.e.teams[0].team, 16, 'tlogo')
                        : '<span class="fv-sum-nocrest"></span>'}<span>${r.name}</span></span></td>
-    <td>${r.entered || '<span class="fv-sum-zero">–</span>'}</td>
-    ${pctCell(r.inFinals,  r.entered)}
-    ${pctCell(r.topGrade,  r.entered)}
-    ${pctCell(r.remaining, r.entered)}
-    ${pctCell(r.inGF,      r.entered)}
-    ${pctCell(r.premiers,  r.entered, r.premiers ? 'fv-sum-prem' : '')}
+    <td>${r.entered
+      ? `${r.entered}${r.enteredTop ? `<span class="fv-sum-top" title="In the strongest grade for their age">${r.enteredTop}</span>` : ''}`
+      : '<span class="fv-sum-zero">–</span>'}</td>
+    ${pctCell(r.inFinals,  r.inFinalsTop,  r.entered)}
+    ${pctCell(r.remaining, r.remainingTop, r.entered)}
+    ${pctCell(r.inGF,      r.inGFTop,      r.entered)}
+    ${pctCell(r.premiers,  r.premiersTop,  r.entered, r.premiers ? 'fv-sum-prem' : '')}
   </tr>`).join('');
 
   // COLLAPSED BY DEFAULT. The cards below are the point of this view; the table
@@ -3586,23 +3626,22 @@ function renderFinalsByClub(pool) {
       <thead><tr>
         <th class="fv-sum-rank" title="Position on the current sort. Clubs level on that measure share a number.">#</th>
         <th style="text-align:left">Club</th>
-        <th title="Teams the club entered, under the current filters">Entered</th>
-        <th title="Teams that reached the finals">Finals</th>
-        <th title="Teams in the strongest grade for their age">Top grade</th>
-        <th title="Teams not yet eliminated and not yet in a grand final">Remaining</th>
-        <th title="Teams named in a grand final, played or scheduled">GF</th>
-        <th title="Teams that have won a grand final">Premierships</th>
+        <th title="Teams the club fielded in this competition, under the current filters. Every percentage in the row is a share of this number. The gold figure is those in the strongest grade for their age.">Entered</th>
+        <th title="Teams that played at least one finals match, as a share of teams entered. Gold: those in the strongest grade for their age.">Finals</th>
+        <th title="Teams not yet eliminated and not yet in a grand final, as a share of teams entered. Gold: those in the strongest grade for their age.">Remaining</th>
+        <th title="Teams named in a grand final, played or scheduled, as a share of teams entered. Gold: those in the strongest grade for their age.">GF</th>
+        <th title="Teams that won a grand final, as a share of teams entered. Gold: those in the strongest grade for their age.">Premierships</th>
       </tr></thead>
       <tbody>${summaryBody}</tbody>
       <tfoot><tr>
         <td class="fv-sum-rank"></td>
         <td style="text-align:left">${summaryRows.length} club${summaryRows.length !== 1 ? 's' : ''}</td>
-        <td>${totEntered}</td>
-        ${pctCell(tot(r => r.inFinals),  totEntered)}
-        ${pctCell(tot(r => r.topGrade),  totEntered)}
-        ${pctCell(tot(r => r.remaining), totEntered)}
-        ${pctCell(tot(r => r.inGF),      totEntered)}
-        ${pctCell(tot(r => r.premiers),  totEntered)}
+        <td>${totEntered}${tot(r => r.enteredTop)
+          ? `<span class="fv-sum-top">${tot(r => r.enteredTop)}</span>` : ''}</td>
+        ${pctCell(tot(r => r.inFinals),  tot(r => r.inFinalsTop),  totEntered)}
+        ${pctCell(tot(r => r.remaining), tot(r => r.remainingTop), totEntered)}
+        ${pctCell(tot(r => r.inGF),      tot(r => r.inGFTop),      totEntered)}
+        ${pctCell(tot(r => r.premiers),  tot(r => r.premiersTop),  totEntered)}
       </tr></tfoot>
     </table></div></div>` : '';
 
