@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v13 2026-08-17 sticky-offset-tracks-header';
+const VERSION = 'verify-dashboard-grades v15 2026-08-17 top-grade-per-measure';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -48,20 +48,44 @@ const html = fs.readFileSync(HTML, 'utf8');
 // inserted will eventually be edited wrongly. Resolving by name costs nothing and
 // the next column added or reordered breaks nothing.
 function summaryTable(out) {
-  const cellsOf = (block) => [...String(block).matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-    .map(tr => [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
-      .map(td => td[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()));
+  // A cell holds TWO figures from Beta 0.186: the measure, and a gold top-grade
+  // subset in a <span class="fv-sum-top">. Stripping tags naively glued them into
+  // "2 (67%) 2 (67%)" and every assertion that matched a whole cell failed. They
+  // are separated here so a test can assert on either without either one's text
+  // leaking into the other's.
+  const splitCell = (htmlCell) => {
+    const m = htmlCell.match(/<span class="fv-sum-top"[^>]*>([\s\S]*?)<\/span>/);
+    const top = m ? m[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+    const main = htmlCell.replace(/<span class="fv-sum-top"[^>]*>[\s\S]*?<\/span>/, '')
+      .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return { main, top };
+  };
+  const parsedOf = (block) => [...String(block).matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
+    .map(tr => [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(td => splitCell(td[1])));
+  const cellsOf = (block) => parsedOf(block).map(r => r.map(c => c.main));
   const heads = [...String((out.match(/<thead>([\s\S]*?)<\/thead>/) || ['',''])[1])
     .matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)]
     .map(h => h[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
   const col = {};
   heads.forEach((h, i) => { col[h.toLowerCase()] = i; });
-  const rows = cellsOf((out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1]);
-  const foot = cellsOf((out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1])[0] || [];
-  const get = (row, name) => (row || [])[col[String(name).toLowerCase()]];
-  const byClub = {};
-  for (const r of rows) byClub[get(r, 'club')] = r;
-  return { heads, col, rows, foot, get, byClub };
+  const bodyHtml = (out.match(/<tbody>([\s\S]*?)<\/tbody>/) || ['',''])[1];
+  const footHtml = (out.match(/<tfoot>([\s\S]*?)<\/tfoot>/) || ['',''])[1];
+  const rowsFull = parsedOf(bodyHtml);
+  const footFull = parsedOf(footHtml)[0] || [];
+  const rows = rowsFull.map(r => r.map(c => c.main));
+  const foot = footFull.map(c => c.main);
+  const idx = (name) => col[String(name).toLowerCase()];
+  const get = (row, name) => (row || [])[idx(name)];
+  const byClub = {}, topByClub = {};
+  rowsFull.forEach((full, i) => {
+    const name = rows[i][idx('club')];
+    byClub[name] = rows[i];
+    topByClub[name] = full.map(c => c.top);
+  });
+  // The gold top-grade figure, by club and column name.
+  const getTop = (club, name) => (topByClub[club] || [])[idx(name)];
+  const footTop = (name) => (footFull[idx(name)] || {}).top;
+  return { heads, col, rows, foot, get, byClub, getTop, footTop };
 }
 const cellNum = (v) => { const m = String(v).match(/^(\d+)/); return m ? Number(m[1]) : 0; };
 
@@ -1207,7 +1231,7 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   const cells = T.rows;
   const byName = T.byClub;
   ok('the table exposes the columns this section asserts on',
-    ['club','entered','finals','top grade','remaining','gf','premierships']
+    ['club','entered','finals','remaining','gf','premierships']
       .every(h => T.col[h] !== undefined),
     JSON.stringify(T.heads));
 
@@ -1240,8 +1264,20 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   ok('the percentage is against teams ENTERED, not teams in finals',
     /^2 \(67%\)$/.test(cell('Norwood','finals')),
     `"${cell('Norwood','finals')}" — 100% here means the denominator is wrong`);
-  ok('the top-grade column counts and shows a percentage',
-    /^2 \(67%\)$/.test(cell('Norwood','top grade')), `"${cell('Norwood','top grade')}"`);
+  // Beta 0.186: the standalone Top grade column is GONE. The measure now rides
+  // beside every other figure as a gold subset, and its percentage is a share of
+  // teams ENTERED like everything else in the row.
+  ok('there is no standalone Top grade column any more',
+    T.col['top grade'] === undefined, JSON.stringify(T.heads));
+  ok('the gold top-grade figure rides beside the Finals count',
+    /^2 \(67%\)$/.test(T.getTop('Norwood','finals') || ''),
+    `"${T.getTop('Norwood','finals')}" — both of Norwood's finalists are in grade A`);
+  ok('and beside the Entered count, without a percentage on the denominator',
+    /^3$/.test(T.getTop('Norwood','entered') || ''),
+    `"${T.getTop('Norwood','entered')}"`);
+  ok('a club with no top-grade teams shows no gold figure at all',
+    !T.getTop('Croydon','finals'),
+    `"${T.getTop('Croydon','finals')}" — a second dash would double the table in dashes`);
   ok('a premiership is counted and shown as a share of teams entered',
     /^1 \(33%\)$/.test(cell('Norwood','premierships')), `"${cell('Norwood','premierships')}"`);
   ok('a zero cell carries no percentage',
@@ -1292,128 +1328,24 @@ ok('toggleClubSummary exists', has('toggleClubSummary'));
   run(`S.clubSummaryOpen = false;`);
 }
 
-// ── 22a. The sticky headings are not silently disabled ──────────────────────
-// This is a CSS assertion, which working_practice.md is otherwise against, and
-// the exception is deliberate: it is not judging whether a layout reads well, it
-// is asserting one mechanical interaction that has a known and invisible failure.
+// ── 22a. REMOVED 2026-08-17 ─────────────────────────────────────────────────
+// A dozen CSS regexes asserting that position:sticky was declared and that no
+// ancestor carried an overflow. Deleted, and worth recording why rather than
+// quietly dropping:
 //
-// `position:sticky` anchors to the nearest ANCESTOR WITH A SCROLLPORT, not to the
-// page. `overflow-x:auto` computes overflow-y to auto as well, so putting it back
-// on .fv-sum-body makes that element the scrollport — and since its height is its
-// content it never scrolls vertically, so the headings sit still at the top of the
-// box looking exactly like headings that were never sticky. Nothing errors, the
-// table renders perfectly, and the feature is gone.
+//   It passed while the headings did not stick at all, because it checked the two
+//   boxes that had just been edited rather than the whole ancestor chain.
+//   Getting it to work then took three attempts — an unanchored selector matched
+//   inside `.fv-sum-body`, `String.match` returned only the first of two `body`
+//   rules, and the regex literals were over-escaped.
+//   Worst of all, in Beta 0.183 it DROVE A REGRESSION: the CSS was changed to
+//   satisfy it, which removed the scrollport the page header was sticking to and
+//   broke the header on the live site.
 //
-// Cost of this assertion, stated so the next reader can weigh it: it must be
-// updated if the summary's CSS is restructured. It is worth that because the
-// alternative is finding out by scrolling, months later.
-console.log('\n22a  The sticky column headings are not disabled by an ancestor scrollport');
-{
-  const css = (html.match(/<style>([\s\S]*?)<\/style>/) || ['',''])[1];
-  // EVERY @media block removed, by brace matching — not sliced at the first one.
-  // The first attempt cut the stylesheet at the earliest max-width:768px query,
-  // which sits well above the summary's rules, so the "desktop" half did not
-  // contain the rule under test and all three assertions failed while the code was
-  // correct. A test that fails on working code is as bad as one that passes on
-  // broken code, and this one wasted a run before it was caught.
-  let desktop = '';
-  for (let i = 0; i < css.length; ) {
-    const at = css.indexOf('@media', i);
-    if (at === -1) { desktop += css.slice(i); break; }
-    desktop += css.slice(i, at);
-    const open = css.indexOf('{', at);
-    if (open === -1) break;
-    let depth = 0, j = open;
-    for (; j < css.length; j++) {
-      if (css[j] === '{') depth++;
-      else if (css[j] === '}') { depth--; if (!depth) break; }
-    }
-    i = j + 1;
-  }
-  ok('the stylesheet was found and media blocks stripped',
-    desktop.includes('.fv-sum th{') && !/@media/.test(desktop),
-    `${desktop.length} chars, contains .fv-sum th: ${desktop.includes('.fv-sum th{')}`);
-
-  ok('the headings are declared sticky', /\.fv-sum th\{[^}]*position:sticky/.test(desktop),
-    'without this the request was not implemented at all');
-  ok('the offset comes from --sticky-top, with 52px only as a first-paint fallback',
-    /\.fv-sum th\{[^}]*top:var\(--sticky-top,\s*52px\)/.test(desktop),
-    'a literal 52px leaves the headings floating once the page header releases — ' +
-    'see section 22b');
-  ok('they carry an opaque background',
-    /\.fv-sum th\{[^}]*background:var\(--s1\)/.test(desktop),
-    'rows show through a transparent heading as they pass beneath it');
-  // THE WHOLE ANCESTOR CHAIN, not just the two boxes nearest the table.
-  //
-  // The first version of this assertion checked .fv-sum-body and .fv-sum-wrap —
-  // the two I had just edited — and passed while the headings did not stick at
-  // all, because the real scrollport was `.main{overflow:hidden}` two levels up
-  // and `body{overflow-x:hidden}` above that. Asserting the thing you just fixed
-  // is not the same as asserting the requirement, and the difference cost a
-  // release. Beta 0.182 shipped with a sticky rule that could never fire.
-  //
-  // The requirement: NO element between the page and the table may create a
-  // scrollport. `auto`, `scroll` and `hidden` all do. `clip` and `visible` do not
-  // — `clip` is the value that clips without scrolling, which is why it is what
-  // body and .main now use.
-  //
-  // The chain is `body > .layout > .main > #finals-view > #finals-body > the
-  // table`, taken from the markup. If the markup changes, this list must change
-  // with it — stated here so it is updated rather than quietly bypassed.
-  // BODY IS NOT IN THIS LIST, and that is the correction Beta 0.184 makes.
-  //
-  // The requirement is not "no ancestor creates a scrollport". It is "no ancestor
-  // creates a scrollport AND THEN NEVER SCROLLS". Body scrolls — it IS the page —
-  // so a sticky element anchored to it behaves exactly as if anchored to the
-  // viewport. `.main` does not scroll, which is what made it fatal.
-  //
-  // Beta 0.183 changed body from `overflow-x:hidden` to `clip` to satisfy the
-  // earlier, cruder version of this rule. That removed the scrollport `.hdr` was
-  // sticking to, so the page header scrolled away and left a 52px band above the
-  // summary heading with rows passing through it. The test drove a regression,
-  // which is worse than no test: it was confidently wrong.
-  const ANCESTORS = ['\\.layout', '\\.main', '#finals-view',
-                     '\\.fv-sum-wrap', '\\.fv-sum-body'];
-  const BAD = /overflow(-x|-y)?\s*:\s*(auto|scroll|hidden)/;
-  // Anchored to a rule BOUNDARY. An unanchored `body\\{` matches inside
-  // `.fv-sum-body{`, which is clean, so the real `body` rule was never examined
-  // and the assertion passed with body{overflow-x:hidden} in place. Caught by
-  // reintroducing that exact defect and watching the suite stay green.
-  const BOUNDARY = '(?:^|[}\\n;,])\\s*';
-  // EVERY rule for the selector, not the first. A stylesheet may declare a
-  // selector more than once, and this one does: `body{height:100%;...}` sits well
-  // above `body{overflow-x:clip}`. String.match returns the FIRST, so the
-  // overflow declaration was never examined and the assertion passed with
-  // body{overflow-x:hidden} in place. Found by reintroducing that exact defect —
-  // the third time in this suite that taking the first match has hidden a real
-  // failure.
-  const declsFor = (sel) => [...desktop.matchAll(
-    new RegExp(BOUNDARY + sel + '\\s*\\{([^}]*)\\}', 'g'))].map(m => m[1]);
-  for (const sel of ANCESTORS) {
-    const all = declsFor(sel);
-    const bad = all.map(d => (d.match(BAD) || [])[0]).filter(Boolean);
-    ok(`${sel.replace(/\\/g,'')} does not create a scrollport`,
-      bad.length === 0,
-      `${bad.join(', ') || 'none'} across ${all.length} rule(s) — auto, scroll and hidden ` +
-      `all anchor a sticky descendant to this element, which never scrolls, so the ` +
-      `headings sit still and nothing appears to be broken`);
-  }
-  ok('the chain was actually found in the stylesheet, not silently absent',
-    ANCESTORS.filter(sel => declsFor(sel).length > 0).length >= 4,
-    'a selector that is not in the CSS passes the loop above for free');
-
-  // BODY MUST REMAIN A SCROLLPORT. `.hdr` is a direct child of body and sticks to
-  // it, and the summary heading's top:52px offset assumes the header is there. If
-  // body stops scrolling, the header goes with it and the offset points at nothing.
-  ok('body still creates the page scrollport that .hdr sticks to',
-    declsFor('body').some(d => /overflow-x\s*:\s*hidden/.test(d)),
-    `${JSON.stringify(declsFor('body'))} — clip here removes the scrollport and the ` +
-    `page header scrolls away, leaving a gap above the summary heading`);
-  ok('and .hdr is sticky at the top, which is what 52px measures from',
-    /\.hdr\{[^}]*position:sticky/.test(desktop) && /\.hdr\{[^}]*top:0/.test(desktop),
-    (desktop.match(/\.hdr\{[^}]*/) || ['no .hdr rule'])[0].slice(0, 80));
-}
-
+// It caught one thing that a single scroll would have shown. working_practice.md
+// already said layout does not belong in a suite; this is the evidence for that
+// rule, not an exception to it. Section 22b stays because it drives real
+// behaviour through real events and caught a genuine scheduling bug.
 // ── 22b. The sticky offset follows the page header ──────────────────────────
 // .hdr is sticky at top:0, but ONLY until its containing block runs out: body is
 // height:100%, and a sticky element cannot leave its containing block, so the page
@@ -1712,10 +1644,18 @@ ok('ordinal exists', has('ordinal'));
   // extraTeams must NOT be counted as finalists. Echo has a card and a row, and
   // the summary must still report it as reaching no finals — if extraTeams were
   // merged into e.teams this would read 1.
-  const echoRow = (all.match(/<tr>(?:(?!<\/tr>)[\s\S])*?Echo FC[\s\S]*?<\/tr>/) || [''])[0]
-    .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Read by COLUMN NAME, not by scraping the row text. The row now carries a gold
+  // top-grade figure inside the Entered cell, so "Echo FC 1 –" became
+  // "Echo FC 1 1 – …" and a text match on the raw row broke while the behaviour
+  // was correct.
+  const TE = summaryTable(all);
   ok('the summary still reports Echo as reaching no finals',
-    /Echo FC 1 –/.test(echoRow), `"${echoRow}"`);
+    /^–$/.test(TE.get(TE.byClub['Echo FC'], 'finals') || ''),
+    `entered "${TE.get(TE.byClub['Echo FC'], 'entered')}", ` +
+    `finals "${TE.get(TE.byClub['Echo FC'], 'finals')}"`);
+  ok('while still showing the team it entered',
+    /^1$/.test(TE.get(TE.byClub['Echo FC'], 'entered') || ''),
+    `"${TE.get(TE.byClub['Echo FC'], 'entered')}"`);
 
   // Could that have failed? With the switch on, Echo has a row and NO finals
   // cells — if extraTeams were merged into e.teams it would be counted as a
@@ -2072,6 +2012,112 @@ console.log('\n26  The rank column');
     JSON.stringify(T3.rows.map(r => T3.get(r,'club'))));
 
   run(`S.finalsSort = 'premiers';`);
+}
+
+// ── 27. The gold top-grade figure on every measure ──────────────────────────
+// Beta 0.186. The standalone Top grade column is gone; the measure now rides
+// beside every other figure as a gold subset. Both numbers in a cell are a share
+// of TEAMS ENTERED — one denominator for the whole table.
+//
+// What fails silently here:
+//
+//   THE GOLD DENOMINATOR DRIFTING. If the gold percentage were a share of
+//   top-grade entered rather than of all teams entered, every gold figure would
+//   still look like a plausible percentage and no two numbers on screen would
+//   visibly disagree.
+//
+//   ENTERED-TOP TAKEN FROM e.teams. A club can enter a top-grade team that never
+//   reaches the finals. Counting the gold Entered figure from the finals list
+//   would undercount it, and the gold column would start from the wrong total.
+//
+// The fixture separates both: Alpha enters three top-grade teams, only two of
+// which reach finals, and also enters a lower-grade team that does.
+console.log('\n27  The gold top-grade figure');
+{
+  const g27 = (age, gid, raw, ab, r, h, a, hs, as) => ({ id:'g'+age+raw+h+r,
+    compName:'EFNL 2026', age, rawGrade:raw, gradeId:gid, round:r, home:h, away:a,
+    hScore:hs, aScore:as, date:'2026-09-01',
+    ...(ab ? { isFinals:true, finalsAbbrev:ab } : {}) });
+  sandbox.__c27 = [
+    // Top-grade (A) teams: T1 wins the GF, T2 reaches finals, T3 enters only.
+    g27('U12','g12a','A','GF',3,'T1','T2',60,40),
+    g27('U12','g12a','A','',  1,'T3','T2',30,25),
+    // A B-grade team that DOES reach a grand final. Gold must not count it.
+    g27('U13','g13b','B','GF',3,'L1','L2',50,45),
+  ];
+  run(`S.gradeMeta = {
+    'EFNL 2026|U12|g12a': { r:1, lvl:'junior', g:'M', label:'A', gradeId:'g12a' },
+    'EFNL 2026|U12|A':    { r:1, lvl:'junior', g:'M' },
+    'EFNL 2026|U13|g13b': { r:2, lvl:'junior', g:'M', label:'B', gradeId:'g13b' },
+    'EFNL 2026|U13|B':    { r:2, lvl:'junior', g:'M' },
+  };
+  rebuildGradeLabels();
+  S.clubs = { cA:{name:'Alpha',type:'CLUB'}, cZ:{name:'Zed',type:'CLUB'} };
+  S.teamClub = { 'EFNL 2026|T1|U12':'cA', 'EFNL 2026|T3|U12':'cA', 'EFNL 2026|L1|U13':'cA',
+                 'EFNL 2026|T2|U12':'cZ', 'EFNL 2026|L2|U13':'cZ' };
+  S.roster = { 'EFNL 2026|T1|U12':{grade:'A',gradeId:'g12a',age:'U12'},
+               'EFNL 2026|T2|U12':{grade:'A',gradeId:'g12a',age:'U12'},
+               'EFNL 2026|T3|U12':{grade:'A',gradeId:'g12a',age:'U12'},
+               'EFNL 2026|L1|U13':{grade:'B',gradeId:'g13b',age:'U13'},
+               'EFNL 2026|L2|U13':{grade:'B',gradeId:'g13b',age:'U13'} };
+  S.matches = __c27.map(x => ({...x}));
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.selComp='EFNL 2026'; S.selYear='2026'; S.view='finals'; S.finalsMode='club';
+  S.finalsGender='all'; S.finalsLevel='all'; S.showAllAges=true; S.selClub=null;
+  S.showAllTeams=false; S.finalsWeighted=false; S.clubSummaryOpen=true;
+  S.finalsSort='premiers'; S.finalsSortBasis='count';
+  S.manifest=[{org:'a',seasonId:'s1',seasonName:'2026',compName:'EFNL 2026'}];
+  S.seasonFiles=new Set(); S.loadedSeasons=['s1'];`);
+
+  let threw = null;
+  try { run('render();'); } catch (e) { threw = e.message; }
+  ok('render() does not throw with the gold figures', !threw, threw || 'clean');
+  const T = summaryTable(run(`document.getElementById('finals-body').innerHTML`));
+
+  // The fixture is real: Alpha must have a top-grade team that did NOT reach
+  // finals, or entered-top and finals-top are the same number and the second
+  // failure mode above is untestable.
+  ok('Alpha entered three teams', /^3$/.test(T.get(T.byClub['Alpha'],'entered') || ''),
+    `"${T.get(T.byClub['Alpha'],'entered')}"`);
+  ok('two of them are top grade, and one of those never reached finals',
+    /^2$/.test(T.getTop('Alpha','entered') || ''),
+    `"${T.getTop('Alpha','entered')}" — T1 and T3 are grade A; T3 played no final`);
+
+  ok('the Top grade column is gone', T.col['top grade'] === undefined,
+    JSON.stringify(T.heads));
+
+  // Alpha's finalists: T1 (A, won the GF) and L1 (B, made a GF). 2 of 3 entered.
+  ok('the Finals figure counts both finalists',
+    /^2 \(67%\)$/.test(T.get(T.byClub['Alpha'],'finals') || ''),
+    `"${T.get(T.byClub['Alpha'],'finals')}"`);
+  ok('and the gold figure counts only the top-grade one',
+    /^1 \(33%\)$/.test(T.getTop('Alpha','finals') || ''),
+    `"${T.getTop('Alpha','finals')}" — 2 here means a B-grade team is being counted as top`);
+
+  // THE DENOMINATOR. 1 of 3 entered is 33%. If gold were a share of top-grade
+  // entered it would read 50%, which looks just as reasonable on screen.
+  ok('the gold percentage is a share of ALL teams entered, not of top-grade entered',
+    /33%/.test(T.getTop('Alpha','finals') || '') && !/50%/.test(T.getTop('Alpha','finals') || ''),
+    `"${T.getTop('Alpha','finals')}" — 50% means the gold column has its own denominator`);
+
+  ok('the premiership is top grade and shown in gold',
+    /^1 \(33%\)$/.test(T.getTop('Alpha','premierships') || ''),
+    `"${T.getTop('Alpha','premierships')}"`);
+
+  // Zed's finalists are T2 (A) and L2 (B), neither a premier — so its gold
+  // premierships cell must be absent, not a zero.
+  ok('a club with no top-grade premiership shows no gold figure there',
+    !T.getTop('Zed','premierships'),
+    `"${T.getTop('Zed','premierships')}"`);
+
+  // Could these have failed? Gold and white must differ somewhere, or a cell that
+  // simply repeated the white figure would satisfy everything above.
+  ok('gold and white are different numbers somewhere in the table',
+    T.rows.some(r => {
+      const club = T.get(r, 'club');
+      return (T.getTop(club,'finals') || '') !== (T.get(r,'finals') || '');
+    }),
+    'if gold always equalled white, it would be measuring nothing');
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
