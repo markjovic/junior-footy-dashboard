@@ -60,7 +60,7 @@
 
 'use strict';
 
-const VERSION = 'cleanup-rename-duplicates v3 2026-08-19 both-rename-shapes';
+const VERSION = 'cleanup-rename-duplicates v4 2026-08-19 common-suffix';
 
 const store = require('./lib/store');
 
@@ -96,7 +96,56 @@ const normTeam = (n) => String(n || '')
 // The two sides as an unordered normalised pair, so a home/away swap between the
 // two records does not defeat the comparison.
 const teamPair = (m) => [normTeam(m.home), normTeam(m.away)].sort().join(' v ');
-const samePair = (a, b) => teamPair(a) === teamPair(b) && normTeam(a.home) !== '';
+
+// ⚠️ A COMPETITION MARKER APPENDED TO BOTH TEAMS.
+//
+// Measured 2026-08-19 on SEJ 2026 U10 Girls `cb7b3db3` round 9 — the real case
+// this script was written for, and one neither v1 nor v3 caught:
+//
+//   Cardinia JFC Girls      v Narre North Foxes FC Girls        20-16
+//   Cardinia JFC Girls - LP v Narre North Foxes FC Girls - LP   20-16   gameId af7d5a48
+//
+// PlayHQ appended " - LP" — Lightning Premiership — to EVERY team in the round.
+// The old records stayed and each pair now sits on the ladder twice.
+//
+// The discriminator is that the extra token is THE SAME ON BOTH SIDES. A colour or
+// a squad letter attaches to one team; a competition marker attaches to the
+// fixture, so it lands on both. That is what makes this safe to collapse without
+// naming "LP" specifically — a future "- LC" or "- Cup" is caught by the same
+// rule, and a colour never is because it never appears on both.
+//
+// Colours are refused outright as a common token anyway. Two clubs both fielding
+// a "Blue" side in one round is ordinary, and if their scores happened to match
+// the rule would otherwise delete a real game.
+const NEVER_A_MARKER = new Set([
+  'blue', 'gold', 'red', 'green', 'white', 'black', 'yellow', 'navy', 'maroon',
+  'purple', 'orange', 'silver', 'teal', 'grey', 'gray', 'brown', 'pink',
+  'girls', 'boys', 'mixed', 'a', 'b', 'c', 'd', '1', '2', '3', '4',
+]);
+
+// `y` is `x` plus one trailing token → return the token, else null.
+function extraToken(x, y) {
+  if (!x || !y.startsWith(x + ' ')) return null;
+  const rest = y.slice(x.length + 1).trim();
+  return rest && !rest.includes(' ') ? rest : null;
+}
+
+function samePair(a, b) {
+  const A = [normTeam(a.home), normTeam(a.away)].sort();
+  const B = [normTeam(b.home), normTeam(b.away)].sort();
+  if (!A[0] || !B[0]) return false;
+  if (A[0] === B[0] && A[1] === B[1]) return true;
+
+  // Try both alignments: a suffix can change the sort order of the two sides.
+  for (const [b0, b1] of [[B[0], B[1]], [B[1], B[0]]]) {
+    for (const [x0, y0, x1, y1] of [[A[0], b0, A[1], b1], [b0, A[0], b1, A[1]]]) {
+      const t0 = extraToken(x0, y0);
+      const t1 = extraToken(x1, y1);
+      if (t0 && t0 === t1 && !NEVER_A_MARKER.has(t0)) return true;
+    }
+  }
+  return false;
+}
 
 // Kept as a separate, stricter signal so the report can say WHICH kind of rename
 // it found — one club, or the whole league.
@@ -172,7 +221,9 @@ function main() {
         (samePair(orphan, s) || sharesTeamExactly(orphan, s)));
       if (twin) {
         doomed.push({ orphan, twin, group: k,
-          kind: sharesTeamExactly(orphan, twin) ? 'one club renamed' : 'names standardised' });
+          kind: sharesTeamExactly(orphan, twin) ? 'one club renamed'
+              : (teamPair(orphan) === teamPair(twin) ? 'names standardised'
+              : 'competition marker on both teams') });
       } else {
         unmatched.push({ orphan, group: k, siblings: withId });
       }

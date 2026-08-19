@@ -37,7 +37,7 @@
 
 'use strict';
 
-const VERSION = 'probe-refetch-round v1 2026-08-19';
+const VERSION = 'probe-refetch-round v2 2026-08-19 round-token-fix';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -49,7 +49,12 @@ const engine = require('./lib/results-engine');
 const COMP   = (process.env.PROBE_COMP || '').trim();
 const NGRADE = Math.max(1, Math.min(20, Number(process.env.PROBE_GRADES || 3)));
 
-const roundToken = engine.roundToken;
+// engine.roundToken takes (number, finalsAbbrev), NOT a record — passing a record
+// produced "[object Object]" for every round and every probe errored. The engine's
+// own record-shaped helper is `tokenOfMatch`, which is not exported, so it is
+// reproduced here from the one-line original rather than guessed at.
+const tokenOfMatch = (m) =>
+  engine.roundToken(m.round, m.isFinals ? (m.finalsAbbrev || String(m.round)) : '');
 
 function todayAEST() {
   return new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -81,7 +86,7 @@ async function main() {
     if (!m.gradeId || m.round === undefined || m.round === null) continue;
     if (live.size && !live.has(m.compName)) continue;
     if (m.scheduled) continue;
-    const key = `${m.compName}\u0000${m.age}\u0000${m.gradeId}\u0000${roundToken(m)}`;
+    const key = `${m.compName}\u0000${m.age}\u0000${m.gradeId}\u0000${tokenOfMatch(m)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(m);
   }
