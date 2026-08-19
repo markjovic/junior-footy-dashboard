@@ -60,14 +60,47 @@
 
 'use strict';
 
-const VERSION = 'cleanup-rename-duplicates v1 2026-08-19';
+const VERSION = 'cleanup-rename-duplicates v3 2026-08-19 both-rename-shapes';
 
 const store = require('./lib/store');
 
 const SCORE_FIELDS = ['hScore', 'hG', 'hB', 'aScore', 'aG', 'aB'];
 
 const sameScores = (a, b) => SCORE_FIELDS.every(k => (a[k] ?? null) === (b[k] ?? null));
-const sharesTeam = (a, b) =>
+
+// ⚠️ EXACT name matching is not enough, which v1 got wrong.
+//
+// v1 required the phantom and its survivor to share one team name exactly, on the
+// reasoning that a rename changes ONE side. That holds for a single club renaming
+// itself. It does NOT hold when a league standardises its club names in bulk —
+// every team in the round changes at once, no name matches exactly, and the rule
+// never fires. Measured 2026-08-19 against SEJ 2026 U10 Girls `cb7b3db3` round 9:
+// three records with a gameId and three without, all six on the same date, and v1
+// removed nothing.
+//
+// Normalising strips the club-type words PlayHQ adds and removes — JFC, FC,
+// Junior Football Club and so on — plus punctuation and case. "Cardinia JFC Girls"
+// and "Cardinia Girls" then agree, while "Cardinia" and "Clyde" still do not.
+//
+// The COLOUR and the age word are deliberately KEPT. "Berwick Springs Blue" and
+// "Berwick Springs Gold" are two different teams from one club, and stripping the
+// colour would let one be deleted as a duplicate of the other.
+const CLUB_WORDS = /\b(jfc|fc|jfnc|fnc|jnr|junior|juniors|football|netball|club|inc|assoc|association)\b/g;
+const normTeam = (n) => String(n || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9 ]+/g, ' ')
+  .replace(CLUB_WORDS, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+// The two sides as an unordered normalised pair, so a home/away swap between the
+// two records does not defeat the comparison.
+const teamPair = (m) => [normTeam(m.home), normTeam(m.away)].sort().join(' v ');
+const samePair = (a, b) => teamPair(a) === teamPair(b) && normTeam(a.home) !== '';
+
+// Kept as a separate, stricter signal so the report can say WHICH kind of rename
+// it found — one club, or the whole league.
+const sharesTeamExactly = (a, b) =>
   a.home === b.home || a.away === b.away || a.home === b.away || a.away === b.home;
 
 // The round token, matching results-engine.js: finals restart numbering at 1, so a
@@ -121,12 +154,28 @@ function main() {
     groupsWithMixedIds++;
 
     for (const orphan of without) {
+      // Same grade, same round, same date, all six score fields identical, and the
+      // same two clubs once names are normalised. Each condition on its own is
+      // weak; together they can only describe one game stored twice.
+      // EITHER shape of rename, because they are different and each misses the
+      // other:
+      //   one club renames itself   Berwick -> Berwick Springs, opponent unchanged
+      //     normalised pair does NOT match ("berwick" vs "berwick springs"), but a
+      //     team name is shared exactly.
+      //   the league standardises    Cardinia JFC Girls -> Cardinia Girls, both sides
+      //     no name is shared exactly, but the normalised pair matches.
+      // v2 used only the second and silently lost the first — caught by rebuilding
+      // the v1 fixture rather than trusting that a later rule was a superset.
       const twin = withId.find(s =>
         sameScores(orphan, s) &&
         (orphan.date || '') === (s.date || '') &&
-        sharesTeam(orphan, s));
-      if (twin) doomed.push({ orphan, twin, group: k });
-      else unmatched.push({ orphan, group: k, candidates: withId.length });
+        (samePair(orphan, s) || sharesTeamExactly(orphan, s)));
+      if (twin) {
+        doomed.push({ orphan, twin, group: k,
+          kind: sharesTeamExactly(orphan, twin) ? 'one club renamed' : 'names standardised' });
+      } else {
+        unmatched.push({ orphan, group: k, siblings: withId });
+      }
     }
   }
 
@@ -147,7 +196,7 @@ function main() {
       console.log(`    REMOVE ${d.orphan.id}`);
       console.log(`      keep ${d.twin.id}`);
       console.log(`           ${d.orphan.hScore}-${d.orphan.aScore} on ${d.orphan.date || 'no date'}, ` +
-        `gameId ${d.twin.gameId}`);
+        `gameId ${d.twin.gameId}  [${d.kind}]`);
     }
     if (doomed.length > 15) console.log(`    ... ${doomed.length - 15} more`);
   }
@@ -161,9 +210,22 @@ function main() {
     console.log('  NOT deleted. Each is either a real game the API has not re-served,');
     console.log('  or a genuinely different fixture. Deleting on "no gameId" alone would');
     console.log('  take these with it — which is why that rule is not used.');
+    // The SIBLINGS are printed too. Without them a non-match cannot be diagnosed:
+    // "3 records with a gameId in this round" says nothing about whether they are
+    // the same games under different names, which is the only question that
+    // matters here. v1 printed only the count and the answer was unobtainable.
     for (const u of unmatched.slice(0, 10)) {
-      console.log(`    ${u.orphan.id}  (${u.orphan.hScore}-${u.orphan.aScore}, ` +
-        `${u.orphan.date || 'no date'}, ${u.candidates} record(s) with a gameId in this round)`);
+      console.log(`    ORPHAN  ${u.orphan.id}`);
+      console.log(`            ${u.orphan.hScore}-${u.orphan.aScore} on ${u.orphan.date || 'no date'}`);
+      for (const sib of u.siblings.slice(0, 6)) {
+        const why = [];
+        if (!sameScores(u.orphan, sib)) why.push('scores differ');
+        if ((u.orphan.date || '') !== (sib.date || '')) why.push('dates differ');
+        if (!samePair(u.orphan, sib)) why.push(`teams differ (${teamPair(u.orphan)} vs ${teamPair(sib)})`);
+        console.log(`      vs  ${sib.id}`);
+        console.log(`            ${sib.hScore}-${sib.aScore} on ${sib.date || 'no date'} ` +
+          `gameId ${sib.gameId} — ${why.join(', ') || 'MATCHES (should have been caught)'}`);
+      }
     }
     if (unmatched.length > 10) console.log(`    ... ${unmatched.length - 10} more`);
     console.log('\n  A large number here is A8 answering itself: it means completed rounds');
