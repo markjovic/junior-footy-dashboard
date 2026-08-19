@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.190</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.191</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.190</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.191</span>
         </div>
 
 
@@ -4540,7 +4540,42 @@ async function openPlayerPanel(uuid) {
   const teamModal = document.getElementById('team-modal');
   _playerPanelSource = (teamModal && teamModal.style.display !== 'none') ? 'team' : 'other';
   teamModal.style.display = 'none';
-  const p = S.players.find(pl => pl.uuid === uuid);
+  // ONE PERSON, ONE HEADER — summed across every team they played for.
+  //
+  // fetch-stats.js stores one record PER GRADE, so a child who turns out for two
+  // teams has two records. `find` returned whichever came first and the strip read
+  // that record alone, while the game list below is a live per-PLAYER fetch and
+  // shows every team. Measured 2026-08-18 on Brodie Aaltonen: U12 B 16 games /
+  // 28 goals and U13 B 2 games / 1 goal, so the strip said 16 and 28 above a list
+  // of 18 games and 29 goals with nothing to explain the difference.
+  //
+  // Scoped to the SEASON, not to the competition: a player can appear in two
+  // competitions in one year and both belong in the total, but two years of the
+  // same competition must never be added together. compName carries the year
+  // ("EFNL 2026"), which is what makes that distinction available here.
+  const seasonYearOf = (c) => (String(c || '').match(/\b(\d{4})\b/) || [])[1] || '';
+  const allRecs = (S.players || []).filter(pl => pl.uuid === uuid);
+  // THE SELECTED SEASON FIRST, then the biggest team within it.
+  //
+  // Picking the primary record by games played across everything loaded seemed
+  // right and is not: a player's PREVIOUS season usually has more games than a
+  // part-finished current one, so viewing 2026 would silently show 2025's totals
+  // and 2025's team. Caught by running this against a two-season fixture before
+  // it shipped.
+  //
+  // The fallback matters too — a player search can surface someone whose only
+  // records are in another year, and an empty strip would be worse than that
+  // year's figures.
+  const wantYear = String(S.selYear || '');
+  let recs = allRecs.filter(pl => seasonYearOf(pl.compName) === wantYear);
+  if (!recs.length && allRecs.length) {
+    const fallback = allRecs.slice().sort((x, y) => (y.gp || 0) - (x.gp || 0))[0];
+    const fy = seasonYearOf(fallback.compName);
+    recs = allRecs.filter(pl => seasonYearOf(pl.compName) === fy);
+  }
+  // Within the season, the team with the most games names the panel — not
+  // whichever record happened to load first, which is what `find` gave.
+  const p = recs.slice().sort((x, y) => (y.gp || 0) - (x.gp || 0))[0];
   const modal = document.getElementById('player-modal');
   const body  = document.getElementById('pm-body');
   const statsEl = document.getElementById('pm-stats');
@@ -4571,13 +4606,30 @@ async function openPlayerPanel(uuid) {
 
   // Summary strip from local data
   if (p) {
-    const gpg = p.gp ? (p.goals/p.gp).toFixed(1) : '–';
+    const sum = (k) => recs.reduce((n, x) => n + (x[k] || 0), 0);
+    const gp = sum('gp'), goals = sum('goals'), bp = sum('bestPlayer');
+    const gpg = gp ? (goals / gp).toFixed(1) : '–';
+    // When a player turned out for more than one team, the split is on the
+    // tooltip. A single total with no way to see its parts is what made the old
+    // figure impossible to reconcile against the list below it.
+    const split = recs.length > 1
+      ? recs.slice().sort((x, y) => (y.gp || 0) - (x.gp || 0))
+          .map(x => `${x.age} ${abbrevGrade(x.rawGrade || '')}: ${x.gp || 0} game(s), ${x.goals || 0} goal(s)`)
+          .join(' · ')
+      : '';
     statsEl.innerHTML = [
-      {v: p.gp,          l: 'Played'},
-      {v: p.goals||'–',  l: 'Goals'},
-      {v: gpg,           l: 'G/Game'},
-      {v: p.bestPlayer||'–', l: 'Best Player'},
-    ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+      {v: gp,        l: 'Played', t: split},
+      {v: goals||'–', l: 'Goals',  t: split},
+      {v: gpg,       l: 'G/Game', t: split},
+      {v: bp||'–',   l: 'Best Player', t: split},
+    ].map(s=>`<div class="team-stat-cell" title="${s.t || ''}"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+    // A quiet note under the name, so the total is self-explanatory on screen and
+    // not only on hover.
+    if (recs.length > 1) {
+      const meta = document.getElementById('pm-meta');
+      if (meta) meta.innerHTML += ` &nbsp;<span style="font-size:10px;color:var(--tx3)">` +
+        `+ ${recs.length - 1} other team${recs.length > 2 ? 's' : ''}</span>`;
+    }
   } else {
     statsEl.innerHTML = '';
   }
