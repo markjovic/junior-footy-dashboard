@@ -37,7 +37,7 @@
 
 'use strict';
 
-const VERSION = 'probe-refetch-round v2 2026-08-19 round-token-fix';
+const VERSION = 'probe-refetch-round v3 2026-08-19 compare-against-gameids';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -191,34 +191,69 @@ async function main() {
   console.log('─'.repeat(96));
 
   const ok = results.filter(r => !r.error);
-  const empty = ok.filter(r => r.returned === 0);
-  const partial = ok.filter(r => r.returned > 0 && r.returned < r.stored);
-  const full = ok.filter(r => r.returned >= r.stored);
+
+  // ⚠️ COMPARE AGAINST THE RECORDS THAT CARRY A gameId, NOT AGAINST `stored`.
+  //
+  // v2 tested `returned < stored` and reported MIXED/INCOMPLETE. That was wrong,
+  // and wrong in the worst way: `stored` is inflated by exactly the duplicates
+  // this whole exercise is about, so the measurement used the defect as its
+  // baseline. Measured 2026-08-19 — SEJ U10 Girls cb7b3db3 round 9 stored 6,
+  // returned 3, and all 3 matched a stored gameId. The round has three games. It
+  // came back complete.
+  //
+  // The sound tests are:
+  //   returnedOnly  games the API returned that we hold no gameId for → we are behind
+  //   storedOnly    gameIds we hold that the API no longer returns   → withdrawn or moved
+  // A round is COMPLETE when both are zero and something came back.
+  const fullRounds = ok.filter(r => r.returned > 0 && r.returnedOnly === 0 && r.storedOnly === 0);
+  const empty    = ok.filter(r => r.returned === 0);
+  const short    = ok.filter(r => r.returned > 0 && r.storedOnly > 0);
+  const ahead    = ok.filter(r => r.returnedOnly > 0);
 
   console.log('\nVERDICT');
   if (!ok.length) {
     console.log('  Every probe errored — no verdict. Check the session and the ids above.');
+  } else if (fullRounds.length === ok.length) {
+    console.log('  discoverFixtureByRound RE-SERVES completed rounds IN FULL.');
+    console.log('  Every game returned matched a stored gameId, and no stored gameId was');
+    console.log('  missing from the response.');
+    console.log('');
+    console.log('  → The 2026-08-13 observation is correct. The note in');
+    console.log('    dashboard_context.md §8 saying a completed round returns 0 games is');
+    console.log('    WRONG and should be removed.');
+    console.log('  → A record with no gameId in a round whose other records HAVE one is');
+    console.log('    therefore a genuine leftover, not a game awaiting re-fetch.');
+    const inflated = ok.filter(r => r.storedNoId > 0);
+    if (inflated.length) {
+      console.log('');
+      console.log(`  ${inflated.length} of ${ok.length} probed round(s) hold records with no gameId`);
+      console.log('  alongside records that have one. Those are what Cleanup Rename');
+      console.log('  Duplicates removes:');
+      for (const r of inflated) {
+        console.log(`     ${r.compName} ${r.age} ${r.gradeId} round ${r.rToken}: ` +
+          `${r.stored} stored, ${r.returned} real, ${r.storedNoId} leftover`);
+      }
+    }
   } else if (empty.length === ok.length) {
     console.log('  discoverFixtureByRound returns NOTHING for a completed round.');
-    console.log('  The 2026-08-11 observation is right; the 2026-08-13 one needs explaining.');
-    console.log('  → A9 is SAFE in the narrow sense that no record will ever gain a gameId,');
-    console.log('    so a "no gameId" test cannot be used at all. Use the score-twin rule.');
-  } else if (full.length === ok.length) {
-    console.log('  discoverFixtureByRound RE-SERVES completed rounds in full.');
-    console.log('  The 2026-08-13 observation is right; the §8 note is wrong and must be');
-    console.log('  corrected in dashboard_context.md and playhq_api_reference.md.');
-    console.log('  → A9 may proceed: a re-fetched round carries a gameId on every real game.');
-  } else if (partial.length) {
-    console.log('  ⚠️  MIXED — at least one round came back INCOMPLETE.');
-    console.log('  This is the dangerous answer. A record without a gameId is NOT');
-    console.log('  necessarily a phantom, so A9 must NOT delete on that test alone.');
-    for (const r of partial) {
+    console.log('  The 2026-08-11 observation is right; §8 stands.');
+  } else if (short.length) {
+    console.log('  ⚠️  INCOMPLETE — a stored gameId was NOT returned.');
+    console.log('  This is the answer that would make a "no gameId" cleanup unsafe.');
+    for (const r of short) {
       console.log(`     ${r.compName} ${r.age} ${r.gradeId} round ${r.rToken}: ` +
-        `stored ${r.stored}, returned ${r.returned}`);
+        `${r.storedOnly} stored gameId(s) absent from the response`);
+    }
+  } else if (ahead.length) {
+    console.log('  The API returned games we do not store. Not an incompleteness — the');
+    console.log('  fetcher is behind. Run Fetch Results and probe again.');
+    for (const r of ahead) {
+      console.log(`     ${r.compName} ${r.age} ${r.gradeId} round ${r.rToken}: ` +
+        `${r.returnedOnly} game(s) not in storage`);
     }
   } else {
-    console.log('  MIXED — some rounds re-served, some returned nothing. Neither note is');
-    console.log('  universally true. Report the table above before building on either.');
+    console.log('  MIXED — some rounds re-served, some returned nothing. Report the table');
+    console.log('  above before building on either observation.');
   }
 
   console.log('\n  A round where `no-id` is 0 tells you nothing about pre-v16 records —');
