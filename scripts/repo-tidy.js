@@ -41,6 +41,11 @@
 const fs   = require('fs');
 const path = require('path');
 
+// Printed on every run. working_practice.md: a script whose output is read from a
+// log must print a version, or a stale cached copy and a real failure look the
+// same and cost a wasted run. This one had none.
+const VERSION = 'repo-tidy v2 2026-08-19 block-comment-aware';
+
 const ROOT = path.resolve(__dirname, '..');
 
 // ─── The removal list ─────────────────────────────────────────────────────────
@@ -257,6 +262,7 @@ if (!candidates.length) {
 // ── Reference scan ──
 // Read every text file NOT being removed, and look for mentions of each
 // candidate. A hit means something still points at it.
+console.log(`=== ${VERSION} ===`);
 console.log('='.repeat(78));
 console.log('REFERENCE SCAN');
 console.log('='.repeat(78));
@@ -278,11 +284,77 @@ console.log(`Scanning ${haystack.length} text file(s) for references.\n`);
 // files routinely explain themselves by naming other files — build-club-index.js
 // credits the probe that established its approach — and treating that as a
 // dependency refuses a removal that is perfectly safe.
-function isCommentLine(line, ext) {
-  const t = line.trim();
-  if (!t) return true;
-  if (ext === '.yml' || ext === '.yaml') return t.startsWith('#');
-  return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+//
+// STATEFUL, because the previous version tested only how a line STARTS and so
+// missed the inside of a block comment:
+//
+//     /*
+//     scripts/probe-team-club.js established the session order.   <-- read as code
+//     */
+//
+// That is a false refusal, which is the safe direction — but it blocks a removal
+// that is fine and gives no way to see why, so the next person either deletes by
+// hand or gives up. Measured against a fixture on 2026-08-19: three reference
+// shapes were refused, of which one was this.
+//
+// The dangerous direction — a LIVE reference read as a comment — is unchanged and
+// was verified against the same fixture: `require()` in a .js and `run: node x.js`
+// in a workflow are both still refused.
+//
+// Returns the LIVE lines only, each with its 1-based number so a refusal can name
+// the line it is refusing on.
+function liveLines(text, ext, matches) {
+  const yaml = ext === '.yml' || ext === '.yaml';
+  const lines = text.split('\n');
+  const out = [];
+  let inBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    let code = '';
+
+    if (yaml) {
+      code = raw.trim().startsWith('#') ? '' : raw;
+    } else {
+      // Strip comment spans and keep what is left. Testing how a line STARTS is
+      // not enough in either direction:
+      //   /*
+      //   scripts/x.js established this        <-- read as CODE, false refusal
+      //   */
+      //   /* note */ require('./x.js')         <-- read as COMMENT, and that is a
+      //                                            live dependency going unnoticed
+      // The second is the dangerous one and the first version of this fix missed
+      // it — found by adding both shapes to the fixture on 2026-08-19.
+      let j = 0;
+      while (j < raw.length) {
+        if (inBlock) {
+          const end = raw.indexOf('*/', j);
+          if (end === -1) { j = raw.length; }
+          else { inBlock = false; j = end + 2; }
+          continue;
+        }
+        const open = raw.indexOf('/*', j);
+        let line = raw.indexOf('//', j);
+        // `://` is a URL, not a comment. Without this a line carrying a URL and a
+        // filename would have the filename swallowed and the reference missed.
+        while (line > 0 && raw[line - 1] === ':') line = raw.indexOf('//', line + 2);
+        if (line !== -1 && (open === -1 || line < open)) {
+          code += raw.slice(j, line);
+          j = raw.length;
+        } else if (open !== -1) {
+          code += raw.slice(j, open);
+          inBlock = true;
+          j = open + 2;
+        } else {
+          code += raw.slice(j);
+          j = raw.length;
+        }
+      }
+    }
+
+    if (code.trim() && matches(code)) out.push({ n: i + 1, text: code.trim() });
+  }
+  return out;
 }
 
 const refused = [];
@@ -297,9 +369,9 @@ for (const c of candidates) {
     const ext = path.extname(h.rel);
     if (!CODE_EXT.has(ext)) { docs.push(h.rel); continue; }
     // Inside a code file, only a non-comment mention is a real dependency.
-    const hits = h.text.split('\n').filter(l => l.includes(c.rel) || l.includes(base));
-    const live = hits.filter(l => !isCommentLine(l, ext));
-    (live.length ? code : docs).push(h.rel);
+    const live = liveLines(h.text, ext, l => l.includes(c.rel) || l.includes(base));
+    if (live.length) { code.push(`${h.rel}:${live[0].n}`); }
+    else { docs.push(h.rel); }
   }
   if (code.length) { c.codeRefs = code; refused.push(c); }
   if (docs.length) { c.docRefs = docs; noted.push(c); }
@@ -309,6 +381,8 @@ if (refused.length) {
   console.log('*** REFUSED — referenced by code:\n');
   for (const c of refused) {
     console.log(`  ${c.rel}`);
+    // file:line, not just file. A refusal you cannot locate is one you either
+    // work around by hand or ignore, and both defeat the guard.
     console.log(`      ${c.codeRefs.slice(0, 6).join(', ')}${c.codeRefs.length > 6 ? ` (+${c.codeRefs.length - 6})` : ''}`);
   }
   console.log('\n  Resolve these before removing. A workflow invoking a script is a real');
