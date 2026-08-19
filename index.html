@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.189</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.190</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.189</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.190</span>
         </div>
 
 
@@ -4705,10 +4705,33 @@ function renderPlayerGames(data, p) {
             // Single-division grades (e.g. "Thirds", "Senior Women") — no grade token
             gradeShort = '';
           }
+          // THE AGE GROUP, shown beside the grade (Beta 0.190).
+          //
+          // A player can turn out for more than one team in a season — this panel
+          // is a live per-PLAYER fetch, not a read of one team's fixtures — and
+          // with only a grade letter on the row there was nothing to say that two
+          // rows in the same round were different teams. Measured 2026-08-18: a
+          // U12 B player's list carried his U13 B games at rounds 7 and 12, and
+          // they read as duplicate rounds against the wrong opponent with the
+          // wrong result, when in fact both were real U13 losses.
+          //
+          // Taken from the STORED record when the row joined to one, because
+          // m.age is the same string the rest of the dashboard groups by. Falling
+          // back to PlayHQ's own grade name — "U13 - B" carries the age, and so do
+          // "Senior Women", "Reserve Men", "Veterans" — so a row that joined to
+          // nothing still gets labelled.
+          const AGE_WORDS = /\b(Under\s*\d+(?:\.\d+)?|U\d+(?:\.\d+)?|Senior Women|Senior Men|Reserve Men|Reserve Women|Seniors|Reserves|Veterans|Thirds|Colts|Masters)\b/i;
+          let ageShort = mm && mm.age ? mm.age : '';
+          if (!ageShort) {
+            const am = gradeRaw.match(AGE_WORDS) || teamName.match(AGE_WORDS);
+            ageShort = am ? am[1].replace(/^Under\s*/i, 'U') : '';
+          }
+
           rows.push({
             round: g.round?.name || '',
             date: g.date || '',
             home, away, teamName, clubName,
+            ageName: ageShort,
             gradeName: gradeShort,
             gradeFullName: gradeRaw,
             compName: p?.compName || '',
@@ -4755,12 +4778,14 @@ function renderPlayerGames(data, p) {
     return `<span style="font-size:7px;font-family:'DM Mono',monospace;color:var(--tx3)">${abbr}</span>`;
   }
 
-  const COLS = '60px 1fr 1fr 40px 18px 34px 52px 28px 28px';
+  // The grade column widened from 40px for the age line above it — "U19.5" and
+  // "Senior Women" are the longest values it has to hold.
+  const COLS = '60px 1fr 1fr 62px 18px 34px 52px 28px 28px';
   body.innerHTML = `<div style="display:grid;grid-template-columns:${COLS};padding:4px 16px 5px;gap:6px;border-bottom:1px solid var(--b2);position:sticky;top:0;background:var(--s1);z-index:1">
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Round</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Home</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3)">Away</span>
-    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Gr</span>
+    <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Age / Gr</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Comp</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Res</span>
     <span style="font-size:8px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tx3);text-align:center">Score</span>
@@ -4787,7 +4812,9 @@ function renderPlayerGames(data, p) {
       <div style="${!isPlayerHome?playerTeamStyle:oppStyle};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px">
         ${crestHTML(awayDisplay,14,'tlogo')}${awayDisplay}
       </div>
-      <div style="text-align:center">${r.gradeName
+      <div style="text-align:center;line-height:1.25" title="${r.gradeFullName || ''}">${
+        r.ageName ? `<div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx2);white-space:nowrap">${r.ageName}</div>` : ''
+      }${r.gradeName
         ? `<span class="gtag gtag-neutral gtag-${String(r.gradeName).replace(/[^A-Za-z0-9]/g,'')}" style="font-size:8px">${r.gradeName}</span>`
         : ''}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
