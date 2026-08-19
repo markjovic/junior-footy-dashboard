@@ -491,7 +491,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.187</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.188</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -840,7 +840,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.187</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.188</span>
         </div>
 
 
@@ -4203,12 +4203,32 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     m.age === age &&
     matchesComp(m) &&
     (m.home === teamName || m.away === teamName)
-  ).sort((a,b) => a.round - b.round);
+  ).sort((a, b) => {
+    // FINALS LAST, always. Finals rounds restart numbering at 1, so sorting on
+    // m.round alone put Finals Round 1 beside home-and-away round 1 and the
+    // preliminary final beside round 2 — which is exactly how this list read on
+    // 2026-08-18: two "Rd 1" rows and two "Rd 2" rows, one of each a final.
+    const fa = isFinalsMatch(a) ? 1 : 0, fb = isFinalsMatch(b) ? 1 : 0;
+    return fa - fb || a.round - b.round;
+  });
 
   // Compute season stats from VALID matches only
   let w=0,d=0,l=0,f=0,a=0,hw=0,hl=0,hd=0,hf=0,ha=0,aw=0,al=0,ad=0,af=0,aa=0;
-  // Finals are shown in the results list below but excluded from the season
-  // stat strip and home/away breakdown (design v2 §3.3).
+  // FINALS, tallied separately (Beta 0.188). They stay out of the season stat
+  // strip and the home/away split because MR% and percentage are ladder figures
+  // and a ladder is home-and-away only — folding finals in would quietly change
+  // numbers that are checked against PlayHQ's own ladder. But they were previously
+  // tallied NOWHERE, so a team's finals record existed only as rows in the list
+  // below, and the strip could read "0 LOST" with a red L visible underneath it.
+  let fw=0,fd=0,fl=0,fF=0,fA=0,fPlayed=0;
+  matches.filter(m => isFinalsMatch(m) && isPlayed(m)).forEach(m => {
+    const isHome = m.home === teamName;
+    const tf = isHome ? m.hScore : m.aScore;
+    const ta = isHome ? m.aScore : m.hScore;
+    fF += tf; fA += ta; fPlayed++;
+    if (tf > ta) fw++; else if (ta > tf) fl++; else fd++;
+  });
+
   matches.filter(m=>matchCounts(m) && !isFinalsMatch(m)).forEach(m => {
     const isHome = m.home === teamName;
     const tf = isHome ? m.hScore : m.aScore;
@@ -4227,8 +4247,12 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   document.getElementById('tm-title').textContent = `${teamName} — ${abbrevGrade(gLabel(grade))}`;
   document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
 
+  // The labels now say HOME AND AWAY, because they always meant that and did not
+  // say so — "0 LOST" above a list containing a red L is a contradiction the
+  // reader has no way to resolve. Finals appear as their own cell.
   document.getElementById('tm-stats').innerHTML = [
-    {v: played, l:'Played'}, {v: w, l:'Won'}, {v: d, l:'Drawn'}, {v: l, l:'Lost'},
+    {v: played, l:'H&A Played'}, {v: w, l:'Won'}, {v: d, l:'Drawn'}, {v: l, l:'Lost'},
+    ...(fPlayed ? [{ v: `${fw}-${fd}-${fl}`, l: 'Finals' }] : []),
     {v: mr+'%', l:'MR%'}, {v: pctVal+'%', l:'Pct'},
   ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
 
@@ -4240,7 +4264,11 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     <div class="team-ha-cell">
       <div class="team-ha-lbl">✈ Away</div>
       <div class="team-ha-val">${aw}W ${ad}D ${al}L &nbsp; &middot; &nbsp; ${af}–${aa}</div>
-    </div>`;
+    </div>
+    ${fPlayed ? `<div class="team-ha-cell">
+      <div class="team-ha-lbl" style="color:var(--gold)">★ Finals</div>
+      <div class="team-ha-val">${fw}W ${fd}D ${fl}L &nbsp; &middot; &nbsp; ${fF}–${fA}</div>
+    </div>` : ''}`;
 
   // Results list — all matches, valid ones full opacity, invalid dimmed
   document.getElementById('tm-body').innerHTML = matches.length ? matches.map(m => {
@@ -4264,7 +4292,9 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     const isGotw = S.gotwFlags[gotwKey] === m.id;
     return `<div style="display:grid;grid-template-columns:26px 32px 20px 18px 1fr 70px 80px minmax(120px,0.7fr);align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:12px;opacity:${valid?1:0.5}">
       <span class="gtag gtag-neutral ${gc}" style="font-size:8px;text-align:center">${abbrevGrade(gLabel(g))}</span>
-      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">Rd ${m.round}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:${isFinalsMatch(m)?'var(--gold)':'var(--tx3)'}"
+            title="${isFinalsMatch(m) ? (m.finalsName || 'Finals') : ''}">${
+        isFinalsMatch(m) ? (m.finalsAbbrev || 'F') : `Rd ${m.round}`}</span>
       <span style="font-size:10px;color:var(--tx3);text-align:center">${isHome?'🏠':'✈'}</span>
       <span style="font-family:'DM Mono',monospace;font-weight:700;color:${resCol};font-size:12px">${res}</span>
       <div style="display:flex;align-items:center;gap:6px;min-width:0">
