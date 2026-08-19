@@ -245,7 +245,10 @@ body{overflow-x:hidden}
 .team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
 .team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
 .team-stat-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
-.team-ha-strip{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--b1)}
+/* auto-fit, not a fixed count. The Finals cell is conditional — a team with no
+   finals gets two cells and a team with finals gets three — and a hard
+   `1fr 1fr` wrapped the third onto its own row. */
+.team-ha-strip{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;border-bottom:1px solid var(--b1)}
 .team-ha-cell{padding:10px 16px;text-align:center}
 .team-ha-cell+.team-ha-cell{border-left:1px solid var(--b1)}
 .team-ha-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
@@ -491,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.188</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.189</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -840,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.188</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.189</span>
         </div>
 
 
@@ -4239,22 +4242,34 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
     else { d++; isHome ? hd++ : ad++; }
     if (isHome) { hf += tf; ha += ta; } else { af += tf; aa += ta; }
   });
-  const played = w+d+l;
-  const mr = played ? ((w + d*0.5)/played*100).toFixed(1) : '–';
+  const mr = (w+d+l) ? ((w + d*0.5)/(w+d+l)*100).toFixed(1) : '–';
   const pctVal = a ? (f/a*100).toFixed(1) : '0.0';
 
   // Render modal
   document.getElementById('tm-title').textContent = `${teamName} — ${abbrevGrade(gLabel(grade))}`;
   document.getElementById('tm-crest').innerHTML = crestHTML(teamName, 36, 'gotw-logo');
 
-  // The labels now say HOME AND AWAY, because they always meant that and did not
-  // say so — "0 LOST" above a list containing a red L is a contradiction the
-  // reader has no way to resolve. Finals appear as their own cell.
+  // SEASON TOTALS, finals included (Beta 0.189). Played/Won/Drawn/Lost are the
+  // team's whole season, which is what a reader means by "played" — 0 LOST above a
+  // list containing a red finals loss was a contradiction with no way to resolve
+  // it. The Finals cell added in 0.188 made this a SEVENTH cell in a grid declared
+  // `repeat(6,1fr)`, so it wrapped to a second row; the count is back to six and
+  // the breakdown below carries the finals split instead.
+  //
+  // MR% and Pct stay HOME AND AWAY. They are ladder figures and a ladder is
+  // home-and-away only, so including finals would make them disagree with the
+  // ladder on the same screen. Said in the tooltip rather than the label, which
+  // has no room for it.
+  const played  = w + d + l;
+  const allP = played + fPlayed, allW = w + fw, allD = d + fd, allL = l + fl;
   document.getElementById('tm-stats').innerHTML = [
-    {v: played, l:'H&A Played'}, {v: w, l:'Won'}, {v: d, l:'Drawn'}, {v: l, l:'Lost'},
-    ...(fPlayed ? [{ v: `${fw}-${fd}-${fl}`, l: 'Finals' }] : []),
-    {v: mr+'%', l:'MR%'}, {v: pctVal+'%', l:'Pct'},
-  ].map(s=>`<div class="team-stat-cell"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+    {v: allP, l:'Played',  t:'Home and away plus finals'},
+    {v: allW, l:'Won',     t:`${w} home and away, ${fw} finals`},
+    {v: allD, l:'Drawn',   t:`${d} home and away, ${fd} finals`},
+    {v: allL, l:'Lost',    t:`${l} home and away, ${fl} finals`},
+    {v: mr+'%',     l:'MR%', t:'Match ratio, home and away only — a ladder figure'},
+    {v: pctVal+'%', l:'Pct', t:'Percentage, home and away only — a ladder figure'},
+  ].map(s=>`<div class="team-stat-cell" title="${s.t || ''}"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
 
   document.getElementById('tm-ha').innerHTML = `
     <div class="team-ha-cell">
