@@ -1,0 +1,78 @@
+# .github/workflows/cleanup-rename-duplicates.yml
+#
+# A9 — removes the phantom records a mid-season team rename created before
+# engine v16. Offline: no PlayHQ calls, so no session and no rate limit.
+#
+# Run Probe Refetch Round (A8) first and read its verdict. This script is safe
+# under either answer — it only removes a record that has a score-twin carrying a
+# gameId — but the "left alone" count it prints is only interpretable alongside
+# that verdict.
+#
+# ALWAYS dry-run first and read the pairs it lists.
+
+name: Cleanup Rename Duplicates
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Delete the records. Leave false for a dry run.'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      comp:
+        description: 'Limit to one competition, e.g. "SEJ 2026". Blank = every live season.'
+        required: false
+        default: ''
+        type: string
+      include_retired:
+        description: 'Include retired seasons. Normally false — they can never gain a gameId.'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cleanup
+        env:
+          CLEANUP_APPLY: ${{ inputs.apply }}
+          CLEANUP_COMP: ${{ inputs.comp }}
+          CLEANUP_INCLUDE_RETIRED: ${{ inputs.include_retired }}
+        run: node scripts/cleanup-rename-duplicates.js
+
+      # Only on apply, and only when something changed. store.save rewrites only
+      # files whose contents differ, so a no-op run leaves the tree clean.
+      # `git add -A data/` rather than a bare pathspec: the root-level data files
+      # moved into data/ on 2026-08-11 and a bare name fails with exit 128.
+      - name: Commit
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Cleanup: remove pre-v16 rename duplicate records"
+          git pull --rebase -X theirs
+          git push

@@ -1,0 +1,44 @@
+# .github/workflows/probe-refetch-round.yml
+#
+# A8 — settles whether discoverFixtureByRound re-serves a completed round.
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+#
+# Run this BEFORE Cleanup Rename Duplicates. The verdict it prints decides
+# whether that cleanup's residue is expected or alarming.
+
+name: Probe Refetch Round
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Limit to one competition, e.g. "SEJ 2026". Blank = every live season.'
+        required: false
+        default: ''
+        type: string
+      grades:
+        description: 'How many grades to probe (1-20). Default 3.'
+        required: false
+        default: '3'
+        type: string
+
+# Read-only. No contents: write — it cannot commit even by accident.
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. The runner's own Node is used deliberately —
+      # setup-node changes the outbound fingerprint and produces
+      # 403 CLOUDFRONT-BLOCK on every PlayHQ request, including session
+      # acquisition. See playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_COMP: ${{ inputs.comp }}
+          PROBE_GRADES: ${{ inputs.grades }}
+        run: node scripts/probe-refetch-round.js
