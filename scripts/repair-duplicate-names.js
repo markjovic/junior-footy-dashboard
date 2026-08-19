@@ -44,7 +44,7 @@
 
 'use strict';
 
-const VERSION = 'repair-duplicate-names v1 2026-08-19';
+const VERSION = 'repair-duplicate-names v2 2026-08-19 clean-team-names';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -178,18 +178,49 @@ async function main() {
 
     if (!games.length) { skipped.push({ label, why: 'the API returned no games', group }); continue; }
 
-    // A record matches a returned game when both team names match EXACTLY, in
-    // either order. Exact, not normalised: the whole question is which spelling
-    // PlayHQ uses, and normalising would make both variants match.
+    // ⚠️ STORED NAMES ARE CLEANED; THE API'S ARE RAW.
+    //
+    // results-engine.js runs every team name through cleanTeam(name, gradeAge)
+    // before storing, which strips the GRADE'S OWN age token and nothing else. v1
+    // compared the raw API name against the cleaned stored one, so nothing ever
+    // matched and all 34 pairs reported "NEITHER name is served" — a confident
+    // answer produced entirely by my own comparison.
+    //
+    // Worse, that mechanism is where most of these duplicates came from. cleanTeam
+    // has two paths: with a gradeAge it strips only that exact token, and without
+    // one it strips ANY U-number. So the same PlayHQ name stored at different times
+    // yields "Mt Eliza JFC U17 Boys Red" and "Mt Eliza JFC Boys Red" — one game,
+    // two ids, and no rename involved. In a U17.5 grade the exact-token path cannot
+    // match "U17", which is why that grade is over-represented in the report.
+    //
+    // Both forms are tried, so a genuine PlayHQ rename is still detected.
+    const formsOf = (g, which) => {
+      const raw = g[which]?.name;
+      if (!raw) return [];
+      const cleaned = engine.cleanTeam(raw, age);
+      return cleaned === raw ? [raw] : [raw, cleaned];
+    };
     const matchOf = (rec) => games.find(g => {
-      const h = g.home?.name, a = g.away?.name;
-      return (h === rec.home && a === rec.away) || (h === rec.away && a === rec.home);
+      const H = formsOf(g, 'home'), A = formsOf(g, 'away');
+      return (H.includes(rec.home) && A.includes(rec.away)) ||
+             (H.includes(rec.away) && A.includes(rec.home));
     });
 
     for (const p of group) {
       const ga = matchOf(p.a), gb = matchOf(p.b);
       if (ga && gb) { skipped.push({ label, why: 'BOTH names are still served — two real games', group: [p] }); continue; }
-      if (!ga && !gb) { skipped.push({ label, why: 'NEITHER name is served — cannot tell which is current', group: [p] }); continue; }
+      if (!ga && !gb) {
+        // The names PlayHQ actually returned, so a non-match is diagnosable. v1
+        // printed the verdict alone and there was no way to tell a real rename
+        // from a broken comparison — which is exactly what it turned out to be.
+        const served = games.map(g => `${g.home?.name} v ${g.away?.name}`).slice(0, 4);
+        skipped.push({ label, why: 'NEITHER name is served — cannot tell which is current',
+          detail: [`stored A: ${p.a.home} v ${p.a.away}`,
+                   `stored B: ${p.b.home} v ${p.b.away}`,
+                   `served  : ${served.join(' | ')}${games.length > 4 ? ` (+${games.length - 4})` : ''}`],
+          group: [p] });
+        continue;
+      }
       const keep = ga ? p.a : p.b;
       const drop = ga ? p.b : p.a;
       const game = ga || gb;
@@ -210,7 +241,10 @@ async function main() {
 
   if (skipped.length) {
     console.log(`\n── Left alone: ${skipped.length} ──`);
-    for (const s of skipped.slice(0, 15)) console.log(`  ${s.label} — ${s.why}`);
+    for (const s of skipped.slice(0, 15)) {
+      console.log(`  ${s.label} — ${s.why}`);
+      for (const d of (s.detail || [])) console.log(`      ${d}`);
+    }
     if (skipped.length > 15) console.log(`  ... ${skipped.length - 15} more`);
     console.log('\n  "BOTH names are still served" means these are two genuinely different');
     console.log('  fixtures that happen to share a score and a date. Not duplicates.');
