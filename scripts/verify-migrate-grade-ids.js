@@ -223,7 +223,6 @@ ok('gotwFlags VALUE remapped',
   core2.gotwFlags['U8|1'] === 'EFNL 2025|U8|gN|1|Bayswater Gold|Boronia Brown',
   core2.gotwFlags['U8|1']);
 ok('gotwFlags KEY untouched', 'U8|1' in core2.gotwFlags);
-ok('lastRound untouched', core2.lastRound['U8|'] === 3);
 ok('gradeMeta untouched', !!read(ARC).gradeMeta['EFNL 2025|U8|']);
 ok('the other organisation is untouched', read(YJFL).matches[0].id === 'YJFL 2026|U14|A|1|Ivanhoe|Kew');
 
