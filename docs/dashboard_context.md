@@ -1,8 +1,8 @@
 # Junior Footy Dashboard — Context Document
 
 **Repo:** `markjovic/junior-footy-dashboard`  
-**Dashboard:** Beta 0.165, served from GitHub Pages  
-**Last updated:** 2026-08-13  
+**Dashboard:** Beta 0.191, served from GitHub Pages  
+**Last updated:** 2026-08-16  
 
 ---
 
@@ -69,8 +69,13 @@ five live seasons). Players arrive after first paint via `requestIdleCallback`.
 
 Holds the manifest (all 18 seasons with status, dates, compName, phases) and
 the cross-organisation keys: `clubs`, `teamClub`, `teamOrg`, `compLogos`,
-`teamLogos`, `gotwFlags`, `lastRound`. These cannot be per-season because they
-span competitions.
+`teamLogos`, `gotwFlags`. These cannot be per-season because they span
+competitions.
+
+`lastRound` is **RETIRED** as of 2026-08-16 — engine v19 stopped writing it and
+Beta 0.176 removed its only reader. A stale map may still be present because
+`store.js` still lists it in `CORE_KEYS`; it is inert, and audit section 9
+reports its size every run as INFO until that line comes out.
 
 ### 3.4 Grade identity
 
@@ -119,7 +124,7 @@ Session management and transport for all PlayHQ API calls. Manages the three
 cookies PlayHQ requires (`phq_tier`, `phq_session`, `phq_sub`) in the
 documented order. All writers use this — never write a local `getSession()`.
 
-**`lib/results-engine.js`** — v16  
+**`lib/results-engine.js`** — v17  
 Core match processing. Called by `fetch-results.js` and `backfill.js`.  
 Key functions: `processGrade()`, `buildGradeMeta()`, `parseGradeName()`.  
 The grade identity migration pass 1/2/3 logic lives here.  
@@ -146,6 +151,42 @@ mid-season, so a rename used to create a phantom duplicate — sixteen in SEJ
 `a5a8276d`, six in `cb7b3db3`, each inflating a ladder's P column by one. Records
 written before v16 have no `gameId`, so existing duplicates persist and need a
 one-off cleanup — see `grade_attribution_split_design.md` §5.
+v17 (2026-08-13): `buildGradeMeta` no longer SKIPS a grading grade. It used to
+`continue` on `rawGrade === 'Grading'` so the grade consumed no rank slot — sound
+reasoning, but it left the grade with no metadata at all, so the page could not
+label it and could not tell it from a grade whose metadata was simply missing.
+A grading grade now gets an entry with `r: 0` and `grading: true`: unranked, so
+A/B/C/D keep 1..4 and a team row still reads "2 of 4", and flagged, so zero is
+distinguishable from absent. The entry also carries `name`, PlayHQ's verbatim
+grade name, because `index.html` never loads `grades.json` and a LABEL is no use
+for identifying a grading grade — labels are "A", "Blue", "Division 1".
+Detection widened from the exact `rawGrade === 'Grading'` to `/grading/i` on the
+name: "U13 Mixed GRADING", "U12 Girls (Grading)" and "U12 Mixed Grading" all
+occur across the five competitions and the exact test caught only some.
+v18 (2026-08-16): a result that supersedes a stored FIXTURE now CLEARS the
+`scheduled` flag, and the promotion counts as an update so the run commits.
+`fetch-fixtures.js` writes its record under the same match id this builds, so a
+played game merges into it at `{ ...prev, ...m }` — and a result record has no
+`scheduled` key, so there was nothing to overwrite `prev.scheduled` and `true`
+survived the spread. The record kept correct scores and stayed classified as a
+fixture, which put it in `S.fixtures` instead of `S.matches` and made
+`isPlayed()` false, so it was absent from the results list and drawn with blank
+score cells in the finals view. **It never self-corrected**: the scores merged in
+on the first run after the game, so every later run found them equal, reported
+`0 new, 0 updated`, and the workflow skipped the commit — a log indistinguishable
+from a run with nothing to do. Measured 2026-08-16 on EFNL 2026 Veterans: four
+Semi Finals records stored with hScore 59, 33, 86 and 68, all four flagged
+`scheduled`, none on screen. `provisional` is deleted with the flag, because
+`isProvSide()` tests `m.provisional && !m.hLogo` and the logo strip runs on
+records that are no longer scheduled — a surviving flag would render a played
+team as a greyed placeholder. `time` is kept. Reported as `Promoted N stored
+fixture(s) to results`.
+v19 (2026-08-16): `lastRound` is GONE — the build loop, the per-competition merge,
+`lastRoundKey()` and its export. It recorded the highest home-and-away round per
+grade for one reader: a small round tag on the ladder grade tabs, removed in Beta
+0.176. It never drove fetching; `knownRounds` does that, built in memory from the
+stored records, so the round walk is unchanged. The `covered` set and the
+`gradeMeta` per-competition merge that sat beside it are untouched.
 
 ### 4.2 Writers
 
@@ -188,6 +229,30 @@ was introduced. Every subsequent run skipped them as already stored. Per-match
 logo fields were stripped at the same time. The evidence was sitting in
 `teamLogos` all along — the v4 `teamLogos` fallback resolved all 566.
 
+**`repair-scheduled-results.js`** — v1  
+Offline (no PlayHQ calls). Clears the `scheduled` flag from stored records that
+are actually results — the backlog engine v18 stops accruing but cannot reach.
+The engine only repairs a record whose round is re-fetched, and three things stop
+that: a round holding one proper result is skipped as already stored, a grade
+whose season has ended is skipped entirely, and archived seasons are out of scope
+for `fetch-results.js`. This reads every season through `store.load(null,
+{ players: false })`, so none of those apply.
+
+**The rule** (agreed 2026-08-16). A record is a disguised result when all three
+hold: `scheduled === true`; any of the six score fields is non-zero; and it has
+no date, or a date of today or earlier (AEST, string compare on `YYYY-MM-DD`).
+The score test is what makes it safe — an unplayed game cannot carry a non-zero
+score, so no real fixture can be caught. A future-dated record carrying a score
+is a contradiction and is LISTED, never repaired: either the date or the score is
+wrong and the script cannot tell which. A genuine 0-0 or an all-zero forfeit is
+indistinguishable from a fixture by this rule and is deliberately left alone,
+counted separately so the residue is a number rather than an assumption.
+
+Per-match logos are NOT stripped here — `results-engine.js` harvests them into
+`teamLogos` and strips them in the same pass, and will do so on the next run now
+the records are no longer scheduled. Dry-run unless `--apply` or
+`REPAIR_APPLY=true`. Idempotent: a second run finds nothing.
+
 **`discover-seasons.js`**  
 Discovers seasons per organisation from PlayHQ and writes the manifest in
 `core.json`. Run this before any backfill when a new season appears.
@@ -214,12 +279,39 @@ One-off migration (2026-08-12): moved data from `data/orgs/` to
 
 ### 4.3 Diagnostics and reporting
 
-**`audit-data.js`** — v12  
+**`audit-data.js`** — v15  
 Read-only. Reads `data/seasons` and reports: file sizes and the core/players
 split, per-season record counts, round gap analysis (live vs retired),
 `grades.json` coverage, grade identity migration state, a sized estimate
 of what a cross-season player search index would cost, and (v11) the shape of
 the `lastRound` and `gotwFlags` keys in `core.json`.
+v13 (2026-08-13): a record with NO `gradeId` is no longer bucketed into round
+coverage under a `compName|age|rawGrade` fallback. That fallback merged unrelated
+grades and INVENTED gaps — it reported `LIVE YJFL 2026|U10| — has 1..14, missing
+8..13`, where the key is six pools piled together and no single pool has a
+contiguous run. Such records are counted and reported as unattributed instead.
+v14 (2026-08-13): section 11 counts player records per person per season.
+v15 (2026-08-13): section 10 states in its own output that it CANNOT show the
+Beta 0.166 attribution change working — it tests `hg === ag` from the roster,
+which that change deliberately left alone, so a steady figure is not a failure.
+v16 (2026-08-16): section 8 divides by PERSON-SEASONS rather than records, and
+labels the record count as records. `fetch-stats.js` stores one record per grade,
+so a child in two grades in one season was counted as two seasons — 2.54 against a
+true 2.27. **The index BYTE figure was never wrong**: it is built from a `Set` of
+season ids, so a second record in the same season adds no entry. The earlier note
+calling 5.67 MB inflated is retracted. Section 9 no longer shape-checks
+`lastRound`; it reports it as RETIRED with its count, and raises INFO while any
+key remains.
+
+**Section 9** — the shape of the `lastRound` and `gotwFlags` keys.
+**Section 10** — records the dashboard never shows, split three ways: DEFUNCT
+(the stored grade has no team resolving to it), LIVE (a promotion), and NO GRADE
+(neither side resolves at all). Measured 2026-08-13: 3,967 records, 7.6%, in every
+one of the eighteen seasons.
+**Section 11** — player records per person per season. Measured 2026-08-13:
+18,540 person-seasons hold MORE THAN ONE record, up to four. `fetch-stats.js`
+stores per grade, so `index.html` must aggregate. **Section 11 has no assertions
+in `verify-audit.js` and its figures are unverified.**
 v12 (2026-08-13): round-gap examples are ranked LIVE first, then by rounds
 missing, before ten are printed. They used to be the first ten found in file-read
 order, so on 2026-08-13 one live gap and 67 retired ones produced ten retired
@@ -274,12 +366,12 @@ test is exactly the committed code.
 |---|---|---|
 | `verify-store.yml` *(umbrella)* | — | runs all 7 suites; fires on every push |
 | `verify-per-season.js` | 53 | `store.js` and `split-by-season.js` |
-| `verify-backfill.js` | 124 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
+| `verify-backfill.js` | 126 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
 | `verify-discover-seasons.js` | 20 | `discover-seasons.js` |
 | `verify-migrate-grade-ids.js` | 54 | `migrate-grade-ids.js` |
-| `verify-dashboard-grades.js` | 88 | `index.html` silent failures |
+| `verify-dashboard-grades.js` | 282 | `index.html` silent failures |
 | `verify-rebuild-grade-meta.js` | 22 | `rebuild-grade-meta.js` |
-| `verify-audit.js` | 58 | `audit-data.js` |
+| `verify-audit.js` | 79 | `audit-data.js` |
 
 `verify-dashboard-grades.js` covers only things that **fail silently**: a
 promoted team appearing on two ladders, a scorer filtered out because their
@@ -310,6 +402,7 @@ All workflows use `workflow_dispatch` unless noted.
 | `repo-tidy.yml` | repo-tidy.js | Has `groups` and `apply` inputs |
 | `audit-data.yml` | audit-data.js | Has `strict` and `org` inputs |
 | `report-grade-collisions.yml` | report-grade-collisions.js | Read-only |
+| `repair-scheduled-results.yml` | repair-scheduled-results.js | Has `apply` and `comp` inputs; no PlayHQ calls |
 | `probe-ser-logos.yml` | probe-ser-logos.js | One-off; add to probes group and remove |
 
 ### 5.1 `fetch-results.yml` inputs — read this before dispatching it
@@ -368,7 +461,7 @@ before trusting a row.
 
 ---
 
-## 6. The dashboard (`index.html`) — Beta 0.165
+## 6. The dashboard (`index.html`) — Beta 0.191
 
 ### 6.1 Data loading
 
@@ -382,6 +475,12 @@ for the session, so switching back is instant. Players for the new season are
 loaded via `loadPlayers()` in the background.
 
 ### 6.2 Grade grouping
+
+The round tag that sat on each ladder grade tab is GONE (Beta 0.176), and
+`lastRound` with it. It rendered nothing at all from Beta 0.133 until engine v14,
+because the writer built a two-segment `age|rawGrade` key and the reader a
+three-segment `compName|age|gradeId` one; once it worked it was not worth the
+space.
 
 Ladders group by `gradeId` (PlayHQ's own UUID). Grade tabs are labelled via
 `gLabel(gradeId)`, which reads from `S.gradeLabelById` (built from
@@ -405,6 +504,55 @@ dropdown independent of the sidebar filter.
 Picks are written to browser storage only. Nothing pushes them to the repo, and
 `core.json` wins on load when its `gotwFlags` is non-empty.
 
+### 6.2b Grade attribution — listing versus ladder
+
+`grade_attribution_split_design.md`. `matchGrade()` is GONE, split in two because
+seventeen call sites were asking two different questions through one name:
+
+- **`matchListGrade(m)`** — where a result is LISTED. Always `m.gradeId`, PlayHQ's
+  own answer to which grade the game was played in. Falls back to the roster grade
+  then `rawGrade` for pre-migration records.
+- **`matchLadderGrade(m)`** — what it COUNTS TOWARDS, or null. A grading grade
+  returns itself; otherwise the teams' agreed grade; otherwise null.
+- **`matchCounts(m)`** — one predicate meaning "does this count", defined as
+  `matchLadderGrade` returning something. Thirteen call sites use it. `matchIsValid`
+  survives only as the raw sides-agree test used by `precomputeMatches`.
+
+`precomputeMatches` caches `_valid`, `_grade` (the ladder grade), `_ladder`, and
+`_hg`/`_ag` so the cached and live paths cannot diverge.
+
+**A grading grade is its own competition.** It gets its own tab and ladder, and its
+ladder counts EVERY game played in its rounds whatever division the two teams were
+later placed in. `matchIsValid` was removed from the ladder filter for this — and
+it was redundant for every other grade anyway, because `matchLadderGrade` already
+returns null when the sides disagree.
+
+**A tab comes from LISTING, not from counting.** `gradesForAge` has no counts
+filter: a result that counts nowhere must still have somewhere to appear.
+
+**Grading grades have no Scorers list.** A player has one record per season, in the
+grade they ended in, with `gp` and `goals` summed across grades — `aggregatePlayers`
+groups on `uuid`, never on name.
+
+### 6.2c Upcoming Fixtures — the grade filter joins on the grade id
+
+`renderFixtures` tested `grades.has(m.rawGrade)` until Beta 0.175. `activGrades()`
+returns `gradesForAge()`, which is built from `matchListGrade()` and
+`matchLadderGrade()` and therefore holds PlayHQ grade IDs — never "A", "Premier"
+or "Blue". A fixture record's `rawGrade` is one of those strings, so the test
+could never match and every fixture in a migrated grade was dropped. With 99.91%
+of records migrated that is effectively all of them, and the empty-list guard then
+hides the whole section, so it failed in complete silence.
+
+It was invisible for as long as it was because the section only has something to
+show when fixtures exist ahead of the results — through the home-and-away season
+`fetch-results.js` had usually caught up, so an empty section looked correct.
+
+The grade tag and the `openTeamDrilldown` argument in the same function had the
+same defect: `rawGrade` where `renderResults` passes the id, which mislabelled the
+tag (blank for the 83 grades whose `rawGrade` is empty) and opened a drilldown
+keyed on something nothing else uses. All three now use `matchListGrade(m)`.
+
 ### 6.3 Season selector
 
 Year is the outer scope. Choosing a year narrows the competition list to the
@@ -412,6 +560,82 @@ competitions that ran in it. Both lists come from the manifest (`S.manifest`),
 not from loaded records — a past year has nothing in `S.matches` until its
 files are fetched, so deriving the list from records would show an empty
 competition list.
+
+### 6.3b The player panel
+
+A LIVE PlayHQ fetch, not a read of `S.matches` — it covers competitions the
+dashboard never stores, such as representative football, which is why some rows
+show a dash.
+
+Its query returns `round { name }`, so a row's round is the STRING "Round 1", not
+a number. Score and result are joined from `S.matches` on the parsed round number
+plus both team names stripped of age. **Finals are detected by the name containing
+"final", not by the absence of a digit** — PlayHQ's finals round names are "Finals
+Round 1", which contains one, and a no-digit test sent every finals row to the
+home-and-away branch to find a different game. Finals then match on team names
+alone within `isFinals` records, because a pair meets at most once in a finals
+series; home-and-away rounds keep matching on the number, because two teams can
+meet twice.
+
+**The score is NOT available from the query.** `result { home { score } }` was
+added on 2026-08-16 and PlayHQ rejected it — the game type returned by
+`gameStatistics` has no such field, and a GraphQL validation error fails the WHOLE
+query, so every player showed "No 2026 season stats found". Reverted.
+
+**⚠️ ONE PERSON MAY HAVE SEVERAL STORED RECORDS.** `fetch-stats.js` stores one
+record per GRADE, so a child who turns out for two teams has two. The header strip
+took `S.players.find(uuid)` — the first of them — and read `gp` and `goals`
+straight off it, while the list below is a live per-PLAYER fetch showing every
+team. Measured 2026-08-18 on one player: U12 B 16 games / 28 goals plus U13 B
+2 games / 1 goal, so the strip said 16 and 28 above a list of 18 games and 29
+goals, with nothing on screen to explain the gap. Fixed in Beta 0.191 — the strip
+sums every record for that person, the tooltip carries the per-team split, and a
+"+ N other teams" note sits under the name.
+
+**Scoped to the SELECTED SEASON, then to the biggest team within it.** Picking the
+primary record by games played across everything loaded looks right and is not: a
+previous season usually has more games than a part-finished current one, so
+viewing 2026 would have shown 2025's totals and 2025's team. The season comes from
+`S.selYear`, matched against the year inside `compName`; a player with no records
+in that year falls back to the year holding most of their games rather than
+rendering an empty strip. Summing is by year and not by competition, because a
+player can appear in two competitions in one season and both belong in the total.
+
+**Each row shows its AGE GROUP beside the grade** (Beta 0.190). Without it, two
+rows in the same round were indistinguishable — a U12 player's U13 games read as
+duplicate rounds against the wrong opponent with the wrong result, when both were
+real U13 games. The age comes from the joined stored record's `m.age`, which is
+the string the rest of the dashboard groups by; a row that joined to nothing falls
+back to parsing PlayHQ's grade name ("U13 - B", "Division 5") and then the team
+name ("The Basin Senior Women Green").
+
+### 6.3c The team drilldown
+
+Opened from a team name. Shows every match for that team, age and competition —
+all grades, so a side that played grading and was then placed appears once with
+the non-counting rows dimmed.
+
+**Finals sort LAST and carry their abbreviation** (Beta 0.188). Finals rounds
+restart numbering at 1, so sorting on `m.round` alone put Finals Round 1 beside
+home-and-away round 1 and the preliminary final beside round 2. Measured
+2026-08-18: the list showed two "Rd 1" rows and two "Rd 2" rows, one of each a
+final, which read as duplicates. Rows now print `finalsAbbrev` (FR1, PF, GF) in
+gold with `finalsName` on hover.
+
+**Season totals include finals; MR% and Pct do not** (Beta 0.189). Played, Won,
+Drawn and Lost are the whole season, because that is what a reader means by
+"played" — before this the strip could read `0 LOST` above a list containing a red
+finals loss, a contradiction with no way to resolve it. MR% and percentage stay
+home-and-away because they are LADDER figures and a ladder is home-and-away only;
+including finals would make them disagree with the ladder on the same screen. Said
+in the tooltip, which is the only place with room.
+
+**A third breakdown cell for finals**, beside Home and Away, shown only when the
+team played one. `.team-ha-strip` uses `grid-auto-flow:column` rather than a fixed
+column count, because the cell is conditional — a hard `1fr 1fr` wrapped the third
+onto its own row, and the same mistake put a seventh stat cell onto a second row
+in `repeat(6,1fr)`. **Both strips have a fixed column count: check it before
+adding a cell.**
 
 ### 6.4 Player search
 
@@ -437,9 +661,209 @@ grades in all clubs. Grades that reached the GF are right-aligned so GF is
 always in the last column; grades eliminated before the GF left-align from
 column 1.
 
+**Within a club, teams sort: premiers first, then by HOW FAR THEY GOT, deepest
+first**, with grade strength, age and grade name as tiebreaks (Beta 0.174). Depth
+is the maximum `globalGradeRoundIdx` column — offset so every grade's grand final
+lands in the last column, making it a measure of distance from the GF and
+comparable across grades with different numbers of finals rounds. Unplayed
+fixtures count: a scheduled preliminary final is how a live team is identified.
+Until 0.174 this was three bands with grade strength inside each, which put a team
+knocked out in the first final above a lower-grade team still alive.
+
 Round labels use `finalsAbbrev` (QF, EF, GF etc) on the cell, with the full
 `finalsName` ("Qualifying Final") on hover. `finalsName` is PlayHQ's round
 name ("Finals Round 1"), not the game type — the abbreviation is what matters.
+
+### 6.6 Finals view — By Venue
+
+Added Beta 0.176. The fourth finals mode, and the only one not organised around a
+team, a club or a grade: it answers "where do I need to be, and when". Every
+finals match — results and scheduled fixtures alike — grouped by DATE, then by
+VENUE, ordered by start time.
+
+Three ordering decisions, none of them arbitrary:
+
+- **Date ascending.** The other modes read backwards from the Grand Final because
+  they are about how a campaign ended. This one is a schedule, and a schedule runs
+  forwards. Matches with no date go into a "Date TBC" group placed LAST — an empty
+  string sorts before every real date, so the naive ordering would put the
+  unknowns at the top of the page.
+- **Venue alphabetical within a date.** There is no meaningful ranking between
+  grounds. "Venue TBC" sorts last, for the same reason as the date.
+- **Time ascending within a venue**, then grade strength, then round for matches
+  sharing a start time. A venue with no time on any match keeps round order.
+
+Dates are formatted from split parts through `Date.UTC` — never
+`new Date(string)` — and compared as `YYYY-MM-DD` strings, which sort correctly
+lexically. Times are `HH:MM:SS` and sort the same way.
+
+The venue link is taken from the first record at that ground that carries a
+`venueUrl`. Every record at one ground should hold the same coordinates, but a
+fixture written before the venue was allocated may have the name and no URL.
+
+Rendered and checked against EFNL 2026 Veterans on 2026-08-16: 14 August before
+15 August before 23 August before Date TBC; Mooroolbark Heights Reserve before
+Morton Park; 09:00 before 12:30 within Morton Park; provisional sides
+("Winner Game 1") drawn without scores.
+
+**Either nesting** (Beta 0.177). `S.venueGroup` decides which level is outer:
+`date` answers "what is on this Saturday, and where", `venue` answers "what is on
+at this ground, and when". One renderer serves both, so the two cannot drift.
+Neither is a filter — the same matches appear both ways — which is why it is a
+grouping switch (`DATE › VENUE` / `VENUE › DATE`, inline beside the mode buttons,
+shown only in this mode) rather than a sort.
+
+The maps link and the suburb follow the VENUE to whichever level is showing it.
+In venue-first the outer heading is the ground, so the link belongs there; leaving
+it on the inner heading dropped it entirely, because the inner heading is then a
+date. Found by rendering both nestings side by side on 2026-08-16.
+
+**Jump to a group.** A select in the sidebar, labelled "Jump to date" or "Jump to
+venue" to match the current grouping, listing the outer groups in display order
+with a match count. It is populated by `syncFinalsJump()` from `fvGroupIndex`,
+which `renderFinalsByVenue` writes as it renders — **from what was actually drawn,
+never derived separately from the pool**, or the dropdown would eventually offer
+headings that no longer exist. Group DOM ids come from the key
+(`fvGroupId`), not a loop index, so a stale selection misses rather than
+scrolling somewhere arbitrary. `scrollIntoView` rather than a hash: a hash pushes
+a history entry per jump and puts the whole view behind a Back button that does
+not restore it. On a narrow screen the sidebar closes after a jump, or it covers
+the thing just scrolled to.
+
+### 6.6a Finals view — By Venue, the grouping switch and the jump
+
+`S.venueGroup` decides which level is outer: `date` answers "what is on this
+Saturday, and where", `venue` answers "what is on at this ground, and when". One
+renderer serves both. Neither is a filter — the same matches appear both ways —
+so it is a grouping switch, not a sort.
+
+The maps link and the suburb follow the VENUE to whichever level shows it. In
+venue-first the outer heading is the ground, so the link belongs there; leaving it
+on the inner heading dropped it entirely, because that heading is then a date.
+
+**Jump to a group.** A select in the sidebar, labelled to match the grouping,
+populated by `syncFinalsJump()` from `fvGroupIndex` — which `renderFinalsByVenue`
+writes AS IT RENDERS. Built from what was drawn, never derived separately from the
+pool, or the dropdown offers headings that no longer exist. Group ids come from
+the key (`fvGroupId`), not a loop index, so a stale selection misses rather than
+scrolling somewhere arbitrary.
+
+### 6.6b Finals view — GF-first columns, ladder positions, ALL TEAMS
+
+**Column 0 is the grand final** for every grade (Beta 0.179), no offset, ragged
+edge on the right. Per-grade round maps are unchanged, so a team that won its
+qualifying final and had a bye still leaves the preliminary-final column blank.
+The depth sort was inverted in the same change — deepest run is now the SMALLEST
+index — because a sort that silently reversed with the columns would put the
+first-eliminated teams at the top of every card, which reads as plausible rather
+than obviously broken.
+
+**Ladder position on every row.** `ladderPosOf`, memoised per render because
+`computeLadder` rescans `S.matches` on every call. It looks up the LADDER grade,
+not the record's own: a promoted team belongs to the grade it is in now, and the
+wrong key renders a dash on every row — indistinguishable from a grade that
+legitimately has no ladder.
+
+**ALL TEAMS switch**, default off. Non-finalists are held on `extraTeams` and
+deliberately NOT merged into `e.teams`: every existing figure is computed from
+that array, so folding them in would silently restate the card header, the
+summary's Finals column and the sort options.
+
+### 6.7 Finals view — the club summary table
+
+Added Beta 0.177, extended in 0.178. One row per club, above the club cards,
+**collapsed by default** — the cards are what the by-club view is for, and this is
+a summary you open when you want it.
+
+| Column | Meaning |
+|---|---|
+| Entered | teams the club fielded, under the current filters |
+| Finals | teams that reached the finals |
+| Top grade | finals teams in a grade PlayHQ ranks strongest for its age |
+| Remaining | teams not eliminated and not yet in a grand final |
+| GF | teams named in a grand final, played or scheduled |
+| Premierships | teams that have won one |
+
+Every column after Entered carries a percentage of Entered, so the column reads
+down consistently. A zero prints as a dash with no percentage.
+
+**Clubs that reached no finals are included.** They cannot come from
+`finalsPool()`, so `finalsFilters()` was factored out of it and `enteredPool()`
+added — the same records without the `isFinals` test. Both pools share that one
+filter deliberately: if the gender or level filter applied to one and not the
+other, 6 of 40 and 6 of 12 would both render as perfectly ordinary numbers. A
+table of only successful clubs makes every club look successful.
+
+**Counting identity is `comp|team|age`, with NO grade** (`teamCountKey`). A side
+that played grading and was then placed in a division is ONE team the club
+entered. The club card's own key carries `rawGrade`, so counting on that lets a
+club's finals total exceed the teams it fielded and print a percentage over 100.
+
+The table and the cards share one comparator (`cmpEntries`) and are built from the
+same `entries` array, so they cannot order the same clubs differently or report
+different figures on one screen. Totals are summed from the rows for the same
+reason.
+
+Open state lives in `S.clubSummaryOpen` and persists through `saveFilters`. It is
+not a `<details>` element: the finals body is rebuilt by `innerHTML` on every
+render, so the element's own open state would be discarded and the section would
+snap shut on any filter change.
+
+**Sort basis: VALUES or %** (Beta 0.180). "Most GF appearances" and "the highest
+proportion of teams entered that reached one" are different questions, and a big
+club wins the first almost by size alone. `enteredBy` is computed BEFORE the sort,
+because a share needs a denominator at comparison time; reading it from a map
+built later compares against `undefined`, which sorts every club equal and looks
+like a stable order. A club with nothing entered scores −1 rather than dividing by
+zero — `NaN` in a comparator does not throw, it returns a nonsense order.
+Choosing % turns `finalsWeighted` off: both decide how to compare the same
+measure, so leaving both on makes one control silently inert.
+
+**A gold top-grade figure on every measure** (Beta 0.186), replacing the
+standalone Top grade column. As one column it could only describe one measure and
+said nothing about whether the teams that went deep were the strong ones. Both
+numbers in a cell are a share of TEAMS ENTERED — one denominator for the whole
+table — so the gold figure is directly comparable with the white one beside it.
+The gold Entered count comes from the ENTERED list, not from `e.teams`: a club can
+enter a top-grade team that never reaches finals, and taking it from the finals
+list undercounts the denominator the whole gold column starts from. A zero prints
+nothing rather than a second dash.
+
+**Sort: most teams in top grade** (Beta 0.187). Counts teams ENTERED in the
+strongest grade, not teams that reached finals there — the one thing the other
+four measures cannot show, since a club can field several top-grade sides and win
+nothing. `enteredTop` is attached to the entry before the sort runs, because the
+sort reads it through `FINALS_SORTS.topgrade.flat(e)`; computing it twice in two
+places is how two figures for one thing start to disagree. It is also set on the
+zero rows, or a club that entered top-grade teams and reached no finals compares
+as `undefined` and lands wherever the tiebreaks put it. The grade weighting hides
+on this measure: weighting ranks a club's finalists BY grade, and this measure is
+already one grade.
+
+**Rank column** (Beta 0.182). Standard competition ranking — 1, 2, 2, 4 — so the
+gap says how many clubs are ahead. Ties are decided by `primaryCmp`, the measure
+the reader picked, NOT by `cmpEntries`, which always separates two clubs on
+premierships and then on name; ranking on that would make every number distinct
+and the column would be the row index. Alphabetical shows a dash: every pair ties
+on the measure there, so a number would read as "everyone is first".
+
+**Sticky column headings** (Beta 0.183–0.185). `top` comes from `--sticky-top`,
+which `syncStickyTop()` keeps equal to the page header's BOTTOM EDGE, clamped at
+zero, on every frame that scrolls. It is not a constant: `.hdr` is sticky at
+`top:0` but its containing block is `body`, `body` is `height:100%`, and a sticky
+element cannot leave its containing block — so the header releases after about one
+viewport and scrolls away. Reading the rect each frame rather than toggling a
+class at a threshold means the headings follow it down continuously instead of
+snapping. The throttle flag is raised BEFORE scheduling and cleared by the
+callback, never assigned from `requestAnimationFrame`'s return value: with a
+synchronous rAF the callback clears the flag first and the assignment sets it back,
+after which every later frame is skipped and the offset freezes.
+
+`.main` is `overflow-x:clip`, not `hidden`. `hidden` makes an element a scrollport
+that never scrolls, and a sticky descendant then anchors to it and sits still.
+**`body` must stay `overflow-x:hidden`** — it is the page's scroll container and
+`.hdr` sticks to it. Changing body to `clip` in Beta 0.183 removed that scrollport
+and the page header stopped sticking altogether.
 
 ---
 
@@ -486,10 +910,53 @@ name ("Finals Round 1"), not the game type — the abbreviation is what matters.
   (2026-08-11) and confirmed working for SER (2026-08-13).
 - `discoverFixtureByRound` returns 0 games for completed rounds that were
   fetched in a prior run — the data is in storage, not re-served by the API.
+  **⚠️ CONTRADICTED and unresolved.** `probe-concurrent-comps.js` re-served full
+  game lists for completed rounds across all 68 calls on 2026-08-13. One of the
+  two is wrong. Do not build a deletion or reconciliation mechanism on either
+  until this is settled.
+- Finals round NAMES are "Finals Round 1", "Finals Round 2" — they contain a
+  number. `finalsAbbrev` is the game type (QF, EF, GF); `finalsName` is the round
+  name. Detecting finals by the absence of a digit is wrong.
+- The game type returned by `gameStatistics` carries `id`, `round { name }`,
+  `date`, `home` and `away` — and NO `result`. Asking for one fails the whole
+  query.
 
 ---
 
 ## 9. Known defects and limitations
+
+### 9.0 A result merged into a fixture kept the `scheduled` flag — FIXED 2026-08-16
+
+Engine v18 and Beta 0.175. Two defects, discovered together because they produced
+one symptom: no finals results beyond the first finals round, and no fixtures
+anywhere on the page.
+
+**The storage half.** `fetch-fixtures.js` writes a scheduled record under the same
+match id `results-engine.js` builds, so a played game merges into it at
+`{ ...prev, ...m }`. A result record has no `scheduled` key, so nothing overwrote
+`prev.scheduled` and `true` survived. `index.html` splits on exactly that flag —
+`S.matches` excludes anything scheduled — so the record never reached the results
+list, and `isPlayed()` (`!m.scheduled && …`) made the finals view draw it as an
+unplayed fixture with blank scores.
+
+**Why it never self-corrected, and why the log looked clean.** The scores were
+merged in on the first run after the game. Every run after that found
+`prev[k] === m[k]`, reported `0 new, 0 updated`, and skipped the commit. A run
+carrying an unrepairable defect and a run with genuinely nothing to do printed the
+same thing. The fix counts the promotion as an update so the run commits.
+
+**The rendering half.** `renderFixtures` joined the grade filter on `rawGrade`
+against a Set of grade IDs — §6.2c.
+
+**Measured, not inferred.** EFNL 2026 Veterans: four Semi Finals records with
+hScore 59, 33, 86 and 68, all flagged `scheduled`. After the fix they carry no
+flag and no `hLogo`/`aLogo`, the second being the confirmation — the logo
+harvest-and-strip loop returns early on scheduled records, so the URLs could only
+have been stripped by a pass that already saw them as results.
+
+**Scope, measured 2026-08-16 by `repair-scheduled-results.js`:** 84 scheduled
+records across all eighteen seasons, none carrying a score. The contamination was
+finals-only; home-and-away results were never affected.
 
 ### 9.1 `lastRound` and `gotwFlags` keying — FIXED 2026-08-13
 
@@ -520,11 +987,23 @@ ever been made.
 Both keys now carry the competition, and `compName` carries the season with it.
 Design and evidence: `docs/lastround_gotw_keying_design.md`.
 
-### 9.2 Concurrent competitions (SEJ 2026 U10)
+### 9.2 Concurrent competitions (SEJ 2026 U10) — LARGELY RESOLVED 2026-08-13
 
-Two leagues run in one age group. A team can only be on one ladder, so the
-Lightning Premiership ladders don't appear. Needs a design decision before
-any code is written.
+Recorded as "two leagues in one age group, needs a design decision". Measurement
+found something wider: SEJ 2026 U10 is one instance of a pattern across three
+organisations and seven seasons — a short-form competition inside a normal season
+whose grades are told apart by a venue, session, pool, zone or parallel league,
+all of which `parseGradeName` discards. `report-grade-collisions.js` measured 62
+colliding keys and 121 shadowed grades.
+
+Resolved by `grade_attribution_split_design.md`: grading grades get their own tab
+and ladder; everything else is listed by `m.gradeId` and counts only when both
+sides agree.
+
+**Still open:** a short-form competition NOT named "grading" — SEJ's Lightning
+Premiership, WFNL's Lightning Cups, YJFL's pools — takes the fallback and its
+games are listed but count nowhere. Accepted deliberately rather than built
+around; see §2.3 of that design.
 
 ### 9.3 49 unmigrated bye sentinels
 
@@ -564,5 +1043,5 @@ Cosmetic only after grade identity migration.
 | `docs/finals_support.md` | Finals view design |
 | `docs/lastround_gotw_keying_design.md` | lastRound / gotwFlags keying (built 2026-08-13) |
 | `docs/unplayed_round_blocker_design.md` | Placeholder rounds stopping the fetch (built 2026-08-13) |
-| `docs/grade_attribution_split_design.md` | Grade attribution across a mid-season split (OPEN) |
+| `docs/grade_attribution_split_design.md` | Grade attribution, grading grades (BUILT 2026-08-13) |
 | `docs/OUTSTANDING_TASKS.md` | Actions, questions, and decisions needed |

@@ -24,6 +24,14 @@ than measured it says so.
 > - **2026-08-11:** `discoverOrganisation` works from a guest session on the
 >   `afl` tenant and returns a full postal address. The "returns null for guest
 >   sessions" limitation is `basketball-victoria` behaviour only.
+> - **2026-08-17:** **grading pools are shared between leagues**, and their games
+>   are recorded under the HOST competition. A competition's own records therefore
+>   contain games played by teams belonging to clubs in other associations. Neither
+>   `compName` nor `organisation` is wrong; the two simply cannot be combined to
+>   mean "a team that entered this competition".
+> - **2026-08-18:** `gameStatistics` returns a player's games across EVERY team
+>   they played for, while `fetch-stats.js` stores one record per grade. A person
+>   with two teams has one live list and two stored records.
 
 ---
 
@@ -261,6 +269,123 @@ though that explanation is inferred rather than measured.
 
 ---
 
+## 7. New section — `gameStatistics` (the player panel)
+
+Measured 2026-08-16 from `index.html`'s player panel query.
+
+The `game` returned inside `gameStatistics` carries **`id`, `round { name }`,
+`date`, `home` and `away` — and no score**. Asking for it fails:
+
+```
+game { result { home { score } away { score } } }   # rejected
+```
+
+**⚠️ A rejected field fails the WHOLE query, not just that field.** GraphQL
+validates the document before executing it, so one unknown field returns an error
+and no data at all. Adding the above took the player panel from working to
+"No 2026 season stats found" for every player, in every season. A query is not a
+place to try a field and see.
+
+**`round { name }` is a STRING, not a number.** It returns `"Round 1"`, so
+anything joining a panel row to a stored match record must parse the number out.
+
+---
+
+## 8. Finals round names contain a number
+
+`finalsAbbrev` is the game type — QF, EF, PF, GF. `finalsName` is the ROUND name,
+and PlayHQ's finals rounds are named **"Finals Round 1", "Finals Round 2"**.
+
+So a finals round name **contains a digit**. Detecting finals by the absence of a
+number is wrong, and it silently sends a finals game down the home-and-away path
+to match a completely different game. Test the name for `final` instead — which
+also covers "Grand Final", "Preliminary Final" and "Qualifying Final".
+
+This is consistent with the existing note that finals rounds restart numbering at
+1: "Finals Round 1" and "Round 1" are different rounds with the same number.
+
+---
+
+## 9. Grade names — "Grading" appears in at least three formats
+
+Measured across the five competitions 2026-08-13:
+
+```
+U13 Mixed GRADING          SER
+U12 Girls (Grading)        EFNL
+U12 Mixed Grading          YJFL, WFNL
+Western Bulldogs U12 Mixed Grading    WFNL, with a sponsor prefix
+GYG - Regional U14 Girls GRADING      SER, with a sponsor prefix
+```
+
+An exact match on a parsed `rawGrade === 'Grading'` catches only some. Use a
+case-insensitive substring test on the full grade name.
+
+**⚠️ `discoverFixtureByRound` re-serves completed rounds.** The 2026-08-11 note
+saying it returns 0 games for a completed round already fetched was NOT reproduced:
+`probe-concurrent-comps.js` fetched every round of seven SEJ 2026 U10 grades on
+2026-08-13, 68 calls, and completed rounds returned their full game lists. One of
+the two observations is wrong and this is unresolved — do not build a deletion or
+reconciliation mechanism on either reading until it is settled.
+
+---
+
+## 10. Grading pools are SHARED BETWEEN LEAGUES
+
+Measured 2026-08-17 against EFNL 2026, and confirmed on the live site after the
+fix.
+
+`discoverFixtureByRound` returns grading-round games in which one or both teams
+belong to a club registered to a **different association** — YJFL, SER and SEJ
+clubs all appear in EFNL's own grading rounds. The pools are run jointly and the
+teams are split back into their own leagues once graded.
+
+**Nothing in the response is wrong, which is what makes this expensive.** The
+record's `compName` really is the host competition, and `DiscoverTeam.organisation`
+really does resolve each team to its own club. Both fields are correct in
+isolation; they cannot be combined to mean "a team that entered this competition".
+
+**⚠️ Any per-competition count of entrants must exclude teams whose records in
+that competition are confined to grading grades.** A real entrant also plays
+home-and-away or finals; a visitor to the pool plays nothing else. Before this
+test was added, one club summary listed dozens of clubs from three other leagues
+as having entered teams, and every percentage in the table was computed over the
+inflated denominator.
+
+**⚠️ The bracketed association in a club's name is NOT a usable discriminator.**
+PlayHQ names carry the club's parent association — `Belgrave Football Netball Club
+(Outer East Senior Football)`, `Ashburton JFC (Yarra Junior Football League
+(YJFL))` — but that is the club's home association, not the competition the team
+is playing in. A club may legitimately field juniors in one league and seniors in
+another, so filtering on the bracket removes real entrants. The test has to be
+structural: did this team play outside the grading pool.
+
+---
+
+## 11. `gameStatistics` spans every team a player turned out for
+
+Measured 2026-08-18.
+
+The live per-player query returns games from EVERY team the player appeared for in
+the season, across age groups — a U12 player's list included his two U13 games.
+There is no field distinguishing them beyond the grade name, so a consumer that
+shows the list without the age group produces rows that look like duplicate rounds
+against the wrong opponent with the wrong result.
+
+**This does not match how the stats are STORED.** `fetch-stats.js` writes one
+record per grade, so the same person has two stored records — U12 B with 16 games
+and 28 goals, U13 B with 2 and 1 — while the live list shows all 18 games and 29
+goals as one sequence. Any header summarising a person has to sum the stored
+records, or it reports one team's figures above a list covering several.
+
+The grade name is the only place the age reliably appears, and it appears in more
+than one shape: `U13 - B`, `U19.5 - Division 3`, `U14 Girls - D`,
+`Western Bulldogs - U12 Girls Division 1`. Where the grade name carries no age at
+all — `Division 3`, `Division 5`, `Premier` — the TEAM name usually does
+(`The Basin Reserves`, `The Basin Senior Women Green`). Parse both, in that order.
+
+---
+
 ## Also needs changing outside this file
 
 - `junior-footy-dashboard/docs/team_registry_design.md` §1.5 and §6 both state
@@ -268,3 +393,8 @@ though that explanation is inferred rather than measured.
 - `junior-footy-dashboard/docs/dashboard_context.md` repeats the claim under
   "Next up: multi-season support", and its open lead about
   `DiscoverTeam.organisation` is unaffected by this run.
+- Sections 10 and 11 are already reflected in `dashboard_context.md` (§6.3b and
+  §6.7) and in the code — Beta 0.181 for the grading-pool filter, 0.190–0.191 for
+  the player panel. They are recorded HERE because they are PlayHQ behaviours
+  rather than facts about this repo, and this file is the only copy that travels
+  to `sports-players-stats`.
