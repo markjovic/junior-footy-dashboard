@@ -72,10 +72,12 @@ the cross-organisation keys: `clubs`, `teamClub`, `teamOrg`, `compLogos`,
 `teamLogos`, `gotwFlags`. These cannot be per-season because they span
 competitions.
 
-`lastRound` is **RETIRED** as of 2026-08-16 — engine v19 stopped writing it and
-Beta 0.176 removed its only reader. A stale map may still be present because
-`store.js` still lists it in `CORE_KEYS`; it is inert, and audit section 9
-reports its size every run as INFO until that line comes out.
+`lastRound` is **GONE** as of 2026-08-19. Reader removed in Beta 0.176, writer in
+engine v19, `CORE_KEYS` entry in store v7. Removing it from `CORE_KEYS` does not by
+itself clear the stored map — `save` composes core as `{ ...core }` and only
+overwrites keys present in `data` — so `store.js` carries a `RETIRED_KEYS` list
+that deletes it explicitly on both write paths. The first save by any writer
+removes it, and audit section 9 then reports 0 keys.
 
 ### 3.4 Grade identity
 
@@ -104,7 +106,7 @@ round-keyed identifiers; they self-heal when the next results run touches them.
 
 ### 4.1 Library (`scripts/lib/`)
 
-**`lib/store.js`** — v6  
+**`lib/store.js`** — v7  
 The per-season storage layer. All five writers go through this.  
 - `store.load(scope, { players: false })` — loads data in the shape
   `data.json` had. `scope` is a list of compNames or null for everything.
@@ -365,7 +367,7 @@ test is exactly the committed code.
 | Script | Tests | Covers |
 |---|---|---|
 | `verify-store.yml` *(umbrella)* | — | runs all 7 suites; fires on every push |
-| `verify-per-season.js` | 53 | `store.js` and `split-by-season.js` |
+| `verify-per-season.js` | 59 | `store.js` and `split-by-season.js` |
 | `verify-backfill.js` | 126 | `backfill.js`, `fetch-results.js`, `results-engine.js` |
 | `verify-discover-seasons.js` | 20 | `discover-seasons.js` |
 | `verify-migrate-grade-ids.js` | 54 | `migrate-grade-ids.js` |

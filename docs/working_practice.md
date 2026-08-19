@@ -277,6 +277,19 @@ Every writer spreads the object (`const merged = { ...existing, ... }`), which
 silently drops non-enumerable properties. Always pass `players: false`
 explicitly to `store.save` for writers that do not touch player records.
 
+### Dropping a key from a list does not remove it from the file
+`store.save` composes the next `core.json` as `{ ...core }` and then overwrites
+only the keys present in `data`. Taking a key out of `CORE_KEYS` therefore stops it
+being read and written, and leaves it sitting in the file indefinitely with nothing
+to explain it. The first `lastRound` removal did exactly this while the comment
+beside it claimed the key was dropped on the next save — caught only because the
+change was executed against a fixture rather than reasoned about.
+
+`store.js` now has a `RETIRED_KEYS` list that deletes such keys explicitly, on
+**both** write paths — `save` and `saveCore` — because a writer that touches no
+season files takes only the second. **Add to that list whenever a key leaves
+`CORE_KEYS`.**
+
 ### A removal is only as safe as the suites you can see
 `lastRound` came out of five files on 2026-08-16. The sixth, the `'lastRound'`
 entry in `store.js`'s `CORE_KEYS`, was deliberately LEFT — `verify-per-season.js`

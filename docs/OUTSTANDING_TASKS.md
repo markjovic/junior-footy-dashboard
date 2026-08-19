@@ -1,7 +1,7 @@
 # Outstanding Tasks
 
 **Repo:** `markjovic/junior-footy-dashboard`  
-**Last updated:** 2026-08-19 (Beta 0.191, engine v19, store v6, audit v16)
+**Last updated:** 2026-08-19 (Beta 0.191, engine v19, store v7, audit v16)
 
 This document is the single place for anything that needs a decision, an action
 from you, or work from me. Read top to bottom; the order is priority.
@@ -10,47 +10,24 @@ from you, or work from me. Read top to bottom; the order is priority.
 
 ## YOUR ACTIONS — do these now
 
-### 1. Delete `probe-ser-logos.js` and its workflow by hand
+### 1. Delete `data/orgs`
 
-These two are in no tidy group, so `repo-tidy.js` cannot remove them. Delete
-through the GitHub web UI:
+**Now unblocked** — a full weekend of scheduled runs has passed. 105.25 MB
+rollback path from the 2026-08-12 per-season split.
 
-- `scripts/probe-ser-logos.js`
-- `.github/workflows/probe-ser-logos.yml`
-
-### 2. Delete `data/orgs` (NOT YET — no weekend has passed)
-
-**Status 2026-08-16: DO NOT DELETE.** `data/orgs` was created on 2026-08-12 and
-no full Saturday–Sunday of scheduled results runs has elapsed since. Four days is
-not a weekend.
-
-**Wait for:** a full weekend of stable scheduled results runs.
 **How:** GitHub web UI → navigate to `data/orgs/` → delete the directory.
-**Why:** 105.25 MB rollback path. The audit reports it as INFO every run until
-it's gone.
+The audit reports it as INFO every run until it is gone.
 
-### 3. Delete `data/data.json` if still present
+### 2. Run Fetch Results once after committing store v7
 
-The rollback path from the 2026-08-11 per-organisation split. Nothing reads
-or writes it.
+Not to fetch anything — to make the `lastRound` prune take effect. The stale map
+in `core.json` is removed by the first save any writer performs. Audit section 9
+will then report `lastRound  0 key(s) — RETIRED` and stop raising INFO.
 
-### 4. Upload `scripts/verify-per-season.js`
-
-One line of the `lastRound` removal is still outstanding — the `'lastRound'`
-entry in `store.js`'s `CORE_KEYS`. That suite has 53 assertions over `store.js`
-and has not been read, so removing the line blind risks a red run nobody can
-diagnose. Everything else came out on 2026-08-16. See B3 below.
-
-Also worth running once: `scripts/report-field-usage.js` for `lastRound`. It could
-not be run during the removal, so the check covered only the files to hand.
-
-### 5. Run Build Club Index after the next results run
-
-`results-engine.js` v13 writes `teamOrg` directly from PlayHQ for teams whose
-rounds were previously skipped. Run **Build Club Index** with no filter once a
-results run has landed, to pick them up.
-
----
+Everything else previously listed here is **DONE**: `probe-ser-logos.js` and its
+workflow deleted, `data/data.json` deleted, Build Club Index run, and
+`report-field-usage.js` run for `lastRound` (2026-08-19 — four references, of
+which only the `store.js` CORE_KEYS entry was live).
 
 ## YOUR DECISIONS — needed before work can start
 
@@ -106,24 +83,20 @@ absence is why representative-football rows on the player card show a dash.
 
 ---
 
-## BLOCKED ON ONE FILE — `scripts/verify-per-season.js`
+## NOTHING IS BLOCKED
 
-### B3. Remove the last `lastRound` line from `store.js`
+B3 is **DONE** (2026-08-19). `lastRound` is out of all six files: reader
+(Beta 0.176), writer (engine v19), audit section 9 (v16), both suites, and now the
+`CORE_KEYS` entry in `store.js` (v7).
 
-`lastRound` was removed from five of six files on 2026-08-16 (engine v19, Beta
-0.176, audit v16, both suites). What remains is one entry in `CORE_KEYS`:
-
-```
-'lastRound',   // compName|age|gradeId -> highest home-and-away round
-```
-
-While it is there, `store.load` still copies any stored map into memory and
-`store.save` still writes it back, so a stale `lastRound` survives in
-`core.json` — inert, since nothing reads or writes it. Audit section 9 reports it
-as RETIRED with its count every run, and raises INFO while it is non-empty, so it
-cannot be forgotten.
-
-Removing the line needs `verify-per-season.js` updated in the same delivery.
+**A finding worth keeping.** Removing a key from `CORE_KEYS` does NOT remove it
+from `core.json`. `save` composes the next core as `{ ...core }` and only
+overwrites keys present in `data`, so a key nobody carries any more survives
+untouched — the first version of this change left every stale entry in place while
+the comment claimed they were gone. `store.js` now has a `RETIRED_KEYS` list that
+deletes them explicitly, on BOTH write paths, because `build-club-index.js` only
+ever takes `saveCore`. Verified by removing the prune and watching the key come
+back.
 
 ## ACTIONS FOR ME — ready when you say go
 
