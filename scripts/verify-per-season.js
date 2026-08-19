@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-per-season v1 2026-08-12';
+const VERSION = 'verify-per-season v2 2026-08-19 lastround-removed';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -49,7 +49,12 @@ function writeOldLayout(manifest) {
   fs.rmSync(DATA, { recursive: true, force: true });
   fs.mkdirSync(ORGS, { recursive: true });
   fs.writeFileSync(CORE, JSON.stringify({ manifest: manifest || MANIFEST(),
-    orgFiles: [{ file: 'stale' }], clubs: { a: 1 }, lastRound: { 'U12|A': 14 } }, null, 2));
+    // gotwFlags, not lastRound. This seed exists to prove a CORE_KEY survives the
+    // migration into core.json, and lastRound was removed from CORE_KEYS in store
+    // v7 — seeding a key the store no longer carries would assert that it is
+    // dropped, which is the opposite of what this section is for.
+    orgFiles: [{ file: 'stale' }], clubs: { a: 1 },
+    gotwFlags: { 'EFNL 2026|U12|3': 'EFNL 2026|U12|g1|3|a|b' } }, null, 2));
   fs.writeFileSync(path.join(ORGS, '383836bb-current.json'), JSON.stringify({
     meta: { org: '383836bb', kind: 'current' },
     matches: [0, 1, 2].map(i => M('EFNL 2026', i)), players: [0, 1, 2].map(i => P('EFNL 2026', i)),
@@ -133,7 +138,60 @@ process.chdir(TMP);
   ok('every match is back', d.matches.length === 9, `${d.matches.length} of 9`);
   ok('every player is back', d.players.length === 5, `${d.players.length} of 5`);
   ok('roster and gradeMeta too', Object.keys(d.roster).length === 2 && Object.keys(d.gradeMeta).length === 2);
-  ok('core keys came from core.json', d.lastRound && d.lastRound['U12|A'] === 14);
+  ok('core keys came from core.json',
+    d.gotwFlags && d.gotwFlags['EFNL 2026|U12|3'] === 'EFNL 2026|U12|g1|3|a|b',
+    JSON.stringify(d.gotwFlags));
+  // The RETIRED key must NOT come back. store v7 dropped it from CORE_KEYS, so a
+  // stale map in core.json is no longer copied into memory — which is what makes
+  // the removal take effect on the next save rather than needing a migration.
+  ok('lastRound is no longer carried into memory', d.lastRound === undefined,
+    `${JSON.stringify(d.lastRound)} — still in CORE_KEYS`);
+  ok('and it is declared retired rather than merely dropped',
+    Array.isArray(store.RETIRED_KEYS) && store.RETIRED_KEYS.includes('lastRound'),
+    JSON.stringify(store.RETIRED_KEYS));
+}
+
+// ── 4a. A retired key is PRUNED from core.json, not merely ignored ───────────
+// Removing a key from CORE_KEYS stops it being read and written, and does NOT
+// remove it from core.json: save composes the next core as `{ ...core }`, so a key
+// nobody carries survives untouched. The first attempt at the lastRound removal
+// left all its entries in place while the comment in store.js claimed they were
+// gone — measured 2026-08-19. RETIRED_KEYS deletes them explicitly, on BOTH write
+// paths, because build-club-index only ever takes saveCore.
+console.log('\n4a  A retired key is pruned from core.json');
+{
+  const seedRetired = () => {
+    const c = JSON.parse(fs.readFileSync(CORE, 'utf8'));
+    c.lastRound = { 'EFNL 2026|U12|g1': 14, 'EFNL 2026|U14|g2': 16 };
+    fs.writeFileSync(CORE, JSON.stringify(c, null, 2));
+  };
+
+  // The fixture is real: without a stale key present, both assertions below pass
+  // against a tree that never had one.
+  seedRetired();
+  ok('the fixture really does carry a stale lastRound',
+    JSON.parse(fs.readFileSync(CORE, 'utf8')).lastRound !== undefined);
+
+  const d1 = store.load(null, { players: false });
+  d1.lastUpdated = new Date().toISOString();
+  store.save(d1, null, { players: false });
+  const afterSave = JSON.parse(fs.readFileSync(CORE, 'utf8'));
+  ok('save() removes it', afterSave.lastRound === undefined,
+    JSON.stringify(afterSave.lastRound));
+  ok('and leaves the live core keys alone',
+    afterSave.gotwFlags !== undefined && afterSave.clubs !== undefined &&
+    Array.isArray(afterSave.manifest),
+    Object.keys(afterSave).join(', '));
+
+  seedRetired();
+  const d2 = store.load(null, { players: false });
+  d2.clubs = { ...(d2.clubs || {}), zz: { name: 'Added' } };
+  store.saveCore(d2);
+  const afterCore = JSON.parse(fs.readFileSync(CORE, 'utf8'));
+  ok('saveCore() removes it too', afterCore.lastRound === undefined,
+    `${JSON.stringify(afterCore.lastRound)} — build-club-index only takes this path`);
+  ok('and saveCore still wrote what it was asked to',
+    afterCore.clubs && afterCore.clubs.zz, JSON.stringify(afterCore.clubs));
 }
 
 // ── 5. Scope ─────────────────────────────────────────────────────────────────
