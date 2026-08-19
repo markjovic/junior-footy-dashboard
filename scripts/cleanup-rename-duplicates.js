@@ -60,7 +60,7 @@
 
 'use strict';
 
-const VERSION = 'cleanup-rename-duplicates v4 2026-08-19 common-suffix';
+const VERSION = 'cleanup-rename-duplicates v5 2026-08-19 report-twins';
 
 const store = require('./lib/store');
 
@@ -164,7 +164,11 @@ function main() {
 
   console.log(`=== ${VERSION} ===`);
   console.log(`Mode: ${apply ? 'APPLY — records will be deleted' : 'DRY RUN — nothing will be written'}`);
-  console.log(`Scope: ${comp || 'every live season'}${includeRetired ? ' + retired' : ''}`);
+  // The LOAD is always everything in scope for store.js; the live filter is applied
+  // afterwards, during grouping. v4 printed "every live season" and then listed all
+  // eighteen, which reads as though it had touched them all.
+  console.log(`Scope: ${comp || 'all seasons loaded'}; acting on ` +
+    `${includeRetired ? 'live AND retired' : 'LIVE seasons only'}`);
 
   const scope = comp ? [comp] : null;
   let data;
@@ -281,6 +285,70 @@ function main() {
     if (unmatched.length > 10) console.log(`    ... ${unmatched.length - 10} more`);
     console.log('\n  A large number here is A8 answering itself: it means completed rounds');
     console.log('  are NOT being re-served in full.');
+  }
+
+  // ── REPORT-ONLY: duplicate games that carry no gameId at all ──────────────
+  // The rule above needs a gameId to anchor on. A retired season has none — it is
+  // never re-fetched — so that rule is BLIND there, and a zero from it means
+  // "could not see", not "clean". Measured 2026-08-19: 0 of 13,645 groups across
+  // all eighteen seasons hold both a record with a gameId and one without.
+  //
+  // This detector needs no gameId. Two records in one (comp, age, gradeId, round)
+  // with identical scores, identical date and the same normalised team pair are
+  // one game stored twice, whatever their ids — the same evidence the rule above
+  // uses, minus the anchor.
+  //
+  // ⚠️ REPORTED, NEVER DELETED, and the distinction is not caution for its own
+  // sake. With no gameId there is nothing to say WHICH of the two names PlayHQ
+  // currently serves, so there is no way to choose which record to keep. Deleting
+  // the wrong one leaves a name the API will never confirm. The repair for these
+  // is a targeted re-fetch of the round, not a deletion.
+  const twinReports = [];
+  for (const [k, recs] of groups) {
+    if (recs.length < 2) continue;
+    const used = new Set();
+    for (let i = 0; i < recs.length; i++) {
+      if (used.has(i)) continue;
+      for (let j = i + 1; j < recs.length; j++) {
+        if (used.has(j)) continue;
+        const a = recs[i], b = recs[j];
+        // Records that BOTH carry a gameId are two different games by definition —
+        // PlayHQ gave them different ids — so identical scores there are a
+        // coincidence, not a duplicate.
+        if (a.gameId && b.gameId) continue;
+        if (!sameScores(a, b)) continue;
+        if ((a.date || '') !== (b.date || '')) continue;
+        if (!samePair(a, b) && !sharesTeamExactly(a, b)) continue;
+        used.add(i); used.add(j);
+        twinReports.push({ group: k, a, b });
+        break;
+      }
+    }
+  }
+
+  if (twinReports.length) {
+    console.log(`\n── ⚠️  Duplicate games with NO gameId on either side: ${twinReports.length} ──`);
+    console.log('  REPORT ONLY — nothing here is deleted. Each pair is one game stored');
+    console.log('  twice, but with no gameId there is nothing to say which name PlayHQ');
+    console.log('  now serves, so the repair is a re-fetch of the round, not a deletion.');
+    const byComp = {};
+    for (const t of twinReports) {
+      const c = t.a.compName || '(none)';
+      byComp[c] = (byComp[c] || 0) + 1;
+    }
+    for (const c of Object.keys(byComp).sort()) console.log(`    ${c}: ${byComp[c]}`);
+    console.log('');
+    for (const t of twinReports.slice(0, 12)) {
+      console.log(`    ${t.a.id}`);
+      console.log(`    ${t.b.id}`);
+      console.log(`      both ${t.a.hScore}-${t.a.aScore} on ${t.a.date || 'no date'}`);
+    }
+    if (twinReports.length > 12) console.log(`    ... ${twinReports.length - 12} more`);
+    console.log('\n  Each pair inflates its grade ladder P column by one for both teams.');
+  } else {
+    console.log('\n── No gameId-less duplicate pairs found ──');
+    console.log('  This detector needs no gameId, so unlike the rule above it is not blind');
+    console.log('  on retired seasons. A zero here is evidence, not silence.');
   }
 
   if (!doomed.length) {
