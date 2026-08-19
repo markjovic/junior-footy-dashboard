@@ -42,7 +42,7 @@ const path = require('path');
 
 // Bump on every change. Printed by report() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const STORE_VERSION = 'v6 2026-08-13 core-key-comments';
+const STORE_VERSION = 'v7 2026-08-19 lastround-removed';
 
 const ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -67,15 +67,48 @@ const CORE_KEYS = [
   'teamOrg',     // cross-organisation, same shape as teamClub
   'compLogos',   // one per competition, trivially small
   'teamLogos',   // keyed by bare team name with NO competition
-  // Both of these were keyed WITHOUT a competition until 2026-08-13, which is
-  // why they are here. They now carry one — gotwFlags is compName|age|roundKey
-  // and lastRound is compName|age|gradeId — so neither is a cross-organisation
-  // key by necessity any more, and both COULD move to PREFIX_KEYS and live in
-  // their season's own file. That is a second migration and it has not been
+  // gotwFlags was keyed WITHOUT a competition until 2026-08-13, which is why it
+  // is here. It now carries one — compName|age|roundKey — so it is no longer a
+  // cross-organisation key by necessity and COULD move to PREFIX_KEYS and live in
+  // its season's own file. That is a second migration and it has not been
   // decided. lastround_gotw_keying_design.md §4 records the option so it is not
-  // lost; until then they stay here, where every reader already looks for them.
+  // lost; until then it stays here, where every reader already looks for it.
+  //
+  // `lastRound` sat beside it until 2026-08-19 and is GONE. It recorded the
+  // highest home-and-away round per grade for one reader — a round tag on the
+  // ladder grade tabs — removed in Beta 0.176, with the writer following in engine
+  // v19. This entry was deliberately left behind at the time because
+  // verify-per-season.js had 53 assertions over this file and had not been read;
+  // a removal that turns a suite red for an unreadable reason is not a removal.
+  // `report-field-usage.js` was run for the field on 2026-08-19 and found four
+  // references — this line, two comments in results-engine.js, the RETIRED report
+  // in audit-data.js, and one comment in index.html. This was the only live one.
+  //
+  // Removing it from this list means store.load no longer copies the stored map
+  // into memory. It does NOT by itself remove the map from core.json: save
+  // composes the next core as `{ ...core }` and only overwrites keys that are
+  // present in `data`, so a key nobody carries any more survives untouched.
+  // Measured 2026-08-19 — the first attempt at this removal left all 2 stale
+  // entries in place and the comment here claimed they were gone. The key is
+  // therefore deleted explicitly, in RETIRED_KEYS below.
   'gotwFlags',   // compName|age|roundKey -> match id, set from the dashboard
-  'lastRound',   // compName|age|gradeId -> highest home-and-away round
+];
+
+// Keys that were CORE_KEYS once and are not any more. Listed rather than simply
+// dropped, because `{ ...core }` carries anything it is not told to remove: a key
+// that leaves CORE_KEYS stops being read and stops being written, and then sits in
+// core.json indefinitely with nothing to explain it.
+//
+// Deleting on write is the whole mechanism — there is no migration script and none
+// is needed. The next save by any writer removes it.
+//
+// Add to this list whenever a key leaves CORE_KEYS. Removing an entry from HERE is
+// only safe once every deployed core.json has been through a save.
+const RETIRED_KEYS = [
+  // Recorded the highest home-and-away round per grade, for a round tag on the
+  // ladder grade tabs. Reader removed in Beta 0.176, writer in engine v19, this
+  // entry in store v7. lastround_gotw_keying_design.md.
+  'lastRound',
 ];
 
 const TIMESTAMP_KEYS = [
@@ -416,6 +449,7 @@ function save(data, scope, opts) {
              bytes: fs.statSync(full).size };
   });
   delete nextCore.orgFiles;   // the previous layout's index
+  for (const k of RETIRED_KEYS) delete nextCore[k];
 
   fs.writeFileSync(CORE_PATH, JSON.stringify(nextCore, null, 2), 'utf8');
 
@@ -436,6 +470,9 @@ function saveCore(data) {
   const next = { ...core };
   for (const k of CORE_KEYS) if (data[k] !== undefined) next[k] = data[k];
   for (const k of TIMESTAMP_KEYS) if (data[k] !== undefined) next[k] = data[k];
+  // Same treatment as save(). Without it a build-club-index run — which only ever
+  // takes this path — would leave a retired key in place indefinitely.
+  for (const k of RETIRED_KEYS) delete next[k];
   next.seasonFiles = listSeasonFiles().sort().map(f => {
     const full = path.join(SEASONS_DIR, f);
     const [seasonId, kindExt] = f.split('-');
@@ -480,5 +517,5 @@ function report(result, label) {
 
 module.exports = {
   load, save, saveCore, liveComps, report,
-  CORE_PATH, SEASONS_DIR, CORE_KEYS, STORE_VERSION,
+  CORE_PATH, SEASONS_DIR, CORE_KEYS, RETIRED_KEYS, STORE_VERSION,
 };
