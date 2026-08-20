@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v16 2026-08-16 lastround-retired';
+const VERSION = 'audit-data v17 2026-08-19 section8-note-corrected';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -998,9 +998,15 @@ console.log('\n11  Player records per person per season');
     console.log(`     in, with gp and goals SUMMED across grades — so index.html must`);
     console.log(`     aggregate these before rendering, and a grading grade gets no Scorers`);
     console.log(`     list of its own. grade_attribution_split_design.md §4.`);
-    warn(`${tM} person-season(s) hold more than one player record. Section 8's index ` +
-      `sizing counts records, not people per season, so its "seasons each" figure ` +
-      `is inflated by these. grade_attribution_split_design.md §3.1`);
+    // NOT a warning about section 8 any more. v16 made that section divide by
+    // person-seasons, and the text here still said it counted records — so the
+    // audit contradicted itself in its own output, reporting 2.26 above and then
+    // calling that very figure inflated below. Restated as what it actually is: a
+    // fact the dashboard has to handle, not a defect in this script.
+    info(`${tM} person-season(s) hold more than one player record. Anything that ` +
+      `summarises a PERSON — the Scorers list, the player panel header — must ` +
+      `aggregate them; reading one record gives a single team's figures wearing ` +
+      `the person's name. grade_attribution_split_design.md §3.1`);
   }
 
   if (gradingGrades.size) {
