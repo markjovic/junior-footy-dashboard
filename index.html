@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.196</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.197</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.196</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.197</span>
         </div>
 
 
@@ -4804,9 +4804,29 @@ function renderPlayerGames(data, p) {
           // than matching nothing, because a missing score is worse than the old
           // behaviour for the handful of grades that carry no age at all.
           const ageOk = x => !rowAge || String(x.age || '').startsWith(rowAge);
-          const mm = Number.isNaN(rNum)
+
+          // ⚠️ JOIN ON PlayHQ's OWN GAME ID FIRST.
+          //
+          // `gameStatistics` returns a `game.id` on every row, and engine v16
+          // stamps that same id onto every stored record as `gameId`. That is an
+          // exact key on both sides: no name matching, no round parsing, no age
+          // constraint, and no way to land on a different game.
+          //
+          // This view matched on round + team names for its whole life, and the
+          // names are ambiguous by construction — cleanTeam strips the age, so a
+          // club's U9, U10 and U11 sides all reduce to one string. Two rounds of
+          // patching that heuristic (Beta 0.190 added the age to the row, 0.196
+          // constrained the join by it) were fixing a problem that only existed
+          // because an exact key was available and unused.
+          //
+          // THE NAME JOIN REMAINS as a fallback, and is still age-constrained.
+          // Records written before engine v16 carry no gameId — every retired
+          // season, and anything fetched before 2026-08-16 — so dropping it would
+          // blank the score on exactly the older seasons this panel now reaches.
+          const byId = g.id ? (S.matches || []).find(x => x.gameId === g.id) : null;
+          const mm = byId || (Number.isNaN(rNum)
             ? (S.matches || []).find(x => x.isFinals && sameTeams(x) && ageOk(x))
-            : (S.matches || []).find(x => !x.isFinals && x.round === rNum && sameTeams(x) && ageOk(x));
+            : (S.matches || []).find(x => !x.isFinals && x.round === rNum && sameTeams(x) && ageOk(x)));
           let resStr = null, scoreStr = null;
           {
             const hs = mm && mm.hScore, as = mm && mm.aScore;
