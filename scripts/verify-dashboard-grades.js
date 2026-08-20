@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v20 2026-08-20 panel-follows-season';
+const VERSION = 'verify-dashboard-grades v21 2026-08-20 age-constrained-join';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -2431,6 +2431,58 @@ console.log('\n28  The player panel follows the selected season');
     'otherwise the reader cannot tell a missing season from a missing player');
 
   run(`S.selYear = '2026';`);
+
+  // ── ⚠️ THE JOIN MUST BE CONSTRAINED BY AGE ────────────────────────────────
+  // The panel gets no score from PlayHQ, so each row is joined to a stored match
+  // on round + team names. stripAgeJ removes the age from both names, so
+  // "Norwood U11" and "Norwood U9" both reduce to "Norwood" — and a club fields a
+  // team in most age groups.
+  //
+  // Reported from the live page 2026-08-20: a U11 player's list carried a U9 row
+  // scoring 0-0 and a U10 row scoring 1-82. Neither game was his. The join took
+  // whichever age group `find` reached first, and the score, result AND age all
+  // came from that other game — which made it look self-consistent, because the
+  // age was being read from the record the join had already got wrong.
+  //
+  // THE FIXTURE IS THREE GAMES IN ONE ROUND between the same two clubs in three
+  // age groups, with different scores. Without all three the wrong-age join
+  // cannot be distinguished from the right one.
+  run(`S.matches = [
+    { id:'EFNL 2026|U9|g9|3|Norwood|Montrose Blue',  compName:'EFNL 2026', age:'U9',
+      rawGrade:'B', gradeId:'g9',  round:3, home:'Norwood', away:'Montrose Blue',
+      hScore:0,  aScore:0,  date:'2026-05-04' },
+    { id:'EFNL 2026|U10|g10|3|Norwood|Montrose Blue', compName:'EFNL 2026', age:'U10',
+      rawGrade:'B', gradeId:'g10', round:3, home:'Norwood', away:'Montrose Blue',
+      hScore:1,  aScore:82, date:'2026-05-04' },
+    { id:'EFNL 2026|U11|g11|3|Norwood|Montrose Blue', compName:'EFNL 2026', age:'U11',
+      rawGrade:'B', gradeId:'g11', round:3, home:'Norwood', away:'Montrose Blue',
+      hScore:78, aScore:12, date:'2026-05-04' },
+  ];
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels(); S.selYear = '2026';`);
+
+  sandbox.__u11 = { data: { publicProfileStatistics: { seasonStatistics: [{
+    name: '2026', statistics: [{ club: { name: 'Norwood' }, teamStatistics: [{
+      team: { name: 'Norwood U11' },
+      gradeStatistics: [{ grade: { name: 'U11 - B' }, gameStatistics: [{ statistics: [],
+        game: { id: 'gx', round: { name: 'Round 3' },
+          home: { name: 'Norwood U11' }, away: { name: 'Montrose Blue U11' } } }] }],
+    }] }] }] } } };
+  run(`renderPlayerGames(__u11, { name: 'Toby Jovic' });`);
+  const j = run(`document.getElementById('pm-body').innerHTML`);
+
+  ok('a U11 row joins the U11 game, not another age group in the same round',
+    /78/.test(j) && /12/.test(j),
+    `the U11 game was 78-12; U9 was 0-0 and U10 was 1-82 — ` +
+    `${/0.*0/.test(j) ? 'looks like the U9 game' : ''}${/82/.test(j) ? 'looks like the U10 game' : ''}`);
+  // This guards the rowAge PARSE, not the ordering. With the join constrained,
+  // mm.age always equals rowAge, so reading one or the other is unobservable —
+  // the circularity only mattered while the join was unconstrained. What can still
+  // break is rowAge coming back empty, which makes the constraint permit any age
+  // and puts the wrong-game bug straight back. Verified by stubbing rowAge to ''.
+  ok('the row age is parsed from PlayHQ\'s grade name, not the joined record',
+    /U11/.test(j) && !/>U9</.test(j) && !/>U10</.test(j),
+    'an empty rowAge lets the join match any age group again');
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
