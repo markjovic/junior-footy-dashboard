@@ -1,0 +1,67 @@
+# .github/workflows/build-player-index.yml
+#
+# Builds data/player-index.json — the cross-season player search index.
+# docs/cross_season_search_design.md.
+#
+# WEEKLY, not chained to fetch-results. Few players are added mid-week, so a stats
+# run does not need to pay for an index rebuild and a commit every time. The index
+# may therefore be up to a week behind for a brand-new player; that was decided
+# deliberately (design §10.2).
+#
+# Offline: reads stored player files only, makes no PlayHQ calls, needs no session.
+
+name: Build Player Index
+
+on:
+  schedule:
+    # 03:15 UTC Monday = 14:15 AEST Monday. Well clear of the Saturday and Sunday
+    # evening results runs, so it never reads a season file mid-commit.
+    - cron: '15 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report the index and write nothing.'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # --max-old-space-size because this reads eighteen seasons of player records.
+      # It releases each season before the next, but the peak is still well above a
+      # default heap and a runner OOM reads as an unexplained failure.
+      - name: Build
+        env:
+          INDEX_DRY_RUN: ${{ inputs.dry_run }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: node scripts/build-player-index.js
+
+      - name: Commit
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Rebuild player search index"
+          git pull --rebase -X theirs
+          git push
