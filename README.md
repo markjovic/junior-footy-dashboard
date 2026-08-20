@@ -42,6 +42,9 @@ workers/
     discover-seasons.yml    ← Manual — run before a backfill when a season appears
     audit-data.yml          ← Manual, read-only — data audit
     repair-scheduled-results.yml ← Manual, offline, no PlayHQ calls
+    cleanup-rename-duplicates.yml ← Manual, offline; dry run by default
+    repair-duplicate-names.yml ← Manual, online; dry run by default
+    probe-refetch-round.yml ← Manual, read-only diagnostic
     repo-audit.yml          ← Manual, read-only — inventory, duplicates, orphans
     repo-tidy.yml           ← Manual — removes dead files, dry run by default
     probe-finals-rounds.yml ← Manual, read-only diagnostic
@@ -60,6 +63,12 @@ scripts/
   migrate-grade-ids.js      ← One-off (idempotent): rewrites match ids to carry grade ids
   rebuild-grade-meta.js     ← Offline: regenerates gradeMeta for every stored season
   repair-scheduled-results.js ← Offline: clears a stale `scheduled` flag from real results
+  cleanup-rename-duplicates.js ← Offline: removes a duplicate left by a team rename,
+                              where one of the pair carries PlayHQ's gameId
+  repair-duplicate-names.js ← Online: the same, where NEITHER does — asks PlayHQ
+                              which name it still serves
+  probe-refetch-round.js    ← Read-only: does discoverFixtureByRound re-serve a
+                              completed round? (it does, settled 2026-08-19)
   split-by-season.js        ← One-off migration: data/orgs → data/seasons
   audit-data.js             ← Read-only data audit (sizes, gaps, grade identity, coverage)
   report-field-usage.js     ← Which scripts reference a stored field. SOURCE files only —
@@ -138,6 +147,11 @@ https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/migrate-gr
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/rebuild-grade-meta.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/split-by-season.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/report-field-usage.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repo-tidy.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/cleanup-rename-duplicates.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-duplicate-names.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-scheduled-results.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/probe-refetch-round.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/store.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/results-engine.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/playhq.js
@@ -723,11 +737,15 @@ fired.
 
 - **`logoKey()` colour stripping does not work.** `new RegExp('\s+' + c + '\s*$')` uses a plain string, so `\s` becomes a literal `s`. Unnoticed because `teamLogos` is keyed by full team name and usually hits exactly.
 - **Team identity is derived from a cleaned display name**, not the PlayHQ team `id` — which both fetchers request and discard. This is the root cause of the club-name heuristics in `fetch-stats.js`.
-- **`discoverFixtureByRound` re-serving completed rounds is unresolved.** One
-  observation says a completed round already fetched returns 0 games; a 68-call
-  probe on 2026-08-13 returned full game lists every time. One is wrong, and no
-  deletion or reconciliation mechanism should be built on either until it is
-  settled.
+- **A team rename stores the same game twice.** A match id embeds both team names,
+  so when PlayHQ renames a team mid-season the game re-fetches under a new id and
+  the old record stays, inflating both teams' ladder P column. Engine v16 stopped
+  new ones by stamping every record with PlayHQ's `gameId`; the backlog was cleared
+  on 2026-08-19 — 24 records, by `cleanup-rename-duplicates.js` and
+  `repair-duplicate-names.js`. **These rounds are unreachable by the normal fetch
+  path**: `knownRounds` is built in memory from stored records and `fetchGrade`
+  skips anything at or below it, so neither fetch-results nor backfill revisits
+  them. Two causes, and only one was PlayHQ's — see the `cleanTeam` note below.
 - **49 unmigrated bye sentinels** (YJFL only) — ambiguous grade collisions that
   self-heal when the next results run touches the grade.
 - **A short-form competition not named "grading"** — SEJ's Lightning Premiership,
@@ -753,6 +771,14 @@ fired.
   section. With 99.91% of records migrated that was every fixture.
 - **The "4 of 8" grade tag counted every grade twice.** `buildGradeMeta` writes each
   ranked grade under both its id and its rawGrade, and the count matched on prefix.
+- **`cleanTeam` stored one PlayHQ name as two different team names.** It has two
+  paths — with a grade age it strips only that exact token, without one it stripped
+  ANY U-number — so `Mt Eliza JFC U17 Boys Red` in a `U17.5` grade was stored both
+  as itself and as `Mt Eliza JFC Boys Red`. Four of the 24 duplicates came from
+  this, and it looked exactly like a PlayHQ rename. Engine v20 makes the
+  no-grade-age path strip nothing and warn loudly, so the two can no longer
+  disagree. The `.5` behaviour is unchanged on purpose: stripping the base number
+  would rewrite the id of every stored U17.5 and U18.5 record.
 
 ---
 
