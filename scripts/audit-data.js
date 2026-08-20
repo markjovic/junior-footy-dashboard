@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v18 2026-08-19 unattributed-do-not-self-heal';
+const VERSION = 'audit-data v19 2026-08-19 byes-unresolvable';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -415,25 +415,42 @@ if (gradesWithGaps > gapExamples.length) {
 // the fallback key, reported in the live section beside a real one.
 if (unattributed.size) {
   const tot = [...unattributed.values()].reduce((a, b) => a + b, 0);
-  // ⚠️ THEY DO NOT SELF-HEAL. This said they would, and that was never true.
+  // ⚠️ PERMANENTLY UNRESOLVABLE — settled 2026-08-19, and INFO rather than a
+  // warning because there is nothing left to do about them.
   //
-  // A results run cannot reach them. `knownRounds` is built in memory from stored
-  // records and fetchGrade skips anything at or below it — and a bye sentinel IS a
-  // stored record, so its round is never re-walked. Most of these sit in RETIRED
-  // seasons besides, which are not in config.json and are never walked at all.
+  // A bye sentinel records that a team had NO GAME: no opponent, no score, no
+  // fixture. Every one of these sits in an age group PlayHQ splits into
+  // identically-shaped pools — "U10 Mixed - Pool 1" through "Pool 6",
+  // "U8 Mixed North (1)" and "North (2)", "U10 Mixed Zone 1" through "Zone 5" —
+  // so nothing in the record says which pool it belongs to, and no fetch can
+  // supply what was never stored.
   //
-  // Measured 2026-08-19: the count has been exactly 49 across every audit run in
-  // the session, and migrate-grade-ids pass 1 and pass 2 both resolved 0 of them.
-  // Whether pass 3 can is UNKNOWN — a dry run reports it as having failed while
-  // making no API calls at all.
-  warn(`${tot} record(s) across ${unattributed.size} key(s) have NO gradeId, so they ` +
-       `cannot be attributed to a grade and have no round coverage. These are the ` +
-       `"needs pass 2" rows in section 7. They do NOT self-heal: a bye sentinel is ` +
-       `a stored record, so its round is never re-walked, and most are in retired ` +
-       `seasons that are never walked at all. Reaching them needs migrate-grade-ids ` +
-       `pass 3, run for real — a dry run makes no calls`);
+  // Measured, not assumed. migrate-grade-ids run for real on 2026-08-19:
+  //   pass 1 (offline)          resolved 0
+  //   pass 2 (team registry)    resolved 0
+  //   pass 3 (live fixtures)    resolved 0 — 63 grades listed, 211 rounds
+  //                             fetched, 279 calls, zero errors
+  //   all 49 classified "ambiguous bye"
+  //
+  // They were previously reported as self-healing on the next results run. That
+  // was never true: knownRounds is built from stored records and fetchGrade skips
+  // anything at or below it, a bye sentinel IS a stored record, and 41 of the 49
+  // are in retired seasons that are never walked at all. The count sat at exactly
+  // 49 for as long as anyone looked.
+  //
+  // Nothing on the dashboard reads them — they carry no result, so they are
+  // excluded from ladders, results and round coverage alike. Left in place
+  // deliberately: deleting them would be irreversible and buys nothing.
+  info(`${tot} record(s) across ${unattributed.size} key(s) have no gradeId. All are ` +
+       `AMBIGUOUS BYES in YJFL pool/zone grades and are permanently unresolvable — ` +
+       `a bye has no fixture to identify it and the pools are indistinguishable. ` +
+       `Confirmed 2026-08-19 by migrate-grade-ids passes 1, 2 and 3 (279 API calls, ` +
+       `0 resolved). They carry no result and nothing on the dashboard reads them. ` +
+       `NO ACTION — this is the settled state, not an open defect.`);
   for (const [k, n] of [...unattributed].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
-    warn(`  unattributed — ${k} — ${n} record(s)`);
+    // INFO to match the line above. Five WARNING lines under a settled INFO would
+    // put the run back to reporting a non-problem as a problem.
+    info(`  unattributed — ${k} — ${n} record(s)`);
   }
 }
 

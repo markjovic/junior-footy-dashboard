@@ -21,7 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-audit v5 2026-08-16 lastround-retired';
+const VERSION = 'verify-audit v6 2026-08-19 byes-settled';
 console.log(`=== ${VERSION} ===`);
 
 const AUDIT = path.join(__dirname, 'audit-data.js');
@@ -246,7 +246,23 @@ seeded('and is labelled LIVE so the two cannot be confused', fx => {
 // and reported as unattributed instead.
 seeded('a record with no gradeId is reported as unattributed', fx => {
   for (const m of fx.archive.matches) { delete m.gradeId; }
-}, /record\(s\) across \d+ key\(s\) have NO gradeId/, 0);
+}, /record\(s\) across \d+ key\(s\) have no gradeId/, 0);
+
+// It must read as SETTLED, not as an open defect. These are ambiguous byes in
+// YJFL pool grades: a bye has no fixture to identify it and the pools are
+// indistinguishable, so nothing can place them. Proved 2026-08-19 by running
+// migrate-grade-ids passes 1, 2 and 3 for real — 279 API calls, 0 resolved.
+//
+// Asserted because the previous text told the reader they would "self-heal when a
+// results run next fetches a real round", which was never true and left a
+// permanent warning looking like a job someone had forgotten.
+seeded('and reported as permanently unresolvable, with no action implied', fx => {
+  for (const m of fx.archive.matches) { delete m.gradeId; }
+}, /permanently unresolvable[\s\S]*NO ACTION/, 0);
+
+seeded('it does not claim they self-heal', fx => {
+  for (const m of fx.archive.matches) { delete m.gradeId; }
+}, /^(?![\s\S]*self-heal)[\s\S]*no gradeId/, 0);
 
 seeded('the unattributed key is named so it can be found', fx => {
   for (const m of fx.archive.matches) { delete m.gradeId; }
