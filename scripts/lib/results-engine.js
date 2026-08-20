@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v19 2026-08-16 lastround-removed';
+const ENGINE_VERSION = 'v20 2026-08-19 cleanteam-fallback-inert';
 
 'use strict';
 
@@ -275,7 +275,38 @@ function cleanTeam(name, gradeAge) {
       return name.replace(new RegExp('\\s+' + ageNum.replace('.','\\.')  + '\\b\\s*', 'gi'), ' ').replace(/\s+$/,'').trim();
     }
   }
-  return name.replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+$/,'').trim();
+
+  // ⚠️ NO gradeAge: STRIP NOTHING (v20, 2026-08-19).
+  //
+  // This used to strip ANY U-number, and that is where four of the twenty-one
+  // duplicate records repaired on 2026-08-19 came from. The two paths disagreed
+  // about one PlayHQ name:
+  //
+  //   grade U17.5, name "Mt Eliza JFC U17 Boys Red"
+  //     with gradeAge -> "Mt Eliza JFC U17 Boys Red"   (U17.5 does not match U17)
+  //     without       -> "Mt Eliza JFC Boys Red"
+  //
+  // A match id embeds team names, so the same game was stored under two ids and
+  // both sat on the ladder. It looked exactly like a PlayHQ rename and was not —
+  // it was ours. See working_practice.md.
+  //
+  // Stripping nothing makes the fallback INERT rather than differently-wrong: a
+  // name that reaches here is stored exactly as PlayHQ gave it, which is also what
+  // the gradeAge path does whenever the token does not match. The two can no
+  // longer produce different strings for one input.
+  //
+  // The `.5` behaviour above is deliberately UNCHANGED. Stripping the base number
+  // from a U17.5 grade would rewrite the id of every stored U17.5 and U18.5
+  // record, creating one new duplicate for each — the opposite of the fix.
+  //
+  // Loud, because it should never happen: the only call site derives age from
+  // parseGradeName and always passes it. If this fires, a grade name failed to
+  // parse and that is worth knowing about rather than silently absorbing.
+  if (name && /\s+U\d/i.test(name)) {
+    console.warn(`    ⚠️ cleanTeam called with no gradeAge for "${name}" — ` +
+      `storing the name unchanged. A grade name failed to parse; check parseGradeName.`);
+  }
+  return String(name).replace(/\s+$/,'').trim();
 }
 
 // ─── Round identity ───────────────────────────────────────────────────────────
