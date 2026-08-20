@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v17 2026-08-19 section8-note-corrected';
+const VERSION = 'audit-data v18 2026-08-19 unattributed-do-not-self-heal';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -415,10 +415,23 @@ if (gradesWithGaps > gapExamples.length) {
 // the fallback key, reported in the live section beside a real one.
 if (unattributed.size) {
   const tot = [...unattributed.values()].reduce((a, b) => a + b, 0);
+  // ⚠️ THEY DO NOT SELF-HEAL. This said they would, and that was never true.
+  //
+  // A results run cannot reach them. `knownRounds` is built in memory from stored
+  // records and fetchGrade skips anything at or below it — and a bye sentinel IS a
+  // stored record, so its round is never re-walked. Most of these sit in RETIRED
+  // seasons besides, which are not in config.json and are never walked at all.
+  //
+  // Measured 2026-08-19: the count has been exactly 49 across every audit run in
+  // the session, and migrate-grade-ids pass 1 and pass 2 both resolved 0 of them.
+  // Whether pass 3 can is UNKNOWN — a dry run reports it as having failed while
+  // making no API calls at all.
   warn(`${tot} record(s) across ${unattributed.size} key(s) have NO gradeId, so they ` +
        `cannot be attributed to a grade and have no round coverage. These are the ` +
-       `"needs pass 2" rows in section 7 and self-heal when a results run next ` +
-       `fetches a real round for the grade`);
+       `"needs pass 2" rows in section 7. They do NOT self-heal: a bye sentinel is ` +
+       `a stored record, so its round is never re-walked, and most are in retired ` +
+       `seasons that are never walked at all. Reaching them needs migrate-grade-ids ` +
+       `pass 3, run for real — a dry run makes no calls`);
   for (const [k, n] of [...unattributed].sort((a, b) => b[1] - a[1]).slice(0, 5)) {
     warn(`  unattributed — ${k} — ${n} record(s)`);
   }
