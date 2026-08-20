@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v18 2026-08-20 search-row-layout';
+const VERSION = 'verify-dashboard-grades v19 2026-08-20 season-switch-unconditional';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -707,8 +707,38 @@ console.log('\n12  Cross-season search returns one row per person');
     (single.match(/openPlayerFromSearch\('u-gone'/g) || []).length === 1,
     `${(single.match(/openPlayerFromSearch\('u-gone'/g) || []).length} handler(s) — the row itself only`);
 
+  // ── ⚠️ THE SEASON SWITCH MUST HAPPEN EVEN WHEN THE SEASON IS ALREADY LOADED ──
+  //
+  // The switch used to sit inside the "needs loading" branch, so clicking a year
+  // already in memory set nothing and the panel — which scopes its totals by
+  // S.selYear — showed the previously selected year. Reported from the live page
+  // 2026-08-20: clicking 2024 showed 2026 stats.
+  //
+  // The fixture makes the season ALREADY LOADED, which is the case that failed.
+  // With it unloaded, loadSeasons would fetch and the old code happened to work.
   ok('openPlayerFromSearch exists to load a season the page has never fetched',
     has('openPlayerFromSearch'));
+  if (has('openPlayerFromSearch')) {
+    run(`S.selYear = '2026'; S.selComp = 'EFNL 2026';
+      S.loadedSeasons = ['s2026','s2023'];
+      S.loadedPlayerSeasons = ['s2026','s2023'];`);
+    // Awaited via a promise the harness can resolve — the function is async and
+    // returns before the assignment otherwise.
+    run(`__p = openPlayerFromSearch('u-toby','s2023');`);
+    ok('clicking an ALREADY-LOADED season still switches the year',
+      run(`S.selYear`) === '2023',
+      `S.selYear is ${run(`S.selYear`)} — the panel scopes on this, so 2026 here means ` +
+      `the click was ignored`);
+    ok('and switches the competition with it',
+      run(`S.selComp`) === 'EFNL 2023', String(run(`S.selComp`)));
+
+    // Could that have failed? Clicking the season already selected must be a
+    // no-op rather than a redundant re-render.
+    run(`S.selYear = '2026'; S.selComp = 'EFNL 2026';
+      __p = openPlayerFromSearch('u-toby','s2026');`);
+    ok('clicking the season already selected leaves it alone',
+      run(`S.selYear`) === '2026', String(run(`S.selYear`)));
+  }
   ok('loadPlayerIndex exists', has('loadPlayerIndex'));
   run(`S.playerIndexState = ''; S.playerIndex = null;`);
 }
