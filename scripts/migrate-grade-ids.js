@@ -58,7 +58,7 @@ const { parseGradeName, cleanTeam, roundToken, Q_GRADE_ROUNDS, Q_FIXTURE } =
   require('./lib/results-engine');
 const { gqlPost, refreshSession, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'migrate-grade-ids v5 2026-08-12 pass3-byes';
+const VERSION = 'migrate-grade-ids v6 2026-08-19 pass3-dry-run-honesty';
 const ROOT = path.resolve(__dirname, '..');
 const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 
@@ -196,6 +196,8 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
   // never re-crawled.
   let pass3Resolved = 0;
   const stillUnresolved = [];
+  // Set only when pass 3 actually issues its API calls — see the summary below.
+  let pass3Executed = false;
   if (disagreed.length && PASS3) {
     // seasonId -> gradeId -> Set(roundToken) still needed
     const want = new Map();
@@ -211,6 +213,13 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
       }
     }
 
+    // ⚠️ Whether pass 3 RAN, not whether it was asked for. The summary used to
+    // branch on PASS3 alone and print "Pass 3 ran and could not place them" after
+    // a dry run that made no calls at all — a negative result asserted with no
+    // evidence behind it, four lines below "DRY RUN — no calls made". Found
+    // 2026-08-19, and it had been discouraging the one run that would settle the
+    // question. working_practice.md: a tool that reports something is absent must
+    // show what it found instead.
     let plannedGrades = 0, plannedRounds = 0;
     for (const g of want.values()) for (const toks of g.values()) { plannedGrades++; plannedRounds += toks.size; }
     console.log(`\nPASS 3  re-fetch the unresolved grades and rounds`);
@@ -219,8 +228,10 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
 
     if (DRY) {
       console.log(`  DRY RUN — no calls made.`);
+      console.log(`  These ${disagreed.length} record(s) are therefore UNTESTED, not unresolvable.`);
       for (const d of disagreed) stillUnresolved.push(d);
     } else {
+      pass3Executed = true;
       await refreshSession();
       // "roundToken|teamA|teamB" -> gradeId, built from live fixtures.
       const fromFixture = new Map();
@@ -340,9 +351,15 @@ async function migrateOrg(ORG, keyToGrades, gradeById, core) {
 
   if (unresolvedTotal) {
     console.log(`\n  UNRESOLVED — these keep their current id and rawGrade.`);
-    console.log(PASS3
-      ? `  Pass 3 ran and could not place them. Re-running will not change that.`
-      : `  Set MIGRATE_PASS3=true to resolve them from the fixtures.`);
+    console.log(
+      pass3Executed
+        ? `  Pass 3 RAN and could not place them. Re-running will not change that.`
+      : PASS3
+        ? `  Pass 3 was requested but SKIPPED — this is a dry run, so no fixtures were\n` +
+          `  fetched and these are UNTESTED, not unresolvable. Set MIGRATE_DRY_RUN=false\n` +
+          `  to actually try. It only rewrites what it can resolve, so a run that places\n` +
+          `  none writes nothing.`
+        : `  Set MIGRATE_PASS3=true to resolve them from the fixtures.`);
     const byKey = new Map();
     for (const { rec } of stillUnresolved) {
       const k = `${rec.compName}|${rec.age}|${rec.rawGrade}`;
