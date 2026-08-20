@@ -424,6 +424,18 @@ body{overflow-x:hidden}
   .fv-sum-body{overflow-x:auto}
   .fv-sum th{position:static}
 }
+.pm-season-strip{display:flex;gap:5px;overflow-x:auto;padding:7px 16px;
+  border-bottom:1px solid var(--b1);background:var(--s2);scrollbar-width:thin}
+.pm-season-strip:empty{display:none}
+.pm-season-strip::-webkit-scrollbar{height:4px}
+.pm-season-strip::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+.pm-yr{flex-shrink:0;font-family:'DM Mono',monospace;font-size:11px;padding:3px 9px;
+  border-radius:4px;cursor:pointer;border:1px solid var(--b2);background:var(--s1);
+  color:var(--tx3);transition:all .12s;white-space:nowrap}
+.pm-yr:hover{color:var(--tx);border-color:var(--tx3)}
+.pm-yr.on{background:rgba(240,192,64,.14);border-color:rgba(240,192,64,.4);color:var(--gold);
+  font-weight:500;cursor:default}
+.pm-yr-sub{font-size:9px;opacity:.7;margin-left:5px}
 .fv-sum-hdr{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:9px 2px;
   cursor:pointer;user-select:none}
 .fv-sum-hdr:hover .fv-sum-title{color:var(--tx)}
@@ -494,7 +506,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.198</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.199</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -736,6 +748,7 @@ body{overflow-x:hidden}
       <div id="pm-season" style="flex-shrink:0;margin-right:10px"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
+    <div id="pm-seasons" class="pm-season-strip"></div>
     <div class="team-stat-strip" id="pm-stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="team-modal-scroll">
       <div class="team-modal-body" id="pm-body">
@@ -844,7 +857,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.198</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.199</span>
         </div>
 
 
@@ -4656,6 +4669,62 @@ async function openPlayerPanel(uuid) {
           title="Every figure on this panel is for the ${shownYear} season">${shownYear}</span>`
       : '';
   }
+
+  // ── Season switcher ───────────────────────────────────────────────────────
+  // Every season this person played, newest first, the current one in gold.
+  // Clicking one goes through openPlayerFromSearch, which is the SAME path a
+  // search result takes — it loads the season if needed, moves the year,
+  // competition, age group and grade with it, re-renders the page behind, and
+  // reopens the panel. Reusing it means the two routes cannot drift.
+  //
+  // SOURCE, in order:
+  //   the index, if it happens to be loaded — it holds every season for every
+  //     person, including seasons this page has never fetched
+  //   otherwise the loaded player records, which is honest but partial
+  //
+  // It does NOT fetch the index. Pulling 2.65 MB because somebody opened a player
+  // panel is exactly what the on-first-keystroke rule exists to avoid; a reader
+  // who has not searched gets the seasons already in memory.
+  {
+    const strip = document.getElementById('pm-seasons');
+    if (strip) {
+      let entries = [];
+      const ix = S.playerIndexState === 'ready' ? S.playerIndex : null;
+      const row = ix && ix.people.find(r => r[0] === uuid);
+      if (row) {
+        entries = row[2].map(([si, ti, ai, gi]) => ({
+          seasonId: ix.seasons[si],
+          year: seasonYearOf(compNameOfSeason(ix.seasons[si])),
+          team: ix.teams[ti] || '', age: ix.ages[ai] || '', grade: ix.grades[gi] || '',
+        }));
+      } else {
+        // One entry per season, newest first. allRecs is every stored record for
+        // this person across every loaded season, and a person in two grades in
+        // one season has two — so it is deduplicated on the year, not listed raw.
+        const seen = new Map();
+        for (const r of allRecs) {
+          const y = seasonYearOf(r.compName);
+          if (!y || seen.has(y)) continue;
+          const sid = ((S.manifest || []).find(m => m.compName === r.compName) || {}).seasonId || '';
+          seen.set(y, { seasonId: sid, year: y, team: r.teamRaw || r.team || '',
+                        age: r.age || '', grade: r.rawGrade || '' });
+        }
+        entries = [...seen.values()].sort((a, b) => b.year.localeCompare(a.year));
+      }
+
+      // A single season needs no switcher — one button that cannot be pressed is
+      // noise, and the badge in the header already says which year it is.
+      strip.innerHTML = entries.length > 1 ? entries.map(e => {
+        const on = e.year === shownYear;
+        const sub = [e.age, e.grade].filter(Boolean).join(' ');
+        return `<div class="pm-yr${on ? ' on' : ''}"
+          title="${[e.team, e.age, e.grade].filter(Boolean).join(' · ') || e.year}"
+          ${on ? '' : `onclick="openPlayerFromSearch('${uuid}','${e.seasonId}')"`}>${e.year}` +
+          `${sub ? `<span class="pm-yr-sub">${sub}</span>` : ''}</div>`;
+      }).join('') : '';
+    }
+  }
+
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
   // Summary strip from local data
