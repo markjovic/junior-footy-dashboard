@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.192</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.193</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.192</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.193</span>
         </div>
 
 
@@ -5062,29 +5062,60 @@ function onPlayerSearch(val) {
   const stripAge = n => String(n || '').replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').replace(/\s+/g, ' ').trim();
   res.style.display = 'flex';
   res.innerHTML = shown.map(r => {
-    // The most recent season names the row; the rest become year chips. That is
-    // what makes two people called Jack Smith tellable apart — the row carries a
-    // team, which a bare index row could not.
+    // THE NAME COMES FIRST AND GETS THE ROOM.
+    //
+    // The first version put the year chips on the same line as the name, in a
+    // flex row. With three or four seasons they took half the width and the name
+    // truncated to "Adam …" — the one thing the reader typed and the one thing
+    // they could no longer read. Reported from the live page 2026-08-20.
+    //
+    // Now: name on its own line, detail beneath it. A row is two lines tall
+    // instead of one, which costs about four visible results in the 240px list —
+    // worth it for a name that is legible.
     const top = r.seasons[0] || {};
     const team = stripAge(top.team);
-    const others = r.seasons.slice(1, 5)
-      .map(sn => seasonYearOf(compNameOfSeason(sn.seasonId)))
-      .filter(Boolean);
-    const chips = others.map(y =>
-      `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:1px 4px;border-radius:3px;` +
-      `background:rgba(255,255,255,.07);color:var(--tx3);flex-shrink:0">${y}</span>`).join('');
     const topYear = seasonYearOf(compNameOfSeason(top.seasonId));
-    const topChip = topYear && topYear !== S.selYear
-      ? `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:1px 4px;border-radius:3px;` +
-        `background:rgba(240,192,64,.14);color:var(--gold);flex-shrink:0">${topYear}</span>` : '';
+
+    // ⚠️ EVERY SEASON IS ITS OWN BUTTON, and opens THAT season.
+    //
+    // The chips used to be decoration: they looked like controls, and clicking
+    // one opened the most recent season regardless of which year it said. A
+    // control that lies about what it does is worse than no control. Each chip
+    // now carries its own seasonId and opens the player in that season.
+    //
+    // Capped at four, oldest dropped, because a player with eight seasons would
+    // otherwise push the row wide again. The panel shows the full history anyway.
+    const seasonBtns = r.seasons.slice(0, 4).map(sn => {
+      const y = seasonYearOf(compNameOfSeason(sn.seasonId));
+      if (!y) return '';
+      const isSel = y === S.selYear;
+      return `<span onclick="event.stopPropagation();openPlayerFromSearch('${r.uuid}','${sn.seasonId}')"
+        title="${[stripAge(sn.team), sn.age, sn.grade].filter(Boolean).join(' · ')} — open ${y}"
+        style="font-family:'DM Mono',monospace;font-size:9px;padding:2px 5px;border-radius:3px;cursor:pointer;
+        background:${isSel ? 'rgba(240,192,64,.16)' : 'rgba(255,255,255,.06)'};
+        color:${isSel ? 'var(--gold)' : 'var(--tx3)'};
+        border:1px solid ${isSel ? 'rgba(240,192,64,.3)' : 'transparent'}">${y}</span>`;
+    }).join('');
+    const more = r.seasons.length > 4
+      ? `<span style="font-size:9px;color:var(--tx3)">+${r.seasons.length - 4}</span>` : '';
+
+    // The meta line describes the season the ROW opens — the most recent one —
+    // so the chips and the text never disagree about which season is which.
     const meta = [team, top.age, top.grade].filter(Boolean).join(' &middot; ');
-    return `<div class="player-result" onclick="openPlayerFromSearch('${r.uuid}','${top.seasonId}')">
+    return `<div class="player-result" style="align-items:flex-start"
+      onclick="openPlayerFromSearch('${r.uuid}','${top.seasonId}')">
       ${crestHTML(team, 16, 'tlogo')}
       <div style="flex:1;min-width:0">
         <div class="player-result-name">${toProperCase(r.name)}</div>
-        <div class="player-result-meta">${meta}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px">
+          <span class="player-result-meta" style="overflow:hidden;text-overflow:ellipsis;max-width:100%">${meta}</span>
+        </div>
+        ${r.seasons.length > 1 ? `<div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:3px">
+          ${seasonBtns}${more}</div>` : ''}
       </div>
-      ${topChip}${chips}
+      ${r.seasons.length === 1 && topYear && topYear !== S.selYear
+        ? `<span style="font-family:'DM Mono',monospace;font-size:9px;padding:2px 5px;border-radius:3px;
+            background:rgba(255,255,255,.06);color:var(--tx3);flex-shrink:0">${topYear}</span>` : ''}
     </div>`;
   }).join('') + scopeNote;
 }
