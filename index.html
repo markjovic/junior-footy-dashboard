@@ -512,7 +512,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.200</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.201</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -862,7 +862,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.200</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.201</span>
         </div>
 
 
@@ -4558,10 +4558,71 @@ function parseGameStats(stats) {
   return {gp, goals, bp};
 }
 
+let _panelUuid = null;
 let _playerPanelSource = null;
 
+// Draws the season buttons in the player panel header. Called when the panel
+// opens, and AGAIN if the search index arrives afterwards — the panel must not
+// wait 2.65 MB before it renders.
+//
+// SOURCE, in order: the index when loaded, because it holds every season for
+// every person including seasons this page has never fetched; otherwise the
+// loaded player records, which is honest but partial.
+function buildSeasonStrip(uuid, shownYear, allRecs) {
+    const strip = document.getElementById('pm-seasons');
+    if (strip) {
+      let entries = [];
+      const ix = S.playerIndexState === 'ready' ? S.playerIndex : null;
+      const row = ix && ix.people.find(r => r[0] === uuid);
+      if (row) {
+        entries = row[2].map(([si, ti, ai, gi]) => ({
+          seasonId: ix.seasons[si],
+          year: seasonYearOf(compNameOfSeason(ix.seasons[si])),
+          team: ix.teams[ti] || '', age: ix.ages[ai] || '', grade: ix.grades[gi] || '',
+        }));
+      } else {
+        // One entry per season, newest first. allRecs is every stored record for
+        // this person across every loaded season, and a person in two grades in
+        // one season has two — so it is deduplicated on the year, not listed raw.
+        const seen = new Map();
+        for (const r of allRecs) {
+          const y = seasonYearOf(r.compName);
+          if (!y || seen.has(y)) continue;
+          const sid = ((S.manifest || []).find(m => m.compName === r.compName) || {}).seasonId || '';
+          seen.set(y, { seasonId: sid, year: y, team: r.teamRaw || r.team || '',
+                        age: r.age || '', grade: r.rawGrade || '' });
+        }
+        entries = [...seen.values()].sort((a, b) => b.year.localeCompare(a.year));
+      }
+
+      // A SINGLE SEASON STILL RENDERS. The header badge used to cover that case
+      // and has been removed — it duplicated these buttons and cost a row — so if
+      // this hid itself for one-season players their panel would say nothing at
+      // all about which year it shows. It renders as one unclickable gold chip,
+      // which is exactly what the badge was.
+      strip.innerHTML = entries.length ? entries.map(e => {
+        // JUST THE YEAR. The age and grade were on the chip as well as in the
+        // header line directly below it, saying the same thing twice and making
+        // each button three times wider than it needed to be. They stay on the
+        // hover title, where they identify a season the panel is not currently
+        // showing — which the header cannot do, since it only describes the
+        // season in view.
+        const on = e.year === shownYear;
+        return `<div class="pm-yr${on ? ' on' : ''}"
+          title="${[e.team, e.age, e.grade].filter(Boolean).join(' · ') || e.year}"
+          ${on ? '' : `onclick="openPlayerFromSearch('${uuid}','${e.seasonId}')"`}>${e.year}</div>`;
+      }).join('')
+        : (shownYear
+            ? `<div class="pm-yr on" title="Every figure on this panel is for the ` +
+              `${shownYear} season">${shownYear}</div>`
+            : '');
+    }
+}
 async function openPlayerPanel(uuid) {
   if (!uuid) return;
+  // Which player the panel is currently showing, so a late index fetch can tell
+  // whether its redraw is still wanted.
+  _panelUuid = uuid;
   const teamModal = document.getElementById('team-modal');
   _playerPanelSource = (teamModal && teamModal.style.display !== 'none') ? 'team' : 'other';
   teamModal.style.display = 'none';
@@ -4661,69 +4722,26 @@ async function openPlayerPanel(uuid) {
   const shownYear = (recs[0] && seasonYearOf(recs[0].compName)) || String(S.selYear || '');
 
   // ── Season switcher ───────────────────────────────────────────────────────
-  // Every season this person played, newest first, the current one in gold.
-  // Clicking one goes through openPlayerFromSearch, which is the SAME path a
-  // search result takes — it loads the season if needed, moves the year,
-  // competition, age group and grade with it, re-renders the page behind, and
-  // reopens the panel. Reusing it means the two routes cannot drift.
-  //
-  // SOURCE, in order:
-  //   the index, if it happens to be loaded — it holds every season for every
-  //     person, including seasons this page has never fetched
-  //   otherwise the loaded player records, which is honest but partial
-  //
-  // It does NOT fetch the index. Pulling 2.65 MB because somebody opened a player
-  // panel is exactly what the on-first-keystroke rule exists to avoid; a reader
-  // who has not searched gets the seasons already in memory.
-  {
-    const strip = document.getElementById('pm-seasons');
-    if (strip) {
-      let entries = [];
-      const ix = S.playerIndexState === 'ready' ? S.playerIndex : null;
-      const row = ix && ix.people.find(r => r[0] === uuid);
-      if (row) {
-        entries = row[2].map(([si, ti, ai, gi]) => ({
-          seasonId: ix.seasons[si],
-          year: seasonYearOf(compNameOfSeason(ix.seasons[si])),
-          team: ix.teams[ti] || '', age: ix.ages[ai] || '', grade: ix.grades[gi] || '',
-        }));
-      } else {
-        // One entry per season, newest first. allRecs is every stored record for
-        // this person across every loaded season, and a person in two grades in
-        // one season has two — so it is deduplicated on the year, not listed raw.
-        const seen = new Map();
-        for (const r of allRecs) {
-          const y = seasonYearOf(r.compName);
-          if (!y || seen.has(y)) continue;
-          const sid = ((S.manifest || []).find(m => m.compName === r.compName) || {}).seasonId || '';
-          seen.set(y, { seasonId: sid, year: y, team: r.teamRaw || r.team || '',
-                        age: r.age || '', grade: r.rawGrade || '' });
-        }
-        entries = [...seen.values()].sort((a, b) => b.year.localeCompare(a.year));
-      }
+  // Drawn from what is known now, then redrawn if the index arrives.
+  buildSeasonStrip(uuid, shownYear, allRecs);
 
-      // A SINGLE SEASON STILL RENDERS. The header badge used to cover that case
-      // and has been removed — it duplicated these buttons and cost a row — so if
-      // this hid itself for one-season players their panel would say nothing at
-      // all about which year it shows. It renders as one unclickable gold chip,
-      // which is exactly what the badge was.
-      strip.innerHTML = entries.length ? entries.map(e => {
-        // JUST THE YEAR. The age and grade were on the chip as well as in the
-        // header line directly below it, saying the same thing twice and making
-        // each button three times wider than it needed to be. They stay on the
-        // hover title, where they identify a season the panel is not currently
-        // showing — which the header cannot do, since it only describes the
-        // season in view.
-        const on = e.year === shownYear;
-        return `<div class="pm-yr${on ? ' on' : ''}"
-          title="${[e.team, e.age, e.grade].filter(Boolean).join(' · ') || e.year}"
-          ${on ? '' : `onclick="openPlayerFromSearch('${uuid}','${e.seasonId}')"`}>${e.year}</div>`;
-      }).join('')
-        : (shownYear
-            ? `<div class="pm-yr on" title="Every figure on this panel is for the ` +
-              `${shownYear} season">${shownYear}</div>`
-            : '');
-    }
+  // ⚠️ FETCH THE INDEX ON PANEL OPEN, not only on a search keystroke.
+  //
+  // The strip could only show seasons already in memory, so opening a player from
+  // Scorers or a team roster gave one button — and once a search had happened,
+  // every player suddenly grew the rest. Reported 2026-08-20.
+  //
+  // The original rule was "not on page load", to keep 2.65 MB away from a reader
+  // who only wants a ladder. Opening a player panel is a different act: it is the
+  // signal that somebody wants that person's history, which is what the index
+  // holds. It is still lazy and still once per session.
+  //
+  // NON-BLOCKING, and guarded on the panel still showing the same player — a slow
+  // fetch must not repaint a panel the reader has since closed or replaced.
+  if (S.playerIndexState !== 'ready' && S.playerIndexState !== 'failed') {
+    loadPlayerIndex().then(() => {
+      if (_panelUuid === uuid) buildSeasonStrip(uuid, shownYear, allRecs);
+    });
   }
 
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
@@ -5080,6 +5098,8 @@ function renderPlayerGames(data, p) {
 }
 
 function closePlayerModal() {
+  // Cleared so a late index fetch does not repaint a closed panel.
+  _panelUuid = null;
   document.getElementById('player-modal').style.display = 'none';
   if (_playerPanelSource === 'team') {
     document.getElementById('team-modal').style.display = 'flex';
