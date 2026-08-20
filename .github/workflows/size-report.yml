@@ -1,0 +1,154 @@
+# .github/workflows/size-report.yml
+# READ-ONLY, offline, zero API calls. No writes, no lock, safe beside anything.
+#
+# 2026-08-19 — THE SCRIPT LIVES IN scripts/size-report.js, NOT HERE. It was a
+# heredoc inside this file, so Actions echoed all ~1,000 lines into the run log
+# before executing anything, every dispatch, ahead of any output worth reading. A
+# file on disk is not echoed. Nothing else about the report changed.
+#
+# ONE CHECKOUT, ONE SCAN, MANY SECTIONS (2026-08-16). size-misses,
+# size-negative-gap and size-repair-rosters each walked all 2,350,696 games in
+# games/bv separately — three checkouts and three full scans to answer three
+# questions about the same data. This walks it ONCE and feeds every section from
+# the same pass. The checkout saving is real; the scan saving is bigger.
+#
+# Sections (input `sections`, comma-separated, or "all"):
+#   misses         — anatomy of spectator misses, with the DEAD/MIXED/COVERED
+#                    clustering diagnostic          (was size-misses.yml)
+#   resweep        — FINAL games carrying a partial pre-spc roster
+#                                                   (was size-resweep.yml)
+#   rosters        — games holding a roster with no capture flag
+#                                                   (was size-repair-rosters.yml)
+#   gaps           — the appearance gap in BOTH directions from one player scan
+#                    (was size-gap-players.yml AND size-negative-gap.yml)
+#   consolidation  — DOES EACH APPEARANCE BELONG TO THE PLAYER IT IS ON?
+#
+# WHY consolidation EXISTS (2026-08-18). Everything else here COUNTS games. None of
+# it checks that a game in a player's games[] is a game that player actually
+# played. Three explanations for the 26,834 over-counted players have now been
+# ruled out by measurement — fill-ins (dg at 5.2% against a 5.7% baseline), split
+# identities (393 probed, 73.3% exact), and uncountable game types (6.37 per 100
+# games against a control of 7.71, i.e. LOWER once squad size is controlled for) —
+# and every one of those tested a count rather than an attribution.
+#
+# The check is simple and needs no API: every game record carries the two team ids
+# (h, a), and every player carries their registrations (teams[].tid, and
+# seasons[].regs[].tid). If a player holds an appearance in a game where they were
+# registered to NEITHER side, that appearance is not theirs. Appearances arrive via
+# resolveToFullUuid, so a wrong alias mapping shows up here as a cluster of
+# appearances for one unregistered team — which is exactly the shape that would
+# produce an over-count that scales with squad size.
+#
+# It tests the other direction too: a team the player IS registered to, whose games
+# we hold, in which they never appear. That is an under-count with a named cause
+# instead of a number.
+#
+# WHAT IT CANNOT SAY. Registrations come from the profile fetch, so a player never
+# fetched, or private, or fetched before a late transfer, has an incomplete
+# registration list — and a "foreign" appearance for them may be perfectly real.
+# The report states how many players it could and could not audit, and the rate
+# for players with a FULL-looking registration list is the one to read.
+#
+# WHY "gaps" IS ONE SECTION AND NOT TWO. size-gap-players measured gp minus games,
+# size-negative-gap measured games minus gp. Same two numbers, same scan, same
+# players, reported by two tools that could disagree and had no way to notice.
+# They are one section now, reporting both directions off one pass.
+#
+# ALSO DROPPED: size-gap-players carried REFERENCE_TOTAL = 775703 hardcoded and
+# printed it as "reference (size-appearance-gaps, 2026-08-06)". The repair campaign
+# has since made 812,554 appends, so that constant now disagrees with reality by
+# more than the thing it was meant to validate. A fixed baseline in a measuring
+# tool becomes a lie on a schedule; the figure is stated as history or not at all.
+#
+# THE EXCESS-OF-1 TEST, AND WHY IT HAS A CONTROL GROUP. size-negative-gap reports
+# 26,834 players holding more games than credited — but 22,387 of them are over by
+# exactly ONE, and only 397 by more than five. A probe of 393 alias-carrying
+# players on 2026-08-16 found 73.3% exactly equal and just 5 over by more than
+# five, which ruled OUT split identities as the cause of a population that size.
+# A single-game discrepancy repeated 22,387 times looks far more like a systematic
+# counting-rule difference — a forfeit, a bye, an abandoned game, or one of our own
+# profileOnly synthetic games — than 22,387 separate identity problems.
+#
+# So this measures how often affected players hold such a game, AND measures the
+# same thing for players with NO excess at all. Without that control the finding is
+# worthless: if unaffected players carry forfeits at the same rate, the flag
+# explains nothing and the correlation is spurious. The control is the test.
+#
+# NO actions/setup-node needed (no API calls), and none is present.
+name: Size Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      sections:
+        description: 'Which sections to run: all, or a comma-separated list of misses,resweep,rosters,gaps,consolidation,collisions,grades'
+        required: false
+        default: 'all'
+        type: string
+      top:
+        description: 'How many rows to list in each ranked table'
+        required: false
+        default: '15'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Size report
+        # set -o pipefail is not optional here: the node output is piped through tee
+        # so it can be published twice, and without pipefail a failing scan exits 0
+        # because tee succeeded — a green run over an empty report.
+        shell: bash
+        env:
+          SECTIONS: ${{ inputs.sections }}
+          TOP: ${{ inputs.top }}
+        run: |
+          set -uo pipefail
+          node --max-old-space-size=8192 scripts/size-report.js 2>&1 | tee /tmp/size-report.txt
+
+      # Both outputs run on `always()` so a scan that dies partway still publishes
+      # what it produced. A truncated report you can read beats a green tick and
+      # nothing to look at.
+      - name: Publish to the run summary
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ ! -s /tmp/size-report.txt ]; then
+            echo '## Size Report — no output produced' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          BYTES=$(wc -c < /tmp/size-report.txt)
+          {
+            echo '## Size Report'
+            echo ''
+            echo "Sections: \`${SECTIONS:-all}\` · $(date -u '+%Y-%m-%d %H:%M UTC') · ${BYTES} bytes"
+            echo ''
+            echo '```text'
+            # GitHub caps a step summary at 1 MiB and silently drops the whole thing
+            # if it is exceeded, so cut at 900 KB and SAY SO rather than losing it.
+            head -c 900000 /tmp/size-report.txt
+            echo '```'
+            if [ "$BYTES" -gt 900000 ]; then
+              echo ''
+              echo "> Truncated at 900 KB for the summary page. The full ${BYTES}-byte report is in the **size-report** artifact below."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SECTIONS: ${{ inputs.sections }}
+
+      - name: Upload the full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-report
+          path: /tmp/size-report.txt
+          retention-days: 30
+          if-no-files-found: warn
