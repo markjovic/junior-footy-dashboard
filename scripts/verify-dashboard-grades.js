@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v19 2026-08-20 season-switch-unconditional';
+const VERSION = 'verify-dashboard-grades v20 2026-08-20 panel-follows-season';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -738,6 +738,53 @@ console.log('\n12  Cross-season search returns one row per person');
       __p = openPlayerFromSearch('u-toby','s2026');`);
     ok('clicking the season already selected leaves it alone',
       run(`S.selYear`) === '2026', String(run(`S.selYear`)));
+
+    // AGE AND GRADE FOLLOW THE SEASON TOO. Setting only the year left the sidebar
+    // showing the previous year's age group and grade, so the page behind the
+    // panel described a different team from the panel itself.
+    //
+    // The record must be IN MEMORY for this — it is read from S.players, not from
+    // the index row, so that every view keys on the same thing.
+    run(`S.selYear = '2026'; S.selectedAge = 'U16'; S.selGrades = new Set(['D']);
+      S.loadedSeasons = ['s2026','s2023']; S.loadedPlayerSeasons = ['s2026','s2023'];
+      S.players = [{ uuid:'u-toby', name:'Toby Jovic', compName:'EFNL 2023',
+        team:'Norwood', teamRaw:'Norwood Purple', age:'U12', rawGrade:'B', gp:10, goals:3 }];
+      // MATCHES TOO. render() clears selectedAge when that age has no data — it
+      // cannot select an age group that does not exist — so a fixture with no
+      // matches makes the assignment look broken when it is the fixture that is
+      // unreal. The live page always has matches for the season it just loaded.
+      S.gradeMeta = { 'EFNL 2023|U12|gB': { r:2, lvl:'junior', g:'M', label:'B', gradeId:'gB' },
+                      'EFNL 2023|U12|B':  { r:2, lvl:'junior', g:'M' } };
+      rebuildGradeLabels();
+      S.roster = { 'EFNL 2023|Norwood|U12': { grade:'B', gradeId:'gB', age:'U12' },
+                   'EFNL 2023|Vermont|U12': { grade:'B', gradeId:'gB', age:'U12' } };
+      S.matches = [{ id:'EFNL 2023|U12|gB|1|Norwood|Vermont', compName:'EFNL 2023',
+        age:'U12', rawGrade:'B', gradeId:'gB', round:1, home:'Norwood', away:'Vermont',
+        hScore:40, aScore:30, date:'2023-04-15' }];
+      S.fixtures = []; precomputeMatches(S.matches);
+      S.manifest = [{ seasonId:'s2026', compName:'EFNL 2026', seasonName:'2026' },
+                    { seasonId:'s2023', compName:'EFNL 2023', seasonName:'2023' }];
+      S.seasonFiles = new Set();
+      __p = openPlayerFromSearch('u-toby','s2023');`);
+    ok('the age group follows the season',
+      run(`S.selectedAge`) === 'U12',
+      `${run(`S.selectedAge`)} — the sidebar would still show U16 while the panel shows U12`);
+    // The GRADE ID, not the rawGrade. S.selGrades is what activGrades() and the
+    // results/fixtures filters join on, and those hold PlayHQ grade ids — putting
+    // a rawGrade in the set is the same defect that hid every fixture in Beta
+    // 0.175. currentGrade() resolves through the roster and returns the id.
+    ok('the grade follows the season, and REPLACES rather than adds',
+      run(`[...S.selGrades].join(',')`) === 'gB',
+      `${run(`[...S.selGrades].join(',')`)} — must be the grade ID; leaving D in the ` +
+      `set shows grades from a season that is no longer selected`);
+
+    // ⚠️ RESTORE THE STATE. openPlayerFromSearch now sets selectedAge and
+    // selGrades as well as the year — deliberately, so the page behind the panel
+    // matches it — and the sandbox is shared with every later section. Leaving a
+    // single grade in selGrades made getGOTWMatch() return null three sections
+    // down, which read as an unrelated failure.
+    run(`S.selYear = '2026'; S.selComp = null; S.selectedAge = null;
+         S.selGrades = new Set(); S.loadedSeasons = []; S.loadedPlayerSeasons = [];`);
   }
   ok('loadPlayerIndex exists', has('loadPlayerIndex'));
   run(`S.playerIndexState = ''; S.playerIndex = null;`);
@@ -2335,6 +2382,55 @@ console.log('\n27  The gold top-grade figure');
       return (T.getTop(club,'finals') || '') !== (T.get(r,'finals') || '');
     }),
     'if gold always equalled white, it would be measuring nothing');
+}
+
+// ── 28. The player panel follows the selected season, in every part ─────────
+// Reported from the live page 2026-08-20: opening a 2025 result showed a header
+// scoped to 2025 above a list of 2026 GAMES. The two halves of one panel
+// disagreed and nothing said which was authoritative.
+//
+// The cause was a hard-coded year: renderPlayerGames read
+// `seasons.find(s => s.name === '2026')`. PlayHQ returns every season the player
+// has ever played, so the filter has to be S.selYear.
+console.log('\n28  The player panel follows the selected season');
+{
+  const payload = (names) => ({ data: { publicProfileStatistics: { seasonStatistics:
+    names.map(n => ({ name: n, statistics: [{
+      club: { name: 'Norwood' },
+      teamStatistics: [{ team: { name: 'Norwood Purple' }, gradeStatistics: [{
+        grade: { name: `U12 - B` },
+        gameStatistics: [{ statistics: [],
+          game: { id: 'g' + n, round: { name: 'Round 1' },
+            home: { name: 'Norwood Purple' }, away: { name: `Opponent ${n}` } } }],
+      }] }],
+    }] })) } } });
+
+  run(`S.selYear = '2025'; S.players = []; S.roster = {}; S.gradeMeta = {};
+       rebuildGradeLabels();`);
+  sandbox.__pay = payload(['2026', '2025', '2024']);
+  run(`renderPlayerGames(__pay, { name: 'Toby Jovic' });`);
+  const body = run(`document.getElementById('pm-body').innerHTML`);
+
+  ok('the games shown are the SELECTED season, not a hard-coded year',
+    /Opponent 2025/.test(body) && !/Opponent 2026/.test(body),
+    'a 2025 header above 2026 games is the defect this guards');
+
+  run(`S.selYear = '2024'; renderPlayerGames(__pay, { name: 'Toby Jovic' });`);
+  ok('changing the season changes the games',
+    /Opponent 2024/.test(run(`document.getElementById('pm-body').innerHTML`)),
+    'if this still says 2025 the filter is not reading S.selYear');
+
+  // A player with no record for the selected year must SAY so, not fall back to
+  // another year — falling back is how a 2025 header ended up over 2026 games.
+  run(`S.selYear = '2022'; renderPlayerGames(__pay, { name: 'Toby Jovic' });`);
+  const none = run(`document.getElementById('pm-body').innerHTML`);
+  ok('a season the player did not play says so', /No 2022 games/.test(none),
+    'silently showing another year is the failure being fixed');
+  ok('and names the seasons PlayHQ does hold',
+    /2026/.test(none) && /2025/.test(none),
+    'otherwise the reader cannot tell a missing season from a missing player');
+
+  run(`S.selYear = '2026';`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
