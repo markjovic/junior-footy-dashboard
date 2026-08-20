@@ -126,7 +126,7 @@ Session management and transport for all PlayHQ API calls. Manages the three
 cookies PlayHQ requires (`phq_tier`, `phq_session`, `phq_sub`) in the
 documented order. All writers use this — never write a local `getSession()`.
 
-**`lib/results-engine.js`** — v17  
+**`lib/results-engine.js`** — v20  
 Core match processing. Called by `fetch-results.js` and `backfill.js`.  
 Key functions: `processGrade()`, `buildGradeMeta()`, `parseGradeName()`.  
 The grade identity migration pass 1/2/3 logic lives here.  
@@ -183,6 +183,14 @@ Semi Finals records stored with hScore 59, 33, 86 and 68, all four flagged
 records that are no longer scheduled — a surviving flag would render a played
 team as a greyed placeholder. `time` is kept. Reported as `Promoted N stored
 fixture(s) to results`.
+v20 (2026-08-19): `cleanTeam`'s no-gradeAge fallback strips NOTHING and warns.
+It used to strip any `U`-number, so one PlayHQ name became two stored names —
+`Mt Eliza JFC U17 Boys Red` in a `U17.5` grade was stored both as itself (the
+gradeAge path cannot match `U17` against `U17.5`) and as `Mt Eliza JFC Boys Red`.
+Because a match id embeds team names, the same game was then stored twice. Four of
+the 24 duplicates repaired on 2026-08-19 came from this. The `.5` behaviour is
+deliberately unchanged: stripping the base number would rewrite the id of every
+stored `U17.5` and `U18.5` record and create a new duplicate for each.
 v19 (2026-08-16): `lastRound` is GONE — the build loop, the per-competition merge,
 `lastRoundKey()` and its export. It recorded the highest home-and-away round per
 grade for one reader: a small round tag on the ladder grade tabs, removed in Beta
@@ -255,6 +263,38 @@ Per-match logos are NOT stripped here — `results-engine.js` harvests them into
 the records are no longer scheduled. Dry-run unless `--apply` or
 `REPAIR_APPLY=true`. Idempotent: a second run finds nothing.
 
+**`cleanup-rename-duplicates.js`** — v5  
+Offline. Removes a duplicate record left by a team rename, where one of the pair
+carries PlayHQ's `gameId` and the other does not. Requires identical scores and
+date plus the same clubs — either an exact shared team name (one club renamed) or
+one identical extra token on BOTH sides (a competition marker such as ` - LP`).
+Colours are refused as a marker: two teams from one club can differ only by colour
+and did both score 24-40 in the same round.
+
+It also REPORTS, without deleting, pairs where NEITHER record has a `gameId` —
+those cannot be resolved offline because nothing stored says which name PlayHQ
+serves now. Dry-run unless `--apply`.
+
+**`repair-duplicate-names.js`** — v2  
+Online. Handles exactly what the above reports: fetches each affected round and
+keeps the record whose team names PlayHQ still serves, stamping it with the
+`gameId` so the pair cannot recur. Where both names are served they are two real
+fixtures sharing a score and date, and where neither is, it says so and prints what
+WAS served.
+
+**⚠️ These rounds are unreachable by the normal fetch path.** `knownRounds` is
+built in memory from stored records and `fetchGrade` skips anything at or below it,
+so neither `fetch-results.js` nor `backfill.js` will ever revisit them.
+
+Applied 2026-08-19: 21 records removed across SER 2026 and SEJ 2026 — 4 from
+`cleanTeam` storing one PlayHQ name two ways, 17 from a ` - LP` Lightning
+Premiership marker. 13 archived pairs were correctly refused as two real games.
+
+**`probe-refetch-round.js`** — v3  
+Read-only. Settled whether `discoverFixtureByRound` re-serves a completed round: it
+does, in full. Compares returned games against stored `gameId`s — NOT against the
+stored record count, which is inflated by the very duplicates it was investigating.
+
 **`discover-seasons.js`**  
 Discovers seasons per organisation from PlayHQ and writes the manifest in
 `core.json`. Run this before any backfill when a new season appears.
@@ -281,7 +321,7 @@ One-off migration (2026-08-12): moved data from `data/orgs/` to
 
 ### 4.3 Diagnostics and reporting
 
-**`audit-data.js`** — v15  
+**`audit-data.js`** — v17  
 Read-only. Reads `data/seasons` and reports: file sizes and the core/players
 split, per-season record counts, round gap analysis (live vs retired),
 `grades.json` coverage, grade identity migration state, a sized estimate
@@ -910,12 +950,16 @@ and the page header stopped sticking altogether.
 - `organisation { id }` on `DiscoverTeam` returns the club's 8-character code
   directly — no URL parsing needed. Verified across 60 EFNL organisations
   (2026-08-11) and confirmed working for SER (2026-08-13).
-- `discoverFixtureByRound` returns 0 games for completed rounds that were
-  fetched in a prior run — the data is in storage, not re-served by the API.
-  **⚠️ CONTRADICTED and unresolved.** `probe-concurrent-comps.js` re-served full
-  game lists for completed rounds across all 68 calls on 2026-08-13. One of the
-  two is wrong. Do not build a deletion or reconciliation mechanism on either
-  until this is settled.
+- `discoverFixtureByRound` **RE-SERVES completed rounds in full** — SETTLED
+  2026-08-19 by `probe-refetch-round.js`. The earlier note here, that it returns 0
+  games for a round already fetched, was WRONG. Three rounds probed across two
+  competitions: every game returned matched a stored `gameId`, and no stored
+  `gameId` was absent from the response.
+  **⚠️ The first version of that probe reported the opposite**, because it compared
+  the returned count against the STORED count — and stored was inflated by the
+  duplicate records the probe existed to investigate. Comparing a measurement
+  against the defect it is measuring gives the defect's answer. Compare against
+  records carrying a `gameId`.
 - Finals round NAMES are "Finals Round 1", "Finals Round 2" — they contain a
   number. `finalsAbbrev` is the game type (QF, EF, GF); `finalsName` is the round
   name. Detecting finals by the absence of a digit is wrong.
