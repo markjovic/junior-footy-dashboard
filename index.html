@@ -430,6 +430,19 @@ body{overflow-x:hidden}
    twice and cost a row. It now wraps to a second line inside the header when a
    player has more seasons than fit, which grows the header only for the players
    who need it. */
+/* TRANSIENT MESSAGES. position:fixed and pointer-events:none so it is painted
+   over the page rather than inserted into it — nothing reflows when it appears or
+   goes, which was the explicit requirement. Sits under .hdr's z-index so it never
+   covers the header controls. */
+#toast-host{position:fixed;top:52px;left:0;right:0;z-index:180;display:flex;
+  flex-direction:column;align-items:center;gap:5px;pointer-events:none;padding-top:8px}
+.toast{pointer-events:none;font-size:11px;padding:6px 13px;border-radius:5px;
+  background:var(--s3);border:1px solid var(--b2);color:var(--tx2);
+  box-shadow:0 3px 14px rgba(0,0,0,.45);opacity:0;transform:translateY(-5px);
+  transition:opacity .18s,transform .18s;max-width:min(90vw,460px);text-align:center}
+.toast.in{opacity:1;transform:none}
+.toast-ok{border-color:rgba(240,192,64,.35);color:var(--gold)}
+
 .pm-season-strip{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;
   align-content:flex-start;flex:1;min-width:0;max-height:56px;overflow-y:auto;
   margin-right:10px;scrollbar-width:thin}
@@ -510,15 +523,18 @@ body{overflow-x:hidden}
 
 <div id="ldr-overlay"><div class="spinner"></div><span class="ldr-txt">LOCAL FOOTY DASHBOARD</span></div>
 
+<div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.201</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.202</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
     <button id="vsw-dash"   class="on" onclick="switchView('dash')">DASHBOARD</button>
     <button id="vsw-finals"           onclick="switchView('finals')">FINALS</button>
   </span>
+  <button class="hdr-btn" id="share-btn" onclick="shareLink()"
+    title="Copy a link to exactly this view">🔗 Share</button>
   <div style="flex:1"></div>
   <button class="hdr-btn" id="share-btn" onclick="shareApp()" style="display:none" title="Share">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -862,7 +878,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.201</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.202</span>
         </div>
 
 
@@ -930,7 +946,115 @@ async function sGet(k){
   try{ if(window.storage){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; } }catch(e){}
   try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; }
 }
+// ═══════════════════════════════════════
+// URL STATE  —  url_state_design.md
+// ═══════════════════════════════════════
+//
+// A HASH, not a query string: GitHub Pages serves a static file, and a hash can
+// never be mistaken for a server route.
+//
+//   #y=2026&c=EFNL&a=U12&g=B&v=ladder&r=14&t=Norwood%20Purple
+//
+// ⚠️ `g` carries the grade LABEL, not the grade id. S.selGrades holds 8-character
+// PlayHQ ids — meaningless to a reader, and a link built on one breaks the moment
+// a season is re-graded. The label is resolved back to an id on read, through the
+// same gradesForAge() the localStorage restore uses.
+
+// Transient message, painted OVER the page. Never inserted into the flow: the
+// requirement was that nothing moves when it appears or goes.
+function toast(msg, kind) {
+  const host = document.getElementById('toast-host');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'ok' ? ' toast-ok' : '');
+  el.textContent = msg;
+  host.appendChild(el);
+  // Two frames: one to attach, one to transition from. Setting the class in the
+  // same frame as the append skips the animation entirely.
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+  setTimeout(() => {
+    el.classList.remove('in');
+    setTimeout(() => el.remove(), 220);
+  }, kind === 'ok' ? 1800 : 3600);
+}
+
+// The competition SHORT name — "EFNL 2026" -> "EFNL". compName is the short name
+// plus the year, so the two URL keys reconstruct it without a lookup table.
+function compShort(compName) {
+  return String(compName || '').replace(/\s*\d{4}\s*$/, '').trim();
+}
+
+function buildHash() {
+  const p = [];
+  if (S.selYear) p.push(['y', S.selYear]);
+  if (S.selComp) p.push(['c', compShort(S.selComp)]);
+  if (S.selectedAge) p.push(['a', S.selectedAge]);
+  // Labels, and only when a subset is chosen — an empty selGrades means "all",
+  // which is the default and does not belong in a shared link.
+  if (S.selGrades && S.selGrades.size) {
+    const labels = [...S.selGrades].map(g => gLabel(g) || g).filter(Boolean);
+    if (labels.length) p.push(['g', labels.join(',')]);
+  }
+  // ONLY 'dash' and 'finals' exist. Ladder and Scorers are mobile SECTIONS
+  // (switchMobSection), not view state — there is no S.subView, and a URL key for
+  // one would be writing state the dashboard does not hold.
+  if (S.view && S.view !== 'dash') p.push(['v', S.view]);
+  if (S.selRound) p.push(['r', S.selRound]);
+  if (S.selTeam) p.push(['t', S.selTeam]);
+  return p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+}
+
+function parseHash(h) {
+  const out = {};
+  String(h || '').replace(/^#/, '').split('&').filter(Boolean).forEach(kv => {
+    const i = kv.indexOf('=');
+    if (i < 1) return;
+    out[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+  });
+  return out;
+}
+
+// Keys whose change is a NAVIGATION — worth a back-button step. The rest are
+// filter tweaks and would fill the history with twenty entries from clicking
+// through grades, so they replace instead.
+const URL_PUSH_KEYS = ['y', 'c', 'v'];
+let _lastHash = null;
+function syncURL() {
+  if (_urlApplying) return;          // do not write while reading
+  const h = buildHash();
+  if (h === _lastHash) return;
+  const prev = parseHash(_lastHash || '');
+  const now = parseHash(h);
+  const nav = URL_PUSH_KEYS.some(k => (prev[k] || '') !== (now[k] || ''));
+  _lastHash = h;
+  try {
+    const url = `${location.pathname}${location.search}${h ? '#' + h : ''}`;
+    if (nav && prev && Object.keys(prev).length) history.pushState(null, '', url);
+    else history.replaceState(null, '', url);
+  } catch (e) { /* file:// and some embedded views reject history writes */ }
+}
+
+// Set while a hash is being applied, so the writes triggered by each assignment
+// do not race the read and overwrite the link being opened.
+let _urlApplying = false;
+
+function shareLink() {
+  const url = `${location.origin}${location.pathname}${buildHash() ? '#' + buildHash() : ''}`;
+  const done = () => toast('Link copied — it opens this exact view', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(() => toast(url));
+  } else {
+    // No clipboard API on http:// or an old browser. Showing the URL is more use
+    // than an error.
+    toast(url);
+  }
+}
+
 function saveFilters() {
+  // The URL rides on saveFilters rather than being wired into sixteen call sites
+  // individually. Anything that changes a filter already persists it, so the two
+  // can never disagree about what the current view is.
+  try { syncURL(); } catch (e) {}
   try {
     localStorage.setItem(SK.filters, JSON.stringify({
       selComp:  S.selComp,
@@ -6018,6 +6142,31 @@ async function init() {
 
   if (DEV_MODE) document.getElementById('dev-badge').style.display = 'inline-flex';
 
+  // ── URL FIRST, then localStorage, then defaults ───────────────────────────
+  // A link someone sent must beat your own last session, or the link does not
+  // work. Per KEY, not all-or-nothing: a hand-written "#y=2026&c=EFNL" keeps your
+  // saved age and grade, which is the useful behaviour.
+  //
+  // ⚠️ AN UNLOADED SEASON IS FETCHED BEFORE ANYTHING IS VALIDATED. Every check
+  // below runs against S.matches; with the season absent, each one finds nothing,
+  // discards every key as invalid, and the link degrades silently to the default
+  // view — indistinguishable from a broken link.
+  const _url = parseHash(location.hash);
+  if (_url.y) {
+    const years = [...new Set((S.manifest || []).map(m => seasonYearOf(m.compName)).filter(Boolean))];
+    if (!years.includes(_url.y)) {
+      // Said, not silent. A wrong year looks like a broken dashboard otherwise.
+      toast(`No data for ${_url.y} — showing ${S.selYear || 'the current season'}`);
+      delete _url.y;
+    } else if (_url.y !== S.selYear) {
+      S.selYear = _url.y;
+      const need = (S.manifest || [])
+        .filter(m => seasonYearOf(m.compName) === _url.y && !(S.loadedSeasons || []).includes(m.seasonId))
+        .map(m => m.seasonId);
+      if (need.length) await loadSeasons(need);
+    }
+  }
+
   // Restore last-used filters from localStorage
   try {
     const saved = localStorage.getItem(SK.filters);
@@ -6072,8 +6221,89 @@ async function init() {
     }
   } catch(e) {}
 
+  // ── URL OVERRIDES, applied through the SAME validation ────────────────────
+  // Each key is checked against what actually exists, exactly as the saved
+  // filters were. A stale link is the same problem as a stale saved filter set,
+  // and gets the same answer: drop the key, keep the rest, do not reset the view.
+  try {
+    if (_url.c) {
+      const want = `${_url.c} ${S.selYear}`.trim();
+      const comps = getComps();
+      if (comps.includes(want)) S.selComp = want;
+      else toast(`${_url.c} has no ${S.selYear} season — showing ${compShort(S.selComp) || 'all'}`);
+    }
+    if (_url.a) {
+      const ages = getAges();
+      if (ages.includes(_url.a)) S.selectedAge = _url.a;
+      else toast(`No ${_url.a} in ${compShort(S.selComp) || 'this competition'} ${S.selYear}`);
+    }
+    if (_url.g && S.selectedAge) {
+      // The URL carries LABELS; selGrades holds grade IDs. Resolve through the
+      // grades that exist for this age, so a label from another season or a
+      // mistyped one is dropped rather than producing an empty view.
+      const want = _url.g.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+      const ids = gradesForAge(S.selectedAge)
+        .filter(id => want.includes(String(gLabel(id) || id).toLowerCase()));
+      if (ids.length) S.selGrades = new Set(ids);
+      else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
+    }
+    if (_url.v === 'finals' || _url.v === 'dash') S.view = _url.v;
+    if (_url.r && S.selectedAge) {
+      const validRounds = new Set(S.matches
+        .filter(m => m.age === S.selectedAge && matchesComp(m)).map(m => roundKey(m)));
+      if (validRounds.has(String(_url.r))) S.selRound = _url.r;
+    }
+    if (_url.t) {
+      const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
+        .flatMap(m => [m.home, m.away]));
+      if (teams.has(_url.t)) S.selTeam = _url.t;
+    }
+  } catch(e) {}
+
   const ages = getAges();
   if (!S.selectedAge || !ages.includes(S.selectedAge)) S.selectedAge = ages[0] || null;
+
+  // Record the hash the page opened on, so the first filter change REPLACES it
+  // rather than pushing a duplicate entry.
+  _lastHash = buildHash();
+  try { history.replaceState(null, '', `${location.pathname}${location.search}` +
+    (_lastHash ? '#' + _lastHash : '')); } catch (e) {}
+
+  // BACK AND FORWARD. Only the push keys create history entries, so a back press
+  // is always a season, competition or view change — never a grade tweak.
+  // Re-reading the whole hash rather than diffing keeps one code path.
+  window.addEventListener('popstate', async () => {
+    const u = parseHash(location.hash);
+    _urlApplying = true;
+    try {
+      if (u.y && u.y !== S.selYear) {
+        S.selYear = u.y;
+        const need = (S.manifest || [])
+          .filter(m => seasonYearOf(m.compName) === u.y && !(S.loadedSeasons || []).includes(m.seasonId))
+          .map(m => m.seasonId);
+        if (need.length) await loadSeasons(need);
+      }
+      if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
+      if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
+      if (u.v === 'finals' || u.v === 'dash') S.view = u.v;
+      S.selGrades = new Set();
+      if (u.g && S.selectedAge) {
+        const want = u.g.split(',').map(x => x.trim().toLowerCase());
+        const ids = gradesForAge(S.selectedAge)
+          .filter(id => want.includes(String(gLabel(id) || id).toLowerCase()));
+        if (ids.length) S.selGrades = new Set(ids);
+      }
+      S.selRound = u.r || null;
+      S.selTeam  = u.t || null;
+      _lastHash = buildHash();
+    } finally {
+      // Cleared before render, or the render's own saveFilters calls are swallowed
+      // and the next genuine change would not write a URL.
+      _urlApplying = false;
+    }
+    render();
+  });
+
   render();
   document.getElementById('ldr-overlay').classList.add('gone');
   openSidebarIfMobile();
