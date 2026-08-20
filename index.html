@@ -526,7 +526,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.202</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.203</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -878,7 +878,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.202</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.203</span>
         </div>
 
 
@@ -999,6 +999,13 @@ function buildHash() {
   // (switchMobSection), not view state — there is no S.subView, and a URL key for
   // one would be writing state the dashboard does not hold.
   if (S.view && S.view !== 'dash') p.push(['v', S.view]);
+  // The LADDER TAB, as a label. Distinct from `g`, which is the sidebar grade
+  // filter — a link can legitimately say "all grades visible, showing the B
+  // ladder", and one key cannot carry both.
+  if (S.selLdrGrade) {
+    const l = gLabel(S.selLdrGrade) || S.selLdrGrade;
+    if (l) p.push(['l', l]);
+  }
   if (S.selRound) p.push(['r', S.selRound]);
   if (S.selTeam) p.push(['t', S.selTeam]);
   return p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -1061,6 +1068,7 @@ function saveFilters() {
       selectedAge: S.selectedAge,
       selGrades: [...S.selGrades],
       selRound:  S.selRound,
+      selLdrGrade: S.selLdrGrade,
       selTeam:   S.selTeam,
       view:       S.view,
       finalsMode: S.finalsMode,
@@ -4341,7 +4349,18 @@ function openSidebarIfMobile() {
 }
 
 function selLdrGrade(g) {
+  // ⚠️ PERSIST IT. This is the LADDER'S OWN grade tab, separate from the sidebar
+  // grade filter — you can be looking at the B ladder with every grade still
+  // ticked. It set S.selLdrGrade and nothing else, so it reached neither
+  // localStorage nor the URL: a shared link opened on whichever ladder happened to
+  // be first for that age, which is not the view the sender was looking at.
+  // Reported 2026-08-20.
+  //
+  // It does NOT re-render — the tab swap is done by class toggling below, which is
+  // why it never went near saveFilters. The URL write has to be explicit.
+  if (S.selLdrGrade === g) return;
   S.selLdrGrade=g;
+  saveFilters();
   document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#fff'):'';});
   document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
 }
@@ -6212,6 +6231,15 @@ async function init() {
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
 
+      // Restore the ladder tab — validate it is still a grade in this age. It is
+      // resolved AFTER selGrades above, because the tab strip only offers grades
+      // that survive the sidebar filter.
+      if (f.selLdrGrade && S.selectedAge) {
+        const visible = gradesForAge(S.selectedAge)
+          .filter(g => !S.selGrades.size || S.selGrades.has(g));
+        if (visible.includes(f.selLdrGrade)) S.selLdrGrade = f.selLdrGrade;
+      }
+
       // Restore team — validate it still exists for this age
       if (f.selTeam && S.selectedAge) {
         const validTeams = new Set(allTeamsForAge(S.selectedAge));
@@ -6248,6 +6276,15 @@ async function init() {
       else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
     }
     if (_url.v === 'finals' || _url.v === 'dash') S.view = _url.v;
+    if (_url.l && S.selectedAge) {
+      // Matched against the grades the tab strip will actually show — a label that
+      // exists in the age but was filtered out by `g` has no tab to select.
+      const visible = gradesForAge(S.selectedAge)
+        .filter(g => !S.selGrades.size || S.selGrades.has(g));
+      const hit = visible.find(g => String(gLabel(g) || g).toLowerCase() === _url.l.toLowerCase());
+      if (hit) S.selLdrGrade = hit;
+      else toast(`Ladder ${_url.l} not available in ${S.selectedAge} — showing the first grade`);
+    }
     if (_url.r && S.selectedAge) {
       const validRounds = new Set(S.matches
         .filter(m => m.age === S.selectedAge && matchesComp(m)).map(m => roundKey(m)));
@@ -6292,6 +6329,13 @@ async function init() {
         const ids = gradesForAge(S.selectedAge)
           .filter(id => want.includes(String(gLabel(id) || id).toLowerCase()));
         if (ids.length) S.selGrades = new Set(ids);
+      }
+      S.selLdrGrade = null;
+      if (u.l && S.selectedAge) {
+        const visible = gradesForAge(S.selectedAge)
+          .filter(g => !S.selGrades.size || S.selGrades.has(g));
+        const hit = visible.find(g => String(gLabel(g) || g).toLowerCase() === u.l.toLowerCase());
+        if (hit) S.selLdrGrade = hit;
       }
       S.selRound = u.r || null;
       S.selTeam  = u.t || null;
