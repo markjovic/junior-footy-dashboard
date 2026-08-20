@@ -60,7 +60,7 @@
 
 'use strict';
 
-const VERSION = 'cleanup-rename-duplicates v5 2026-08-19 report-twins';
+const VERSION = 'cleanup-rename-duplicates v6 2026-08-20 carnival-guards';
 
 const store = require('./lib/store');
 
@@ -152,6 +152,37 @@ function samePair(a, b) {
 const sharesTeamExactly = (a, b) =>
   a.home === b.home || a.away === b.away || a.home === b.away || a.away === b.home;
 
+// ⚠️ TWO GUARDS ON THE PAIRING, both added 2026-08-20 after the report listed 13
+// pairs that were not duplicates at all.
+//
+// A LIGHTNING CARNIVAL breaks the score+date+shared-team signature completely.
+// Every game is 0-0, every game is on one day, and each team plays several — so
+// "Cobras v Vikings" and "Dragons v Vikings" match on all three and are plainly
+// two different fixtures. All 13 false positives were that shape.
+//
+//   1. ALL-ZERO SCORES ARE NOT EVIDENCE. Six matching zeroes say nothing; in a
+//      carnival grade they are the norm. At least one score field must be non-zero
+//      before identical scores count for anything.
+//
+//   2. WHEN ONLY ONE TEAM IS SHARED, the other two must be plausibly the same club.
+//      A rename changes one side — "Berwick" to "Berwick Springs", "Mt Eliza JFC
+//      Boys Red" to "Mt Eliza JFC U17 Boys Red" — so the two non-shared names
+//      still start with the same club word. "Cobras" and "Dragons" do not.
+//      A prefix test is too strict: the U17 case inserts the token in the middle.
+const anyScore = (a) => SCORE_FIELDS.some(k => Number(a[k] || 0) !== 0);
+const firstTok = (n) => normTeam(n).split(' ')[0] || '';
+// The sides NOT shared between two records, compared on their opening word.
+function otherSidesAgree(a, b) {
+  const A = [a.home, a.away], B = [b.home, b.away];
+  const shared = A.find(x => B.includes(x));
+  if (!shared) return true;               // nothing shared — samePair decided it
+  const oa = A.find(x => x !== shared), ob = B.find(x => x !== shared);
+  if (!oa || !ob) return false;
+  const ta = firstTok(oa), tb = firstTok(ob);
+  return !!ta && ta === tb;
+}
+
+
 // The round token, matching results-engine.js: finals restart numbering at 1, so a
 // bare number would merge a grand final with home-and-away round 1.
 const roundKey = (m) => (m.isFinals ? `F:${m.finalsAbbrev || 'F'}` : String(m.round));
@@ -222,7 +253,9 @@ function main() {
       const twin = withId.find(s =>
         sameScores(orphan, s) &&
         (orphan.date || '') === (s.date || '') &&
-        (samePair(orphan, s) || sharesTeamExactly(orphan, s)));
+        anyScore(orphan) &&
+        (samePair(orphan, s) || sharesTeamExactly(orphan, s)) &&
+        otherSidesAgree(orphan, s));
       if (twin) {
         doomed.push({ orphan, twin, group: k,
           kind: sharesTeamExactly(orphan, twin) ? 'one club renamed'
@@ -318,7 +351,9 @@ function main() {
         if (a.gameId && b.gameId) continue;
         if (!sameScores(a, b)) continue;
         if ((a.date || '') !== (b.date || '')) continue;
+        if (!anyScore(a)) continue;
         if (!samePair(a, b) && !sharesTeamExactly(a, b)) continue;
+        if (!otherSidesAgree(a, b)) continue;
         used.add(i); used.add(j);
         twinReports.push({ group: k, a, b });
         break;
