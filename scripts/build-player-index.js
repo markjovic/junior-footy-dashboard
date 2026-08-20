@@ -40,7 +40,7 @@
 
 'use strict';
 
-const VERSION = 'build-player-index v1 2026-08-20';
+const VERSION = 'build-player-index v2 2026-08-20 skip-stub-manifest-entries';
 
 const fs = require('fs');
 const path = require('path');
@@ -77,6 +77,28 @@ function main() {
   //
   // Sorted on the YEAR IN compName, not on startDate: a 2026 season starts in
   // October 2025, so a date sort silently interleaves the years.
+  // ⚠️ SKIP MANIFEST ENTRIES THAT ARE NOT SEASONS.
+  //
+  // core.json's manifest carries an entry per organisation, and the twelve in
+  // organisationCodes[] that have never been migrated to the full shape have no
+  // compName and no seasonId. Measured 2026-08-20: 65 entries, 18 real seasons,
+  // 47 stubs — each one was being loaded, logged as `null 0 record(s)`, and
+  // interned into the season dictionary as an empty string.
+  //
+  // Harmless to the output, but 47 wasted loads and 47 dead dictionary slots, and
+  // a log that reads as though something is broken.
+  const before = manifest.length;
+  manifest = manifest.filter(m => m && m.seasonId && m.compName);
+  if (manifest.length !== before) {
+    const n = before - manifest.length;
+    console.log(`  (${n} manifest ${n === 1 ? 'entry has' : 'entries have'} no seasonId or ` +
+      `compName and ${n === 1 ? 'is' : 'are'} not a season — skipped)`);
+  }
+  if (!manifest.length) {
+    console.error('No usable seasons in the manifest.');
+    process.exit(1);
+  }
+
   const yearOf = (c) => Number((String(c || '').match(/\b(\d{4})\b/) || [])[1] || 0);
   manifest.sort((a, b) => yearOf(b.compName) - yearOf(a.compName) ||
                           String(a.compName).localeCompare(String(b.compName)));
