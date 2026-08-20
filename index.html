@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.197</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.198</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -733,6 +733,7 @@ body{overflow-x:hidden}
         <div class="team-modal-title" id="pm-name"></div>
         <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
       </div>
+      <div id="pm-season" style="flex-shrink:0;margin-right:10px"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
     <div class="team-stat-strip" id="pm-stats" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -843,7 +844,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.197</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.198</span>
         </div>
 
 
@@ -4633,6 +4634,28 @@ async function openPlayerPanel(uuid) {
     ? (recs.length ? recs.slice().sort((a, b) => (b.gp || 0) - (a.gp || 0)).map(teamLine).join('')
                    : teamLine(p))
     : '';
+
+  // THE SEASON, stated. The panel used to be current-season-only, so the year was
+  // implicit and safe to leave out. It now opens any of eighteen — from a search
+  // result, or a year chip — and nothing on it said which one, so a 2023 panel and
+  // a 2026 panel were indistinguishable at a glance.
+  //
+  // Filled from the SAME `recs` the header and the totals use, rather than from
+  // S.selYear directly, so a panel showing a fallback season cannot label itself
+  // with the year that was selected.
+  const shownYear = (recs[0] && seasonYearOf(recs[0].compName)) || String(S.selYear || '');
+  const seasonEl = document.getElementById('pm-season');
+  if (seasonEl) {
+    const isCurrent = shownYear === String(S.selYear || '');
+    seasonEl.innerHTML = shownYear
+      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;
+          padding:3px 9px;border-radius:4px;letter-spacing:.5px;
+          background:${isCurrent ? 'rgba(240,192,64,.12)' : 'rgba(255,255,255,.07)'};
+          border:1px solid ${isCurrent ? 'rgba(240,192,64,.3)' : 'var(--b2)'};
+          color:${isCurrent ? 'var(--gold)' : 'var(--tx2)'}"
+          title="Every figure on this panel is for the ${shownYear} season">${shownYear}</span>`
+      : '';
+  }
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
   // Summary strip from local data
