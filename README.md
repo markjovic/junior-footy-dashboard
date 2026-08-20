@@ -1,5 +1,5 @@
 <!-- README.md -->
-# Local Footy Dashboard — Beta 0.191
+# Local Footy Dashboard — Beta 0.201
 
 A single-file HTML dashboard for AFL football results, automatically fetched from PlayHQ. Renders a live ladder, results, top scorers, Game of the Week, finals progress, and player profiles across all age groups and grades for multiple competitions simultaneously.
 
@@ -21,6 +21,7 @@ data/
                               teamLogos, compLogos, gotwFlags) — NOT match data
   grades.json               ← Grade cache (auto-populated by fetch workflow)
   clubs.json                ← Club id → name cache (auto-populated by club index workflow)
+  player-index.json         ← Cross-season player search index (6.30 MB, weekly rebuild)
   seasons/
     <seasonId>-core.json    ← matches, roster, gradeMeta, meta — one file per season
     <seasonId>-players.json ← player records — one file per season
@@ -45,6 +46,8 @@ workers/
     cleanup-rename-duplicates.yml ← Manual, offline; dry run by default
     repair-duplicate-names.yml ← Manual, online; dry run by default
     probe-refetch-round.yml ← Manual, read-only diagnostic
+    build-player-index.yml  ← SCHEDULED weekly (Mon 03:15 UTC) — the only workflow
+                              with its own cron; everything else is Worker-driven
     repo-audit.yml          ← Manual, read-only — inventory, duplicates, orphans
     repo-tidy.yml           ← Manual — removes dead files, dry run by default
     probe-finals-rounds.yml ← Manual, read-only diagnostic
@@ -69,6 +72,7 @@ scripts/
                               which name it still serves
   probe-refetch-round.js    ← Read-only: does discoverFixtureByRound re-serve a
                               completed round? (it does, settled 2026-08-19)
+  build-player-index.js     ← Builds the cross-season search index; runs weekly
   split-by-season.js        ← One-off migration: data/orgs → data/seasons
   audit-data.js             ← Read-only data audit (sizes, gaps, grade identity, coverage)
   report-field-usage.js     ← Which scripts reference a stored field. SOURCE files only —
@@ -152,6 +156,8 @@ https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/cleanup-re
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-duplicate-names.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-scheduled-results.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/probe-refetch-round.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-player-index.js
+https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/cross_season_search_design.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/store.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/results-engine.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/playhq.js
@@ -733,6 +739,19 @@ fired.
 
 ---
 
+### Player search — every season
+Reads `data/player-index.json`, loaded on the first keystroke and held for the
+session. **One row per person**, carrying team, age and grade so two people with
+one name are tellable apart, with earlier seasons as clickable year chips.
+6.30 MB raw, **2.65 MB gzipped** — which is what a reader actually downloads.
+
+If the index cannot be fetched, search falls back to the loaded seasons **and says
+so**. Silently narrowing is how "not loaded" gets read as "no such player".
+
+Was scoped to the selected season.
+
+---
+
 ## Known issues
 
 - **`logoKey()` colour stripping does not work.** `new RegExp('\s+' + c + '\s*$')` uses a plain string, so `\s` becomes a literal `s`. Unnoticed because `teamLogos` is keyed by full team name and usually hits exactly.
@@ -786,6 +805,11 @@ fired.
 
 | Version | Key changes |
 |---------|-------------|
+| 0.201 | Search index fetched when a player panel opens, not only on a search |
+| 0.199–0.200 | Season switcher in the player panel header, year only |
+| 0.197 | Player panel rows join on PlayHQ's `gameId`, not on team names |
+| 0.195–0.196 | Panel games follow the selected season; header lists every team |
+| 0.192–0.194 | Cross-season player search; season switch made unconditional |
 | 0.191 | Player panel header sums every team a person played for, scoped to the selected season |
 | 0.190 | Age group beside the grade on every player-panel row |
 | 0.189 | Team drilldown season totals include finals; MR% and Pct stay home-and-away; finals breakdown cell |
