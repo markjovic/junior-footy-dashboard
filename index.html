@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.195</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.196</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.195</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.196</span>
         </div>
 
 
@@ -4778,9 +4778,35 @@ function renderPlayerGames(data, p) {
             : parseInt(rName.match(/(\d+)/)?.[1] ?? '', 10);
           const jh = stripAgeJ(home), ja = stripAgeJ(away);
           const sameTeams = x => stripAgeJ(x.home) === jh && stripAgeJ(x.away) === ja;
+
+          // ⚠️ THE JOIN MUST BE CONSTRAINED BY AGE.
+          //
+          // stripAgeJ removes the age from both names, so "Norwood U11" and
+          // "Norwood U9" both reduce to "Norwood" — and a club fields a team in
+          // most age groups. Round 3 "Norwood v Montrose Blue" therefore matched
+          // whichever age group's record `find` reached first, and the score,
+          // result AND age all came from a different game. Reported from the live
+          // page 2026-08-20: a U11 player's list carried a U9 row scoring 0-0 and
+          // a U10 row scoring 1-82, neither of which he played in.
+          //
+          // The row's OWN age comes from PlayHQ's grade name — "U11 - B" — which
+          // is independent of the join and therefore safe to constrain it with.
+          // It is derived here rather than further down, where it used to be:
+          // reading it from `mm.age` made it circular, so a wrong join reported
+          // its own wrong age and looked self-consistent.
+          const gradeRawEarly = (gradeStat.grade?.name || '').replace(/^[*\s]+/, '').trim();
+          const AGE_WORDS_J = /\b(Under\s*\d+(?:\.\d+)?|U\d+(?:\.\d+)?|Senior Women|Senior Men|Reserve Men|Reserve Women|Seniors|Reserves|Veterans|Thirds|Colts|Masters)\b/i;
+          const rowAgeM = gradeRawEarly.match(AGE_WORDS_J) || String(teamName).match(AGE_WORDS_J);
+          const rowAge = rowAgeM ? rowAgeM[1].replace(/^Under\s*/i, 'U') : '';
+
+          // When the age is known, a record must match it. When it is not — no age
+          // anywhere in the grade or team name — the join stays as it was rather
+          // than matching nothing, because a missing score is worse than the old
+          // behaviour for the handful of grades that carry no age at all.
+          const ageOk = x => !rowAge || String(x.age || '').startsWith(rowAge);
           const mm = Number.isNaN(rNum)
-            ? (S.matches || []).find(x => x.isFinals && sameTeams(x))
-            : (S.matches || []).find(x => !x.isFinals && x.round === rNum && sameTeams(x));
+            ? (S.matches || []).find(x => x.isFinals && sameTeams(x) && ageOk(x))
+            : (S.matches || []).find(x => !x.isFinals && x.round === rNum && sameTeams(x) && ageOk(x));
           let resStr = null, scoreStr = null;
           {
             const hs = mm && mm.hScore, as = mm && mm.aScore;
@@ -4823,12 +4849,11 @@ function renderPlayerGames(data, p) {
           // back to PlayHQ's own grade name — "U13 - B" carries the age, and so do
           // "Senior Women", "Reserve Men", "Veterans" — so a row that joined to
           // nothing still gets labelled.
-          const AGE_WORDS = /\b(Under\s*\d+(?:\.\d+)?|U\d+(?:\.\d+)?|Senior Women|Senior Men|Reserve Men|Reserve Women|Seniors|Reserves|Veterans|Thirds|Colts|Masters)\b/i;
-          let ageShort = mm && mm.age ? mm.age : '';
-          if (!ageShort) {
-            const am = gradeRaw.match(AGE_WORDS) || teamName.match(AGE_WORDS);
-            ageShort = am ? am[1].replace(/^Under\s*/i, 'U') : '';
-          }
+          // PLAYHQ'S ANSWER FIRST, the joined record's second. This was the other
+          // way round, which made the age circular: a row joined to a U9 record
+          // displayed U9 and looked correct. `rowAge` is parsed from the grade name
+          // above and owes nothing to the join.
+          const ageShort = rowAge || (mm && mm.age ? mm.age : '');
 
           rows.push({
             round: g.round?.name || '',
