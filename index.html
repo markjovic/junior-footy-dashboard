@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.193</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.194</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.193</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.194</span>
         </div>
 
 
@@ -5120,22 +5120,37 @@ function onPlayerSearch(val) {
   }).join('') + scopeNote;
 }
 
-// Opening a result may need a season that is not in memory — the index spans
-// seasons the page has never fetched. Load it, then open the panel.
+// Opening a result switches the view to that season, then opens the panel.
+//
+// ⚠️ THE SEASON SWITCH IS UNCONDITIONAL. It used to sit inside the "needs
+// loading" branch:
+//
+//     if (seasonId && !loaded) { S.selYear = yr; await loadSeasons(...); }
+//
+// so clicking a year that was ALREADY in memory set nothing, and the panel — which
+// scopes its totals by S.selYear — showed whatever year was previously selected.
+// Reported from the live page 2026-08-20: clicking 2024 on a player showed their
+// 2026 stats. The chip passed the right season id and it was then ignored.
+//
+// Loading is conditional. Switching is not.
 async function openPlayerFromSearch(uuid, seasonId) {
   clearSearch();
-  const loaded = (S.loadedSeasons || []).includes(seasonId);
-  if (seasonId && !loaded) {
-    // Switch the view to that season first, so the panel opens against the same
-    // year the reader picked. The panel scopes its totals by S.selYear, and
-    // without this it would show whichever year happened to be selected.
-    const comp = compNameOfSeason(seasonId);
-    const yr = seasonYearOf(comp);
-    if (yr) S.selYear = yr;
-    if (comp) S.selComp = comp;
-    await loadSeasons([seasonId]);
-  }
+  if (!seasonId) { openPlayerPanel(uuid); return; }
+
+  const comp = compNameOfSeason(seasonId);
+  const yr = seasonYearOf(comp);
+  const changed = (yr && yr !== S.selYear) || (comp && comp !== S.selComp);
+  if (yr) S.selYear = yr;
+  if (comp) S.selComp = comp;
+
+  if (!(S.loadedSeasons || []).includes(seasonId)) await loadSeasons([seasonId]);
   if (!(S.loadedPlayerSeasons || []).includes(seasonId)) await loadPlayers();
+
+  // Re-render when the year moved, so the season selector, ladder and results
+  // agree with the panel. Without it the page still says 2026 while the panel
+  // shows 2024, and the reader has no way to tell which is authoritative.
+  if (changed) { try { render(); } catch (e) { console.warn('render after season switch:', e); } }
+
   openPlayerPanel(uuid);
 }
 
