@@ -494,7 +494,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.194</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.195</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -843,7 +843,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.194</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.195</span>
         </div>
 
 
@@ -4605,8 +4605,33 @@ async function openPlayerPanel(uuid) {
   // drilldown: bare club name (matches m.home/m.away), raw grade (unabbreviated), age override
   const drillTeam = p?.team || lookupTeam;
   const drillAge  = p?.age || '';
+  // EVERY team this person played for in the selected season, each with its age
+  // and grade. `recs` is already the season-scoped set the summary strip sums, so
+  // the header and the totals describe the same thing by construction.
+  //
+  // It used to show ONE team and one grade from the primary record. A player in
+  // two teams had the other silently absent, and the grade chip could render a raw
+  // gradeId — `Norwood ce193e34` on the live page 2026-08-20 — when currentGrade
+  // fell through to the id because that season's gradeMeta was not loaded.
+  // gLabel() maps an id to its label; abbrevGrade on a bare id just shortens the id.
+  const teamLine = (rec) => {
+    const disp = stripAge(rec.teamRaw || rec.team || '');
+    const resolved = currentGrade(disp, rec.age, rec.rawGrade, rec.compName) || rec.rawGrade || '';
+    const label = abbrevGrade(gLabel(resolved) || resolved);
+    const cls = `gtag-${String(label).replace(/[^A-Za-z0-9]/g, '')}`;
+    const bare = rec.team || disp;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px">` +
+      `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" ` +
+      `onclick="openTeamDrilldown('${String(bare).replace(/'/g, "\\'")}','${resolved}','${rec.age || ''}')" ` +
+      `onmouseover="this.style.borderBottomColor='var(--gold)'" ` +
+      `onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${disp}</span>` +
+      `<span style="color:var(--tx3)">${rec.age || ''}</span>` +
+      (label ? `<span class="gtag gtag-neutral ${cls}">${label}</span>` : '') +
+      `</span>`;
+  };
   document.getElementById('pm-meta').innerHTML = p
-    ? `<span style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)" onclick="openTeamDrilldown('${drillTeam.replace(/'/g,"\'")}','${rawGradeResolved}','${drillAge}')" onmouseover="this.style.borderBottomColor='var(--gold)'" onmouseout="this.style.borderBottomColor='rgba(255,255,255,0.15)'">${teamDisplay}</span> &nbsp;<span class="gtag gtag-neutral ${gc}">${grade}</span>`
+    ? (recs.length ? recs.slice().sort((a, b) => (b.gp || 0) - (a.gp || 0)).map(teamLine).join('')
+                   : teamLine(p))
     : '';
   document.getElementById('pm-crest').innerHTML = p ? crestHTML(teamDisplay, 36, 'gotw-logo') : '';
 
@@ -4673,16 +4698,36 @@ function renderPlayerGames(data, p) {
   const body = document.getElementById('pm-body');
   const seasons = data?.data?.publicProfileStatistics?.seasonStatistics || [];
 
-  // Use all 2026 seasons
-  const season2026 = seasons.find(s => s.name === '2026');
-  if (!season2026?.statistics?.length) {
-    body.innerHTML = '<div class="empty"><p>No 2026 season stats found.</p></div>';
+  // ⚠️ THE SELECTED SEASON, NOT A HARD-CODED ONE.
+  //
+  // This read `seasons.find(s => s.name === '2026')`. PlayHQ returns every season
+  // the player has ever played, so opening a 2025 result showed a header scoped to
+  // 2025 sitting above a list of 2026 games — reported from the live page
+  // 2026-08-20. The two halves of the panel disagreed and nothing said which was
+  // right.
+  //
+  // `seasonStatistics[].name` is the SEASON LABEL — "2025", "2026" — which is the
+  // one thing it IS safe to read it as. It is not the player's name; that
+  // misreading is recorded in playhq_api_reference.md and cost 40,034 files in the
+  // sibling project.
+  const wantSeason = String(S.selYear || '');
+  const season = seasons.find(s => String(s.name) === wantSeason)
+    // A player may have no record for the selected year — they had not started, or
+    // had left. Falling back to their most recent season is wrong: it would show
+    // another year's games under this year's heading, which is the defect being
+    // fixed. Say so instead.
+    || null;
+  if (!season?.statistics?.length) {
+    const had = seasons.map(x => x.name).filter(Boolean).sort().reverse();
+    body.innerHTML = `<div class="empty"><p>No ${wantSeason || 'season'} games for this player.` +
+      (had.length ? `<br><span style="font-size:11px;color:var(--tx3)">PlayHQ has ` +
+        `${had.slice(0, 6).join(', ')}${had.length > 6 ? '…' : ''}</span>` : '') + `</p></div>`;
     return;
   }
 
   // Collect all game rows across all club registrations
   const rows = [];
-  for (const reg of season2026.statistics) {
+  for (const reg of season.statistics) {
     const clubRaw = reg.club?.name || '';
     const clubName = clubRaw.replace(/\s*\([^)]+\)\s*$/, '').trim();
     const isCurrentClub = !p?.transferred || (p.clubs||[]).some(c =>
@@ -5140,16 +5185,42 @@ async function openPlayerFromSearch(uuid, seasonId) {
   const comp = compNameOfSeason(seasonId);
   const yr = seasonYearOf(comp);
   const changed = (yr && yr !== S.selYear) || (comp && comp !== S.selComp);
+  let ageOrGradeChanged = false;
   if (yr) S.selYear = yr;
   if (comp) S.selComp = comp;
 
   if (!(S.loadedSeasons || []).includes(seasonId)) await loadSeasons([seasonId]);
   if (!(S.loadedPlayerSeasons || []).includes(seasonId)) await loadPlayers();
 
+  // AGE AND GRADE FOLLOW THE SEASON TOO.
+  //
+  // Setting only the year and competition left the sidebar showing the previous
+  // year's age group and grade selection, so the page behind the panel described a
+  // different team from the panel itself. If the reader closes the panel they
+  // should be looking at the player they just opened, not at wherever they were.
+  //
+  // Read from the stored record rather than from the index row, because the record
+  // is what every other view keys on and the two must not diverge. Done AFTER the
+  // loads above, since the record does not exist until its season is in memory.
+  const rec = (S.players || []).find(pl => pl.uuid === uuid &&
+    seasonYearOf(pl.compName) === yr);
+  if (rec) {
+    if (rec.age && rec.age !== S.selectedAge) { S.selectedAge = rec.age; ageOrGradeChanged = true; }
+    const g = currentGrade(
+      String(rec.teamRaw || rec.team || '').replace(/\s+U\d+(?:\.\d+)?\s*/gi, ' ').trim(),
+      rec.age, rec.rawGrade, rec.compName) || rec.rawGrade || '';
+    // A single grade, not an added one: the grade filter is a Set and leaving the
+    // previous season's grades in it would show this player's grade alongside
+    // grades from a season no longer selected.
+    if (g) { S.selGrades = new Set([g]); ageOrGradeChanged = true; }
+  }
+
   // Re-render when the year moved, so the season selector, ladder and results
   // agree with the panel. Without it the page still says 2026 while the panel
   // shows 2024, and the reader has no way to tell which is authoritative.
-  if (changed) { try { render(); } catch (e) { console.warn('render after season switch:', e); } }
+  if (changed || ageOrGradeChanged) {
+    try { render(); } catch (e) { console.warn('render after season switch:', e); }
+  }
 
   openPlayerPanel(uuid);
 }
