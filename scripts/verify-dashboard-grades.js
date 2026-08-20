@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v17 2026-08-20 cross-season-search';
+const VERSION = 'verify-dashboard-grades v18 2026-08-20 search-row-layout';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -670,6 +670,42 @@ console.log('\n12  Cross-season search returns one row per person');
   ok('and the note admits the index is unavailable',
     /index unavailable/.test(f),
     'silently narrowing is how "not loaded" gets read as "does not exist"');
+
+  // ── The row layout ────────────────────────────────────────────────────────
+  // Reported from the live page 2026-08-20: with the year chips on the same line
+  // as the name, three seasons truncated "Adam Whatever" to "Adam …". The name is
+  // what the reader typed and what they are scanning for — it cannot be the thing
+  // that loses the space.
+  run(`S.playerIndex = __ix; S.playerIndexState = 'ready'; S.selYear = '2026';`);
+  const layout = find('jovic');
+  ok('the name is on its own line, not competing with the chips',
+    /player-result-name[\s\S]{0,80}<\/div>\s*<div/.test(layout),
+    'the chips moved below the name; if they are back on its line it truncates again');
+
+  // ⚠️ A YEAR CHIP OPENS THAT YEAR.
+  // They used to be decoration — they looked like controls, and clicking one
+  // opened the most recent season whatever year it said. A control that lies
+  // about what it does is worse than no control at all.
+  ok('every year chip carries its own seasonId',
+    (layout.match(/openPlayerFromSearch\('u-toby','s202[0-9]'\)/g) || []).length >= 3,
+    `${(layout.match(/openPlayerFromSearch\('u-toby','s[^']*'\)/g) || []).length} handler(s) — ` +
+    `one per season plus the row itself`);
+  ok('a chip for an older season opens THAT season, not the newest',
+    /openPlayerFromSearch\('u-toby','s2023'\)/.test(layout),
+    'the 2023 chip must pass s2023');
+  ok('a chip stops the row handler from also firing',
+    /event\.stopPropagation\(\);openPlayerFromSearch/.test(layout),
+    'without it a chip opens its season and then the row opens the newest over the top');
+  ok('the selected season chip is marked',
+    /rgba\(240,192,64,\.16\)/.test(layout),
+    'the reader should see which of the years is the one they are viewing');
+
+  // A player with ONE season gets no chip row — a single button that repeats the
+  // line above it is noise.
+  const single = find('departed');
+  ok('a one-season player shows no chip row',
+    (single.match(/openPlayerFromSearch\('u-gone'/g) || []).length === 1,
+    `${(single.match(/openPlayerFromSearch\('u-gone'/g) || []).length} handler(s) — the row itself only`);
 
   ok('openPlayerFromSearch exists to load a season the page has never fetched',
     has('openPlayerFromSearch'));
