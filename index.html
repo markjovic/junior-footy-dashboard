@@ -424,10 +424,17 @@ body{overflow-x:hidden}
   .fv-sum-body{overflow-x:auto}
   .fv-sum th{position:static}
 }
-.pm-season-strip{display:flex;gap:5px;overflow-x:auto;padding:7px 16px;
-  border-bottom:1px solid var(--b1);background:var(--s2);scrollbar-width:thin}
+/* IN THE HEADER, not a row of its own. A separate strip pushed the stats, the
+   game list and everything below it down the panel, and duplicated the year badge
+   that already sat beside the close button — so the same information appeared
+   twice and cost a row. It now wraps to a second line inside the header when a
+   player has more seasons than fit, which grows the header only for the players
+   who need it. */
+.pm-season-strip{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;
+  align-content:flex-start;flex:1;min-width:0;max-height:56px;overflow-y:auto;
+  margin-right:10px;scrollbar-width:thin}
 .pm-season-strip:empty{display:none}
-.pm-season-strip::-webkit-scrollbar{height:4px}
+.pm-season-strip::-webkit-scrollbar{width:4px}
 .pm-season-strip::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
 .pm-yr{flex-shrink:0;font-family:'DM Mono',monospace;font-size:11px;padding:3px 9px;
   border-radius:4px;cursor:pointer;border:1px solid var(--b2);background:var(--s1);
@@ -435,7 +442,6 @@ body{overflow-x:hidden}
 .pm-yr:hover{color:var(--tx);border-color:var(--tx3)}
 .pm-yr.on{background:rgba(240,192,64,.14);border-color:rgba(240,192,64,.4);color:var(--gold);
   font-weight:500;cursor:default}
-.pm-yr-sub{font-size:9px;opacity:.7;margin-left:5px}
 .fv-sum-hdr{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:9px 2px;
   cursor:pointer;user-select:none}
 .fv-sum-hdr:hover .fv-sum-title{color:var(--tx)}
@@ -506,7 +512,7 @@ body{overflow-x:hidden}
 
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.199</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.200</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -745,10 +751,9 @@ body{overflow-x:hidden}
         <div class="team-modal-title" id="pm-name"></div>
         <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
       </div>
-      <div id="pm-season" style="flex-shrink:0;margin-right:10px"></div>
+      <div id="pm-seasons" class="pm-season-strip"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
-    <div id="pm-seasons" class="pm-season-strip"></div>
     <div class="team-stat-strip" id="pm-stats" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="team-modal-scroll">
       <div class="team-modal-body" id="pm-body">
@@ -857,7 +862,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.199</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.200</span>
         </div>
 
 
@@ -4648,27 +4653,12 @@ async function openPlayerPanel(uuid) {
                    : teamLine(p))
     : '';
 
-  // THE SEASON, stated. The panel used to be current-season-only, so the year was
-  // implicit and safe to leave out. It now opens any of eighteen — from a search
-  // result, or a year chip — and nothing on it said which one, so a 2023 panel and
-  // a 2026 panel were indistinguishable at a glance.
-  //
-  // Filled from the SAME `recs` the header and the totals use, rather than from
-  // S.selYear directly, so a panel showing a fallback season cannot label itself
-  // with the year that was selected.
+  // The season the panel is ACTUALLY showing, taken from the same `recs` the
+  // header teams and the totals come from — not from S.selYear directly, so a
+  // panel that fell back to another season cannot label itself with the year that
+  // happened to be selected. It was declared inside the header badge that this
+  // switcher replaced.
   const shownYear = (recs[0] && seasonYearOf(recs[0].compName)) || String(S.selYear || '');
-  const seasonEl = document.getElementById('pm-season');
-  if (seasonEl) {
-    const isCurrent = shownYear === String(S.selYear || '');
-    seasonEl.innerHTML = shownYear
-      ? `<span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;
-          padding:3px 9px;border-radius:4px;letter-spacing:.5px;
-          background:${isCurrent ? 'rgba(240,192,64,.12)' : 'rgba(255,255,255,.07)'};
-          border:1px solid ${isCurrent ? 'rgba(240,192,64,.3)' : 'var(--b2)'};
-          color:${isCurrent ? 'var(--gold)' : 'var(--tx2)'}"
-          title="Every figure on this panel is for the ${shownYear} season">${shownYear}</span>`
-      : '';
-  }
 
   // ── Season switcher ───────────────────────────────────────────────────────
   // Every season this person played, newest first, the current one in gold.
@@ -4712,16 +4702,27 @@ async function openPlayerPanel(uuid) {
         entries = [...seen.values()].sort((a, b) => b.year.localeCompare(a.year));
       }
 
-      // A single season needs no switcher — one button that cannot be pressed is
-      // noise, and the badge in the header already says which year it is.
-      strip.innerHTML = entries.length > 1 ? entries.map(e => {
+      // A SINGLE SEASON STILL RENDERS. The header badge used to cover that case
+      // and has been removed — it duplicated these buttons and cost a row — so if
+      // this hid itself for one-season players their panel would say nothing at
+      // all about which year it shows. It renders as one unclickable gold chip,
+      // which is exactly what the badge was.
+      strip.innerHTML = entries.length ? entries.map(e => {
+        // JUST THE YEAR. The age and grade were on the chip as well as in the
+        // header line directly below it, saying the same thing twice and making
+        // each button three times wider than it needed to be. They stay on the
+        // hover title, where they identify a season the panel is not currently
+        // showing — which the header cannot do, since it only describes the
+        // season in view.
         const on = e.year === shownYear;
-        const sub = [e.age, e.grade].filter(Boolean).join(' ');
         return `<div class="pm-yr${on ? ' on' : ''}"
           title="${[e.team, e.age, e.grade].filter(Boolean).join(' · ') || e.year}"
-          ${on ? '' : `onclick="openPlayerFromSearch('${uuid}','${e.seasonId}')"`}>${e.year}` +
-          `${sub ? `<span class="pm-yr-sub">${sub}</span>` : ''}</div>`;
-      }).join('') : '';
+          ${on ? '' : `onclick="openPlayerFromSearch('${uuid}','${e.seasonId}')"`}>${e.year}</div>`;
+      }).join('')
+        : (shownYear
+            ? `<div class="pm-yr on" title="Every figure on this panel is for the ` +
+              `${shownYear} season">${shownYear}</div>`
+            : '');
     }
   }
 
