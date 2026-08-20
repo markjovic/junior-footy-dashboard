@@ -44,7 +44,7 @@ const path = require('path');
 // Printed on every run. working_practice.md: a script whose output is read from a
 // log must print a version, or a stale cached copy and a real failure look the
 // same and cost a wasted run. This one had none.
-const VERSION = 'repo-tidy v2 2026-08-19 block-comment-aware';
+const VERSION = 'repo-tidy v3 2026-08-20 new-tools-listed';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -129,6 +129,29 @@ const GROUPS = {
       ['scripts/probe-search.js',
        'Established the search.playhq.com endpoint, recorded in playhq_api_reference.md §3. The 2026-08-11 sweep it was written for is complete.'],
       ['.github/workflows/probe-search.yml',
+       'Workflow for the above.'],
+
+      // ── Added 2026-08-20 ──
+      // These three are LISTED so a future tidy can remove them deliberately, and
+      // are NOT recommended for removal yet. A file in no group at all cannot be
+      // reached by this script, so the choice never gets made and it sits there
+      // indefinitely — which is how probe-ser-logos.js ended up needing to be
+      // deleted by hand through the web UI.
+      //
+      // Each answered its question and each remains cheap to keep: all are
+      // read-only or dry-run by default, and each re-answers a question that has
+      // already recurred once. Remove them when the answers stop being doubted.
+      ['scripts/probe-refetch-round.js',
+       'Settled whether discoverFixtureByRound re-serves a completed round — it does, in full (2026-08-19, 279 calls). Recorded in playhq_api_reference.md. KEEP for now: the previous answer to this question stood wrong for a week because nobody could cheaply re-check it.'],
+      ['.github/workflows/probe-refetch-round.yml',
+       'Workflow for the above.'],
+      ['scripts/cleanup-rename-duplicates.js',
+       'Removed 3 duplicate records left by a team rename where one side carried a gameId, 2026-08-19. KEEP: idempotent, dry-run by default, and it also REPORTS the gameId-less pairs that repair-duplicate-names.js exists to fix.'],
+      ['.github/workflows/cleanup-rename-duplicates.yml',
+       'Workflow for the above.'],
+      ['scripts/repair-duplicate-names.js',
+       'Removed 21 duplicate records where NEITHER side carried a gameId, 2026-08-19, by asking PlayHQ which name it still serves. KEEP: the rounds it repairs are unreachable by fetch-results and backfill, so nothing else can reach them.'],
+      ['.github/workflows/repair-duplicate-names.yml',
        'Workflow for the above.'],
     ],
   },

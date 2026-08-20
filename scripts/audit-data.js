@@ -40,7 +40,7 @@ let engineLoadError = null;
 try { ({ parseGradeName } = require(path.join(__dirname, 'lib', 'results-engine'))); }
 catch (e) { engineLoadError = e.message; }
 
-const VERSION = 'audit-data v19 2026-08-19 byes-unresolvable';
+const VERSION = 'audit-data v20 2026-08-20 worklist-wording';
 const ROOT = process.env.AUDIT_ROOT || path.resolve(__dirname, '..');
 const DATA = path.join(ROOT, 'data');
 const SEASONS = path.join(DATA, 'seasons');
@@ -662,7 +662,14 @@ if (!parseGradeName) {
   }
 
   if (hotKeys.length) {
-    console.log(`\n  UNMIGRATED records by colliding key — pass 3's worklist:`);
+    // NOT a worklist. Pass 3 has been run for real (2026-08-19, 279 API calls) and
+    // resolved none of these — every one is an ambiguous bye in a YJFL pool or zone
+    // grade, and a bye has no fixture to identify it. Calling it a worklist invites
+    // the next reader to run a migration that has already been proved not to help,
+    // which is the same trap the "self-heal" wording set below.
+    console.log(`\n  UNMIGRATED records by colliding key — SETTLED, not a worklist:`);
+    console.log(`  Every one is an ambiguous bye. Pass 3 was run on 2026-08-19 and`);
+    console.log(`  resolved 0 of them; the pools are indistinguishable from a bye record.`);
     hotKeys.sort((x, y) => y[2] - x[2]);
     for (const [comp, k, n, g] of hotKeys.slice(0, 15)) {
       console.log(`    ${comp.padEnd(12)} "${k}"`.padEnd(46) + `${String(n).padStart(6)} records across ${g} grades`);
