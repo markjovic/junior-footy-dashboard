@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v16 2026-08-18 topgrade-sort';
+const VERSION = 'verify-dashboard-grades v17 2026-08-20 cross-season-search';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -536,9 +536,12 @@ console.log('\n11  Search matches name parts in any order');
       age: 'U13', rawGrade: 'A', compName: 'EFNL 2026', goals: 0 },
   ];
   S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels();
-  // Search is scoped to the SELECTED season — accumulating scope by browsing was
-  // unpredictable, so the fixture has to say which season it is looking at.
-  S.selYear = '2026';`);
+  S.selYear = '2026';
+  // The index state must be STATED. Left at '' the search kicks off a fetch, the
+  // harness has no network, and every assertion below sees the "loading…" branch
+  // rather than the token matching it is testing. 'failed' is the honest choice:
+  // this section is about name matching, which must work with or without an index.
+  S.playerIndex = null; S.playerIndexState = 'failed';`);
 
   const found = (q) => {
     run(`onPlayerSearch(${JSON.stringify(q)});`);
@@ -551,41 +554,127 @@ console.log('\n11  Search matches name parts in any order');
   ok('"toby" finds BOTH', (() => { const h2 = found('toby');
     return /Toby Jovic/.test(h2) && /Toby James/.test(h2); })());
   ok('a name that matches nothing says so rather than vanishing',
-    /No match in/.test(found('zzzzz')));
+    /No match in|No player of that name/.test(found('zzzzz')));
 
-  // The scope matters: a name absent from 2026 is indistinguishable from a name
-  // that does not exist, unless the search says what it looked at.
-  ok('the results say which season was searched', /searching 2026 only/.test(found('toby')));
+  // The scope matters: a name absent from the loaded seasons is indistinguishable
+  // from a name that does not exist, unless the search says what it looked at.
+  // With no index loaded this is the fallback wording.
+  ok('the results say what was searched',
+    /index unavailable — searching .* only/.test(found('toby')),
+    'name matching must work without the index, and must say the scope is narrowed');
 }
 
-// ── 12. Search scope is the selected season, and looks like it ──────────────
-// It used to cover whatever happened to be in memory, so the same query returned
-// more results the longer you had been on the page, with nothing to explain why.
-// And it sat ABOVE the season control, which implied it was global.
-console.log('\n12  Search is scoped to the selected season');
+// ── 12. Cross-season search: one row per PERSON ─────────────────────────────
+// cross_season_search_design.md. Search used to cover only the selected season,
+// so a player who left in 2024 was unfindable from a 2026 view. It now reads
+// data/player-index.json — one row per person, seasons nested.
+//
+// THE FAILURE THIS GUARDS is the one the old scoping existed to prevent: a name
+// returning more rows the more seasons you had browsed. The index solves it by
+// grouping on uuid rather than by narrowing, and if that grouping ever broke the
+// list would silently grow a row per season with nothing to explain it.
+console.log('\n12  Cross-season search returns one row per person');
 {
-  run(`S.players = [
-    { uuid: 'a', name: 'Toby Jovic', team: 'Norwood', teamRaw: 'Norwood Purple',
-      age: 'U12', rawGrade: 'B', compName: 'EFNL 2026', goals: 5 },
-    { uuid: 'b', name: 'Toby Jovic', team: 'Norwood', teamRaw: 'Norwood',
-      age: 'U11', rawGrade: 'B', compName: 'EFNL 2025', goals: 5 },
+  // The index shape as build-player-index.js writes it: dictionary-encoded,
+  // seasons newest-first, integers into the four tables.
+  sandbox.__ix = {
+    meta: { people: 3 },
+    seasons: ['s2026', 's2025', 's2023', 's2024'],
+    teams:   ['Norwood Purple', 'Norwood', 'Mitcham', 'Vermont'],
+    ages:    ['U12', 'U11', 'U15'],
+    grades:  ['B', 'A', 'D'],
+    people: [
+      // ONE person, THREE seasons — must be ONE row
+      ['u-toby', 'Toby Jovic', [[0,0,0,0],[1,1,1,0],[2,1,1,1]]],   // 2026, 2025, 2023
+      // A different person with the SAME name — must be a SEPARATE row, and
+      // tellable apart by team. This is what carrying the team buys.
+      ['u-toby2','Toby Jovic', [[0,3,0,1]]],                        // 2026 only
+      // Only in a retired season — unfindable before the index existed
+      // 2024 ONLY, and no other person has 2024 — that is what makes the
+      // selected-season sort below able to fail.
+      ['u-gone', 'Departed Jovic', [[3,2,2,2]]],
+    ],
+  };
+  run(`S.manifest = [
+    { seasonId:'s2026', compName:'EFNL 2026', seasonName:'2026' },
+    { seasonId:'s2025', compName:'EFNL 2025', seasonName:'2025' },
+    { seasonId:'s2023', compName:'EFNL 2023', seasonName:'2023' },
+    { seasonId:'s2024', compName:'EFNL 2024', seasonName:'2024' },
   ];
-  S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels(); S.selYear = '2026';`);
+  S.players = []; S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels();
+  S.selYear = '2026';
+  S.playerIndex = __ix; S.playerIndexState = 'ready';`);
+
   const find = (q) => { run(`onPlayerSearch(${JSON.stringify(q)});`);
     return run(`document.getElementById('player-search-results').innerHTML`); };
 
-  const h26 = find('jovic');
-  ok('only the selected season is returned',
-    (h26.match(/Toby Jovic/g) || []).length === 1,
-    `${(h26.match(/Toby Jovic/g) || []).length} row(s)`);
-  ok('and it is the 2026 one', /Norwood Purple/.test(h26) && /U12/.test(h26));
+  const h = find('jovic');
+  // THREE people share this surname in the fixture — Toby (3 seasons), a second
+  // Toby (1), and Departed (1). Five person-seasons, three rows. Before the
+  // grouping this returned five.
+  ok('five person-seasons collapse to three rows, one per person',
+    (h.match(/class="player-result"/g) || []).length === 3,
+    `${(h.match(/class="player-result"/g) || []).length} row(s) — one per PERSON, not per season`);
+  ok('the row is named by the most recent season',
+    /Norwood Purple/.test(h) && /U12/.test(h),
+    'seasons are newest-first in the index; the top one names the row');
+  ok('the other seasons appear as year chips', /2025/.test(h) && /2023/.test(h));
+  ok('two people with one name are told apart by team',
+    /Norwood Purple/.test(h) && /Vermont/.test(h),
+    'this is what carrying team/age/grade in the index is for');
 
-  run(`S.selYear = '2025';`);
-  const h25 = find('jovic');
-  ok('changing season changes the result, not adds to it',
-    (h25.match(/Toby Jovic/g) || []).length === 1 && /U11/.test(h25),
-    `${(h25.match(/Toby Jovic/g) || []).length} row(s)`);
-  ok('the note names the season being searched', /searching 2025 only/.test(h25));
+  // THE POINT OF THE FEATURE: someone whose only season is retired.
+  const g = find('departed');
+  ok('a player only in a retired season is findable', /Departed Jovic/.test(g));
+  ok('and the row shows the season they played', /2024/.test(g));
+
+  ok('the note says every season was searched',
+    /searching all 4 seasons/.test(h), 'the reader must know the search was not narrowed');
+  ok('an unmatched name is now unambiguous',
+    /No player of that name/.test(find('zzzzz')),
+    'with the whole index loaded, absent really does mean absent');
+
+  // Selected season first — design §10.3.
+  // A SHARED SURNAME, so one query returns all three and the order is the thing
+  // under test. The first version queried "o" — under the two-character minimum,
+  // so nothing rendered and the assertion compared -1 against -1.
+  run(`S.selYear = '2024';`);
+  const h24 = find('jovic');
+  ok('a player in the selected season sorts above one who is not',
+    h24.indexOf('Departed Jovic') < h24.indexOf('Toby Jovic'),
+    `Departed played 2024 only; Toby played 2026/2025/2023 — with 2024 selected ` +
+    `Departed must lead`);
+  run(`S.selYear = '2026';`);
+  const h26 = find('jovic');
+  ok('and the order reverses when the selected season does',
+    h26.indexOf('Toby Jovic') < h26.indexOf('Departed Jovic'),
+    'if this matched the line above, the selected season is not being read at all');
+
+  // ── The fallback ──────────────────────────────────────────────────────────
+  // If the index cannot be fetched, search must degrade to the loaded seasons and
+  // SAY so — reporting "no such player" for someone merely not in memory is the
+  // failure the old scope note existed to prevent.
+  run(`S.playerIndex = null; S.playerIndexState = 'failed';
+  S.players = [
+    { uuid:'u-toby', name:'Toby Jovic', team:'Norwood', teamRaw:'Norwood Purple',
+      age:'U12', rawGrade:'B', compName:'EFNL 2026', goals:5 },
+    { uuid:'u-toby', name:'Toby Jovic', team:'Norwood', teamRaw:'Norwood',
+      age:'U11', rawGrade:'B', compName:'EFNL 2025', goals:5 },
+  ];`);
+  const f = find('jovic');
+  ok('without the index, the loaded seasons still search',
+    /Toby Jovic/.test(f));
+  ok('and one person in two loaded seasons is STILL one row',
+    (f.match(/class="player-result"/g) || []).length === 1,
+    `${(f.match(/class="player-result"/g) || []).length} row(s) — the grouping is not the index's doing`);
+  ok('and the note admits the index is unavailable',
+    /index unavailable/.test(f),
+    'silently narrowing is how "not loaded" gets read as "does not exist"');
+
+  ok('openPlayerFromSearch exists to load a season the page has never fetched',
+    has('openPlayerFromSearch'));
+  ok('loadPlayerIndex exists', has('loadPlayerIndex'));
+  run(`S.playerIndexState = ''; S.playerIndex = null;`);
 }
 
 // ── 15. The by-club view actually renders ───────────────────────────────────
