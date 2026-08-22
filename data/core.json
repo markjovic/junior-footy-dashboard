@@ -20307,10 +20307,11 @@
     "WFNL 2026|Williamstown Juniors Mixed Gold|U10": "72fabf33",
     "WFNL 2026|YSE Mixed Red|U10": "10f7bb91",
     "WFNL 2026|Newport Power Mixed 2 (Raph/Gary)|U10": "c59adf26",
-    "SEJ 2026|Lyndhurst FNC Mixed|U11": "489af3fa"
+    "SEJ 2026|Lyndhurst FNC Mixed|U11": "489af3fa",
+    "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144"
   },
-  "lastUpdated": "2026-08-19T13:04:00.400Z",
-  "lastResultsFetch": "2026-08-19T13:04:00.401Z",
+  "lastUpdated": "2026-08-22T04:18:04.375Z",
+  "lastResultsFetch": "2026-08-22T04:18:04.375Z",
   "lastStatsFetch": "2026-08-19T13:47:07.795Z",
   "seasonFiles": [
     {
@@ -20341,7 +20342,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2441324
+      "bytes": 2436080
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
