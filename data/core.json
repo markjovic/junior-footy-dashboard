@@ -1494,7 +1494,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2186,
+        "matches": 2210,
         "players_n": 8824
       }
     },
@@ -20310,17 +20310,25 @@
     "SEJ 2026|Lyndhurst FNC Mixed|U11": "489af3fa",
     "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144",
     "EFNL 2026|Donvale Seniors|Senior Men": "a016282f",
-    "EFNL 2026|The Basin Reserves|Reserve Men": "f44925c0"
+    "EFNL 2026|The Basin Reserves|Reserve Men": "f44925c0",
+    "WFNL 2026|Yarraville Seddon Eagles Senior Women|Senior Women": "10f7bb91",
+    "WFNL 2026|Point Cook Centrals Senior Women|Senior Women": "e2297be1",
+    "WFNL 2026|Suns Senior Women|Senior Women": "d9981c25",
+    "WFNL 2026|Laverton Magpies Senior Women|Senior Women": "89457385",
+    "WFNL 2026|Werribee Centrals Juniors Senior Women|Senior Women": "0fd554ad",
+    "WFNL 2026|West Footscray Senior Women|Senior Women": "a348ac8b",
+    "WFNL 2026|Parkside Spurs Senior Women|Senior Women": "c5684024",
+    "WFNL 2026|Wyndhamvale Senior Women|Senior Women": "cbdfeb0b"
   },
-  "lastUpdated": "2026-08-22T10:17:48.913Z",
-  "lastResultsFetch": "2026-08-22T10:17:48.913Z",
+  "lastUpdated": "2026-08-22T13:30:32.589Z",
+  "lastResultsFetch": "2026-08-22T13:30:32.589Z",
   "lastStatsFetch": "2026-08-19T13:47:07.795Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 995706
+      "bytes": 1007423
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20332,7 +20340,7 @@
       "file": "data/seasons/263ca13b-core.json",
       "seasonId": "263ca13b",
       "kind": "core",
-      "bytes": 921061
+      "bytes": 921064
     },
     {
       "file": "data/seasons/263ca13b-players.json",
@@ -20344,7 +20352,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2431740
+      "bytes": 2431411
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
