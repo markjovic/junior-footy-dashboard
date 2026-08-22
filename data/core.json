@@ -20312,8 +20312,8 @@
     "EFNL 2026|Donvale Seniors|Senior Men": "a016282f",
     "EFNL 2026|The Basin Reserves|Reserve Men": "f44925c0"
   },
-  "lastUpdated": "2026-08-22T07:18:30.078Z",
-  "lastResultsFetch": "2026-08-22T07:18:30.078Z",
+  "lastUpdated": "2026-08-22T10:17:48.913Z",
+  "lastResultsFetch": "2026-08-22T10:17:48.913Z",
   "lastStatsFetch": "2026-08-19T13:47:07.795Z",
   "seasonFiles": [
     {
@@ -20344,7 +20344,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2432394
+      "bytes": 2431740
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
