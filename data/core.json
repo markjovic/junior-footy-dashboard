@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5485,
+        "matches": 5486,
         "players_n": 18174
       }
     },
@@ -20308,10 +20308,12 @@
     "WFNL 2026|YSE Mixed Red|U10": "10f7bb91",
     "WFNL 2026|Newport Power Mixed 2 (Raph/Gary)|U10": "c59adf26",
     "SEJ 2026|Lyndhurst FNC Mixed|U11": "489af3fa",
-    "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144"
+    "EFNL 2026|Upper Ferntree Gully|U19.5": "f6d97144",
+    "EFNL 2026|Donvale Seniors|Senior Men": "a016282f",
+    "EFNL 2026|The Basin Reserves|Reserve Men": "f44925c0"
   },
-  "lastUpdated": "2026-08-22T04:18:04.375Z",
-  "lastResultsFetch": "2026-08-22T04:18:04.375Z",
+  "lastUpdated": "2026-08-22T07:18:30.078Z",
+  "lastResultsFetch": "2026-08-22T07:18:30.078Z",
   "lastStatsFetch": "2026-08-19T13:47:07.795Z",
   "seasonFiles": [
     {
@@ -20342,7 +20344,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2436080
+      "bytes": 2432394
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
