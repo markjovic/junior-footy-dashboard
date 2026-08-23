@@ -1,0 +1,48 @@
+# .github/workflows/probe-nonfinal-scores.yml
+#
+# Can a score be shown before PlayHQ marks a game FINAL?
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+# Run it while finals are on — the whole question is about games that have been
+# played and not yet confirmed, so an idle midweek run will find nothing.
+
+name: Probe Non-Final Scores
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Limit to one competition, e.g. "EFNL 2026". Blank = every live season.'
+        required: false
+        default: ''
+        type: string
+      rounds:
+        description: 'How many trailing rounds per grade (1-6). Default 2.'
+        required: false
+        default: '2'
+        type: string
+      grades:
+        description: 'How many grades to probe (1-40). Default 12, finals grades first.'
+        required: false
+        default: '12'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_COMP: ${{ inputs.comp }}
+          PROBE_ROUNDS: ${{ inputs.rounds }}
+          PROBE_GRADES: ${{ inputs.grades }}
+        run: node scripts/probe-nonfinal-scores.js
