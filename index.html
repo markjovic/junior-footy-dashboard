@@ -552,7 +552,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.205</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.206</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -904,7 +904,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.205</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.206</span>
         </div>
 
 
@@ -1025,6 +1025,30 @@ function buildHash() {
   // (switchMobSection), not view state — there is no S.subView, and a URL key for
   // one would be writing state the dashboard does not hold.
   if (S.view && S.view !== 'dash') p.push(['v', S.view]);
+
+  // ── FINALS VIEW STATE ─────────────────────────────────────────────────────
+  // `v=finals` alone put the reader in the finals view in THEIR OWN last-used
+  // mode, because the URL overrode `v` and localStorage supplied everything else.
+  // So "look at our club's finals" opened on by-age for anyone who had last used
+  // by-age. Reported 2026-08-23.
+  //
+  // Only the keys worth SHARING. saveFilters persists eleven; the rest — the
+  // summary sort, the weighting, whether the club table is open — are personal
+  // preferences rather than a thing you send someone, and putting them in the URL
+  // would mean a shared link quietly reformatting the recipient's table.
+  if (S.view === 'finals') {
+    if (S.finalsMode && S.finalsMode !== 'age') p.push(['fm', S.finalsMode]);
+    if (S.finalsMode === 'venue' && S.venueGroup && S.venueGroup !== 'date') {
+      p.push(['fv', S.venueGroup]);
+    }
+    if (S.selClub) {
+      // The club NAME, not its 8-character id — a link is read by people.
+      const nm = clubNameOf(S.selClub);
+      if (nm) p.push(['fc', nm]);
+    }
+    if (S.finalsGender && S.finalsGender !== 'all') p.push(['fg', S.finalsGender]);
+    if (S.finalsLevel && S.finalsLevel !== 'all') p.push(['fl', S.finalsLevel]);
+  }
   // The LADDER TAB, as a label. Distinct from `g`, which is the sidebar grade
   // filter — a link can legitimately say "all grades visible, showing the B
   // ladder", and one key cannot carry both.
@@ -1050,7 +1074,10 @@ function parseHash(h) {
 // Keys whose change is a NAVIGATION — worth a back-button step. The rest are
 // filter tweaks and would fill the history with twenty entries from clicking
 // through grades, so they replace instead.
-const URL_PUSH_KEYS = ['y', 'c', 'v'];
+// `fm` is here because switching by-age to by-club is a navigation, not a filter
+// tweak — a reader who lands on a by-club link and presses back expects to leave,
+// not to shuffle through finals modes.
+const URL_PUSH_KEYS = ['y', 'c', 'v', 'fm'];
 let _lastHash = null;
 function syncURL() {
   if (_urlApplying) return;          // do not write while reading
@@ -6365,6 +6392,21 @@ async function init() {
       else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
     }
     if (_url.v === 'finals' || _url.v === 'dash') S.view = _url.v;
+    if (S.view === 'finals') {
+      if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
+      if (['date', 'venue'].includes(_url.fv)) S.venueGroup = _url.fv;
+      if (['all', 'boys', 'girls', 'mixed'].includes(_url.fg)) S.finalsGender = _url.fg;
+      if (['all', 'junior', 'senior'].includes(_url.fl)) S.finalsLevel = _url.fl;
+      if (_url.fc) {
+        // Resolve the NAME back to a club id, against the clubs that exist. A club
+        // from another competition, or a renamed one, is dropped rather than
+        // leaving the view filtered to nothing with no explanation.
+        const hit = Object.keys(S.clubs || {})
+          .find(id => String(clubNameOf(id) || '').toLowerCase() === _url.fc.toLowerCase());
+        if (hit) S.selClub = hit;
+        else toast(`${_url.fc} not found in ${compShort(S.selComp) || 'this competition'}`);
+      }
+    }
     if (_url.l && S.selectedAge) {
       // Matched against the grades the tab strip will actually show — a label that
       // exists in the age but was filtered out by `g` has no tab to select.
@@ -6412,6 +6454,19 @@ async function init() {
       if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
       if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
       if (u.v === 'finals' || u.v === 'dash') S.view = u.v;
+      // Reset to the defaults first, or going BACK from a by-club link would keep
+      // the club selected — a back button that leaves state behind is worse than
+      // one that does nothing.
+      S.finalsMode = ['age', 'club', 'venue', 'winners'].includes(u.fm) ? u.fm : 'age';
+      S.venueGroup = ['date', 'venue'].includes(u.fv) ? u.fv : 'date';
+      S.finalsGender = ['all', 'boys', 'girls', 'mixed'].includes(u.fg) ? u.fg : 'all';
+      S.finalsLevel = ['all', 'junior', 'senior'].includes(u.fl) ? u.fl : 'all';
+      S.selClub = null;
+      if (u.fc) {
+        const hit = Object.keys(S.clubs || {})
+          .find(id => String(clubNameOf(id) || '').toLowerCase() === u.fc.toLowerCase());
+        if (hit) S.selClub = hit;
+      }
       S.selGrades = new Set();
       if (u.g && S.selectedAge) {
         const want = u.g.split(',').map(x => x.trim().toLowerCase());
