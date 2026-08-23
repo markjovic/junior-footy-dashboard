@@ -10693,7 +10693,7 @@
     "Bayswater": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/be1ca5c9-4327-4d94-8a4b-71ac73c85511/1696899718152/logo.png?_a=BAMAMifg0",
     "Montrose Red": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/d3429a03-18e9-4171-a535-4e2a5f48fbea/1696902071422/logo.png?_a=BAMAMifg0",
     "Knox": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/ff08ba6e-ea05-4654-a5d3-96906df42bdb/1696902003041/logo.png?_a=BAMAMifg0",
-    "Templestowe": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/225d5de5-ae3c-4249-afec-75d66ceeb18d/1696902395319/logo.png?_a=BAMAMifg0",
+    "Templestowe": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/2545b284-8d43-4969-998c-9cadfca8f8e5/1635749623779/logo.png?_a=BAMAMifg0",
     "Beaconsfield Blue": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/01960048-3e3e-431b-b291-ecbfc8f79c0b/1696903246285/logo.png?_a=BAMAMifg0",
     "Montrose": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/d3429a03-18e9-4171-a535-4e2a5f48fbea/1696902071422/logo.png?_a=BAMAMifg0",
     "North Ringwood": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/9e3ed6a9-276a-4468-aaee-c89205ebe97f/1696902146129/logo.png?_a=BAMAMifg0",
@@ -20320,8 +20320,8 @@
     "WFNL 2026|Parkside Spurs Senior Women|Senior Women": "c5684024",
     "WFNL 2026|Wyndhamvale Senior Women|Senior Women": "cbdfeb0b"
   },
-  "lastUpdated": "2026-08-23T03:17:26.779Z",
-  "lastResultsFetch": "2026-08-23T03:17:26.779Z",
+  "lastUpdated": "2026-08-23T04:17:47.713Z",
+  "lastResultsFetch": "2026-08-23T04:17:47.713Z",
   "lastStatsFetch": "2026-08-22T14:16:36.587Z",
   "seasonFiles": [
     {
@@ -20352,7 +20352,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2426154
+      "bytes": 2425496
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
