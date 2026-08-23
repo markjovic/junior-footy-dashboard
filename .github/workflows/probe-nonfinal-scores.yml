@@ -22,9 +22,11 @@ on:
         default: '2'
         type: string
       grades:
-        description: 'How many grades to probe (1-40). Default 12, finals grades first.'
+        description: 'Cap the number of grades. 0 = EVERY grade in scope, which is the
+          default — a cap makes a "no such games exist" result worthless, since a sample
+          cannot show absence. Only set this to shorten a diagnostic run.'
         required: false
-        default: '12'
+        default: '0'
         type: string
 
 permissions:
