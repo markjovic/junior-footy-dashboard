@@ -41,7 +41,7 @@
 
 'use strict';
 
-const VERSION = 'probe-nonfinal-scores v2 2026-08-20 show-the-working';
+const VERSION = 'probe-nonfinal-scores v3 2026-08-20 all-grades-by-default';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -49,7 +49,17 @@ const engine = require('./lib/results-engine');
 
 const COMP    = (process.env.PROBE_COMP || '').trim();
 const NROUNDS = Math.max(1, Math.min(6, Number(process.env.PROBE_ROUNDS || 2)));
-const NGRADES = Math.max(1, Math.min(40, Number(process.env.PROBE_GRADES || 12)));
+// 0 = EVERY grade in scope, and that is the default.
+//
+// ⚠️ A CAP MAKES A NEGATIVE RESULT WORTHLESS. v1 probed 12 grades and would have
+// printed "NONE — PlayHQ is not filling in the score" on a sample of about 3% of
+// live grades. That is a conclusion from a sample, and the question being asked
+// is precisely whether such games exist ANYWHERE.
+//
+// A live-season sweep is roughly 350-400 grades — one rounds call each plus a
+// fixture call per trailing round, so around 1,000-1,200 requests at 250ms. Five
+// minutes for a read-only probe that answers the question properly.
+const NGRADES = Math.max(0, Number(process.env.PROBE_GRADES || 0));
 
 // Scores as the engine reads them, so this reports what the engine WOULD store.
 const stat = (arr, type) => {
@@ -119,8 +129,12 @@ async function main() {
   // Finals grades first — they are the reason this exists.
   const finalsGrades = new Set((data.matches || []).filter(m => m.isFinals).map(m => m.gradeId));
   grades.sort((a, b) => (finalsGrades.has(b.gradeId) ? 1 : 0) - (finalsGrades.has(a.gradeId) ? 1 : 0));
-  const picks = grades.slice(0, NGRADES);
-  console.log(`${grades.length} live grade(s); probing ${picks.length}, finals grades first.\n`);
+  const picks = NGRADES > 0 ? grades.slice(0, NGRADES) : grades;
+  const partial = picks.length < grades.length;
+  console.log(`${grades.length} grade(s) in scope; probing ${picks.length}` +
+    `${partial ? ' — A SAMPLE' : ' — all of them'}, finals grades first.`);
+  console.log(`Roughly ${picks.length * (1 + NROUNDS)} request(s) at ~250ms each ` +
+    `(~${Math.ceil(picks.length * (1 + NROUNDS) * 0.25 / 60)} min).\n`);
 
   const statusCount = new Map();
   const rows = [];
@@ -183,8 +197,19 @@ async function main() {
   const withScore = rows.filter(r => r.hasScore);
   console.log(`NON-FINAL GAMES CARRYING A SCORE: ${withScore.length} of ${rows.length}`);
   if (!withScore.length) {
-    console.log('  NONE. PlayHQ is not filling in the score until it marks a game FINAL,');
-    console.log('  so there is nothing to show early and no change worth making.');
+    if (partial) {
+      console.log(`  NONE — but only ${picks.length} of ${grades.length} grades were probed.`);
+      console.log('  ⚠️  THAT PROVES NOTHING. A sample cannot show that something does not');
+      console.log('      exist. Re-run with PROBE_GRADES=0 (the default) for every grade');
+      console.log('      before concluding PlayHQ withholds the score.');
+    } else {
+      console.log(`  NONE, across ALL ${grades.length} grade(s) in scope and the last ` +
+        `${NROUNDS} round(s) of each.`);
+      console.log('  PlayHQ is not filling in the score until it marks a game FINAL, so');
+      console.log('  there is nothing to show early.');
+      console.log('  ⚠️  Timing still matters: run this while games are unconfirmed. A');
+      console.log('      midweek run finds nothing because everything has been settled.');
+    }
   } else {
     console.log('─'.repeat(104));
     console.log('comp / age / grade                 round     status            score      G-B   date        past  parts ok');
@@ -220,7 +245,9 @@ async function main() {
 
   console.log('\nVERDICT');
   if (!withScore.length) {
-    console.log('  No change worth making — the scores are not there to show.');
+    console.log(partial
+      ? '  NO VERDICT — a sample was probed. Re-run with PROBE_GRADES=0.'
+      : '  No change worth making — the scores are not there to show.');
   } else {
     const safe = withScore.filter(r => r.past && r.consistent !== false);
     console.log(`  ${safe.length} game(s) are dated in the past with internally consistent scores.`);
