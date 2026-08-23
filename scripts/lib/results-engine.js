@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v20 2026-08-19 cleanteam-fallback-inert';
+const ENGINE_VERSION = 'v21 2026-08-23 live-scores';
 
 'use strict';
 
@@ -152,7 +152,7 @@ query discoverFixtureByRound($roundID: ID!) {
 // it fails, and a CloudFront WAF block, an expired session and an application
 // error are now told apart instead of all being "HTTP error, retry twice".
 
-const { gqlPost, refreshSession, sleep, logSummary } = require('./playhq');
+const { gqlPost, refreshSession, spectatorScore, sleep, logSummary } = require('./playhq');
 const store = require('./store');
 
 // ─── Name helpers ─────────────────────────────────────────────────────────────
@@ -697,6 +697,59 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
 
     const games = fixtureRes?.data?.discoverFixtureByRound?.games || [];
     const finalGames = games.filter(g => g.status?.value === 'FINAL');
+
+    // ── LIVE SCORES ───────────────────────────────────────────────────────────
+    // live_scores_design.md. Measured 2026-08-20 across all 86 live EFNL grades:
+    // discoverFixtureByRound returns an EMPTY result block for every non-final
+    // game, and so does discoverGame. The score for a game being scored on the
+    // PlayHQ app lives ONLY on the spectator endpoint, which calls it LIVE.
+    //
+    // PENDING carries no score on any route — a game that finished and awaits
+    // confirmation simply is not in the API — so only IN_PROGRESS is worth asking
+    // about.
+    //
+    // Collected BEFORE the no-final-games bail-out below, which breaks out of the
+    // round walk. A round being played has no finals yet, so anything gathered
+    // after that point would never run.
+    const liveGames = games.filter(g => g.status?.value === 'IN_PROGRESS');
+    const liveRecords = [];
+    for (const game of liveGames) {
+      if (!game.id) continue;
+      let sc = null;
+      try { sc = await spectatorScore(game.id); } catch (e) { sc = null; }
+      // null covers every "no score" reason including "not electronically
+      // scored", which is the usual answer and not a failure.
+      if (!sc || (sc.hScore == null && sc.aScore == null)) continue;
+
+      const hN = cleanTeam(game.home?.name || '', age);
+      const aN = cleanTeam(game.away?.name || '', age);
+      if (!hN || !aN) continue;
+
+      const v = game.allocation?.court?.venue || {};
+      liveRecords.push({
+        id: `${grade.compName}|${age}|${id}|${rToken}|${[hN, aN].sort().join('|')}`,
+        gameId: game.id,
+        age, rawGrade, gradeId: id, round: number, compName: grade.compName,
+        ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
+        home: hN, away: aN,
+        hScore: sc.hScore ?? 0, hG: sc.hG ?? 0, hB: sc.hB ?? 0,
+        aScore: sc.aScore ?? 0, aG: sc.aG ?? 0, aB: sc.aB ?? 0,
+        venue: v.name || '', vSuburb: v.suburb || '',
+        venueUrl: v.latitude && v.longitude ? `https://maps.google.com/?q=${v.latitude},${v.longitude}` : '',
+        date: game.date || '',
+        // ⚠️ ITS OWN FLAG. Not `scheduled` and not `provisional`:
+        // repair-scheduled-results.js promotes on "scheduled + any non-zero score
+        // + date in the past", and engine v18 promotes a scheduled record the
+        // moment it gains scores. A half-time score under either flag becomes a
+        // permanent wrong result that looks exactly like a real one.
+        live: true,
+        liveAt: new Date().toISOString(),
+      });
+    }
+    if (liveRecords.length) {
+      console.log(`    ${liveRecords.length} live score(s) from the spectator endpoint`);
+      allMatches.push(...liveRecords);
+    }
 
     if (games.length === 0) {
       // No games — bye round. Push a sentinel so knownRounds advances past it.
@@ -1323,7 +1376,9 @@ async function run(o) {
       const ab = m.finalsAbbrev || String(m.round);
       if (!finalsByGrade.has(key)) finalsByGrade.set(key, new Set());
       finalsByGrade.get(key).add(ab);
-      if (m.isPartial) {
+      // Same rule for finals — a live grand final must be re-fetched once it is
+      // confirmed, so it counts as partial rather than as stored.
+      if (m.isPartial || m.live) {
         if (!partialFinals.has(key)) partialFinals.set(key, new Set());
         partialFinals.get(key).add(ab);
       }
@@ -1331,8 +1386,17 @@ async function run(o) {
     }
     if (!roundsByGrade.has(key)) roundsByGrade.set(key, new Set());
     roundsByGrade.get(key).add(m.round);
-    // Track partial rounds — these must be re-fetched even if within consecutive count
-    if (m.isPartial) {
+    // ⚠️ A LIVE RECORD MUST NOT ADVANCE knownRounds.
+    //
+    // It is a running score, not a result: the game will go FINAL later and that
+    // confirmed result has to be collected. Left to count as a fetched round, the
+    // consecutive scan would advance past it, fetchGrade would skip the round on
+    // every later run, and the live score would be frozen in storage for ever as
+    // the final word on the game.
+    //
+    // Treated exactly as `isPartial` already is, and for the same reason — a round
+    // that is stored but not finished has to be re-fetched.
+    if (m.isPartial || m.live) {
       if (!partialRounds.has(key)) partialRounds.set(key, new Set());
       partialRounds.get(key).add(m.round);
     }
@@ -1364,6 +1428,9 @@ async function run(o) {
   // because the flag they carried made them invisible on the page while the log
   // reported a clean run — the failure had no signal of its own at either end.
   let promotedFixtures = 0;
+  // Live records that have just been confirmed FINAL — counted separately so the
+  // log distinguishes "a fixture gained a result" from "a running score settled".
+  let promotedLive = 0;
   const promotedExamples = [];
   let fetchError = null;
   let resultsGradeIdx = 0;
@@ -1472,6 +1539,18 @@ async function run(o) {
         // stripped. `time` is deliberately KEPT: nothing misreads it and it is real
         // information the results query does not return.
         const wasScheduled = prev.scheduled === true;
+        // ⚠️ A LIVE RECORD BEING CONFIRMED IS A PROMOTION TOO.
+        //
+        // `{ ...prev, ...m }` cannot CLEAR a key the incoming object does not have,
+        // and a confirmed result has no `live` key — exactly the defect that left
+        // `scheduled: true` on real results for a whole season. Without this the
+        // record keeps `live: true` for ever, is excluded from every ladder, and
+        // shows a LIVE badge on a game that finished weeks ago.
+        //
+        // Only a FINAL result reaches this merge: live records are written from
+        // the spectator branch and carry `live`, so `!m.live` identifies the
+        // confirmed one.
+        const wasLive = prev.live === true && !m.live;
         const rec = { ...prev, ...m };
         if (wasScheduled) {
           delete rec.scheduled;
@@ -1479,11 +1558,17 @@ async function run(o) {
           promotedFixtures++;
           if (promotedExamples.length < 8) promotedExamples.push(rec.id);
         }
+        if (wasLive) {
+          delete rec.live;
+          delete rec.liveAt;
+          promotedLive++;
+          if (promotedExamples.length < 8) promotedExamples.push(`${rec.id} (was live)`);
+        }
         byId.set(m.id, rec);
         // The promotion is itself a change, even when every score already matched.
         // Without this the repair run reports no changes and is never committed,
         // which is the state this defect has been sitting in.
-        if (scoreChanged || wasScheduled) updatedCount++;
+        if (scoreChanged || wasScheduled || wasLive) updatedCount++;
       } else {
         byId.set(m.id, m);
         newCount++;
@@ -1507,6 +1592,10 @@ async function run(o) {
   // Fixture records promoted to results. A non-zero count on the FIRST run after
   // v18 is the backlog being repaired; a non-zero count on every run thereafter is
   // normal and simply means games were played since the last run.
+  if (promotedLive) {
+    console.log(`Confirmed ${promotedLive} live score(s) — the live flag is cleared ` +
+      `and they now count towards ladders.`);
+  }
   if (promotedFixtures) {
     console.log(`Promoted ${promotedFixtures} stored fixture(s) to results ` +
       `— scheduled flag cleared, now visible on the page:`);

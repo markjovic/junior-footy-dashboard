@@ -317,7 +317,15 @@ async function specPost(query, variables, operationName) {
       continue;
     }
 
-    if (json.errors && json.errors.length) counters.graphqlError++;
+    // ⚠️ "NOT ELECTRONICALLY SCORED" IS AN ANSWER, NOT AN ERROR.
+    //
+    // Most games are not scored on the app, so this arrives for the majority of
+    // calls — 44 of 46 on 2026-08-20. Counting it as a GraphQL error made the run
+    // summary read `graphqlError=44` on a run where nothing went wrong, which is
+    // the sort of figure that gets ignored and then hides a real one.
+    const benign = (json.errors || []).every(e =>
+      /not electronically scored|could not be found/i.test(String(e?.message || '')));
+    if (json.errors && json.errors.length && !benign) counters.graphqlError++;
     else counters.ok++;
     return json;
   }
