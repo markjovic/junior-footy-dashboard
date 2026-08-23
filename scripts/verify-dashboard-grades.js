@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v24 2026-08-23 live-filter-and-finals';
+const VERSION = 'verify-dashboard-grades v25 2026-08-23 finals-in-url';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -2660,6 +2660,40 @@ console.log('\n29  A live score counts towards nothing');
     `${(fv.match(/live-badge/g) || []).length} badge(s) — fvSide renders one team, ` +
     `so a badge inside it appears twice`);
   run(`S.view = 'dash';`);
+
+  // ── ⚠️ A SHARED FINALS LINK MUST CARRY THE MODE ───────────────────────────
+  // `v=finals` alone put the reader in the finals view in THEIR OWN last-used
+  // mode, because the URL overrode `v` and localStorage supplied the rest. So
+  // "look at our club's finals" opened on by-age for anyone whose saved mode was
+  // by-age. Reported 2026-08-23.
+  run(`S.clubs = { c1:{name:'Norwood',type:'CLUB'}, c2:{name:'The Basin',type:'CLUB'} };
+    S.view='finals'; S.finalsMode='club'; S.selClub='c2';
+    S.venueGroup='date'; S.finalsGender='all'; S.finalsLevel='all';`);
+  const fh = run(`buildHash()`);
+  ok('a by-club finals link carries the mode', /fm=club/.test(fh), fh);
+  ok('and the club, by NAME not by id',
+    /fc=The%20Basin/.test(fh),
+    `${fh} — an 8-character club id in a link is unreadable and unverifiable`);
+
+  // The keys must NOT leak onto a dashboard link.
+  run(`S.view = 'dash';`);
+  ok('finals keys are absent from a dashboard link',
+    !/fm=|fc=|fv=/.test(run(`buildHash()`)),
+    `${run(`buildHash()`)} — the state is still set; it just does not belong here`);
+
+  // Reading it back resolves the name to an id, and refuses one that is not there.
+  run(`S.view='finals'; S.selClub=null;`);
+  run(`__hit = Object.keys(S.clubs||{}).find(id =>
+    String(clubNameOf(id)||'').toLowerCase() === 'the basin');`);
+  ok('a club name in the URL resolves back to its id',
+    run(`__hit`) === 'c2', String(run(`__hit`)));
+  run(`__miss = Object.keys(S.clubs||{}).find(id =>
+    String(clubNameOf(id)||'').toLowerCase() === 'a club that left');`);
+  ok('and a club that is not in this competition resolves to nothing',
+    run(`__miss`) === undefined,
+    'it must be dropped with a message, not leave the view filtered to zero teams');
+
+  run(`S.view='dash'; S.finalsMode='age'; S.selClub=null;`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
