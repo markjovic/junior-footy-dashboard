@@ -998,7 +998,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2031,
+        "matches": 2064,
         "players_n": 6765
       }
     },
@@ -1087,7 +1087,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 784,
+        "matches": 789,
         "players_n": 2085
       }
     },
@@ -1494,7 +1494,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2210,
+        "matches": 2232,
         "players_n": 8850
       }
     },
@@ -1551,7 +1551,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 3030,
+        "matches": 3064,
         "players_n": 9166
       }
     },
@@ -20318,17 +20318,19 @@
     "WFNL 2026|Werribee Centrals Juniors Senior Women|Senior Women": "0fd554ad",
     "WFNL 2026|West Footscray Senior Women|Senior Women": "a348ac8b",
     "WFNL 2026|Parkside Spurs Senior Women|Senior Women": "c5684024",
-    "WFNL 2026|Wyndhamvale Senior Women|Senior Women": "cbdfeb0b"
+    "WFNL 2026|Wyndhamvale Senior Women|Senior Women": "cbdfeb0b",
+    "YJFL 2026|Heidelberg Girls|U11 Girls": "62025c6b",
+    "YJFL 2026|Richmond Boys 1|U16": "f3dc4036"
   },
-  "lastUpdated": "2026-08-23T06:17:42.974Z",
-  "lastResultsFetch": "2026-08-23T06:17:42.974Z",
+  "lastUpdated": "2026-08-23T07:30:24.816Z",
+  "lastResultsFetch": "2026-08-23T07:30:24.816Z",
   "lastStatsFetch": "2026-08-22T14:16:36.587Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 1007423
+      "bytes": 1018991
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20340,7 +20342,7 @@
       "file": "data/seasons/263ca13b-core.json",
       "seasonId": "263ca13b",
       "kind": "core",
-      "bytes": 921064
+      "bytes": 938717
     },
     {
       "file": "data/seasons/263ca13b-players.json",
@@ -20352,7 +20354,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2420908
+      "bytes": 2416978
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
@@ -20412,7 +20414,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 362961
+      "bytes": 365650
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
@@ -20484,7 +20486,7 @@
       "file": "data/seasons/cda2f0ec-core.json",
       "seasonId": "cda2f0ec",
       "kind": "core",
-      "bytes": 1280869
+      "bytes": 1297837
     },
     {
       "file": "data/seasons/cda2f0ec-players.json",
