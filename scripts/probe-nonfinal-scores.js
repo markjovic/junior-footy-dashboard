@@ -41,7 +41,7 @@
 
 'use strict';
 
-const VERSION = 'probe-nonfinal-scores v3 2026-08-20 all-grades-by-default';
+const VERSION = 'probe-nonfinal-scores v4 2026-08-20 second-and-third-source';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -170,6 +170,7 @@ async function main() {
           comp: g.compName, age: g.age, grade: g.rawGrade,
           round: round.abbreviatedName || round.name || round.number,
           isFinals: !!round.isFinalsRound,
+          gameId: game.id || null,
           status: st, hs, as, hg, hb, date,
           past: date && date < today,
           hasScore: (hs != null && hs !== 0) || (as != null && as !== 0),
@@ -181,6 +182,119 @@ async function main() {
         });
       }
       await sleep(250);
+    }
+  }
+
+  // ── ⚠️ discoverFixtureByRound IS NOT THE ONLY SOURCE ──────────────────────
+  //
+  // v3 concluded "the scores are not there to show" from ONE endpoint. They are
+  // visible on the PlayHQ website and app for PENDING games, so they exist —
+  // discoverFixtureByRound simply returns an empty `result` block until FINAL.
+  //
+  // Two other documented routes, and this asks BOTH rather than picking one:
+  //
+  //   discoverGame(gameID) on the main API — same session, same transport, so if
+  //     this carries the score there is nothing new to build
+  //   the SPECTATOR endpoint — playhq_api_reference.md describes it as serving
+  //     live e-scoring and hidden game scores, which is what an app showing a
+  //     running score would be reading
+  //
+  // The spectator attempt is made WITHOUT a session cookie, because lib/playhq.js
+  // does not expose one and it may not need it. A 403 is a useful answer, not a
+  // failure — it says the endpoint is reachable and wants credentials.
+  const Q_GAME = `query DiscoverGame($gameID: ID!) {
+    discoverGame(gameID: $gameID) {
+      id
+      status { value }
+      result {
+        winner { value }
+        outcome { value }
+        home { statistics { count type { value } } }
+        away { statistics { count type { value } } }
+      }
+    }
+  }`;
+
+  const Q_SPECTATOR = `query game($id: ID!) {
+    game(id: $id) {
+      id
+      status
+      result {
+        home { statistics { type { value } count } }
+        away { statistics { type { value } count } }
+      }
+    }
+  }`;
+
+  const nonFinalIds = rows.filter(r => r.gameId).slice(0, 40);
+  const second = { tried: 0, scored: 0, errors: new Map(), samples: [] };
+  const third  = { tried: 0, scored: 0, errors: new Map(), samples: [] };
+
+  if (nonFinalIds.length) {
+    console.log(`\nSECOND SOURCE — discoverGame on the main API (${nonFinalIds.length} game(s))`);
+    for (const r of nonFinalIds) {
+      second.tried++;
+      try {
+        const res = await gqlPost(Q_GAME, { gameID: r.gameId });
+        const g = res?.data?.discoverGame;
+        const hs = stat(g?.result?.home?.statistics, 'TOTAL_SCORE');
+        const as = stat(g?.result?.away?.statistics, 'TOTAL_SCORE');
+        if ((hs != null && hs !== 0) || (as != null && as !== 0)) {
+          second.scored++;
+          if (second.samples.length < 6) {
+            second.samples.push(`${r.comp} ${r.age} ${r.grade} r${r.round} ` +
+              `[${g?.status?.value || r.status}] ${hs}-${as}`);
+          }
+        }
+      } catch (e) {
+        const k = String(e.message).slice(0, 60);
+        second.errors.set(k, (second.errors.get(k) || 0) + 1);
+      }
+      await sleep(200);
+    }
+
+    console.log(`THIRD SOURCE — spectator endpoint, no cookie (${nonFinalIds.length} game(s))`);
+    for (const r of nonFinalIds) {
+      third.tried++;
+      try {
+        const res = await fetch('https://spectator.playhq.com/graphql', {
+          method: 'POST',
+          headers: {
+            'accept': '*/*',
+            'origin': 'https://www.playhq.com',
+            'user-agent': 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)',
+            'tenant': 'afl',
+            'x-phq-tenant': 'afl',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ operationName: 'game', query: Q_SPECTATOR, variables: { id: r.gameId } }),
+        });
+        if (!res.ok) {
+          const k = `HTTP ${res.status}`;
+          third.errors.set(k, (third.errors.get(k) || 0) + 1);
+        } else {
+          const j = await res.json();
+          if (j.errors) {
+            const k = String(j.errors[0]?.message || 'graphql error').slice(0, 60);
+            third.errors.set(k, (third.errors.get(k) || 0) + 1);
+          } else {
+            const g = j?.data?.game;
+            const hs = stat(g?.result?.home?.statistics, 'TOTAL_SCORE');
+            const as = stat(g?.result?.away?.statistics, 'TOTAL_SCORE');
+            if ((hs != null && hs !== 0) || (as != null && as !== 0)) {
+              third.scored++;
+              if (third.samples.length < 6) {
+                third.samples.push(`${r.comp} ${r.age} ${r.grade} r${r.round} ` +
+                  `[${g?.status || r.status}] ${hs}-${as}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        const k = String(e.message).slice(0, 60);
+        third.errors.set(k, (third.errors.get(k) || 0) + 1);
+      }
+      await sleep(200);
     }
   }
 
@@ -197,6 +311,8 @@ async function main() {
   const withScore = rows.filter(r => r.hasScore);
   console.log(`NON-FINAL GAMES CARRYING A SCORE: ${withScore.length} of ${rows.length}`);
   if (!withScore.length) {
+    console.log('  discoverFixtureByRound returns an EMPTY result block for these —');
+    console.log('  see the second and third sources below before concluding anything.');
     if (partial) {
       console.log(`  NONE — but only ${picks.length} of ${grades.length} grades were probed.`);
       console.log('  ⚠️  THAT PROVES NOTHING. A sample cannot show that something does not');
@@ -243,11 +359,42 @@ async function main() {
     console.log('  PlayHQ deciding an outcome is a strong signal the game is done.');
   }
 
+  // ── What the other two sources said ───────────────────────────────────────
+  if (second.tried || third.tried) {
+    const show = (name, r) => {
+      console.log(`\n${name}`);
+      console.log(`  ${r.scored} of ${r.tried} non-final game(s) carried a score`);
+      for (const sm of r.samples) console.log(`    ${sm}`);
+      for (const [k, n] of [...r.errors].sort((a, b) => b[1] - a[1]).slice(0, 4)) {
+        console.log(`    ${String(n).padStart(4)} x  ${k}`);
+      }
+    };
+    show('SECOND SOURCE — discoverGame (main API)', second);
+    show('THIRD SOURCE — spectator endpoint (no cookie)', third);
+  }
+
   console.log('\nVERDICT');
-  if (!withScore.length) {
+  if (second.scored || third.scored) {
+    // The interesting answer. Which endpoint carries it decides what gets built.
+    if (second.scored) {
+      console.log(`  ✅ discoverGame CARRIES THE SCORE for ${second.scored} non-final game(s).`);
+      console.log('  Same endpoint, same session, same transport as everything else — so');
+      console.log('  showing an unofficial score needs no new infrastructure, only a');
+      console.log('  second call for games this round returned as non-FINAL.');
+    }
+    if (third.scored) {
+      console.log(`  ✅ the SPECTATOR endpoint carries the score for ${third.scored} game(s).`);
+      console.log('  That is a different host and header set; lib/playhq.js would need to');
+      console.log('  learn it. It is what the PlayHQ app reads for a running score.');
+    }
+    console.log('\n  Next: docs/unofficial_scores_design.md — an `unofficial` record, shown');
+    console.log('  with a marker, excluded from ladders and percentages until FINAL.');
+  } else if (!withScore.length) {
     console.log(partial
       ? '  NO VERDICT — a sample was probed. Re-run with PROBE_GRADES=0.'
-      : '  No change worth making — the scores are not there to show.');
+      : `  Not found on ANY of the three sources tried (fixture, discoverGame,\n` +
+        `  spectator). If the score is visible on the site, it is coming from a\n` +
+        `  fourth route — check the errors above before concluding anything.`);
   } else {
     const safe = withScore.filter(r => r.past && r.consistent !== false);
     console.log(`  ${safe.length} game(s) are dated in the past with internally consistent scores.`);
