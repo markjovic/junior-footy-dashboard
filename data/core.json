@@ -999,7 +999,7 @@
         "results": true,
         "players": true,
         "matches": 2064,
-        "players_n": 6765
+        "players_n": 6768
       }
     },
     {
@@ -1387,7 +1387,7 @@
         "results": true,
         "players": true,
         "matches": 5486,
-        "players_n": 18182
+        "players_n": 18184
       }
     },
     {
@@ -1495,7 +1495,7 @@
         "results": true,
         "players": true,
         "matches": 2232,
-        "players_n": 8850
+        "players_n": 8848
       }
     },
     {
@@ -20324,7 +20324,7 @@
   },
   "lastUpdated": "2026-08-23T07:30:24.816Z",
   "lastResultsFetch": "2026-08-23T07:30:24.816Z",
-  "lastStatsFetch": "2026-08-22T14:16:36.587Z",
+  "lastStatsFetch": "2026-08-23T08:08:20.410Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
@@ -20336,7 +20336,7 @@
       "file": "data/seasons/2170ac5a-players.json",
       "seasonId": "2170ac5a",
       "kind": "players",
-      "bytes": 4023607
+      "bytes": 4023040
     },
     {
       "file": "data/seasons/263ca13b-core.json",
@@ -20348,7 +20348,7 @@
       "file": "data/seasons/263ca13b-players.json",
       "seasonId": "263ca13b",
       "kind": "players",
-      "bytes": 3782829
+      "bytes": 3784640
     },
     {
       "file": "data/seasons/2dcbf383-core.json",
@@ -20360,7 +20360,7 @@
       "file": "data/seasons/2dcbf383-players.json",
       "seasonId": "2dcbf383",
       "kind": "players",
-      "bytes": 8121729
+      "bytes": 8122832
     },
     {
       "file": "data/seasons/3733598c-core.json",
@@ -20420,7 +20420,7 @@
       "file": "data/seasons/4dfaaab5-players.json",
       "seasonId": "4dfaaab5",
       "kind": "players",
-      "bytes": 1130575
+      "bytes": 1130622
     },
     {
       "file": "data/seasons/5488f6a0-core.json",
@@ -20492,7 +20492,7 @@
       "file": "data/seasons/cda2f0ec-players.json",
       "seasonId": "cda2f0ec",
       "kind": "players",
-      "bytes": 4735121
+      "bytes": 4735463
     },
     {
       "file": "data/seasons/d6ed597a-core.json",
