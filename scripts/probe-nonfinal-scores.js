@@ -41,10 +41,10 @@
 
 'use strict';
 
-const VERSION = 'probe-nonfinal-scores v4 2026-08-20 second-and-third-source';
+const VERSION = 'probe-nonfinal-scores v5 2026-08-20 every-game-by-status';
 
 const store = require('./lib/store');
-const { gqlPost, sleep, logSummary } = require('./lib/playhq');
+const { gqlPost, spectatorScore, sleep, logSummary } = require('./lib/playhq');
 const engine = require('./lib/results-engine');
 
 const COMP    = (process.env.PROBE_COMP || '').trim();
@@ -226,9 +226,23 @@ async function main() {
     }
   }`;
 
-  const nonFinalIds = rows.filter(r => r.gameId).slice(0, 40);
-  const second = { tried: 0, scored: 0, errors: new Map(), samples: [] };
-  const third  = { tried: 0, scored: 0, errors: new Map(), samples: [] };
+  // ⚠️ EVERY non-final game, not the first 40.
+  //
+  // v4 capped this at 40 of 46 and then reported on PENDING — and there were
+  // exactly 6 PENDING games, so the cap could have excluded precisely the case in
+  // question. That is the second time in one script that a conclusion was drawn
+  // from a slice; the first was the grade cap, fixed in v3.
+  const nonFinalIds = rows.filter(r => r.gameId);
+  // Counted PER STATUS. "2 of 40 carried a score" cannot answer "do PENDING games
+  // have scores", which is the actual question.
+  const mk = () => ({ tried: 0, scored: 0, errors: new Map(), samples: [],
+                      byStatus: new Map() });
+  const second = mk(), third = mk();
+  const note = (r, st, got) => {
+    if (!r.byStatus.has(st)) r.byStatus.set(st, { tried: 0, scored: 0 });
+    const b = r.byStatus.get(st);
+    b.tried++; if (got) b.scored++;
+  };
 
   if (nonFinalIds.length) {
     console.log(`\nSECOND SOURCE — discoverGame on the main API (${nonFinalIds.length} game(s))`);
@@ -239,9 +253,11 @@ async function main() {
         const g = res?.data?.discoverGame;
         const hs = stat(g?.result?.home?.statistics, 'TOTAL_SCORE');
         const as = stat(g?.result?.away?.statistics, 'TOTAL_SCORE');
-        if ((hs != null && hs !== 0) || (as != null && as !== 0)) {
+        const got = (hs != null && hs !== 0) || (as != null && as !== 0);
+        note(second, r.status, got);
+        if (got) {
           second.scored++;
-          if (second.samples.length < 6) {
+          if (second.samples.length < 8) {
             second.samples.push(`${r.comp} ${r.age} ${r.grade} r${r.round} ` +
               `[${g?.status?.value || r.status}] ${hs}-${as}`);
           }
@@ -253,46 +269,28 @@ async function main() {
       await sleep(200);
     }
 
-    console.log(`THIRD SOURCE — spectator endpoint, no cookie (${nonFinalIds.length} game(s))`);
+    console.log(`THIRD SOURCE — spectator endpoint (${nonFinalIds.length} game(s))`);
     for (const r of nonFinalIds) {
       third.tried++;
-      try {
-        const res = await fetch('https://spectator.playhq.com/graphql', {
-          method: 'POST',
-          headers: {
-            'accept': '*/*',
-            'origin': 'https://www.playhq.com',
-            'user-agent': 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)',
-            'tenant': 'afl',
-            'x-phq-tenant': 'afl',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({ operationName: 'game', query: Q_SPECTATOR, variables: { id: r.gameId } }),
-        });
-        if (!res.ok) {
-          const k = `HTTP ${res.status}`;
-          third.errors.set(k, (third.errors.get(k) || 0) + 1);
-        } else {
-          const j = await res.json();
-          if (j.errors) {
-            const k = String(j.errors[0]?.message || 'graphql error').slice(0, 60);
-            third.errors.set(k, (third.errors.get(k) || 0) + 1);
-          } else {
-            const g = j?.data?.game;
-            const hs = stat(g?.result?.home?.statistics, 'TOTAL_SCORE');
-            const as = stat(g?.result?.away?.statistics, 'TOTAL_SCORE');
-            if ((hs != null && hs !== 0) || (as != null && as !== 0)) {
-              third.scored++;
-              if (third.samples.length < 6) {
-                third.samples.push(`${r.comp} ${r.age} ${r.grade} r${r.round} ` +
-                  `[${g?.status || r.status}] ${hs}-${as}`);
-              }
-            }
-          }
-        }
-      } catch (e) {
+      // Through lib/playhq.js rather than a second hand-rolled fetch, so the WAF
+      // handling, retries and counters are the ones every other call uses.
+      let sc = null;
+      try { sc = await spectatorScore(r.gameId); }
+      catch (e) {
         const k = String(e.message).slice(0, 60);
         third.errors.set(k, (third.errors.get(k) || 0) + 1);
+      }
+      const got = !!sc && ((sc.hScore != null && sc.hScore !== 0) || (sc.aScore != null && sc.aScore !== 0));
+      note(third, r.status, got);
+      if (got) {
+        third.scored++;
+        if (third.samples.length < 8) {
+          third.samples.push(`${r.comp} ${r.age} ${r.grade} r${r.round} ` +
+            `[api:${r.status} / spec:${sc.status}] ${sc.hScore}-${sc.aScore}` +
+            (sc.hG != null ? `  (${sc.hG}.${sc.hB} v ${sc.aG}.${sc.aB})` : ''));
+        }
+      } else if (!sc) {
+        third.errors.set('no score returned', (third.errors.get('no score returned') || 0) + 1);
       }
       await sleep(200);
     }
@@ -364,6 +362,10 @@ async function main() {
     const show = (name, r) => {
       console.log(`\n${name}`);
       console.log(`  ${r.scored} of ${r.tried} non-final game(s) carried a score`);
+      for (const [st, b] of [...r.byStatus].sort((a, b2) => b2[1].tried - a[1].tried)) {
+        console.log(`    ${String(st).padEnd(14)} ${String(b.scored).padStart(4)} of ` +
+          `${String(b.tried).padStart(4)}`);
+      }
       for (const sm of r.samples) console.log(`    ${sm}`);
       for (const [k, n] of [...r.errors].sort((a, b) => b[1] - a[1]).slice(0, 4)) {
         console.log(`    ${String(n).padStart(4)} x  ${k}`);
