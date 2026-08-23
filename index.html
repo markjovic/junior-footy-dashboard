@@ -304,6 +304,11 @@ body{overflow-x:hidden}
   .match-row{grid-template-columns:24px 1fr 64px 1fr;padding:5px 10px;gap:5px}
   .mr-venue{display:none}
   .mr-det{display:none}
+  /* .mr-live is deliberately NOT hidden. The score column narrows to 64px, so the
+     age text goes and the badge alone stays — "LIVE" is the part that matters, and
+     a score that cannot be told from a final one is the failure being avoided. */
+  .mr-live .live-at{display:none}
+  .mr-live{margin-top:3px}
   .team-modal{width:100vw;max-width:100vw;max-height:100dvh;border-radius:0;margin:0;height:100dvh} .team-modal-scroll{flex:1;overflow-y:auto}
   .team-modal-overlay{align-items:flex-end}
   .gotw-name{font-size:9px}
@@ -478,6 +483,13 @@ body{overflow-x:hidden}
   animation:livePulse 1.6s ease-in-out infinite}
 @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.25}}
 .live-at{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-left:4px}
+/* Its OWN class, not a bare div inside .mr-score. The mobile rule hides .mr-det,
+   and a badge tucked beside it was invisible on a phone — where a live score is
+   most likely to be read from the sideline. Reported 2026-08-23. */
+.mr-live{margin-top:2px;line-height:1}
+/* Finals view. Right-aligned to sit under the score column rather than under the
+   team names, so the eye finds it next to the number it qualifies. */
+.fv-live{text-align:right;margin-top:2px;line-height:1}
 
 .fv-sum-top{display:block;color:var(--gold);font-size:11px;line-height:1.35}
 .fv-sum-top .fv-sum-pct{color:var(--gold);opacity:.75}
@@ -540,7 +552,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.204</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.205</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -892,7 +904,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.204</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.205</span>
         </div>
 
 
@@ -2549,8 +2561,16 @@ function renderResults(age) {
   const grades = activGrades(age);
   let matches = S.matches.filter(m => { if (!matchesComp(m)) return false;
     if (m.age !== age) return false;
-    // Valid matches: filter by active grade. Invalid (greyed): always show regardless of grade filter.
-    if (matchCounts(m)) {
+    // Valid matches: filter by active grade. Invalid (greyed): always show
+    // regardless of grade filter.
+    //
+    // ⚠️ A LIVE GAME IS FILTERED LIKE A VALID ONE. It fails matchCounts by design
+    // — a running score counts towards no ladder — but that is a statement about
+    // COUNTING, not about attribution: it has a perfectly good listing grade and
+    // belongs under the grade filter like any other game. Without this it fell
+    // into the always-show branch meant for records whose two sides resolve to
+    // different grades, and appeared under every grade tab. Reported 2026-08-23.
+    if (matchCounts(m) || m.live) {
       const g = matchListGrade(m) || m.rawGrade || '';
       if (grades.size && g && !grades.has(g)) return false;
     }
@@ -2600,7 +2620,7 @@ function renderResults(age) {
           <span style="color:var(--tx3)"> – </span>
           <span style="color:${aWon?'var(--gold)':hWon?'var(--tx3)':'var(--tx)'}">${m.aScore}</span>
           <span class="mr-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</span>
-          ${m.live ? `<div style="margin-top:2px">${liveBadge(m)}</div>` : ''}
+          ${m.live ? `<div class="mr-live">${liveBadge(m)}</div>` : ''}
         </div>
         <div class="mr-right">
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
@@ -3117,6 +3137,13 @@ function renderFinalsByAge(pool) {
         ${keys.map(k => `<div class="fv-cell">${
           byKey[k].sort((x,y)=>(x.date||'').localeCompare(y.date||'')).map(m =>
             `<div style="margin-bottom:6px">${fvSide(m,'h')}${fvSide(m,'a')}` +
+            // ⚠️ ONCE PER MATCH, not per side — fvSide renders one team, and a
+            // badge in there would appear twice on every live game.
+            //
+            // The finals view had NO live indicator at all: a grand final showing
+            // 42-46 mid-game was indistinguishable from a finished one, which is
+            // the worst place for that confusion. Reported 2026-08-23.
+            `${m.live ? `<div class="fv-live">${liveBadge(m)}</div>` : ''}` +
             `${isPlayed(m) ? '' : `<div class="fv-date">${fmtDate(m)}</div>`}</div>`).join('')
         }</div>`).join('')}</div>`;
 
@@ -3435,7 +3462,8 @@ function renderFinalsByVenue(pool) {
           <span class="fvv-age">${m.age}</span>
           <span class="gtag gtag-neutral ${gc}">${label}</span>
           <span class="fvv-rnd">${m.finalsAbbrev || 'F'}</span>
-          <span class="fvv-teams">${fvSide(m, 'h')}${fvSide(m, 'a')}</span>
+          <span class="fvv-teams">${fvSide(m, 'h')}${fvSide(m, 'a')}${
+            m.live ? `<div class="fv-live">${liveBadge(m)}</div>` : ''}</span>
         </div>`;
       }).join('');
 
