@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v21 2026-08-20 age-constrained-join';
+const VERSION = 'verify-dashboard-grades v23 2026-08-23 live-scores';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -2483,6 +2483,139 @@ console.log('\n28  The player panel follows the selected season');
   ok('the row age is parsed from PlayHQ\'s grade name, not the joined record',
     /U11/.test(j) && !/>U9</.test(j) && !/>U10</.test(j),
     'an empty rowAge lets the join match any age group again');
+
+  // ── ⚠️ PlayHQ's GAME ID IS THE JOIN, and it beats the names ───────────────
+  // `gameStatistics` returns game.id, and engine v16 stamps the same id onto
+  // stored records. That is an exact key on both sides. The name join is a
+  // fallback for pre-v16 records only.
+  //
+  // THE FIXTURE MAKES THE TWO DISAGREE deliberately: the stored record carrying
+  // the matching gameId has DIFFERENT team names and a DIFFERENT round from the
+  // PlayHQ row. If the id is being used, the score comes from it. If the names
+  // are, it comes from the other record — or from nothing.
+  run(`S.matches = [
+    { id:'EFNL 2026|U11|g11|3|Norwood|Montrose Blue', compName:'EFNL 2026', age:'U11',
+      rawGrade:'B', gradeId:'g11', round:3, home:'Norwood', away:'Montrose Blue',
+      hScore:78, aScore:12, date:'2026-05-04' },
+    { id:'EFNL 2026|U11|g11|9|Renamed Club|Other Side', compName:'EFNL 2026', age:'U11',
+      rawGrade:'B', gradeId:'g11', round:9, home:'Renamed Club', away:'Other Side',
+      hScore:55, aScore:6, date:'2026-06-20', gameId:'PHQ-EXACT' },
+  ];
+  S.fixtures = []; precomputeMatches(S.matches);
+  S.roster = {}; S.gradeMeta = {}; rebuildGradeLabels(); S.selYear = '2026';`);
+
+  sandbox.__gid = { data: { publicProfileStatistics: { seasonStatistics: [{
+    name: '2026', statistics: [{ club: { name: 'Norwood' }, teamStatistics: [{
+      team: { name: 'Norwood U11' },
+      gradeStatistics: [{ grade: { name: 'U11 - B' }, gameStatistics: [{ statistics: [],
+        // The id matches the round-9 record; the names and round match the
+        // round-3 one. They cannot both win.
+        game: { id: 'PHQ-EXACT', round: { name: 'Round 3' },
+          home: { name: 'Norwood U11' }, away: { name: 'Montrose Blue U11' } } }] }],
+    }] }] }] } } };
+  run(`renderPlayerGames(__gid, { name: 'Toby Jovic' });`);
+  const gid = run(`document.getElementById('pm-body').innerHTML`);
+  ok('the gameId join wins over the name join',
+    /55/.test(gid) && /6/.test(gid) && !/78/.test(gid),
+    `expected the 55-6 record the gameId points at; 78-12 means the names won`);
+
+  // Could that have failed? A row with NO gameId on either side must still find
+  // its game — every retired season is in that state.
+  run(`S.matches = [
+    { id:'EFNL 2026|U11|g11|3|Norwood|Montrose Blue', compName:'EFNL 2026', age:'U11',
+      rawGrade:'B', gradeId:'g11', round:3, home:'Norwood', away:'Montrose Blue',
+      hScore:78, aScore:12, date:'2026-05-04' },
+  ];
+  S.fixtures = []; precomputeMatches(S.matches);`);
+  sandbox.__noid = JSON.parse(JSON.stringify(sandbox.__u11));
+  run(`renderPlayerGames(__noid, { name: 'Toby Jovic' });`);
+  ok('a pre-v16 record with no gameId still joins by name',
+    /78/.test(run(`document.getElementById('pm-body').innerHTML`)),
+    'dropping the name fallback blanks the score on every retired season');
+}
+
+// ── 29. A live score counts towards NOTHING ─────────────────────────────────
+// live_scores_design.md. A score read off the PlayHQ app mid-game is not a
+// result: it must show on screen and stay out of every ladder, percentage and
+// win/loss tally until PlayHQ confirms it.
+//
+// SILENT IF IT BREAKS. A half-time score in a ladder looks exactly like a real
+// one — the P column is one higher and the percentage is wrong, with nothing on
+// screen to say why.
+console.log('\n29  A live score counts towards nothing');
+{
+  const M = (over, extra) => Object.assign({
+    compName: 'EFNL 2026', age: 'U12', rawGrade: 'B', gradeId: 'gB',
+    round: 1, hG: 6, hB: 6, aG: 6, aB: 4, date: '2026-04-05',
+  }, over, extra || {});
+
+  run(`S.gradeMeta = { 'EFNL 2026|U12|gB': { r:2, lvl:'junior', g:'M', label:'B', gradeId:'gB' },
+                       'EFNL 2026|U12|B':  { r:2, lvl:'junior', g:'M' } };
+    rebuildGradeLabels();
+    S.roster = { 'EFNL 2026|Alpha|U12': { grade:'B', gradeId:'gB', age:'U12' },
+                 'EFNL 2026|Beta|U12':  { grade:'B', gradeId:'gB', age:'U12' },
+                 'EFNL 2026|Gamma|U12': { grade:'B', gradeId:'gB', age:'U12' },
+                 'EFNL 2026|Delta|U12': { grade:'B', gradeId:'gB', age:'U12' } };`);
+
+  // One CONFIRMED game and one LIVE game, in the same grade and round.
+  sandbox.__lv = [
+    M({ id: 'EFNL 2026|U12|gB|1|Alpha|Beta', home: 'Alpha', away: 'Beta',
+        hScore: 42, aScore: 40 }),
+    M({ id: 'EFNL 2026|U12|gB|1|Delta|Gamma', home: 'Gamma', away: 'Delta',
+        hScore: 42, aScore: 46, live: true, liveAt: new Date().toISOString(),
+        gameId: '72f78074' }),
+  ];
+  run(`S.matches = __lv.map(x => ({...x})); S.fixtures = []; precomputeMatches(S.matches);
+    S.selComp='EFNL 2026'; S.selYear='2026'; S.selectedAge='U12'; S.selGrades=new Set();
+    S.view='dash'; S.selRound=null; S.selTeam=null;
+    S.manifest=[{seasonId:'s1',compName:'EFNL 2026',seasonName:'2026'}];`);
+
+  ok('matchCounts() is FALSE for a live record',
+    run(`matchCounts(S.matches.find(m => m.live))`) === false,
+    'this is the single gate for ladders, percentage and MR%');
+  ok('and TRUE for the confirmed game beside it',
+    run(`matchCounts(S.matches.find(m => !m.live))`) === true,
+    'if this is false the fixture proves nothing — both would be excluded anyway');
+
+  const ladder = run(`JSON.stringify(computeLadder('U12','gB','').map(r => [r.name, r.played]))`);
+  const rows = JSON.parse(ladder);
+  const byTeam = Object.fromEntries(rows);
+  ok('the live game does not put its teams on the ladder',
+    (byTeam['Gamma'] || 0) === 0 && (byTeam['Delta'] || 0) === 0,
+    `${ladder} — Gamma and Delta are only in the live game`);
+  ok('while the confirmed game does',
+    byTeam['Alpha'] === 1 && byTeam['Beta'] === 1, ladder);
+
+  // Could that have failed? Clear the flag and the same record must count — that
+  // is what happens when PlayHQ confirms it, and it proves the exclusion is the
+  // flag and not something else about the fixture.
+  run(`S.matches = __lv.map(x => { const c = {...x}; delete c.live; delete c.liveAt; return c; });
+       precomputeMatches(S.matches);`);
+  const after = Object.fromEntries(JSON.parse(
+    run(`JSON.stringify(computeLadder('U12','gB','').map(r => [r.name, r.played]))`)));
+  ok('clearing the flag makes the SAME record count',
+    after['Gamma'] === 1 && after['Delta'] === 1,
+    'the exclusion must be the live flag, not the teams or the grade');
+
+  // Display: it has to be visible, and marked.
+  run(`S.matches = __lv.map(x => ({...x})); precomputeMatches(S.matches); render();`);
+  const body = run(`document.getElementById('results-body').innerHTML`);
+  ok('the live game still appears in the results list',
+    /Gamma/.test(body) && /42/.test(body),
+    'excluded from ladders, not hidden — the whole point is to show it');
+  ok('and carries a LIVE badge',
+    /live-badge/.test(body),
+    'without it a running score is indistinguishable from a final one');
+  ok('and is NOT dimmed like a non-counting game',
+    !/class="match-row" style="opacity:\.5"[\s\S]{0,400}Gamma/.test(body),
+    'dimming reads as an error rather than as news');
+
+  ok('liveAgeText reports how old the reading is',
+    /just now|\dm ago/.test(run(`liveAgeText({ live:true, liveAt:new Date().toISOString() })`)),
+    String(run(`liveAgeText({ live:true, liveAt:new Date().toISOString() })`)));
+  ok('and says nothing for a record that is not live',
+    run(`liveAgeText({ hScore: 1 })`) === '',
+    'a badge on a confirmed result would be worse than none');
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
