@@ -20320,8 +20320,8 @@
     "WFNL 2026|Parkside Spurs Senior Women|Senior Women": "c5684024",
     "WFNL 2026|Wyndhamvale Senior Women|Senior Women": "cbdfeb0b"
   },
-  "lastUpdated": "2026-08-22T13:30:32.589Z",
-  "lastResultsFetch": "2026-08-22T13:30:32.589Z",
+  "lastUpdated": "2026-08-23T01:17:57.134Z",
+  "lastResultsFetch": "2026-08-23T01:17:57.134Z",
   "lastStatsFetch": "2026-08-22T14:16:36.587Z",
   "seasonFiles": [
     {
@@ -20352,7 +20352,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2431411
+      "bytes": 2430751
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
