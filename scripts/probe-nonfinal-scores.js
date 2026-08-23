@@ -41,7 +41,7 @@
 
 'use strict';
 
-const VERSION = 'probe-nonfinal-scores v1 2026-08-20';
+const VERSION = 'probe-nonfinal-scores v2 2026-08-20 show-the-working';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -66,16 +66,55 @@ async function main() {
   console.log('READ-ONLY — no writes, no commits.\n');
 
   const data = store.load(COMP ? [COMP] : null, { players: false });
-  const live = new Set(store.liveComps(['ACTIVE']) || []);
+  const all = data.matches || [];
+
+  // ⚠️ SHOW THE WORKING BEFORE BAILING. v1 printed "No live grades found" and
+  // exited 1 — which could mean nothing loaded, no record carried a gradeId, or
+  // the live filter removed everything, and there was no way to tell which.
+  // working_practice.md: a tool that reports something is absent must show what it
+  // found instead. Written the same day that rule was, and broken immediately.
+  const liveList = store.liveComps(['ACTIVE', 'UPCOMING']) || [];
+  const live = new Set(liveList);
+  const compsInData = [...new Set(all.map(m => m.compName).filter(Boolean))];
+  const withGrade = all.filter(m => m.gradeId).length;
+
+  console.log('LOADED');
+  console.log(`  ${all.length} match record(s) across ${compsInData.length} competition(s)`);
+  console.log(`  ${withGrade} carry a gradeId`);
+  console.log(`  manifest says ACTIVE/UPCOMING: ${liveList.length ? liveList.join(', ') : '(none)'}`);
+  if (compsInData.length) {
+    console.log(`  competitions in the data: ${compsInData.slice(0, 8).join(', ')}` +
+      `${compsInData.length > 8 ? ` (+${compsInData.length - 8})` : ''}`);
+  }
+
+  // If the manifest marks nothing live — a season's status can lag, or the field
+  // can be absent — fall back to every competition present rather than reporting
+  // nothing. The probe is read-only; a wider sweep costs calls, not safety.
+  const useLive = live.size > 0 && compsInData.some(c => live.has(c));
+  if (!useLive && live.size) {
+    console.log('  ⚠️  none of the live competitions appear in the loaded data — ' +
+      'probing everything instead');
+  } else if (!live.size) {
+    console.log('  ⚠️  the manifest marks no season ACTIVE or UPCOMING — ' +
+      'probing everything instead');
+  }
+  console.log('');
+
   const grades = [];
   const seen = new Set();
-  for (const m of data.matches || []) {
+  for (const m of all) {
     if (!m.gradeId || seen.has(m.gradeId)) continue;
-    if (live.size && !live.has(m.compName)) continue;
+    if (useLive && !live.has(m.compName)) continue;
     seen.add(m.gradeId);
     grades.push({ gradeId: m.gradeId, compName: m.compName, age: m.age, rawGrade: m.rawGrade });
   }
-  if (!grades.length) { console.error('No live grades found.'); process.exit(1); }
+  if (!grades.length) {
+    console.error('Nothing to probe. From the figures above:');
+    console.error(`  ${all.length ? '' : '— no records loaded at all; check the scope and data/seasons/'}`);
+    console.error(`  ${all.length && !withGrade ? '— records loaded but none carry a gradeId' : ''}`);
+    console.error(`  ${withGrade && useLive ? '— records carry gradeIds but none are in a live competition' : ''}`);
+    process.exit(1);
+  }
 
   // Finals grades first — they are the reason this exists.
   const finalsGrades = new Set((data.matches || []).filter(m => m.isFinals).map(m => m.gradeId));
