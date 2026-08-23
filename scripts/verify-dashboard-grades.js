@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const VERSION = 'verify-dashboard-grades v23 2026-08-23 live-scores';
+const VERSION = 'verify-dashboard-grades v24 2026-08-23 live-filter-and-finals';
 console.log(`=== ${VERSION} ===`);
 
 const HTML = path.join(__dirname, '..', 'index.html');
@@ -2616,6 +2616,50 @@ console.log('\n29  A live score counts towards nothing');
   ok('and says nothing for a record that is not live',
     run(`liveAgeText({ hScore: 1 })`) === '',
     'a badge on a confirmed result would be worse than none');
+
+  // ── ⚠️ A LIVE GAME OBEYS THE GRADE FILTER ─────────────────────────────────
+  // It fails matchCounts by design, and renderResults' "show regardless of the
+  // grade filter" branch is keyed on exactly that — so a live game appeared under
+  // EVERY grade tab. That branch exists for records whose two sides resolve to
+  // different grades; a live game has a perfectly good listing grade.
+  // Reported 2026-08-23.
+  run(`S.gradeMeta['EFNL 2026|U12|gC'] = { r:3, lvl:'junior', g:'M', label:'C', gradeId:'gC' };
+    S.gradeMeta['EFNL 2026|U12|C'] = { r:3, lvl:'junior', g:'M' };
+    rebuildGradeLabels();
+    S.roster['EFNL 2026|Gamma|U12'] = { grade:'B', gradeId:'gB', age:'U12' };
+    S.matches = __lv.map(x => ({...x}));
+    precomputeMatches(S.matches);
+    S.selGrades = new Set(['gC']);   // the live game is grade B
+    render();`);
+  const filtered = run(`document.getElementById('results-body').innerHTML`);
+  ok('a live game in grade B is hidden when only grade C is selected',
+    !/Gamma/.test(filtered),
+    'the always-show branch is for unattributable records, not for live ones');
+
+  run(`S.selGrades = new Set(['gB']); render();`);
+  ok('and shown when its own grade IS selected',
+    /Gamma/.test(run(`document.getElementById('results-body').innerHTML`)),
+    'if this fails the filter is now hiding it always, which is worse');
+  run(`S.selGrades = new Set();`);
+
+  // ── The finals view had NO indicator at all ───────────────────────────────
+  // A grand final showing 42-46 mid-game was indistinguishable from a finished
+  // one — the worst place for that confusion.
+  run(`S.matches = __lv.map(x => Object.assign({}, x, {
+      isFinals: true, finalsAbbrev: 'GF', finalsName: 'Grand Final' }));
+    precomputeMatches(S.matches);
+    S.view = 'finals'; S.finalsMode = 'age'; S.finalsGender = 'all';
+    S.finalsLevel = 'all'; S.showAllAges = true; S.selClub = null;
+    render();`);
+  const fv = run(`document.getElementById('finals-body').innerHTML`);
+  ok('the finals view marks a live score',
+    /live-badge/.test(fv),
+    'a mid-game grand final must not read as a result');
+  ok('and marks it ONCE per match, not once per side',
+    (fv.match(/live-badge/g) || []).length === 1,
+    `${(fv.match(/live-badge/g) || []).length} badge(s) — fvSide renders one team, ` +
+    `so a badge inside it appears twice`);
+  run(`S.view = 'dash';`);
 }
 
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
