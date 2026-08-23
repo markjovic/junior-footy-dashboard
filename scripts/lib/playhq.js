@@ -28,6 +28,22 @@ const https = require('https');
 const crypto = require('crypto');
 
 const API_URL = 'https://api.playhq.com/graphql';
+
+// ⚠️ A SECOND HOST, for scores that do not exist on the main API yet.
+//
+// discoverFixtureByRound returns an EMPTY result block for any game not marked
+// FINAL — measured 2026-08-20 across all 86 live EFNL grades, 46 non-final games,
+// zero scores. discoverGame says the same. The spectator endpoint is where a game
+// being scored on the app actually lives, and it answered for the two grand finals
+// in progress at the time.
+//
+// It needs NO SESSION COOKIE on the afl tenant — 40 calls, zero 403s — and it uses
+// its own status vocabulary: LIVE rather than IN_PROGRESS.
+//
+// ⚠️ It only knows ELECTRONICALLY SCORED games. Anything else returns
+// "game could not be found or was not electronically scored", which is an answer
+// rather than a failure and must not be retried.
+const SPECTATOR_URL = 'https://spectator.playhq.com/graphql';
 const USER_AGENT = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
 const TENANT = 'afl';
 
@@ -74,12 +90,12 @@ function headers(extra) {
 
 // Raw POST. Resolves with { status, text, setCookie } and never rejects, so the
 // classifier above it sees every outcome rather than only the happy path.
-function rawPost(bodyStr, extraHeaders, timeoutMs) {
+function rawPost(bodyStr, extraHeaders, timeoutMs, url) {
   return new Promise((resolve) => {
     const h = headers(extraHeaders);
     h['Content-Length'] = Buffer.byteLength(bodyStr);
 
-    const req = https.request(API_URL, { method: 'POST', headers: h, timeout: timeoutMs || 60000 }, (res) => {
+    const req = https.request(url || API_URL, { method: 'POST', headers: h, timeout: timeoutMs || 60000 }, (res) => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', (c) => { data += c; });
@@ -248,6 +264,107 @@ async function gqlPost(query, variables, operationName) {
   throw new Error(`${operationName || 'query'} failed after ${MAX_ATTEMPTS} attempts — ${lastReason}`);
 }
 
+// Spectator POST. Same retry, WAF and counter handling as gqlPost — a second
+// transport with its own error handling is how two code paths start disagreeing
+// about what a 403 means.
+//
+// Differences from the main endpoint, all deliberate:
+//   no session is required, so it does not call ensureSession and a 403 is NOT
+//     treated as an expired session to refresh
+//   `x-phq-tenant` is sent as well as `tenant`
+//   "not electronically scored" is a real answer and is returned, not retried
+async function specPost(query, variables, operationName) {
+  const bodyStr = JSON.stringify(operationName
+    ? { operationName, query, variables } : { query, variables });
+  let lastReason = 'unknown';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) counters.retries++;
+    const res = await rawPost(bodyStr, { 'x-phq-tenant': TENANT }, 30000, SPECTATOR_URL);
+
+    if (res.status === 0) {
+      counters.transient++;
+      lastReason = `network: ${res.networkError}`;
+      await sleep(attempt * 2000);
+      continue;
+    }
+    if (isWafBlock(res.status, res.text)) {
+      counters.blocked++;
+      lastReason = 'cloudfront block';
+      console.warn(`  [waf] spectator blocked on ${operationName || 'query'} — waiting 80s`);
+      await sleep(80000);
+      continue;
+    }
+    // NOT a session problem: this endpoint takes no cookie, so refreshing one
+    // would loop forever. Report it and stop.
+    if (res.status === 403) {
+      counters.auth403++;
+      throw new Error(`spectator 403 on ${operationName || 'query'}`);
+    }
+    if (res.status !== 200) {
+      lastReason = `HTTP ${res.status}: ${res.text.slice(0, 200)}`;
+      counters.transient++;
+      await sleep(attempt * 1000);
+      continue;
+    }
+
+    let json;
+    try { json = JSON.parse(res.text); }
+    catch (e) {
+      counters.transient++;
+      lastReason = `JSON parse: ${e.message}`;
+      await sleep(attempt * 1000);
+      continue;
+    }
+
+    if (json.errors && json.errors.length) counters.graphqlError++;
+    else counters.ok++;
+    return json;
+  }
+  throw new Error(`spectator ${operationName || 'query'} failed after ${MAX_ATTEMPTS} attempts — ${lastReason}`);
+}
+
+// The live score for one game, or null.
+//
+// null means "no score available" for every reason that is not an outage — the
+// game is not e-scored, has not started, or the id is unknown. A caller wanting to
+// show a live score cannot act on the difference, and treating "not e-scored" as
+// an error would fill the log with a message that is really just an answer.
+const Q_SPECTATOR_GAME = `query game($id: ID!) {
+  game(id: $id) {
+    id
+    status
+    result {
+      home { statistics { type { value } count } }
+      away { statistics { type { value } count } }
+    }
+  }
+}`;
+
+async function spectatorScore(gameId) {
+  if (!gameId) return null;
+  let json;
+  try { json = await specPost(Q_SPECTATOR_GAME, { id: gameId }, 'game'); }
+  catch (e) { return null; }
+  if (json.errors && json.errors.length) return null;
+  const g = json?.data?.game;
+  if (!g) return null;
+  const pick = (side, type) => {
+    const s = (g.result?.[side]?.statistics || []).find(x => x.type?.value === type);
+    return s ? s.count : null;
+  };
+  const hScore = pick('home', 'TOTAL_SCORE');
+  const aScore = pick('away', 'TOTAL_SCORE');
+  if (hScore == null && aScore == null) return null;
+  return {
+    gameId: g.id,
+    status: g.status || null,          // LIVE, FINAL — its own vocabulary
+    hScore, aScore,
+    hG: pick('home', 'GOALS'), hB: pick('home', 'BEHINDS'),
+    aG: pick('away', 'GOALS'), aB: pick('away', 'BEHINDS'),
+  };
+}
+
 function summary() {
   return { ...counters };
 }
@@ -263,6 +380,9 @@ function logSummary(label) {
 
 module.exports = {
   gqlPost,
+  specPost,
+  spectatorScore,
+  SPECTATOR_URL,
   refreshSession,
   ensureSession,
   summary,
