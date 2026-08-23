@@ -465,6 +465,20 @@ body{overflow-x:hidden}
 .fv-sum-pct{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3)}
 /* The top-grade subset, on its own line beneath the total so a cell never grows
    sideways — the table already scrolls horizontally on a phone. */
+/* LIVE. A running score is not a result, and the badge is the only thing on
+   screen saying so — without it a 42-46 mid-game is indistinguishable from a
+   final score. The TIME matters as much as the badge: a score fetched at 14:12
+   and read at 20:00 is a stale score, and showing it without saying when it was
+   taken is worse than not showing it. */
+.live-badge{display:inline-flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;
+  font-size:9px;font-weight:600;letter-spacing:.6px;padding:1px 5px;border-radius:3px;
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#f87171;
+  vertical-align:middle;white-space:nowrap}
+.live-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;
+  animation:livePulse 1.6s ease-in-out infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.25}}
+.live-at{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);margin-left:4px}
+
 .fv-sum-top{display:block;color:var(--gold);font-size:11px;line-height:1.35}
 .fv-sum-top .fv-sum-pct{color:var(--gold);opacity:.75}
 .fv-sum-nocrest{width:16px;height:16px;border-radius:50%;background:var(--s3);flex-shrink:0;
@@ -526,7 +540,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.203</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.204</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -878,7 +892,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.203</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.204</span>
         </div>
 
 
@@ -1585,6 +1599,20 @@ function matchCounts(m) {
 }
 
 function matchLadderGrade(m) {
+  // ⚠️ A LIVE SCORE COUNTS TOWARDS NOTHING. live_scores_design.md.
+  //
+  // It is a running score read off the PlayHQ app mid-game, not a result.
+  //
+  // The gate is HERE and not in matchCounts(), which was the first attempt.
+  // computeLadder() does not call matchCounts at all — it joins on
+  // `matchLadderGrade(m) === grade`, deliberately, because matchIsValid was
+  // removed from that filter in Beta 0.166. So a live record failed matchCounts
+  // and still appeared on the ladder with P=1. Caught by the suite before
+  // release, having been asserted on the wrong function.
+  //
+  // Returning null here excludes it from BOTH: matchCounts is defined as "this
+  // has a ladder grade", and the ladder join can never match null.
+  if (m.live) return null;
   if (isGradingGrade(m.gradeId)) return m.gradeId;
   // The ROSTER decides, always. An earlier version returned `m._ladder || m._grade`
   // on the cached path and fell back to m.gradeId through _grade, which put a
@@ -2552,7 +2580,11 @@ function renderResults(age) {
       const valid = matchCounts(m);
       const gotwKey = gotwKeyFor(m.compName, age, roundKey(m));
       const isGotw = S.gotwFlags[gotwKey] === m.id;
-      return `<div class="match-row" style="${valid?'':'opacity:.5'}">
+      // A live game is NOT dimmed like a non-counting one. Both fail matchCounts,
+      // but "this game does not count towards a ladder because the teams are in
+      // different grades" and "this game is being played right now" are different
+      // things, and dimming the second reads as an error rather than as news.
+      return `<div class="match-row" style="${(valid || m.live) ? '' : 'opacity:.5'}">
         <div class="mr-grade">
           <span class="gtag gtag-neutral ${gc}">${abbrevGrade(gLabel(g))}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
@@ -2568,6 +2600,7 @@ function renderResults(age) {
           <span style="color:var(--tx3)"> – </span>
           <span style="color:${aWon?'var(--gold)':hWon?'var(--tx3)':'var(--tx)'}">${m.aScore}</span>
           <span class="mr-det">${m.hG}.${m.hB} – ${m.aG}.${m.aB}</span>
+          ${m.live ? `<div style="margin-top:2px">${liveBadge(m)}</div>` : ''}
         </div>
         <div class="mr-right">
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
@@ -2985,6 +3018,32 @@ function enteredTeamsByClub() {
 
 const isProvSide = (m, side) => !!m.provisional && !(side === 'h' ? m.hLogo : m.aLogo);
 const isPlayed   = m => !m.scheduled && m.hScore !== null && m.hScore !== undefined;
+
+// The LIVE badge, and how long ago the score was read.
+//
+// isPlayed() is deliberately true for a live record so the score renders in the
+// ordinary places. This is what stops it being mistaken for a result: a badge on
+// the row, and the age of the reading beside it.
+//
+// Minutes, not a clock time — "14:12" makes a reader work out whether that was
+// recent, and the whole question is whether the number can still be trusted.
+function liveAgeText(m) {
+  if (!m || !m.live || !m.liveAt) return '';
+  const then = Date.parse(m.liveAt);
+  if (!then) return '';
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`;
+}
+function liveBadge(m) {
+  if (!m || !m.live) return '';
+  const age = liveAgeText(m);
+  return `<span class="live-badge" title="Being scored on the PlayHQ app — ` +
+    `does not count towards ladders until confirmed"><span class="live-dot"></span>LIVE</span>` +
+    (age ? `<span class="live-at">${age}</span>` : '');
+}
 
 // A team "reached finals" only as a listed side. A placeholder such as
 // "Winner Game 1" has not qualified and must never create a club entry.
@@ -4392,7 +4451,9 @@ function openTeamDrilldown(teamName, grade, ageOverride) {
   // tallied NOWHERE, so a team's finals record existed only as rows in the list
   // below, and the strip could read "0 LOST" with a red L visible underneath it.
   let fw=0,fd=0,fl=0,fF=0,fA=0,fPlayed=0;
-  matches.filter(m => isFinalsMatch(m) && isPlayed(m)).forEach(m => {
+  // `!m.live` on both tallies: isPlayed() is deliberately TRUE for a live record
+  // so the score renders, but a running score must not become a W, D or L.
+  matches.filter(m => isFinalsMatch(m) && isPlayed(m) && !m.live).forEach(m => {
     const isHome = m.home === teamName;
     const tf = isHome ? m.hScore : m.aScore;
     const ta = isHome ? m.aScore : m.hScore;
