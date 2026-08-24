@@ -20324,7 +20324,7 @@
   },
   "lastUpdated": "2026-08-24T02:30:09.244Z",
   "lastResultsFetch": "2026-08-24T02:30:09.244Z",
-  "lastStatsFetch": "2026-08-23T14:08:32.437Z",
+  "lastStatsFetch": "2026-08-24T03:10:08.056Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
@@ -20360,7 +20360,7 @@
       "file": "data/seasons/2dcbf383-players.json",
       "seasonId": "2dcbf383",
       "kind": "players",
-      "bytes": 8122385
+      "bytes": 8122418
     },
     {
       "file": "data/seasons/3733598c-core.json",
