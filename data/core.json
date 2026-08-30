@@ -998,7 +998,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2065,
+        "matches": 2084,
         "players_n": 6766
       }
     },
@@ -1087,7 +1087,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 789,
+        "matches": 793,
         "players_n": 2084
       }
     },
@@ -1494,7 +1494,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2245,
+        "matches": 2251,
         "players_n": 8846
       }
     },
@@ -1551,7 +1551,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 3069,
+        "matches": 3101,
         "players_n": 9163
       }
     },
@@ -20322,15 +20322,15 @@
     "YJFL 2026|Heidelberg Girls|U11 Girls": "62025c6b",
     "YJFL 2026|Richmond Boys 1|U16": "f3dc4036"
   },
-  "lastUpdated": "2026-08-30T06:18:55.893Z",
-  "lastResultsFetch": "2026-08-30T06:18:55.893Z",
+  "lastUpdated": "2026-08-30T07:30:58.999Z",
+  "lastResultsFetch": "2026-08-30T07:30:58.999Z",
   "lastStatsFetch": "2026-08-29T14:09:10.734Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 1025916
+      "bytes": 1029004
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20342,7 +20342,7 @@
       "file": "data/seasons/263ca13b-core.json",
       "seasonId": "263ca13b",
       "kind": "core",
-      "bytes": 939239
+      "bytes": 949289
     },
     {
       "file": "data/seasons/263ca13b-players.json",
@@ -20354,7 +20354,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2428210
+      "bytes": 2428030
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
@@ -20414,7 +20414,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 365650
+      "bytes": 367773
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
@@ -20486,7 +20486,7 @@
       "file": "data/seasons/cda2f0ec-core.json",
       "seasonId": "cda2f0ec",
       "kind": "core",
-      "bytes": 1300420
+      "bytes": 1316451
     },
     {
       "file": "data/seasons/cda2f0ec-players.json",
