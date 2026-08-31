@@ -17,6 +17,17 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      fixtures_dry_run:
+        description: 'fixtures_dry_run — report and write NOTHING. Use to diagnose without purging.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      fixtures_trace:
+        description: 'fixtures_trace — print every record id for grades whose PlayHQ name contains this, e.g. "premier".'
+        required: false
+        default: ''
+        type: string
       include_retired:
         description: 'Stats: also fetch retired seasons (slow — only for a Phase B backfill)'
         required: false
@@ -195,6 +206,8 @@ jobs:
         id: fixtures
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
+          FIXTURES_DRY_RUN: ${{ github.event.inputs.fixtures_dry_run }}
+          FIXTURES_TRACE: ${{ github.event.inputs.fixtures_trace }}
         run: |
           set +e
           node scripts/fetch-fixtures.js
