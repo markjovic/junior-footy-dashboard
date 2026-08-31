@@ -127,8 +127,6 @@ jobs:
           echo "run=false" >> $GITHUB_OUTPUT
           echo "vip_only=false" >> $GITHUB_OUTPUT
           exit 0
-          # vip_only not used for scheduled runs (stats only run via workflow_dispatch)
-          echo "vip_only=false" >> $GITHUB_OUTPUT
 
       - name: Fetch stats
         if: steps.mode.outputs.run == 'true'
@@ -164,13 +162,32 @@ jobs:
           ref: main
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # 20, matching the other two jobs. This job alone was on 22; a version
+          # difference between jobs in one workflow is a difference nobody
+          # remembers choosing and everybody has to rule out.
+          node-version: '20'
 
       - name: Determine fixtures mode
         id: mode
         run: |
+          # ⚠️ `both` MUST REACH THIS JOB.
+          #
+          # This tested `INPUT = "fixtures"` only, while the results and stats jobs
+          # both treat `both` as "run me". The Cloudflare Worker dispatches
+          # `fetch=both`, so results and stats ran on every scheduled trigger and
+          # fixtures ran on NONE of them — lastFixtureFetch sat at 2026-08-16 for
+          # fifteen days while results updated daily.
+          #
+          # The visible symptom was a grade whose finals started after that date
+          # having no FR2, PF or GF fixtures at all, while every grade whose finals
+          # started earlier did. Nothing was wrong with fetch-fixtures.js; it had
+          # not been run.
           INPUT="${{ github.event.inputs.fetch }}"
-          [ "$INPUT" = "fixtures" ] && echo "run=true" >> $GITHUB_OUTPUT || echo "run=false" >> $GITHUB_OUTPUT
+          if [ "$INPUT" = "fixtures" ] || [ "$INPUT" = "both" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
           echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
 
       - name: Fetch fixtures
