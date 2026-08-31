@@ -31,13 +31,17 @@
 
 'use strict';
 
-const VERSION = 'probe-round-flags v1 2026-08-31';
+const VERSION = 'probe-round-flags v2 2026-08-31 targeted';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 const engine = require('./lib/results-engine');
 
 const ONE     = (process.env.PROBE_GRADE || '').trim();
+// A substring matched against "comp age grade", so a grade can be targeted by
+// name when its id is not to hand — which it usually is not, because the run log
+// prints the NAME.
+const MATCH   = (process.env.PROBE_MATCH || '').trim().toLowerCase();
 const NGRADES = Math.max(1, Math.min(60, Number(process.env.PROBE_GRADES || 8)));
 
 async function main() {
@@ -60,8 +64,26 @@ async function main() {
       picks.push({ gradeId: m.gradeId, compName: m.compName, age: m.age, rawGrade: m.rawGrade });
     }
     if (!picks.length) { console.error('No grades with finals found in storage.'); process.exit(1); }
+
+    const total = picks.length;
+    if (MATCH) {
+      picks = picks.filter(g =>
+        `${g.compName} ${g.age} ${g.rawGrade}`.toLowerCase().includes(MATCH));
+      if (!picks.length) {
+        console.error(`No grade with finals matches "${MATCH}".`);
+        console.error('Try a shorter substring — it is matched against "comp age grade".');
+        process.exit(1);
+      }
+    }
+    const shown = Math.min(picks.length, NGRADES);
     picks = picks.slice(0, NGRADES);
-    console.log(`${seen.size} grade(s) with finals; showing ${picks.length}.\n`);
+    // ⚠️ SAY WHEN THIS IS A SAMPLE. v1 printed a verdict about "the flag" from
+    // whichever eight grades came first — which on 2026-08-31 were SER grades,
+    // none of them the EFNL grade that had actually failed. A conclusion drawn
+    // from grades that exclude the case in question is worth nothing.
+    console.log(`${total} grade(s) with finals` +
+      (MATCH ? `; ${picks.length} match "${MATCH}"` : '') +
+      `; showing ${shown}${shown < (MATCH ? picks.length : total) ? ' — A SAMPLE' : ''}.\n`);
   }
 
   let multi = 0, none = 0, nonBool = 0;
@@ -122,7 +144,12 @@ async function main() {
     console.log('  ⚠️  `current` is not a boolean. A truthy test may be reading it wrong.');
   } else {
     console.log('  Exactly one round flagged per grade, and it is a boolean — so');
-    console.log('  findIndex is correct and the flag genuinely lags behind the games.');
+    console.log('  findIndex is reading the field correctly FOR THE GRADES SHOWN.');
+    console.log('');
+    console.log('  ⚠️  That says nothing about a grade not in this list. If a specific');
+    console.log('      grade is stopping short, probe THAT one:');
+    console.log('        PROBE_MATCH="premier - eastland senior men"');
+    console.log('      and compare its flagged round against the rounds it has played.');
   }
 
   if (typeof logSummary === 'function') logSummary('probe-round-flags');
