@@ -20,6 +20,16 @@ const GRADES_PATH = path.join(ROOT, 'data', 'grades.json');
 const DATA_PATH   = path.join(ROOT, 'data', 'data.json');
 
 const FETCH_DELAY = parseInt(process.env.FETCH_DELAY_MS || '200', 10);
+// Report and write nothing. This script purges every scheduled record for a
+// competition before rebuilding them, so diagnosing it by running it repeatedly
+// is destructive. There was no way to look without touching the data.
+const DRY_RUN = process.env.FIXTURES_DRY_RUN === 'true';
+// Print the id of every record produced, for grades whose name contains this.
+// The per-grade output was a COUNT — "[1] 4 fixture(s)" — which cannot show that
+// those four were dropped between here and the file. Measured 2026-08-31:
+// Premier Senior Men and Premier Reserve Men each reported 4 and stored 0, while
+// Premier U19.5 reported 4 and stored them.
+const TRACE = (process.env.FIXTURES_TRACE || '').trim().toLowerCase();
 
 // ─── HTTP / GraphQL ───────────────────────────────────────────────────────────
 // Session and transport come from the shared module, so all four writers behave
@@ -188,7 +198,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'fetch-fixtures v5 2026-08-12 explicit-no-players';
+const VERSION = 'fetch-fixtures v6 2026-08-31 dry-run-and-id-logging';
 
 async function main() {
   console.log(`=== ${VERSION} ===`);
@@ -383,8 +393,19 @@ async function main() {
       }
     }
     console.log(`  [${idx}] ${records.length} fixture(s)`);
+    if (TRACE && String(grade.name || '').toLowerCase().includes(TRACE)) {
+      console.log(`      grade.id=${grade.id}  parsed age=${JSON.stringify(age)} ` +
+        `rawGrade=${JSON.stringify(rawGrade)}`);
+      for (const r of records) console.log(`      + ${r.id}`);
+      if (!records.length) console.log('      (none produced)');
+    }
     return records;
   }
+
+  // Ids that a new fixture record replaced. A collision with a played result is
+  // data loss; a collision between two fixtures is two grades claiming one game.
+  const clobberedResults = [];
+  const clobberedFixtures = [];
 
   // Process in parallel batches
   for (let i = 0; i < grades.length; i += CONCURRENCY) {
@@ -392,10 +413,34 @@ async function main() {
     const results = await Promise.all(batch.map((g, j) => processGrade(g, i + j + 1)));
     for (const records of results) {
       for (const r of records) {
+        // ⚠️ AN OVERWRITE HERE IS SILENT. byId is keyed on the match id, so a
+        // record whose id collides with one already in the map — a real result,
+        // or another grade's fixture — replaces it without a word. Counted and
+        // reported rather than assumed harmless.
+        const prev = byId.get(r.id);
+        if (prev) {
+          if (!prev.scheduled) {
+            clobberedResults.push(r.id);
+          } else {
+            clobberedFixtures.push(r.id);
+          }
+        }
         byId.set(r.id, r);
         newCount++;
       }
     }
+  }
+
+  if (clobberedResults.length) {
+    console.log(`\n⚠️  ${clobberedResults.length} fixture record(s) OVERWROTE A PLAYED RESULT:`);
+    for (const id of clobberedResults.slice(0, 10)) console.log(`     ${id}`);
+    if (clobberedResults.length > 10) console.log(`     ... ${clobberedResults.length - 10} more`);
+  }
+  if (clobberedFixtures.length) {
+    console.log(`\n⚠️  ${clobberedFixtures.length} fixture record(s) replaced another FIXTURE ` +
+      `— two grades produced the same match id:`);
+    for (const id of clobberedFixtures.slice(0, 10)) console.log(`     ${id}`);
+    if (clobberedFixtures.length > 10) console.log(`     ... ${clobberedFixtures.length - 10} more`);
   }
 
   // Write back — preserve all existing matches, add/update scheduled ones
@@ -407,9 +452,18 @@ async function main() {
   // build-club-index — must agree, or whichever runs next re-inflates the file
   // and every run produces a whole-file diff.
   // Explicit rather than relying on the marker load() leaves on the object.
+  if (DRY_RUN) {
+    console.log(`\nDRY RUN — nothing written. ${newCount} record(s) would have been stored.`);
+    const sched = data.matches.filter(m => m.scheduled).length;
+    console.log(`data.matches would hold ${data.matches.length} record(s), ${sched} scheduled.`);
+    return;
+  }
   store.report(store.save(data, storeScope, { players: false }), 'fetch-fixtures');
   console.log(`\nFixtures: ${newCount} new scheduled records written`);
-  console.log('Wrote data.json');
+  // The old monolithic file has not existed since 2026-08-12; store.save writes
+  // per-season files and reports them itself.
+  console.log(`data.matches now holds ${data.matches.length} record(s), ` +
+    `${data.matches.filter(m => m.scheduled).length} scheduled.`);
   logSummary('fetch-fixtures');
 
   // Exit codes now match the other three writers: 0 = changed, 2 = no change,
