@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v21 2026-08-23 live-scores';
+const ENGINE_VERSION = 'v22 2026-08-31 past-rounds-beyond-current';
 
 'use strict';
 
@@ -634,8 +634,53 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
       // A current round exists — use it as the cutoff
       const roundIndex = roundList.indexOf(round);
       if (roundIndex > currentRoundIndex) {
-        console.log(`    ${rLabel} ... beyond current round — stopping`);
-        break;
+        // ⚠️ THE `current` FLAG LAGS, AND FINALS ARE WHERE IT SHOWS.
+        //
+        // Measured 2026-08-31: Finals Round 2 was played on 29-30 August and
+        // PlayHQ still had `current` on Finals Round 1. The walk stopped, the
+        // results were never fetched, and those games sat in Upcoming Fixtures
+        // with dates two days in the past. Every grade whose D3/D4 preliminary
+        // final ran the same weekend was affected the same way.
+        //
+        // A round DATED IN THE PAST is fetched regardless of the flag. This does
+        // not reintroduce the provisionalDates problem the comment above warns
+        // about, because of an asymmetry:
+        //
+        //   a bad date that looks FUTURE  -> we still stop, and it costs nothing
+        //   a bad date that looks PAST    -> one wasted call returning no results
+        //
+        // Using dates to STOP early is what was unsafe. Using them to fetch MORE
+        // risks a call, not a wrong answer.
+        //
+        // Bounded at 30 days so a genuinely corrupt date — the 2026-11-04-for-April
+        // case in the comment above — cannot drag the walk back through a whole
+        // season once that date passes.
+        const pastDate = (provisionalDates || []).some(d => {
+          const day = String(d || '').slice(0, 10);
+          if (!day) return false;
+          if (day >= today) return false;
+          const age = (Date.parse(today) - Date.parse(day)) / 86400000;
+          return age >= 0 && age <= 30;
+        });
+        // NAME THE CURRENT ROUND. Without it the line says a round is "beyond
+        // current" and leaves the reader to guess WHICH round that is — and on
+        // 2026-08-31 the guess filled in for a measurement, which is how an
+        // inference ends up stated as a cause. The dates go in too, so a stop can
+        // be told from a lagging flag without re-deriving anything.
+        const curRound = roundList[currentRoundIndex];
+        const curName = curRound
+          ? (curRound.abbreviatedName || curRound.name || `R${curRound.number}`)
+          : '(none)';
+        const dTxt = (provisionalDates || []).map(d => String(d || '').slice(0, 10))
+          .filter(Boolean).join(', ') || 'no date';
+        if (!pastDate) {
+          console.log(`    ${rLabel} ... beyond current round (current is ${curName}; ` +
+            `this round ${dTxt}) — stopping`);
+          break;
+        }
+        console.log(`    ${rLabel} ... beyond current round (current is ${curName}) ` +
+          `but dated ${dTxt}, in the past — fetching anyway`);
+        // fall through to fetch
       }
       // Rounds up to and including current are fetched (may have finals)
     } else {
