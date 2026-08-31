@@ -1,0 +1,44 @@
+# .github/workflows/probe-round-flags.yml
+#
+# What is actually in rounds[].current?
+#
+# The round walk finds the current round with findIndex, which returns the FIRST
+# match — correct only if exactly one round is flagged and the field is a boolean.
+# Neither has ever been checked. This prints the raw array.
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+
+name: Probe Round Flags
+
+on:
+  workflow_dispatch:
+    inputs:
+      grade:
+        description: 'One grade id, e.g. the Premier Eastland Senior Men grade. Blank = grades with finals.'
+        required: false
+        default: ''
+        type: string
+      grades:
+        description: 'How many grades to show when no id is given (1-60). Default 8.'
+        required: false
+        default: '8'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_GRADE: ${{ inputs.grade }}
+          PROBE_GRADES: ${{ inputs.grades }}
+        run: node scripts/probe-round-flags.js
