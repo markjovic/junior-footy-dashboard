@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5516,
+        "matches": 5499,
         "players_n": 18183
       }
     },
@@ -20544,5 +20544,5 @@
     }
   ],
   "lastClubIndex": "2026-08-19T12:29:46.710Z",
-  "lastFixtureFetch": "2026-08-31T05:07:27.452Z"
+  "lastFixtureFetch": "2026-08-31T06:36:44.555Z"
 }
