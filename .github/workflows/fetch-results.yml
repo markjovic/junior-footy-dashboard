@@ -166,7 +166,27 @@ jobs:
 
   fetch-fixtures:
     runs-on: ubuntu-latest
-    needs: fetch-results
+    # ⚠️ SERIALISED. This waits for fetch-stats, not just fetch-results.
+    #
+    # With `needs: fetch-results` alone, stats and fixtures ran in PARALLEL. Both
+    # check out main at the same moment, both load the season file, both write the
+    # WHOLE file back, and both commit. Whichever pushes second is holding a copy
+    # loaded before the other's changes, so it silently reverts them.
+    #
+    # Measured 2026-08-31, run #335: commit 21de89a "fixtures" landed, then
+    # 49f55ff "stats" from the same run landed on top and reverted it. The file
+    # kept stats' 5499 records with 47 scheduled instead of fixtures' 5499 with
+    # 30, and Premier's finals fixtures vanished. The fixtures job reported
+    # success and lastFixtureFetch — a CORE key, in a different file — survived,
+    # so every symptom pointed at the fetch logic instead of the commit.
+    #
+    # `git pull --rebase -X theirs` does not protect against this and contributes
+    # to it: on a conflict it takes the upstream side and drops the local commit
+    # without failing.
+    #
+    # The cost is wall-clock time — the two jobs no longer overlap. The benefit is
+    # that a whole-file writer cannot be clobbered by another whole-file writer.
+    needs: [fetch-results, fetch-stats]
     steps:
       - uses: actions/checkout@v4
         with:
