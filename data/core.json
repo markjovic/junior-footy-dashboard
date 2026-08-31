@@ -998,7 +998,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2089,
+        "matches": 2098,
         "players_n": 6768
       }
     },
@@ -1087,7 +1087,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 793,
+        "matches": 794,
         "players_n": 2085
       }
     },
@@ -20322,8 +20322,8 @@
     "YJFL 2026|Heidelberg Girls|U11 Girls": "62025c6b",
     "YJFL 2026|Richmond Boys 1|U16": "f3dc4036"
   },
-  "lastUpdated": "2026-08-30T17:30:26.942Z",
-  "lastResultsFetch": "2026-08-30T17:30:26.942Z",
+  "lastUpdated": "2026-08-31T02:28:35.050Z",
+  "lastResultsFetch": "2026-08-31T02:28:35.050Z",
   "lastStatsFetch": "2026-08-30T14:07:57.053Z",
   "seasonFiles": [
     {
@@ -20342,7 +20342,7 @@
       "file": "data/seasons/263ca13b-core.json",
       "seasonId": "263ca13b",
       "kind": "core",
-      "bytes": 951949
+      "bytes": 956715
     },
     {
       "file": "data/seasons/263ca13b-players.json",
@@ -20414,7 +20414,7 @@
       "file": "data/seasons/4dfaaab5-core.json",
       "seasonId": "4dfaaab5",
       "kind": "core",
-      "bytes": 367773
+      "bytes": 368298
     },
     {
       "file": "data/seasons/4dfaaab5-players.json",
@@ -20486,7 +20486,7 @@
       "file": "data/seasons/cda2f0ec-core.json",
       "seasonId": "cda2f0ec",
       "kind": "core",
-      "bytes": 1318447
+      "bytes": 1318355
     },
     {
       "file": "data/seasons/cda2f0ec-players.json",
