@@ -18,6 +18,11 @@ on:
         required: false
         default: ''
         type: string
+      match:
+        description: 'Substring of "comp age grade", e.g. "eastland senior men". Targets one grade by name.'
+        required: false
+        default: ''
+        type: string
       grades:
         description: 'How many grades to show when no id is given (1-60). Default 8.'
         required: false
@@ -40,5 +45,6 @@ jobs:
       - name: Probe
         env:
           PROBE_GRADE: ${{ inputs.grade }}
+          PROBE_MATCH: ${{ inputs.match }}
           PROBE_GRADES: ${{ inputs.grades }}
         run: node scripts/probe-round-flags.js
