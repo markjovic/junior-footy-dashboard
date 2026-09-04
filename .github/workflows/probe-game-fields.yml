@@ -1,0 +1,41 @@
+# .github/workflows/probe-game-fields.yml
+#
+# Does the MAIN API carry a per-quarter breakdown?
+#
+# probe-quarter-scores.js only asked the spectator endpoint, which answers "not
+# electronically scored" for most games — yet PlayHQ's site shows quarter scores
+# for virtually all of them. So the site reads something we have never asked for.
+#
+# Introspection is disabled, so this asks for candidate fields one at a time and
+# reads the validation errors, which name valid alternatives.
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+
+name: Probe Game Fields
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: 'game — one PlayHQ gameId. Blank = the most recent completed game that has one.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_GAME: ${{ inputs.game }}
+        run: node scripts/probe-game-fields.js
