@@ -487,6 +487,22 @@ body{overflow-x:hidden}
    and a badge tucked beside it was invisible on a phone — where a live score is
    most likely to be read from the sideline. Reported 2026-08-23. */
 .mr-live{margin-top:2px;line-height:1}
+/* QUARTER SCORES. A full-width strip UNDER the row, not a line inside .mr-score.
+   That column is 64px on a phone and .mr-det is display:none there, so anything
+   tucked beside it is invisible on exactly the device most likely to be reading a
+   score from the sideline — the mistake the LIVE badge made and had to have
+   undone. */
+.mr-qtr{grid-column:1/-1;display:flex;gap:14px;padding:2px 0 1px 30px;
+  font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);
+  letter-spacing:.4px;font-variant-numeric:tabular-nums}
+.mr-qtr b{font-weight:400;color:var(--tx2);min-width:26px;display:inline-block}
+.mr-qtr .qv{min-width:22px;display:inline-block;text-align:right}
+.qtr-btn{margin-left:8px;font-family:'DM Mono',monospace;font-size:9px;
+  padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--b2);
+  background:var(--s1);color:var(--tx3);white-space:nowrap}
+.qtr-btn:hover{color:var(--tx);border-color:var(--tx3)}
+.qtr-btn.on{background:rgba(240,192,64,.12);border-color:rgba(240,192,64,.35);color:var(--gold)}
+@media(max-width:768px){ .mr-qtr{padding-left:10px;gap:10px} }
 /* Finals view. Right-aligned to sit under the score column rather than under the
    team names, so the eye finds it next to the number it qualifies. */
 .fv-live{text-align:right;margin-top:2px;line-height:1}
@@ -552,7 +568,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.206</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.207</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -698,6 +714,8 @@ body{overflow-x:hidden}
             <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleResultsCard()">
               <span class="card-title">Results</span>
               <span class="card-meta" id="results-meta"></span>
+              <button class="qtr-btn" id="qtr-btn" onclick="event.stopPropagation();cycleQuarters()"
+                title="Quarter-by-quarter scores">Qtrs: off</button>
               <span id="results-toggle" style="font-size:10px;color:var(--tx3);margin-left:8px">▼</span>
             </div>
             <div id="results-body"></div>
@@ -904,7 +922,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.206</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.207</span>
         </div>
 
 
@@ -1056,6 +1074,9 @@ function buildHash() {
     const l = gLabel(S.selLdrGrade) || S.selLdrGrade;
     if (l) p.push(['l', l]);
   }
+  // The quarter view travels in a shared link — "look at this game" is exactly
+  // when someone wants the breakdown they were looking at.
+  if (S.qtrMode && S.qtrMode !== 'off') p.push(['q', S.qtrMode]);
   if (S.selRound) p.push(['r', S.selRound]);
   if (S.selTeam) p.push(['t', S.selTeam]);
   return p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -1121,6 +1142,7 @@ function saveFilters() {
       selectedAge: S.selectedAge,
       selGrades: [...S.selGrades],
       selRound:  S.selRound,
+      qtrMode:   S.qtrMode,
       selLdrGrade: S.selLdrGrade,
       selTeam:   S.selTeam,
       view:       S.view,
@@ -1172,6 +1194,13 @@ let S = {
   // keystroke, then held for the session. cross_season_search_design.md.
   playerIndex: null,       // { seasons, teams, ages, grades, people } once loaded
   playerIndexState: '',    // '' | 'loading' | 'ready' | 'failed'
+  // Quarter-by-quarter display: 'off' | 'cum' | 'q'.
+  //   cum  10 16 42 42  — running total, what PlayHQ shows ("END OF PERIOD")
+  //   q    10  6 26  0  — per quarter, which is how it is STORED and which shows
+  //                       where a game turned; cumulative hides a big third.
+  // Stored per quarter because that is the primitive the API returns; the
+  // cumulative view is derived, never the other way round.
+  qtrMode: 'off',
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
   // { "EFNL 2026|U12|3": "matchId", "EFNL 2026|U12|F:GF": "matchId" }
   // compName|age|roundKey -> matchId. The compName carries the season, so
@@ -2499,6 +2528,7 @@ function renderFixtures(age) {
           ${m.provisional && !m.aLogo ? '' : crestHTML(m.away, 16, 'mr-logo')}
         </div>
         <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
+        ${quarterLine(m)}
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">${roundLabel(byRound[r][0])}</div>${rows}`;
@@ -5409,6 +5439,54 @@ function compNameOfSeason(seasonId) {
   return m ? m.compName : '';
 }
 
+// ── Quarter scores ─────────────────────────────────────────────────
+// hQ/aQ are written by scripts/fetch-quarter-scores.js from
+// discoverGame.statistics.<side>.periods. PER QUARTER, ordered by the grade's own
+// period list — PlayHQ returns the array unordered.
+//
+// Roughly 31% of games have no breakdown at all: some grades do not record one
+// (grade.hasPeriodScores false) and some scorers do not finish it. A row without
+// one gets NO LINE — not a placeholder, not a row of dashes. A gap that looks
+// like a rendering fault invites someone to go looking for a bug that is not
+// there.
+const QTR_MODES = ['off', 'cum', 'q'];
+const QTR_LABEL = { off: 'Qtrs: off', cum: 'Qtrs: total', q: 'Qtrs: each' };
+
+function cycleQuarters() {
+  const i = QTR_MODES.indexOf(S.qtrMode);
+  S.qtrMode = QTR_MODES[(i + 1) % QTR_MODES.length];
+  syncQtrBtn();
+  saveFilters();
+  render();
+}
+function syncQtrBtn() {
+  const b = document.getElementById('qtr-btn');
+  if (!b) return;
+  b.textContent = QTR_LABEL[S.qtrMode] || QTR_LABEL.off;
+  b.classList.toggle('on', S.qtrMode !== 'off');
+}
+
+// A running total from the stored per-quarter values. The last entry equals the
+// final score, which is what makes it readable next to the score above it.
+const cumulate = (arr) => {
+  const out = []; let t = 0;
+  for (const v of arr) { t += (Number(v) || 0); out.push(t); }
+  return out;
+};
+
+function quarterLine(m) {
+  if (S.qtrMode === 'off') return '';
+  const hq = m.hQ, aq = m.aQ;
+  if (!Array.isArray(hq) || !Array.isArray(aq) || !hq.length || hq.length !== aq.length) return '';
+  const h = S.qtrMode === 'cum' ? cumulate(hq) : hq;
+  const a = S.qtrMode === 'cum' ? cumulate(aq) : aq;
+  const cell = (v) => `<span class="qv">${v}</span>`;
+  return `<div class="mr-qtr">` +
+    `<span><b>${m.home.split(' ')[0].slice(0, 3).toUpperCase()}</b>${h.map(cell).join('')}</span>` +
+    `<span><b>${m.away.split(' ')[0].slice(0, 3).toUpperCase()}</b>${a.map(cell).join('')}</span>` +
+    `</div>`;
+}
+
 // ── Player search ──────────────────────────────────────────────────
 function onPlayerSearch(val) {
   const res = document.getElementById('player-search-results');
@@ -6346,6 +6424,7 @@ async function init() {
       if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
+      if (QTR_MODES.includes(f.qtrMode)) S.qtrMode = f.qtrMode;
 
       // Restore the ladder tab — validate it is still a grade in this age. It is
       // resolved AFTER selGrades above, because the tab strip only offers grades
@@ -6392,6 +6471,7 @@ async function init() {
       else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
     }
     if (_url.v === 'finals' || _url.v === 'dash') S.view = _url.v;
+    if (QTR_MODES.includes(_url.q)) S.qtrMode = _url.q;
     if (S.view === 'finals') {
       if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
       if (['date', 'venue'].includes(_url.fv)) S.venueGroup = _url.fv;
@@ -6430,6 +6510,7 @@ async function init() {
 
   const ages = getAges();
   if (!S.selectedAge || !ages.includes(S.selectedAge)) S.selectedAge = ages[0] || null;
+  syncQtrBtn();
 
   // Record the hash the page opened on, so the first filter change REPLACES it
   // rather than pushing a duplicate entry.
@@ -6454,6 +6535,7 @@ async function init() {
       if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
       if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
       if (u.v === 'finals' || u.v === 'dash') S.view = u.v;
+      S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'off';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
       // one that does nothing.
