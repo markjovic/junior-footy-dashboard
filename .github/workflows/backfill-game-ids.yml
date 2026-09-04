@@ -1,0 +1,81 @@
+# .github/workflows/backfill-game-ids.yml
+#
+# Stamps PlayHQ's gameId onto stored records that lack one.
+#
+# Engine v16 (2026-08-16) started recording it, so everything older has none —
+# 12,023 of 13,158 completed 2026 records, and effectively all of 2022-2025.
+# Anything keyed on the game id reaches about 8% of the data until this is run:
+# quarter scores, live scores, and the player panel's exact join.
+#
+# ALWAYS dry-run first. The match is round + team names, which is the same fuzzy
+# join that put U9 scores on a U11 player's card — it refuses anything ambiguous
+# and reports what it refused.
+
+name: Backfill Game IDs
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'apply — write the ids. Leave false for a dry run.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      comp:
+        description: 'comp — one competition, e.g. "EFNL 2026". Blank = all. Strongly recommended: one at a time.'
+        required: false
+        default: ''
+        type: string
+      year:
+        description: 'year — limit to one season year, e.g. 2026. Blank = every year.'
+        required: false
+        default: '2026'
+        type: string
+      max_calls:
+        description: 'max_calls — safety cap on API requests. Default 6000.'
+        required: false
+        default: '6000'
+        type: string
+
+permissions:
+  contents: write
+
+# ⚠️ Shares a lock with every other whole-file writer. Two of them with
+# overlapping checkouts silently revert each other — that is how the fixtures
+# commit was lost on 2026-08-31.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Backfill
+        env:
+          GID_APPLY: ${{ inputs.apply }}
+          GID_COMP: ${{ inputs.comp }}
+          GID_YEAR: ${{ inputs.year }}
+          GID_MAX_CALLS: ${{ inputs.max_calls }}
+        run: node scripts/backfill-game-ids.js
+
+      - name: Commit
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Backfill PlayHQ game ids"
+          git pull --rebase -X theirs
+          git push
