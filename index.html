@@ -496,7 +496,10 @@ body{overflow-x:hidden}
   font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);
   letter-spacing:.4px;font-variant-numeric:tabular-nums}
 .mr-qtr b{font-weight:400;color:var(--tx2);min-width:26px;display:inline-block}
-.mr-qtr .qv{min-width:22px;display:inline-block;text-align:right}
+.qtr-off{color:var(--amber,#f0a020);cursor:help;font-size:10px;padding-left:2px}
+.mr-qtr .qv{min-width:26px;display:inline-block;text-align:right}
+.mr-qtr .qgb{display:block;font-style:normal;font-size:8px;opacity:.62;line-height:1.1}
+.mr-qtr .qv-der{color:var(--tx2);border-bottom:1px dotted var(--tx3);cursor:help}
 .qtr-btn{margin-left:8px;font-family:'DM Mono',monospace;font-size:9px;
   padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--b2);
   background:var(--s1);color:var(--tx3);white-space:nowrap}
@@ -568,7 +571,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.207</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.209</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -922,7 +925,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.207</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.209</span>
         </div>
 
 
@@ -5480,10 +5483,52 @@ function quarterLine(m) {
   if (!Array.isArray(hq) || !Array.isArray(aq) || !hq.length || hq.length !== aq.length) return '';
   const h = S.qtrMode === 'cum' ? cumulate(hq) : hq;
   const a = S.qtrMode === 'cum' ? cumulate(aq) : aq;
-  const cell = (v) => `<span class="qv">${v}</span>`;
+  // GOALS AND BEHINDS UNDER THE POINTS, when PlayHQ reported them — "1.4" says
+  // more than "10", separating accurate kicking from near misses, and it is what
+  // PlayHQ prints under each column. Points-only where the breakdown is absent.
+  const hgb = Array.isArray(m.hQGB) ? m.hQGB : null;
+  const agb = Array.isArray(m.aQGB) ? m.aQGB : null;
+  const cumGB = (gb) => {
+    let g = 0, b = 0;
+    return gb.map(([q, r]) => { g += q; b += r; return [g, b]; });
+  };
+  const hG = hgb ? (S.qtrMode === 'cum' ? cumGB(hgb) : hgb) : null;
+  const aG = agb ? (S.qtrMode === 'cum' ? cumGB(agb) : agb) : null;
+
+  // A quarter CALCULATED from the total rather than reported. It always
+  // reconciles by construction, so without a mark it looks more certain than the
+  // reported ones beside it.
+  const cell = (v, i, gb, der) => {
+    const sub = gb && gb[i] ? `<i class="qgb">${gb[i][0]}.${gb[i][1]}</i>` : '';
+    const isDer = der !== null && der !== undefined && der === i;
+    return `<span class="qv${isDer ? ' qv-der' : ''}"` +
+      `${isDer ? ' title="Calculated from the final score — this quarter was not reported"' : ''}>` +
+      `${v}${sub}</span>`;
+  };
+
+  // ⚠️ SAY SO WHEN THE QUARTERS DO NOT ADD UP.
+  //
+  // qFlag is [homeDiff, awayDiff] — set by fetch-quarter-scores.js when the
+  // quarters do not sum to the final score. About 1% of games, almost all out by
+  // one behind or one goal on a single side, because the quarter figures and the
+  // final total are entered separately by the scorer. PlayHQ's own page shows the
+  // same discrepancy.
+  //
+  // It matters most in CUMULATIVE view, where the last figure sits directly under
+  // a score it does not equal — that reads as a rendering fault unless the row
+  // admits it. A marker is smaller and more honest than hiding the row.
+  const f = Array.isArray(m.qFlag) ? m.qFlag : null;
+  const note = f
+    ? `<span class="qtr-off" title="PlayHQ's quarter figures do not sum to the ` +
+      `final score — home ${f[0] >= 0 ? '+' : ''}${f[0]}, away ${f[1] >= 0 ? '+' : ''}${f[1]}. ` +
+      `Entered separately by the scorer.">≠</span>`
+    : '';
   return `<div class="mr-qtr">` +
-    `<span><b>${m.home.split(' ')[0].slice(0, 3).toUpperCase()}</b>${h.map(cell).join('')}</span>` +
-    `<span><b>${m.away.split(' ')[0].slice(0, 3).toUpperCase()}</b>${a.map(cell).join('')}</span>` +
+    `<span><b>${m.home.split(' ')[0].slice(0, 3).toUpperCase()}</b>` +
+      `${h.map((v, i) => cell(v, i, hG, m.hQDer)).join('')}</span>` +
+    `<span><b>${m.away.split(' ')[0].slice(0, 3).toUpperCase()}</b>` +
+      `${a.map((v, i) => cell(v, i, aG, m.aQDer)).join('')}</span>` +
+    note +
     `</div>`;
 }
 
