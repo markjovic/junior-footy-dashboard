@@ -30,6 +30,17 @@ on:
         required: false
         default: ''
         type: string
+      redo:
+        description: 'redo — re-fetch games that ALREADY have quarters, overwriting them. Default false, which asks only about the gaps.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      checkpoint:
+        description: 'checkpoint — write to disk every N resolved records. Default 250. 0 disables.'
+        required: false
+        default: '250'
+        type: string
       max_calls:
         description: 'max_calls — safety cap on API requests. Default 4000.'
         required: false
@@ -62,10 +73,15 @@ jobs:
           QS_YEAR: ${{ inputs.year }}
           QS_COMP: ${{ inputs.comp }}
           QS_MAX_CALLS: ${{ inputs.max_calls }}
+          QS_REDO: ${{ inputs.redo }}
+          QS_CHECKPOINT: ${{ inputs.checkpoint }}
         run: node scripts/fetch-quarter-scores.js
 
+      # ⚠️ always(), not success(). The fetch checkpoints to disk as it goes, so a
+      # run that dies at minute 29 still has most of its work on disk — and
+      # without this the commit is skipped and every one of those calls is wasted.
       - name: Commit
-        if: ${{ inputs.apply == 'true' }}
+        if: ${{ always() && inputs.apply == 'true' }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
