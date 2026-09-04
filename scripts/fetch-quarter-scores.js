@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v4 2026-09-04 statistics-periods';
+const VERSION = 'fetch-quarter-scores v5 2026-09-04 game-route-progress';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -267,9 +267,27 @@ async function main() {
       }
     }
   } else {
-    for (const m of target) {
-      if (calls >= MAXCALL) break;
-      if (!m.gameId) continue;
+    // ⚠️ PROGRESS ON THIS ROUTE TOO. v3 added it to the round route only, and the
+    // game route is the one that actually runs — 1,135 calls of silence, which is
+    // indistinguishable from a hang. Reported twice.
+    const todo = target.filter(m => m.gameId);
+    const started = Date.now();
+    console.log(`${todo.length} game(s) carry a gameId and can be asked about.`);
+    console.log(`${target.length - todo.length} cannot — written before engine v16.`);
+    console.log(`Roughly ${Math.ceil(todo.length * 0.35 / 60)} min.\n`);
+    let i = 0;
+    for (const m of todo) {
+      if (calls >= MAXCALL) {
+        console.log(`\nCall cap reached after ${i} of ${todo.length} — re-run or raise max_calls.`);
+        break;
+      }
+      i++;
+      // Every 50, not every game: 1,135 lines is its own kind of unreadable.
+      if (i % 50 === 1) {
+        const mins = ((Date.now() - started) / 60000).toFixed(1);
+        console.log(`  [${i}/${todo.length}] ${m.compName} ${m.age} ${m.rawGrade} ` +
+          `— ${found} found, ${empty} empty, ${mismatch} unreconciled (${mins} min)`);
+      }
       try {
         const r = await gqlPost(Q_GAME_PERIODS, { gameID: m.gameId }, 'DiscoverGame');
         calls++;
