@@ -1,0 +1,46 @@
+# .github/workflows/probe-quarter-scores.yml
+#
+# Can we show per-quarter scores, and for how many games?
+#
+# Nothing stored carries a period breakdown — records hold totals only. Quarters
+# exist on the spectator endpoint, which only knows ELECTRONICALLY SCORED games.
+# This measures how many completed games actually have them before anything is
+# designed against it.
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+
+name: Probe Quarter Scores
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'comp — limit to one competition, e.g. "EFNL 2026". Blank = all loaded.'
+        required: false
+        default: ''
+        type: string
+      sample:
+        description: 'sample — how many completed games to ask about (10-400). Default 80, spread across ages.'
+        required: false
+        default: '80'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on PlayHQ requests. The spectator
+      # endpoint needs no session, but the runner's own Node is used regardless
+      # for consistency with the other probes.
+      - name: Probe
+        env:
+          PROBE_COMP: ${{ inputs.comp }}
+          PROBE_SAMPLE: ${{ inputs.sample }}
+        run: node scripts/probe-quarter-scores.js
