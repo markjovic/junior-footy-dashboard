@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v2 2026-09-04 no-scope-arg';
+const VERSION = 'fetch-quarter-scores v3 2026-09-04 progress';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -204,8 +204,30 @@ async function main() {
       if (!m.gradeId) continue;
       if (!roundsByGrade.has(m.gradeId)) roundsByGrade.set(m.gradeId, new Set());
     }
-    for (const gradeId of roundsByGrade.keys()) {
-      if (calls >= MAXCALL) break;
+    // ⚠️ SAY SOMETHING WHILE IT WORKS. v2 printed nothing between the route
+    // decision and the final report — about 1,000 grades and up to 3,000 round
+    // calls, eight minutes of silence, indistinguishable from a hang.
+    const gradeList = [...roundsByGrade.keys()];
+    const started = Date.now();
+    console.log(`Walking ${gradeList.length} grade(s). Cap ${MAXCALL} calls.\n`);
+    let gi = 0;
+    for (const gradeId of gradeList) {
+      if (calls >= MAXCALL) {
+        console.log(`\nCall cap reached at grade ${gi} of ${gradeList.length} — ` +
+          `re-run to continue, or raise max_calls.`);
+        break;
+      }
+      gi++;
+      const sample = target.find(m => m.gradeId === gradeId);
+      const mins = ((Date.now() - started) / 60000).toFixed(1);
+      console.log(`[${gi}/${gradeList.length}] ${sample ? sample.compName + ' ' + sample.age + ' ' + sample.rawGrade : gradeId}` +
+        `  (${calls} calls, ${mins} min, ${found} found)`);
+      // Nothing in this grade can be matched without a stored gameId, so the
+      // rounds call would be spent for certain. 98% of records predate engine
+      // v16 — skipping these is most of the run.
+      const matchable = target.some(m => m.gradeId === gradeId && m.gameId);
+      if (!matchable) { console.log('    no record here carries a gameId — skipped'); continue; }
+
       let rounds = [];
       try {
         const rr = await gqlPost(engine.Q_GRADE_ROUNDS, { gradeID: gradeId });
