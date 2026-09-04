@@ -34,8 +34,9 @@
 
 'use strict';
 
-const VERSION = 'probe-preseason-roster v1 2026-09-04';
+const VERSION = 'probe-preseason-roster v2 2026-09-04 real-manifest';
 
+const fs = require('fs');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
@@ -92,9 +93,22 @@ async function main() {
   const byStatus = new Map();
   const seasonsSeen = new Map();
   const examples = [];
-  // A registration for a season we do NOT already store is the whole point: that
-  // is next season, visible before any fixture exists.
-  const knownSeasons = new Set((data.manifest || []).map(m => m.seasonId));
+  // ⚠️ THE MANIFEST COMES FROM core.json, NOT FROM store.load().
+  //
+  // `data.manifest` is empty — store.load() returns matches, players and the
+  // cross-organisation keys, not the manifest. v1 read it from there, got an
+  // empty Set, and reported EVERY season as one we do not store, including EFNL
+  // 2026. The same mistake was found and fixed in build-player-index.js weeks ago
+  // and repeated here.
+  let knownSeasons = new Set();
+  try {
+    const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
+    knownSeasons = new Set((core.manifest || []).map(m => m.seasonId).filter(Boolean));
+  } catch (e) {
+    console.error(`⚠️ Could not read the manifest: ${e.message}`);
+    console.error('   Every season will be reported as unknown — do not trust that list.');
+  }
+  console.log(`Manifest holds ${knownSeasons.size} season(s).\n`);
 
   for (const p of picks) {
     let json;
@@ -148,6 +162,8 @@ async function main() {
   }
 
   console.log('\nSEASONS WE DO NOT ALREADY STORE');
+  console.log('  (a player registered somewhere we do not track — rep teams, other');
+  console.log('   leagues, interstate. Each is a season this project has no record of.)');
   if (!seasonsSeen.size) {
     console.log('  None. Every registration is for a season already in the manifest —');
     console.log('  so at this moment there is no future season to discover. Re-run once');
