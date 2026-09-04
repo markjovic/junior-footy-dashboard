@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v1 2026-09-04';
+const VERSION = 'enrich-games v6 2026-09-04 seed-600-default';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -47,6 +47,7 @@ const VERSION = 'enrich-games v1 2026-09-04';
 const QV = 2;
 
 const { execFileSync } = require('child_process');
+const fs = require('fs');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 const engine = require('./lib/results-engine');
@@ -61,6 +62,50 @@ const COMMIT     = APPLY && process.env.EG_COMMIT !== 'false';
 // 360 minutes; leaving 40 covers the final commit and the re-dispatch.
 const BUDGET_MIN = Math.max(5, Number(process.env.EG_BUDGET_MIN || 300));
 const DELAY      = Math.max(60, Number(process.env.EG_DELAY_MS || 120));
+// ⚠️ PUSHING IS NOT FREE — EVERY PUSH REBUILDS AND REDEPLOYS GITHUB PAGES.
+//
+// v1 pushed at every checkpoint, roughly every 90 seconds, which over a 17-hour
+// archive walk is several hundred Pages builds. Pages throttles well before that,
+// and the deploys are pure waste: nobody needs the dashboard updated every 90
+// seconds during a backfill.
+//
+// So the two are decoupled. The local SAVE still happens every CHECKPOINT records
+// — it costs a file write and is the insurance against losing work. The PUSH
+// happens at most every PUSH_MIN minutes, and always at the end of a run.
+const PUSH_MIN = Math.max(0, Number(process.env.EG_PUSH_MIN || 20));
+// How long a "PlayHQ has nothing" answer stands for a LIVE season before it is
+// worth asking again. Retired seasons are never re-asked.
+//
+// ONE DAY. A scorer filling quarters in on the Monday after a game is the normal
+// case, not the exception, and a 45-day window would have meant a game played in
+// September carried "no quarters" until the season was over. The saving this
+// exists for comes from the RETIRED seasons — 45,000 of the 52,000 records — where
+// the answer is settled for good. A live season is a few thousand games and
+// re-asking them daily costs little.
+const QNO_DAYS = Math.max(0, Number(process.env.EG_QNO_DAYS || 1));
+// ⚠️ SEED THE CURSOR — for the transition only.
+//
+// Runs 1-3 walked roughly the first 900 grades under v1/v2, which recorded no
+// cursor. Without this, v5's first run starts at grade 0 and repeats all of it.
+// Setting this marks the first N grades as walked WITHOUT asking about them.
+//
+// It relies on the grade order being the same between runs. It is — the list
+// comes from the order records sit in the season files, which nothing reorders —
+// but if it were ever wrong the cost is bounded: those grades are recorded in the
+// cursor, so they are revisited on the NEXT pass once it clears. Nothing is
+// permanently skipped.
+//
+// ⚠️ DEFAULTS TO 600 — A TEMPORARY VALUE, NOT A DESIGN.
+//
+// Runs 1-3 walked roughly the first 900 grades under v1/v2, which wrote no
+// cursor. Defaulting to 600 lets the chained run pick up near where it stopped
+// without the dispatch having to say so — the chain passes no inputs of its own.
+//
+// ⚠️ SET THIS BACK TO 0 once a real cursor exists in core.json. Leaving it at 600
+// means every FUTURE pass silently skips its first 600 grades — the cursor would
+// then be seeded on top of nothing, every time, for ever. It is a carry-over, and
+// it expires the moment the first pass completes.
+const SKIP_FIRST = Math.max(0, Number(process.env.EG_SKIP_FIRST || 600));
 
 const started = Date.now();
 const overBudget = () => (Date.now() - started) / 60000 >= BUDGET_MIN;
@@ -174,15 +219,51 @@ async function main() {
   // look done) or redo everything again (redo on, repeating the first run's work).
   // qV records WHICH extraction produced a record, so a continuation picks up
   // exactly where the last one stopped — which is what makes one dispatch enough.
+  // ⚠️ A MISS MUST BE REMEMBERED, NOT JUST A HIT.
+  //
+  // v1 and v2 stamped qV only on records that GOT quarters. A record PlayHQ has
+  // nothing for carried no mark at all, so every chained run asked about it
+  // again — roughly 1,300 per pass, and by run 3 the first three and a half hours
+  // were re-asking grades that had already answered "nothing" twice.
+  //
+  // `qNo` records the date PlayHQ was last asked and returned nothing:
+  //   a RETIRED season is never asked again — nobody edits a 2022 scoresheet
+  //   a live season is asked again after QNO_DAYS, because a scorer may fill it
+  //     in late, which is the whole reason not to make this permanent
+  // The manifest comes from core.json — store.load() does not return it. Getting
+  // this wrong reported every season as unknown in probe-preseason-roster v1.
+  let manifest = [];
+  try {
+    manifest = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8')).manifest || [];
+  } catch (e) {
+    console.error(`⚠️ Could not read the manifest: ${e.message}`);
+    console.error('   Retired seasons cannot be identified, so misses will be re-asked');
+    console.error(`   after ${QNO_DAYS} days rather than never. Not fatal.`);
+  }
+  const retiredSeasons = new Set(manifest.filter(m => m.retired).map(m => m.compName));
+
+  const missIsStale = (m) => {
+    if (!m.qNo) return true;
+    if (retiredSeasons.has(m.compName)) return false;   // settled for good
+    const age = (Date.now() - Date.parse(m.qNo)) / 86400000;
+    return !(age >= 0 && age < QNO_DAYS);
+  };
+
   const done = (m) => {
-    if (m.qV === QV) return true;             // this version already did it
-    if (REDO) return false;                   // upgrading — anything older is fair game
-    return !!(Array.isArray(m.hQ) && m.hQ.length); // has data from some version, leave it
+    if (m.qV === QV) return true;              // this version already got them
+    if (REDO) return false;                    // upgrading — anything older is fair game
+    if (m.qNo && !missIsStale(m)) return true; // asked, PlayHQ had nothing, still fresh
+    return !!(Array.isArray(m.hQ) && m.hQ.length); // data from some version, leave it
   };
   const todo = inScope.filter(m => !done(m));
 
+  const skippedMiss = inScope.filter(m => !todo.includes(m) && m.qNo && m.qV !== QV).length;
   console.log(`${inScope.length} completed record(s) in scope; ` +
-    `${inScope.length - todo.length} already enriched, ${todo.length} to do.`);
+    `${inScope.length - todo.length} already handled, ${todo.length} to do.`);
+  if (skippedMiss) {
+    console.log(`  of those, ${skippedMiss} are known to have no quarters — asked ` +
+      `before, PlayHQ had nothing, not asked again.`);
+  }
   if (!todo.length) { console.log('Nothing to do.'); return 0; }
 
   // Grouped by grade: one round-list call serves every round of that grade, and
@@ -192,8 +273,78 @@ async function main() {
     if (!byGrade.has(m.gradeId)) byGrade.set(m.gradeId, []);
     byGrade.get(m.gradeId).push(m);
   }
-  const grades = [...byGrade.keys()];
-  console.log(`${grades.length} grade(s) to walk.\n`);
+  let grades = [...byGrade.keys()];
+
+  // ⚠️ A PASS CURSOR, so a chained run does not re-walk what the last one did.
+  //
+  // qNo (v3) stops a MISS being re-asked, but only from the run that recorded it
+  // onwards. Runs 1-3 left no marker, so run 4 would still re-ask every one of
+  // them — three and a half hours of repeating work before reaching anything new.
+  //
+  // The cursor is the list of grade ids ALREADY WALKED in this pass, kept in
+  // core.json. It is exact and it does not care that the grade list shrinks
+  // between runs as records get done, which an index-based cursor would.
+  //
+  // When every grade has been walked the pass is complete and the cursor clears,
+  // so the next dispatch starts fresh — by which point qNo is doing the filtering
+  // and there is far less to do.
+  const cursorKey = `enrichPass${REDO ? 'Redo' : ''}`;
+  let walked = new Set();
+  try {
+    const c = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'))[cursorKey];
+    if (c && Array.isArray(c.grades)) walked = new Set(c.grades);
+  } catch (e) { /* no cursor yet */ }
+
+  // Seeding happens before anything else, so the count printed below is honest.
+  if (SKIP_FIRST && !walked.size) {
+    const seed = grades.slice(0, SKIP_FIRST);
+    seed.forEach(g => walked.add(g));
+    console.log(`⚠️ SEEDED: the first ${seed.length} grade(s) marked as walked WITHOUT`);
+    console.log('   being asked — carrying over progress from runs that recorded no');
+    console.log('   cursor. They are IN the cursor, so the next pass covers them.');
+    console.log('');
+    console.log('   ⚠️ EG_SKIP_FIRST defaults to 600 and should be set back to 0 once');
+    console.log('      this pass completes. Left as it is, every future pass skips its');
+    console.log('      first 600 grades.');
+    console.log('');
+  } else if (SKIP_FIRST && walked.size) {
+    // A real cursor exists, so the seed is not applied — worth saying, because a
+    // default that quietly stops mattering is one nobody remembers to remove.
+    console.log(`(EG_SKIP_FIRST=${SKIP_FIRST} ignored — a real cursor exists. Set it to 0.)`);
+  }
+
+  const before = grades.length;
+  if (walked.size) {
+    grades = grades.filter(g => !walked.has(g));
+    console.log(`${before} grade(s) have work; ${walked.size} already walked this pass, ` +
+      `${grades.length} remaining.`);
+    if (!grades.length) {
+      // Everything has been seen once. Clear and let the next dispatch start over
+      // with qNo filtering the misses out.
+      console.log('\nPass complete — every grade walked. Clearing the cursor.');
+      writeCursor(null);
+      return 0;
+    }
+  } else {
+    console.log(`${grades.length} grade(s) to walk.`);
+  }
+  console.log('');
+
+  // Written at every checkpoint, so an interrupted run does not lose its place.
+  //
+  // ⚠️ NOT via store.saveCore — that copies only keys in CORE_KEYS and drops
+  // anything it does not recognise, silently. Adding the cursor to CORE_KEYS
+  // would put a scratch value in the file every reader loads. Read, patch, write.
+  const writeCursor = (value) => {
+    if (!APPLY) return;
+    try {
+      const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
+      if (value === null) delete core[cursorKey]; else core[cursorKey] = value;
+      fs.writeFileSync(store.CORE_PATH, JSON.stringify(core, null, 2), 'utf8');
+    } catch (e) { console.error(`    ⚠️ cursor write failed: ${e.message}`); }
+  };
+  const saveCursor = () =>
+    writeCursor({ grades: [...walked], at: new Date().toISOString(), version: VERSION });
 
   let calls = 0, found = 0, empty = 0, flagged = 0, refused = 0;
   let stamped = 0, noGrade = 0, resolved = 0, committed = 0;
@@ -218,6 +369,7 @@ async function main() {
   // Moves everything resolved onto the records, saves, and commits. Safe mid-run:
   // it only touches records this run resolved.
   let pending = 0;
+  let lastPush = Date.now();
   const flush = globalThis.__egFlush = (label) => {
     if (!APPLY) { for (const m of data.matches || []) delete m._e; pending = 0; return 0; }
     let n = 0;
@@ -225,7 +377,10 @@ async function main() {
       const e = m._e;
       if (!e) continue;
       if (e.gameId) m.gameId = e.gameId;
+      if (e.qNo) m.qNo = e.qNo;
       if (e.q) {
+        // Quarters arrived, so any previous miss is history.
+        delete m.qNo;
         m.hQ = e.q[0]; m.aQ = e.q[1];
         m.qV = QV;
         if (e.gb) { m.hQGB = e.gb[0]; m.aQGB = e.gb[1]; } else { delete m.hQGB; delete m.aQGB; }
@@ -241,8 +396,11 @@ async function main() {
     try {
       store.save(data, scope, { players: false });
       committed += n;
-      console.log(`    …checkpoint ${n} record(s) (${committed} this run) — ${label}`);
-      gitCommit(label);
+      const due = label === 'final' || label === 'after a fatal error' ||
+        PUSH_MIN === 0 || (Date.now() - lastPush) / 60000 >= PUSH_MIN;
+      console.log(`    …checkpoint ${n} record(s) (${committed} this run) — ${label}` +
+        (due ? '' : `, next push in ${Math.max(0, PUSH_MIN - (Date.now() - lastPush) / 60000).toFixed(0)} min`));
+      if (due) { lastPush = Date.now(); gitCommit(label); }
     } catch (e) {
       console.error(`    ⚠️ save failed: ${e.message}`);
     }
@@ -331,8 +489,12 @@ async function main() {
         calls++;
         g = r?.data?.discoverGame;
       } catch (e) { continue; }
-      if (!g) { empty++; continue; }
-      if (g.round?.grade?.hasPeriodScores === false) { noGrade++; continue; }
+      const today = new Date().toISOString().slice(0, 10);
+      if (!g) { empty++; note(m, { qNo: today }); continue; }
+      // A grade that records no quarters at all is settled, not a gap.
+      if (g.round?.grade?.hasPeriodScores === false) {
+        noGrade++; note(m, { qNo: today }); continue;
+      }
 
       const order = (g.round?.grade?.periods || []).map(x => x.value);
       const rh = quarters(g.statistics?.home?.periods, order, m.hScore);
@@ -342,13 +504,18 @@ async function main() {
         const why = !rh.q && !ra.q ? `both: ${rh.reason}`
                   : !rh.q ? `home: ${rh.reason}` : `away: ${ra.reason}`;
         emptyWhy.set(why, (emptyWhy.get(why) || 0) + 1);
+        note(m, { qNo: today });
         continue;
       }
 
       const hs = rh.q.reduce((a, b) => a + b, 0), as = ra.q.reduce((a, b) => a + b, 0);
       const dh = hs - m.hScore, da = as - m.aScore;
       // Beyond a couple of goals is not a scorer slip — that is a different game.
-      if (Math.abs(dh) > 12 || Math.abs(da) > 12) { refused++; continue; }
+      if (Math.abs(dh) > 12 || Math.abs(da) > 12) {
+        // Not a scorer slip — a different game. Marked so it is not re-asked
+        // every run, since re-asking will return the same wrong thing.
+        refused++; note(m, { qNo: today }); continue;
+      }
       note(m, {
         q: [rh.q, ra.q],
         gb: (rh.gb && ra.gb) ? [rh.gb, ra.gb] : null,
@@ -358,12 +525,16 @@ async function main() {
       found++;
       if (dh || da) flagged++;
       resolved++;
-      if (pending >= CHECKPOINT) flush(`${gi}/${grades.length}`);
+      if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
       await sleep(DELAY);
     }
+    // Walked to completion — recorded so a later run skips it. NOT recorded if
+    // the budget stopped us mid-grade, or the rest of that grade would be lost.
+    if (!stopped) walked.add(gradeId);
     if (stopped) break;
   }
 
+  saveCursor();
   flush('final');
 
   console.log('\nRESULT');
