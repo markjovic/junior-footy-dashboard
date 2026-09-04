@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v5 2026-08-13 grademeta-grading';
+const VERSION = 'verify-backfill v8 2026-09-04 relative-season-window';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
