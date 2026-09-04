@@ -20438,7 +20438,7 @@
       "file": "data/seasons/75d8a232-core.json",
       "seasonId": "75d8a232",
       "kind": "core",
-      "bytes": 2350906
+      "bytes": 2365503
     },
     {
       "file": "data/seasons/75d8a232-players.json",
@@ -20450,7 +20450,7 @@
       "file": "data/seasons/8c46e153-core.json",
       "seasonId": "8c46e153",
       "kind": "core",
-      "bytes": 1132082
+      "bytes": 1132188
     },
     {
       "file": "data/seasons/8c46e153-players.json",
