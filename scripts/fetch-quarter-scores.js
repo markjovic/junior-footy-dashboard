@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v5 2026-09-04 game-route-progress';
+const VERSION = 'fetch-quarter-scores v8 2026-09-04 checkpointed';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -46,6 +46,25 @@ const APPLY  = process.argv.includes('--apply') || process.env.QS_APPLY === 'tru
 const COMP   = (process.env.QS_COMP || '').trim();
 const YEAR   = (process.env.QS_YEAR || '2026').trim();
 const MAXCALL = Math.max(50, Number(process.env.QS_MAX_CALLS || 4000));
+// ⚠️ RESUMABLE. A record that already carries hQ/aQ is not asked about again.
+//
+// Without this, fixing a extraction bug means re-fetching every game to recover
+// the ones that were wrongly discarded — 5,077 calls and half an hour to gather
+// perhaps 1,500. With it, a re-run costs only the gaps.
+//
+// Set QS_REDO=true to force a full re-fetch, which is what you want if the
+// EXTRACTION changed in a way that could alter values already stored, rather than
+// only rescuing ones that were skipped.
+const REDO = process.env.QS_REDO === 'true';
+// ⚠️ CHECKPOINT. Everything used to be held in memory and written once at the
+// end, so a WAF block, a timeout or any crash at minute 29 threw away half an
+// hour of calls — and the commit step then found nothing to commit and reported
+// success. Written every N resolved records instead.
+//
+// The cost is a whole-file write per checkpoint. The season file is a few MB and
+// the write is local, so 250 is cheap; the commit still happens once, in the
+// workflow, at the end.
+const CHECKPOINT = Math.max(0, Number(process.env.QS_CHECKPOINT || 250));
 
 // ⚠️ NO ARGUMENT. `periods` on GameTeamResult takes none —
 // `Unknown argument "scope" on field "GameTeamResult.periods"`, measured
@@ -91,15 +110,33 @@ const Q_GAME_PERIODS = `query DiscoverGame($gameID: ID!) {
   }
 }`;
 
+// ⚠️ TOTAL_SCORE IS NOT ALWAYS PRESENT — DERIVE IT.
+//
+// v5 required TOTAL_SCORE in every period and returned null for the WHOLE game if
+// any period lacked it, so one quarter recorded as goals and behinds alone threw
+// away the other three. That is the most likely reason 36% came back "empty" in a
+// set of grades where quarter scores are near-universal.
+//
+// The tenant config gives the arithmetic: 6_POINT_SCORE has pointValue 6,
+// 1_POINT_SCORE has 1. Deriving is exact, not an estimate.
 // TOTAL_SCORE out of a period's statistics array.
 const pScore = (stats) => {
-  const s = (stats || []).find(x => x.type?.value === 'TOTAL_SCORE');
-  return s ? s.count : null;
+  const arr = stats || [];
+  const t = arr.find(x => x.type?.value === 'TOTAL_SCORE');
+  if (t && t.count !== null && t.count !== undefined) return t.count;
+  const g = arr.find(x => x.type?.value === '6_POINT_SCORE');
+  const b = arr.find(x => x.type?.value === '1_POINT_SCORE');
+  if (g || b) return (g?.count || 0) * 6 + (b?.count || 0);
+  return null;
 };
 // ⚠️ ORDERED BY THE GRADE'S OWN PERIOD LIST, never by array position.
 // The Mt Eliza game returned THIRD, FIRST, FOURTH, SECOND.
+// Returns the quarters, or a REASON string. A single "empty" counter cannot
+// distinguish "PlayHQ has nothing" from "this code rejected it", and that is
+// exactly the distinction needed to tell a data gap from a defect.
 const toQuarters = (periods, order) => {
-  if (!Array.isArray(periods) || !periods.length) return null;
+  if (!Array.isArray(periods)) return { reason: 'no periods field' };
+  if (!periods.length) return { reason: 'periods array empty' };
   const byValue = new Map();
   for (const p of periods) {
     const v = p?.period?.value;
@@ -110,7 +147,9 @@ const toQuarters = (periods, order) => {
   const out = seq.map(v => byValue.get(v));
   // A quarter genuinely scoreless is 0, not missing. Only a MISSING period is a
   // reason to reject the row.
-  return out.every(v => v !== null && v !== undefined) ? out : null;
+  if (out.every(v => v !== null && v !== undefined)) return { q: out };
+  const got = seq.filter(v => byValue.has(v)).length;
+  return { reason: `${got} of ${seq.length} periods present`, partial: out };
 };
 
 const isRejection = (json) => (json.errors || []).some(e =>
@@ -138,6 +177,12 @@ async function main() {
   }
   const already = target.filter(m => Array.isArray(m.hQ) && m.hQ.length).length;
   console.log(`${target.length} completed ${YEAR} record(s); ${already} already carry quarters.`);
+  if (already && !REDO) {
+    console.log(`Skipping those ${already} — only the gaps will be asked about.`);
+    console.log('Set redo=true to re-fetch everything.');
+  } else if (already && REDO) {
+    console.log(`REDO — all ${already} will be re-fetched and overwritten.`);
+  }
 
   // ── Which route works? Tested, not assumed. ───────────────────────────────
   // ⚠️ SEVERAL GAMES, NOT ONE. An empty array from a single game says nothing
@@ -158,10 +203,10 @@ async function main() {
     gameRoute = true;
     const g = r?.data?.discoverGame;
     const order = (g?.round?.grade?.periods || []).map(x => x.value);
-    const q = toQuarters(g?.statistics?.home?.periods, order);
-    if (q) gameWithData++;
+    const r0 = toQuarters(g?.statistics?.home?.periods, order);
+    if (r0.q) gameWithData++;
     console.log(`    ${smp.date} ${smp.home} v ${smp.away} — ` +
-      `${q ? q.join(', ') : '(no periods)'}`);
+      `${r0.q ? r0.q.join(', ') : '(' + r0.reason + ')'}`);
     await sleep(200);
   }
   if (gameRoute) {
@@ -184,11 +229,39 @@ async function main() {
   }
   console.log(`\nRoute: ${roundRoute ? 'ROUND (cheap)' : 'GAME (one call per game)'}\n`);
 
+  // Moves resolved quarters onto the records and writes the file. Safe to call
+  // mid-run: it only touches records this run resolved, and clears the scratch
+  // field so a later checkpoint does not rewrite the same ones.
+  let checkpointed = 0;
+  const flush = globalThis.__qsFlush = (why) => {
+    if (!APPLY) return 0;
+    let n = 0;
+    for (const m of data.matches || []) {
+      if (!m._q) continue;
+      m.hQ = m._q[0]; m.aQ = m._q[1];
+      delete m._q;
+      n++;
+    }
+    if (!n) return 0;
+    try {
+      store.save(data, scope, { players: false });
+      checkpointed += n;
+      console.log(`    …checkpoint: ${n} record(s) written (${checkpointed} this run) — ${why}`);
+    } catch (e) {
+      console.error(`    ⚠️ checkpoint FAILED: ${e.message}`);
+      // Not fatal. The records keep their values in memory and the next
+      // checkpoint or the final save will try again.
+    }
+    return n;
+  };
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const byGameId = new Map();
   for (const m of target) if (m.gameId) byGameId.set(m.gameId, m);
 
   let calls = 0, found = 0, mismatch = 0, empty = 0, noPeriodGrade = 0;
+  const emptyWhy = new Map();
+  const emptyEx = [];
   const mismatches = [];
 
   const applyTo = (rec, hq, aq) => {
@@ -270,7 +343,8 @@ async function main() {
     // ⚠️ PROGRESS ON THIS ROUTE TOO. v3 added it to the round route only, and the
     // game route is the one that actually runs — 1,135 calls of silence, which is
     // indistinguishable from a hang. Reported twice.
-    const todo = target.filter(m => m.gameId);
+    const todo = target.filter(m => m.gameId &&
+      (REDO || !(Array.isArray(m.hQ) && m.hQ.length)));
     const started = Date.now();
     console.log(`${todo.length} game(s) carry a gameId and can be asked about.`);
     console.log(`${target.length - todo.length} cannot — written before engine v16.`);
@@ -296,11 +370,21 @@ async function main() {
         // hasPeriodScores false is not a gap — nobody records quarters there.
         if (g?.round?.grade?.hasPeriodScores === false) { noPeriodGrade++; continue; }
         const order = (g?.round?.grade?.periods || []).map(x => x.value);
-        const hq = toQuarters(g?.statistics?.home?.periods, order);
-        const aq = toQuarters(g?.statistics?.away?.periods, order);
-        if (!hq || !aq) { empty++; continue; }
-        if (applyTo(m, hq, aq)) found++;
+        const rh = toQuarters(g?.statistics?.home?.periods, order);
+        const ra = toQuarters(g?.statistics?.away?.periods, order);
+        if (!rh.q || !ra.q) {
+          empty++;
+          // Which side, and why. "empty" alone cannot separate a PlayHQ gap from
+          // a rejection by this code.
+          const why = !rh.q && !ra.q ? `both: ${rh.reason}`
+                    : !rh.q ? `home: ${rh.reason}` : `away: ${ra.reason}`;
+          emptyWhy.set(why, (emptyWhy.get(why) || 0) + 1);
+          if (emptyEx.length < 10) emptyEx.push(`${m.id}  ${why}`);
+          continue;
+        }
+        if (applyTo(m, rh.q, ra.q)) found++;
       } catch (e) { /* counted as empty below */ }
+      if (CHECKPOINT && found && found % CHECKPOINT === 0) flush(`${i}/${todo.length}`);
       await sleep(120);
     }
   }
@@ -318,6 +402,18 @@ async function main() {
   console.log(`  quarters found and consistent  ${found}`);
   console.log(`  returned nothing               ${empty}`);
   console.log(`  grade records no quarters      ${noPeriodGrade}  (hasPeriodScores false — not a gap)`);
+  if (emptyWhy.size) {
+    console.log('\n  Why nothing was returned:');
+    for (const [why, n] of [...emptyWhy].sort((a, b) => b[1] - a[1])) {
+      console.log(`    ${String(n).padStart(5)}  ${why}`);
+    }
+    console.log('\n  Examples:');
+    for (const e of emptyEx) console.log(`    ${e}`);
+    console.log('\n  ⚠️ "periods array empty" means PlayHQ returned nothing for that side.');
+    console.log('     Anything else is this code rejecting data that was present —');
+    console.log('     check those against the game on the PlayHQ site before trusting');
+    console.log('     the coverage figure.');
+  }
   console.log(`  quarters that did NOT reconcile ${mismatch}`);
   console.log('─'.repeat(72));
   if (mismatches.length) {
@@ -346,25 +442,28 @@ async function main() {
     return;
   }
 
-  let written = 0;
-  for (const m of target) {
-    if (!m._q) continue;
-    const [hq, aq] = m._q;
-    m.hQ = hq; m.aQ = aq;
-    delete m._q;
-    written++;
-  }
-  // Scratch field must not reach storage.
-  for (const m of data.matches || []) if (m._q) delete m._q;
-
-  const bytes = JSON.stringify(data.matches).length;
-  console.log(`\n${written} record(s) gained hQ/aQ. matches payload ${(bytes / 1048576).toFixed(2)} MB.`);
-  store.report(store.save(data, scope, { players: false }), 'fetch-quarter-scores');
+  // flush() writes the file itself. A second store.save here would rewrite an
+  // identical file and report it as a change.
+  const written = flush('final');
+  console.log(`\n${written} record(s) written in the final pass; ` +
+    `${checkpointed} in total this run.`);
   if (typeof logSummary === 'function') logSummary('fetch-quarter-scores');
   console.log(`=== ${VERSION} complete ===`);
 }
 
+// ⚠️ A CRASH MUST NOT DISCARD WHAT WAS ALREADY GATHERED. The last checkpoint is
+// already on disk, and anything resolved since is flushed here before exiting.
+// Exit 1 still, so the workflow shows the failure — but the commit step runs on
+// always() and picks up the partial file.
 main().catch(e => {
   console.error('Fatal:', e && e.stack ? e.stack : e);
+  try {
+    if (typeof globalThis.__qsFlush === 'function') {
+      const n = globalThis.__qsFlush('after a fatal error');
+      console.error(`Salvaged ${n} record(s) resolved before the failure.`);
+    }
+  } catch (e2) {
+    console.error('Salvage also failed:', e2.message);
+  }
   process.exit(1);
 });
