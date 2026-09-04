@@ -139,6 +139,8 @@ const COOKIE_QUERIES = [
 
 async function acquireSession() {
   for (let attempt = 1; attempt <= SESSION_ATTEMPTS; attempt++) {
+    // Ramp for ordinary failures. A WAF block is handled separately below with a
+    // full 80s wait — this ramp is far too short for one.
     if (attempt > 1) await sleep(Math.min(attempt * 2000, 15000));
 
     for (const body of COOKIE_QUERIES) {
@@ -160,6 +162,25 @@ async function acquireSession() {
         counters.sessionRefreshes++;
         console.log(`  [session] acquired on attempt ${attempt} (${body.operationName})`);
         return true;
+      }
+
+      // ⚠️ A WAF BLOCK HERE NEEDS THE FULL 80 SECONDS, NOT THE RAMP.
+      //
+      // This loop retried on a 2-15s ramp whatever the cause, so ten attempts
+      // fitted inside roughly 90 seconds — barely one CloudFront window — and
+      // every attempt extended the block it was waiting out. Observed
+      // 2026-09-04: nine consecutive attempts, all 403, no cookie of any kind,
+      // then the run gave up.
+      //
+      // Distinguishing the two matters because they want opposite responses: a
+      // missing cookie on a 200 is worth an immediate retry with the other query
+      // shape, a WAF block is worth waiting for.
+      if (isWafBlock(res.status, res.text)) {
+        counters.blocked++;
+        console.warn(`  [session] attempt ${attempt} (${body.operationName}): ` +
+          `CloudFront block — waiting 80s rather than retrying into it`);
+        await sleep(80000);
+        continue;
       }
 
       console.warn(
@@ -233,6 +254,23 @@ async function gqlPost(query, variables, operationName) {
       lastReason = 'session 403';
       await refreshSession();
       continue;
+    }
+
+    // ⚠️ A 400 IS A VALIDATION ERROR AND WILL NEVER SUCCEED ON A RETRY.
+    //
+    // This retried it four times like any other non-200. Probing eleven candidate
+    // field names on 2026-09-04 therefore cost 36 requests instead of 11, and that
+    // burst is the most likely reason the WAF then blocked every session attempt
+    // for the next run. Retrying a query the server has already told us is
+    // malformed is pure cost.
+    //
+    // The body is returned rather than thrown, because it carries the GraphQL
+    // error — including "Did you mean...?", which is the whole point of probing a
+    // field this way.
+    if (res.status === 400) {
+      counters.graphqlError++;
+      try { return JSON.parse(res.text); }
+      catch (e) { throw new Error(`${operationName || 'query'} rejected (400): ${res.text.slice(0, 200)}`); }
     }
 
     if (res.status !== 200) {
