@@ -36,8 +36,9 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v9 2026-09-04 store-unreconciled';
+const VERSION = 'fetch-quarter-scores v11 2026-09-04 commit-at-checkpoint';
 
+const { execFileSync } = require('child_process');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 const engine = require('./lib/results-engine');
@@ -65,6 +66,9 @@ const REDO = process.env.QS_REDO === 'true';
 // the write is local, so 250 is cheap; the commit still happens once, in the
 // workflow, at the end.
 const CHECKPOINT = Math.max(0, Number(process.env.QS_CHECKPOINT || 250));
+// Commit and push at every checkpoint. Off only if something else owns the
+// commit — but then a cancelled run loses everything since its last push.
+const COMMIT = process.env.QS_COMMIT !== 'false';
 
 // ⚠️ NO ARGUMENT. `periods` on GameTeamResult takes none —
 // `Unknown argument "scope" on field "GameTeamResult.periods"`, measured
@@ -120,6 +124,18 @@ const Q_GAME_PERIODS = `query DiscoverGame($gameID: ID!) {
 // The tenant config gives the arithmetic: 6_POINT_SCORE has pointValue 6,
 // 1_POINT_SCORE has 1. Deriving is exact, not an estimate.
 // TOTAL_SCORE out of a period's statistics array.
+// Goals and behinds for a period, which PlayHQ returns alongside the total and
+// which this script threw away until v10. "1.4" says more than "10": it separates
+// a quarter of accurate kicking from one of near misses, and it is what PlayHQ
+// prints under each column.
+const pGB = (stats) => {
+  const arr = stats || [];
+  const g = arr.find(x => x.type?.value === '6_POINT_SCORE');
+  const b = arr.find(x => x.type?.value === '1_POINT_SCORE');
+  if (!g && !b) return null;
+  return [g?.count || 0, b?.count || 0];
+};
+
 const pScore = (stats) => {
   const arr = stats || [];
   const t = arr.find(x => x.type?.value === 'TOTAL_SCORE');
@@ -134,20 +150,46 @@ const pScore = (stats) => {
 // Returns the quarters, or a REASON string. A single "empty" counter cannot
 // distinguish "PlayHQ has nothing" from "this code rejected it", and that is
 // exactly the distinction needed to tell a data gap from a defect.
-const toQuarters = (periods, order) => {
+const toQuarters = (periods, order, total) => {
   if (!Array.isArray(periods)) return { reason: 'no periods field' };
   if (!periods.length) return { reason: 'periods array empty' };
-  const byValue = new Map();
+  const byValue = new Map(), byGB = new Map();
   for (const p of periods) {
     const v = p?.period?.value;
-    if (v) byValue.set(v, pScore(p.statistics));
+    if (!v) continue;
+    byValue.set(v, pScore(p.statistics));
+    const gb = pGB(p.statistics);
+    if (gb) byGB.set(v, gb);
   }
   // Fall back to the standard AFL sequence if the grade did not supply one.
   const seq = (order && order.length ? order : ['FIRST_QTR','SECOND_QTR','THIRD_QTR','FOURTH_QTR']);
   const out = seq.map(v => byValue.get(v));
+  const gb = seq.map(v => byGB.get(v) || null);
   // A quarter genuinely scoreless is 0, not missing. Only a MISSING period is a
   // reason to reject the row.
-  if (out.every(v => v !== null && v !== undefined)) return { q: out };
+  if (out.every(v => v !== null && v !== undefined)) {
+    return { q: out, gb: gb.every(x => x) ? gb : null };
+  }
+
+  // ⚠️ EXACTLY ONE MISSING PERIOD CAN BE DERIVED — total minus the rest.
+  //
+  // Arithmetic, not a guess. But it FORCES reconciliation: if the final total is
+  // itself wrong, the error lands entirely in the derived quarter and the ≠
+  // marker never fires, so the row would look perfect while being wrong.
+  // Recorded in qDerived so the dashboard can say which quarter was calculated.
+  const missingIdx = out.map((v, i) => (v === null || v === undefined) ? i : -1)
+    .filter(i => i >= 0);
+  if (missingIdx.length === 1 && total !== null && total !== undefined) {
+    const known = out.reduce((a, v) => a + (Number(v) || 0), 0);
+    const derived = total - known;
+    // A negative quarter is impossible, so the total and the parts disagree about
+    // more than one missing value. Leave it as a gap.
+    if (derived >= 0) {
+      out[missingIdx[0]] = derived;
+      return { q: out, gb: null, derivedAt: missingIdx[0] };
+    }
+  }
+
   const got = seq.filter(v => byValue.has(v)).length;
   return { reason: `${got} of ${seq.length} periods present`, partial: out };
 };
@@ -203,7 +245,7 @@ async function main() {
     gameRoute = true;
     const g = r?.data?.discoverGame;
     const order = (g?.round?.grade?.periods || []).map(x => x.value);
-    const r0 = toQuarters(g?.statistics?.home?.periods, order);
+    const r0 = toQuarters(g?.statistics?.home?.periods, order, smp.hScore);
     if (r0.q) gameWithData++;
     console.log(`    ${smp.date} ${smp.home} v ${smp.away} — ` +
       `${r0.q ? r0.q.join(', ') : '(' + r0.reason + ')'}`);
@@ -232,6 +274,36 @@ async function main() {
   // Moves resolved quarters onto the records and writes the file. Safe to call
   // mid-run: it only touches records this run resolved, and clears the scratch
   // field so a later checkpoint does not rewrite the same ones.
+  // ⚠️ COMMIT FROM INSIDE THE RUN, NOT ONLY AT THE END.
+  //
+  // v8 wrote checkpoints to the runner's filesystem and left the commit to the
+  // workflow's last step. That protects against the script crashing and nothing
+  // else: cancel the job or hit the six-hour timeout and the runner is discarded
+  // with every checkpoint on it. Which is exactly the failure a long run actually
+  // meets.
+  //
+  // Committing here means a cancelled run keeps everything up to its last
+  // checkpoint. The workflow still commits at the end for whatever came after it.
+  const gitCommit = (n, why) => {
+    if (!COMMIT) return;
+    try {
+      execFileSync('git', ['add', '-A', 'data/'], { stdio: 'pipe' });
+      // Nothing staged is normal — a checkpoint where store.save wrote an
+      // identical file. Not an error, and not worth a push.
+      const staged = execFileSync('git', ['diff', '--staged', '--name-only'], { encoding: 'utf8' }).trim();
+      if (!staged) return;
+      execFileSync('git', ['commit', '-m', `Quarter scores: ${n} record(s) (${why})`], { stdio: 'pipe' });
+      execFileSync('git', ['pull', '--rebase'], { stdio: 'pipe' });
+      execFileSync('git', ['push'], { stdio: 'pipe' });
+      console.log(`    …committed and pushed (${why})`);
+    } catch (e) {
+      // A failed push must not stop the fetch. The work stays on disk and the
+      // next checkpoint, or the workflow's final commit, will carry it.
+      const msg = (e.stderr || e.stdout || e.message || '').toString().split('\n')[0];
+      console.error(`    ⚠️ commit/push failed (${why}): ${msg.slice(0, 140)}`);
+    }
+  };
+
   let checkpointed = 0;
   const flush = globalThis.__qsFlush = (why) => {
     if (!APPLY) return 0;
@@ -242,6 +314,16 @@ async function main() {
       // qFlag is [homeDiff, awayDiff] — how far the quarters are from the stored
       // score. Absent when they agree, so a reader can test for it directly.
       if (m._q[3]) m.qFlag = m._q[3]; else delete m.qFlag;
+      const x = m._q[4] || {};
+      // Goals and behinds per quarter, when PlayHQ reported them. Points are
+      // always present; the breakdown is not.
+      if (x.hGB) m.hQGB = x.hGB; else delete m.hQGB;
+      if (x.aGB) m.aQGB = x.aGB; else delete m.aQGB;
+      // Index of a quarter that was CALCULATED from the total rather than
+      // reported. The dashboard marks it, because a derived quarter always
+      // reconciles by construction and would otherwise look more certain than it is.
+      if (x.hDer !== null && x.hDer !== undefined) m.hQDer = x.hDer; else delete m.hQDer;
+      if (x.aDer !== null && x.aDer !== undefined) m.aQDer = x.aDer; else delete m.aQDer;
       delete m._q;
       n++;
     }
@@ -250,6 +332,7 @@ async function main() {
       store.save(data, scope, { players: false });
       checkpointed += n;
       console.log(`    …checkpoint: ${n} record(s) written (${checkpointed} this run) — ${why}`);
+      gitCommit(checkpointed, why);
     } catch (e) {
       console.error(`    ⚠️ checkpoint FAILED: ${e.message}`);
       // Not fatal. The records keep their values in memory and the next
@@ -264,7 +347,7 @@ async function main() {
 
   let calls = 0, found = 0, mismatch = 0, empty = 0, noPeriodGrade = 0;
   const emptyWhy = new Map();
-  let refusedBig = 0;
+  let refusedBig = 0, derivedCount = 0, gbCount = 0;
   const emptyEx = [];
   const mismatches = [];
 
@@ -281,7 +364,7 @@ async function main() {
   //
   // So: stored, with qFlag carrying the size of the disagreement per side, and the
   // dashboard marks the row rather than pretending it adds up.
-  const applyTo = (rec, hq, aq) => {
+  const applyTo = (rec, hq, aq, rh, ra) => {
     // ⚠️ THE PARTS MUST MAKE THE WHOLE. If the quarters do not sum to the stored
     // score, the breakdown belongs to a different game or a different scale, and
     // showing it beside the total would be worse than showing nothing.
@@ -291,8 +374,15 @@ async function main() {
     // Cumulative is accepted too in case a grade is configured differently —
     // measured once, not assumed to hold everywhere.
     const cum = hq[hq.length - 1] === rec.hScore && aq[aq.length - 1] === rec.aScore;
-    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'per-quarter', null]; return true; }
-    if (cum) { rec._q = [hq, aq, 'cumulative', null]; return true; }
+    const extra = {
+      hGB: rh && rh.gb ? rh.gb : null,
+      aGB: ra && ra.gb ? ra.gb : null,
+      // Which quarter, if any, was calculated rather than reported.
+      hDer: rh && rh.derivedAt !== undefined ? rh.derivedAt : null,
+      aDer: ra && ra.derivedAt !== undefined ? ra.derivedAt : null,
+    };
+    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'per-quarter', null, extra]; return true; }
+    if (cum) { rec._q = [hq, aq, 'cumulative', null, extra]; return true; }
 
     // Stored anyway, with the difference recorded. A large gap is still worth
     // refusing — that is a wrong game, not a miscount.
@@ -306,7 +396,7 @@ async function main() {
     // A disagreement bigger than a couple of goals is not a scorer slip. Those
     // stay refused, because the likeliest explanation is the wrong fixture.
     if (Math.abs(dh) > 12 || Math.abs(da) > 12) { refusedBig++; return false; }
-    rec._q = [hq, aq, 'unreconciled', [dh, da]];
+    rec._q = [hq, aq, 'unreconciled', [dh, da], extra];
     return true;
   };
 
@@ -396,8 +486,8 @@ async function main() {
         // hasPeriodScores false is not a gap — nobody records quarters there.
         if (g?.round?.grade?.hasPeriodScores === false) { noPeriodGrade++; continue; }
         const order = (g?.round?.grade?.periods || []).map(x => x.value);
-        const rh = toQuarters(g?.statistics?.home?.periods, order);
-        const ra = toQuarters(g?.statistics?.away?.periods, order);
+        const rh = toQuarters(g?.statistics?.home?.periods, order, m.hScore);
+        const ra = toQuarters(g?.statistics?.away?.periods, order, m.aScore);
         if (!rh.q || !ra.q) {
           empty++;
           // Which side, and why. "empty" alone cannot separate a PlayHQ gap from
@@ -408,7 +498,9 @@ async function main() {
           if (emptyEx.length < 10) emptyEx.push(`${m.id}  ${why}`);
           continue;
         }
-        if (applyTo(m, rh.q, ra.q)) found++;
+        if (rh.derivedAt !== undefined || ra.derivedAt !== undefined) derivedCount++;
+        if (rh.gb && ra.gb) gbCount++;
+        if (applyTo(m, rh.q, ra.q, rh, ra)) found++;
       } catch (e) { /* counted as empty below */ }
       if (CHECKPOINT && found && found % CHECKPOINT === 0) flush(`${i}/${todo.length}`);
       await sleep(120);
@@ -426,6 +518,8 @@ async function main() {
       ? `  ⚠️ ${target.length - withId} cannot be matched — written before engine v16`
       : ''));
   console.log(`  quarters found and consistent  ${found}`);
+  console.log(`  ...with goals and behinds      ${gbCount}`);
+  console.log(`  ...a quarter CALCULATED        ${derivedCount}  (one period missing; total minus the rest)`);
   console.log(`  returned nothing               ${empty}`);
   console.log(`  grade records no quarters      ${noPeriodGrade}  (hasPeriodScores false — not a gap)`);
   if (emptyWhy.size) {
