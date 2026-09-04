@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v8 2026-09-04 checkpointed';
+const VERSION = 'fetch-quarter-scores v9 2026-09-04 store-unreconciled';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -239,6 +239,9 @@ async function main() {
     for (const m of data.matches || []) {
       if (!m._q) continue;
       m.hQ = m._q[0]; m.aQ = m._q[1];
+      // qFlag is [homeDiff, awayDiff] — how far the quarters are from the stored
+      // score. Absent when they agree, so a reader can test for it directly.
+      if (m._q[3]) m.qFlag = m._q[3]; else delete m.qFlag;
       delete m._q;
       n++;
     }
@@ -261,9 +264,23 @@ async function main() {
 
   let calls = 0, found = 0, mismatch = 0, empty = 0, noPeriodGrade = 0;
   const emptyWhy = new Map();
+  let refusedBig = 0;
   const emptyEx = [];
   const mismatches = [];
 
+  // ⚠️ AN UNRECONCILED BREAKDOWN IS STORED WITH A FLAG, NOT DISCARDED.
+  //
+  // 29 of 2,547 games on 2026-09-04 had quarters that did not sum to the stored
+  // score, almost all out by exactly 1 (a behind) or 6 (a goal) on one side. That
+  // is a scorer entering quarter figures that do not match the final total, which
+  // is typed separately — PlayHQ's own page shows the same discrepancy.
+  //
+  // Discarding them loses real information over a 1-point disagreement. Storing
+  // them silently would be worse: in CUMULATIVE view the last figure would not
+  // equal the score printed beside it, and that reads as a rendering fault.
+  //
+  // So: stored, with qFlag carrying the size of the disagreement per side, and the
+  // dashboard marks the row rather than pretending it adds up.
   const applyTo = (rec, hq, aq) => {
     // ⚠️ THE PARTS MUST MAKE THE WHOLE. If the quarters do not sum to the stored
     // score, the breakdown belongs to a different game or a different scale, and
@@ -274,14 +291,23 @@ async function main() {
     // Cumulative is accepted too in case a grade is configured differently —
     // measured once, not assumed to hold everywhere.
     const cum = hq[hq.length - 1] === rec.hScore && aq[aq.length - 1] === rec.aScore;
-    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'per-quarter']; return true; }
-    if (cum) { rec._q = [hq, aq, 'cumulative']; return true; }
+    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'per-quarter', null]; return true; }
+    if (cum) { rec._q = [hq, aq, 'cumulative', null]; return true; }
+
+    // Stored anyway, with the difference recorded. A large gap is still worth
+    // refusing — that is a wrong game, not a miscount.
+    const dh = hs - rec.hScore, da = as - rec.aScore;
     mismatch++;
-    if (mismatches.length < 10) {
+    if (mismatches.length < 12) {
       mismatches.push(`${rec.id}  stored ${rec.hScore}-${rec.aScore}  ` +
-        `quarters ${hq.join('.')}=${hs} / ${aq.join('.')}=${as}`);
+        `quarters ${hq.join('.')}=${hs} / ${aq.join('.')}=${as}  ` +
+        `(off by ${dh >= 0 ? '+' : ''}${dh} / ${da >= 0 ? '+' : ''}${da})`);
     }
-    return false;
+    // A disagreement bigger than a couple of goals is not a scorer slip. Those
+    // stay refused, because the likeliest explanation is the wrong fixture.
+    if (Math.abs(dh) > 12 || Math.abs(da) > 12) { refusedBig++; return false; }
+    rec._q = [hq, aq, 'unreconciled', [dh, da]];
+    return true;
   };
 
   if (roundRoute) {
@@ -414,10 +440,11 @@ async function main() {
     console.log('     check those against the game on the PlayHQ site before trusting');
     console.log('     the coverage figure.');
   }
-  console.log(`  quarters that did NOT reconcile ${mismatch}`);
+  console.log(`  quarters that did NOT reconcile ${mismatch}  ` +
+    `(stored with qFlag; ${refusedBig} refused as too far out)`);
   console.log('─'.repeat(72));
   if (mismatches.length) {
-    console.log('\n⚠️ NOT WRITTEN — the parts do not make the whole:');
+    console.log('\n⚠️ STORED WITH qFlag — the parts do not make the whole:');
     for (const s of mismatches) console.log(`  ${s}`);
   }
 
