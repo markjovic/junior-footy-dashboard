@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v3 2026-09-04 progress';
+const VERSION = 'fetch-quarter-scores v4 2026-09-04 statistics-periods';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -52,22 +52,42 @@ const MAXCALL = Math.max(50, Number(process.env.QS_MAX_CALLS || 4000));
 // 2026-09-04. The bare field was accepted the first time it was probed and
 // returned an empty array for that one game, which I read as "needs an argument"
 // rather than "that game has none". One game is not a sample.
+// ⚠️ THE PERIODS ARE ON `statistics`, NOT ON `result`.
+//
+//   discoverGame.statistics.home.periods[]     ← the period table
+//   discoverGame.result.home.periods[]         ← exists, always empty
+//
+// Captured from the game-centre page's own request, 2026-09-04. Every earlier
+// probe asked `result`, found a valid `periods` field there, got an empty array,
+// and concluded PlayHQ did not expose the data. The field was real and the wrong
+// one — being accepted proved nothing about being correct.
+//
+// SHAPE, from the Mt Eliza v Narre North game (42-33):
+//   statistics.home.periods = [
+//     { period: { value: 'THIRD_QTR' },  statistics: [ { type:{value:'TOTAL_SCORE'}, count: 26 }, ... ] },
+//     { period: { value: 'FIRST_QTR' },  statistics: [ { type:{value:'TOTAL_SCORE'}, count: 10 }, ... ] },
+//     ...
+//   ]
+//
+// ⚠️ TWO THINGS THAT WILL BITE:
+//
+// 1. THE ARRAY IS UNORDERED. That game returned THIRD, FIRST, FOURTH, SECOND.
+//    Reading it positionally gives a scrambled quarter line. Order comes from
+//    round.grade.periods, which lists Q1..Q4 properly.
+//
+// 2. THE API IS PER-QUARTER; THE SITE SHOWS CUMULATIVE. Home was 10, 6, 26, 0 —
+//    which sums to the stored 42. The site's "10, 16, 42, 42" is that running
+//    total, because the grade's periodScoresDisplayType is END_OF_PERIOD. Stored
+//    here as PER-QUARTER, and the dashboard can total it if that is what you
+//    want to show.
 const PERIOD_BLOCK =
-  'periods { period { value shortName } statistics { count type { value } } }';
+  'periods { period { value } statistics { count type { value } } }';
 
 const Q_GAME_PERIODS = `query DiscoverGame($gameID: ID!) {
   discoverGame(gameID: $gameID) {
     id
-    result { home { ${PERIOD_BLOCK} } away { ${PERIOD_BLOCK} } }
-  }
-}`;
-
-const Q_ROUND_PERIODS = `query discoverFixtureByRound($roundID: ID!) {
-  discoverFixtureByRound(roundID: $roundID) {
-    games {
-      id
-      result { home { ${PERIOD_BLOCK} } away { ${PERIOD_BLOCK} } }
-    }
+    round { grade { hasPeriodScores periods { value shortName } } }
+    statistics { home { ${PERIOD_BLOCK} } away { ${PERIOD_BLOCK} } }
   }
 }`;
 
@@ -76,9 +96,20 @@ const pScore = (stats) => {
   const s = (stats || []).find(x => x.type?.value === 'TOTAL_SCORE');
   return s ? s.count : null;
 };
-const toQuarters = (periods) => {
+// ⚠️ ORDERED BY THE GRADE'S OWN PERIOD LIST, never by array position.
+// The Mt Eliza game returned THIRD, FIRST, FOURTH, SECOND.
+const toQuarters = (periods, order) => {
   if (!Array.isArray(periods) || !periods.length) return null;
-  const out = periods.map(p => pScore(p.statistics));
+  const byValue = new Map();
+  for (const p of periods) {
+    const v = p?.period?.value;
+    if (v) byValue.set(v, pScore(p.statistics));
+  }
+  // Fall back to the standard AFL sequence if the grade did not supply one.
+  const seq = (order && order.length ? order : ['FIRST_QTR','SECOND_QTR','THIRD_QTR','FOURTH_QTR']);
+  const out = seq.map(v => byValue.get(v));
+  // A quarter genuinely scoreless is 0, not missing. Only a MISSING period is a
+  // reason to reject the row.
   return out.every(v => v !== null && v !== undefined) ? out : null;
 };
 
@@ -125,7 +156,9 @@ async function main() {
       break;
     }
     gameRoute = true;
-    const q = toQuarters(r?.data?.discoverGame?.result?.home?.periods);
+    const g = r?.data?.discoverGame;
+    const order = (g?.round?.grade?.periods || []).map(x => x.value);
+    const q = toQuarters(g?.statistics?.home?.periods, order);
     if (q) gameWithData++;
     console.log(`    ${smp.date} ${smp.home} v ${smp.away} — ` +
       `${q ? q.join(', ') : '(no periods)'}`);
@@ -136,30 +169,7 @@ async function main() {
       `sampled game(s) carried a breakdown`);
   }
 
-  // The round route is the cheap one, so it is worth knowing whether it works
-  // even if the game route does.
-  let roundRoute = false;
-  const grades = [...new Set(target.map(m => m.gradeId).filter(Boolean))];
-  let probeRoundId = null;
-  if (grades.length) {
-    try {
-      const rr = await gqlPost(engine.Q_GRADE_ROUNDS, { gradeID: grades[0] });
-      const rounds = rr?.data?.discoverGrade?.rounds || [];
-      probeRoundId = rounds.length ? rounds[0].id : null;
-    } catch (e) { /* fall through to the game route */ }
-  }
-  if (probeRoundId) {
-    try {
-      const r = await gqlPost(Q_ROUND_PERIODS, { roundID: probeRoundId }, 'discoverFixtureByRound');
-      if (isRejection(r)) {
-        console.log('  discoverFixtureByRound + periods REJECTED — using the per-game route');
-        for (const e of (r.errors || []).slice(0, 2)) console.log(`    ${e.message}`);
-      } else {
-        roundRoute = true;
-        console.log('  discoverFixtureByRound + periods accepted — one call per ROUND');
-      }
-    } catch (e) { console.log(`  round probe failed: ${e.message}`); }
-  }
+  const roundRoute = false;   // periods are not on discoverFixtureByRound
 
   if (!gameRoute && !roundRoute) {
     console.error('\nNeither route accepts a periods field. Nothing can be fetched.');
@@ -178,7 +188,7 @@ async function main() {
   const byGameId = new Map();
   for (const m of target) if (m.gameId) byGameId.set(m.gameId, m);
 
-  let calls = 0, found = 0, mismatch = 0, empty = 0;
+  let calls = 0, found = 0, mismatch = 0, empty = 0, noPeriodGrade = 0;
   const mismatches = [];
 
   const applyTo = (rec, hq, aq) => {
@@ -187,8 +197,11 @@ async function main() {
     // showing it beside the total would be worse than showing nothing.
     const hs = hq.reduce((a, b) => a + b, 0);
     const as = aq.reduce((a, b) => a + b, 0);
+    // PER-QUARTER is what the API returns, so the sum is the expected match.
+    // Cumulative is accepted too in case a grade is configured differently —
+    // measured once, not assumed to hold everywhere.
     const cum = hq[hq.length - 1] === rec.hScore && aq[aq.length - 1] === rec.aScore;
-    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'sum']; return true; }
+    if (hs === rec.hScore && as === rec.aScore) { rec._q = [hq, aq, 'per-quarter']; return true; }
     if (cum) { rec._q = [hq, aq, 'cumulative']; return true; }
     mismatch++;
     if (mismatches.length < 10) {
@@ -260,8 +273,13 @@ async function main() {
       try {
         const r = await gqlPost(Q_GAME_PERIODS, { gameID: m.gameId }, 'DiscoverGame');
         calls++;
-        const hq = toQuarters(r?.data?.discoverGame?.result?.home?.periods);
-        const aq = toQuarters(r?.data?.discoverGame?.result?.away?.periods);
+        const g = r?.data?.discoverGame;
+        // The grade says whether a period table should exist at all. A grade with
+        // hasPeriodScores false is not a gap — nobody records quarters there.
+        if (g?.round?.grade?.hasPeriodScores === false) { noPeriodGrade++; continue; }
+        const order = (g?.round?.grade?.periods || []).map(x => x.value);
+        const hq = toQuarters(g?.statistics?.home?.periods, order);
+        const aq = toQuarters(g?.statistics?.away?.periods, order);
         if (!hq || !aq) { empty++; continue; }
         if (applyTo(m, hq, aq)) found++;
       } catch (e) { /* counted as empty below */ }
@@ -281,6 +299,7 @@ async function main() {
       : ''));
   console.log(`  quarters found and consistent  ${found}`);
   console.log(`  returned nothing               ${empty}`);
+  console.log(`  grade records no quarters      ${noPeriodGrade}  (hasPeriodScores false — not a gap)`);
   console.log(`  quarters that did NOT reconcile ${mismatch}`);
   console.log('─'.repeat(72));
   if (mismatches.length) {
