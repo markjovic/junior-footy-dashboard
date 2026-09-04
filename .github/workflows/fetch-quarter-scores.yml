@@ -67,6 +67,15 @@ jobs:
       # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
       # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
       # session acquisition. See docs/playhq_api_reference.md.
+      # git identity must exist BEFORE the fetch, because the script commits at
+      # every checkpoint rather than leaving it all to the end.
+      - name: Configure git
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
       - name: Fetch
         env:
           QS_APPLY: ${{ inputs.apply }}
@@ -75,6 +84,7 @@ jobs:
           QS_MAX_CALLS: ${{ inputs.max_calls }}
           QS_REDO: ${{ inputs.redo }}
           QS_CHECKPOINT: ${{ inputs.checkpoint }}
+          QS_COMMIT: ${{ inputs.apply }}
         run: node scripts/fetch-quarter-scores.js
 
       # ⚠️ always(), not success(). The fetch checkpoints to disk as it goes, so a
