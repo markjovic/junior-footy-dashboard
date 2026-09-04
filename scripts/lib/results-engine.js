@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v24 2026-08-31 revert-round-guard-changes';
+const ENGINE_VERSION = 'v25 2026-09-04 quarter-scores';
 
 'use strict';
 
@@ -129,6 +129,16 @@ query discoverFixtureByRound($roundID: ID!) {
       }
       status { value }
       date
+      # QUARTER SCORES, FREE WITH THIS CALL. statistics.<side>.periods on the
+      # fixture query returns the SAME breakdown as discoverGame — verified game
+      # by game, 4 of 4 identical, 2026-09-04, scripts/probe-round-periods.js.
+      # It is NOT on result.<side>: that field exists, is accepted, and is always
+      # empty, which had three probes concluding PlayHQ did not expose quarters
+      # at all. No backticks in this comment — it lives inside a template literal.
+      statistics {
+        home { periods { period { value } statistics { count type { value } } } }
+        away { periods { period { value } statistics { count type { value } } } }
+      }
       allocation {
         court {
           venue {
@@ -451,6 +461,87 @@ async function discoverGrades(competitions) {
 }
 
 // ─── Per-grade results fetcher ────────────────────────────────────────────────
+
+// ── Quarter scores ───────────────────────────────────────────────────────────
+// From statistics.<side>.periods on the fixture query. Same extraction as
+// scripts/enrich-games.js, and the same three traps:
+//
+//   THE ARRAY IS UNORDERED. A real response returned THIRD, FIRST, FOURTH,
+//     SECOND. Reading it positionally gives a scrambled quarter line.
+//   TOTAL_SCORE IS NOT ALWAYS THERE. Requiring it discarded whole games over one
+//     quarter recorded as goals and behinds alone.
+//   ONE MISSING PERIOD CAN BE DERIVED from the total, but doing so FORCES
+//     reconciliation — the index is recorded so the dashboard can mark it.
+//
+// ⚠️ TOLERANT BY DESIGN. If PlayHQ ever drops or renames the field this returns
+// null and the result is stored exactly as before. A results run must not fail
+// because an extra is missing.
+const QV = 2;
+
+function qStat(stats, type) {
+  const s = (stats || []).find(x => x.type?.value === type);
+  return s && s.count !== null && s.count !== undefined ? s.count : null;
+}
+function qPoints(stats) {
+  const t = qStat(stats, 'TOTAL_SCORE');
+  if (t !== null) return t;
+  const g = qStat(stats, '6_POINT_SCORE'), b = qStat(stats, '1_POINT_SCORE');
+  if (g === null && b === null) return null;
+  return (g || 0) * 6 + (b || 0);
+}
+function qGoalsBehinds(stats) {
+  const g = qStat(stats, '6_POINT_SCORE'), b = qStat(stats, '1_POINT_SCORE');
+  if (g === null && b === null) return null;
+  return [g || 0, b || 0];
+}
+
+const QTR_ORDER = ['FIRST_QTR', 'SECOND_QTR', 'THIRD_QTR', 'FOURTH_QTR'];
+
+function extractQuarters(periods, total) {
+  if (!Array.isArray(periods) || !periods.length) return null;
+  const pts = new Map(), gb = new Map();
+  for (const p of periods) {
+    const v = p?.period?.value;
+    if (!v) continue;
+    pts.set(v, qPoints(p.statistics));
+    const x = qGoalsBehinds(p.statistics);
+    if (x) gb.set(v, x);
+  }
+  const out = QTR_ORDER.map(v => pts.get(v));
+  const gbs = QTR_ORDER.map(v => gb.get(v) || null);
+  if (out.every(v => v !== null && v !== undefined)) {
+    return { q: out, gb: gbs.every(Boolean) ? gbs : null, derivedAt: null };
+  }
+  const miss = out.map((v, i) => (v === null || v === undefined) ? i : -1).filter(i => i >= 0);
+  if (miss.length === 1 && total !== null && total !== undefined) {
+    const d = total - out.reduce((a, v) => a + (Number(v) || 0), 0);
+    if (d >= 0) { out[miss[0]] = d; return { q: out, gb: null, derivedAt: miss[0] }; }
+  }
+  return null;
+}
+
+// Everything a match record carries about quarters, or {} when there is nothing.
+// Returning a patch rather than mutating keeps the caller a single spread.
+function quarterFields(game, hScore, aScore) {
+  try {
+    const h = extractQuarters(game?.statistics?.home?.periods, hScore);
+    const a = extractQuarters(game?.statistics?.away?.periods, aScore);
+    if (!h || !a) return {};
+    const hs = h.q.reduce((x, y) => x + y, 0), as = a.q.reduce((x, y) => x + y, 0);
+    const dh = hs - hScore, da = as - aScore;
+    // Beyond a couple of goals is not a scorer slip — that is a different game.
+    if (Math.abs(dh) > 12 || Math.abs(da) > 12) return {};
+    const out = { hQ: h.q, aQ: a.q, qV: QV };
+    if (h.gb && a.gb) { out.hQGB = h.gb; out.aQGB = a.gb; }
+    if (h.derivedAt !== null) out.hQDer = h.derivedAt;
+    if (a.derivedAt !== null) out.aQDer = a.derivedAt;
+    if (dh || da) out.qFlag = [dh, da];
+    return out;
+  } catch (e) {
+    // Never let an extra break a results run.
+    return {};
+  }
+}
 
 async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnded) {
   const { id, name, ageName = '', genderName = '' } = grade;
@@ -892,6 +983,10 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
         home: homeName, away: awayName,
         hScore, hG, hB,
         aScore, aG, aB,
+        // Quarter scores, when PlayHQ carries them. Spread LAST so an empty patch
+        // is genuinely nothing — a record without quarters is byte-identical to
+        // one written before this existed, so nothing is rewritten needlessly.
+        ...quarterFields(game, hScore, aScore),
         venue, vSuburb, venueUrl,
         date: game.date || '',
       });
@@ -1533,6 +1628,11 @@ async function run(o) {
       if (byId.has(m.id)) {
         const prev = byId.get(m.id);
         const scoreChanged = ['hScore','hG','hB','aScore','aG','aB'].some(k => prev[k] !== m[k]);
+        // ⚠️ DO NOT LOSE QUARTERS ON A RE-FETCH. `{ ...prev, ...m }` keeps prev's
+        // hQ when m has none, which is what we want — but if PlayHQ has since
+        // published them, m wins. Both directions are correct only because the
+        // patch is absent rather than empty when there is nothing.
+        const gainedQuarters = !prev.hQ && !!m.hQ;
 
         // FIXTURE SUPERSEDED BY A RESULT (v18).
         //
@@ -1597,7 +1697,7 @@ async function run(o) {
         // The promotion is itself a change, even when every score already matched.
         // Without this the repair run reports no changes and is never committed,
         // which is the state this defect has been sitting in.
-        if (scoreChanged || wasScheduled || wasLive) updatedCount++;
+        if (scoreChanged || wasScheduled || wasLive || gainedQuarters) updatedCount++;
       } else {
         byId.set(m.id, m);
         newCount++;
