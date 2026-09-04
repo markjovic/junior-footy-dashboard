@@ -1,0 +1,48 @@
+# .github/workflows/probe-preseason-roster.yml
+#
+# Can we know next season's rosters before a ball is kicked?
+#
+# publicProfileTeams(profileID) returns a player's registrations INCLUDING
+# UPCOMING ones. Walk last season's players and next season's rosters assemble
+# themselves — including club switches, which are visible nowhere else.
+#
+# Everything known about this field was measured on basketball-victoria, where 25%
+# of profiles returned NOT_FOUND. This checks whether it holds on the afl tenant.
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+
+name: Probe Preseason Roster
+
+on:
+  workflow_dispatch:
+    inputs:
+      n:
+        description: 'n — how many players to sample (10-500). Default 100, spread across competitions.'
+        required: false
+        default: '100'
+        type: string
+      comp:
+        description: 'comp — limit to one competition, e.g. "EFNL 2026". Blank = all loaded.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_N: ${{ inputs.n }}
+          PROBE_COMP: ${{ inputs.comp }}
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: node scripts/probe-preseason-roster.js
