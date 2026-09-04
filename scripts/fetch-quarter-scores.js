@@ -36,7 +36,7 @@
 
 'use strict';
 
-const VERSION = 'fetch-quarter-scores v1 2026-09-04';
+const VERSION = 'fetch-quarter-scores v2 2026-09-04 no-scope-arg';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
@@ -47,8 +47,13 @@ const COMP   = (process.env.QS_COMP || '').trim();
 const YEAR   = (process.env.QS_YEAR || '2026').trim();
 const MAXCALL = Math.max(50, Number(process.env.QS_MAX_CALLS || 4000));
 
+// ⚠️ NO ARGUMENT. `periods` on GameTeamResult takes none —
+// `Unknown argument "scope" on field "GameTeamResult.periods"`, measured
+// 2026-09-04. The bare field was accepted the first time it was probed and
+// returned an empty array for that one game, which I read as "needs an argument"
+// rather than "that game has none". One game is not a sample.
 const PERIOD_BLOCK =
-  'periods(scope: BY_PERIOD) { period { value shortName } statistics { count type { value } } }';
+  'periods { period { value shortName } statistics { count type { value } } }';
 
 const Q_GAME_PERIODS = `query DiscoverGame($gameID: ID!) {
   discoverGame(gameID: $gameID) {
@@ -104,21 +109,31 @@ async function main() {
   console.log(`${target.length} completed ${YEAR} record(s); ${already} already carry quarters.`);
 
   // ── Which route works? Tested, not assumed. ───────────────────────────────
-  const sampleWithId = target.find(m => m.gameId);
-  let gameRoute = false;
-  if (sampleWithId) {
-    try {
-      const r = await gqlPost(Q_GAME_PERIODS, { gameID: sampleWithId.gameId }, 'DiscoverGame');
-      if (isRejection(r)) {
-        console.log('  discoverGame + periods(scope:) REJECTED:');
-        for (const e of (r.errors || []).slice(0, 2)) console.log(`    ${e.message}`);
-      } else {
-        gameRoute = true;
-        const q = toQuarters(r?.data?.discoverGame?.result?.home?.periods);
-        console.log(`  discoverGame + periods(scope:) accepted — sample home quarters: ` +
-          `${q ? q.join(', ') : '(empty)'}`);
-      }
-    } catch (e) { console.log(`  discoverGame probe failed: ${e.message}`); }
+  // ⚠️ SEVERAL GAMES, NOT ONE. An empty array from a single game says nothing
+  // about the field — it may simply be a game nobody entered quarters for. The
+  // first probe of this field drew exactly that wrong conclusion.
+  const samples = target.filter(m => m.gameId).slice(0, 6);
+  let gameRoute = false, gameWithData = 0;
+  for (const smp of samples) {
+    let r;
+    try { r = await gqlPost(Q_GAME_PERIODS, { gameID: smp.gameId }, 'DiscoverGame'); }
+    catch (e) { console.log(`  discoverGame probe failed: ${e.message}`); break; }
+    if (isRejection(r)) {
+      console.log('  discoverGame + periods REJECTED:');
+      for (const e of (r.errors || []).slice(0, 2)) console.log(`    ${e.message}`);
+      gameRoute = false;
+      break;
+    }
+    gameRoute = true;
+    const q = toQuarters(r?.data?.discoverGame?.result?.home?.periods);
+    if (q) gameWithData++;
+    console.log(`    ${smp.date} ${smp.home} v ${smp.away} — ` +
+      `${q ? q.join(', ') : '(no periods)'}`);
+    await sleep(200);
+  }
+  if (gameRoute) {
+    console.log(`  discoverGame.periods accepted; ${gameWithData} of ${samples.length} ` +
+      `sampled game(s) carried a breakdown`);
   }
 
   // The round route is the cheap one, so it is worth knowing whether it works
@@ -147,8 +162,15 @@ async function main() {
   }
 
   if (!gameRoute && !roundRoute) {
-    console.error('\nNeither route returns periods. Nothing can be fetched.');
+    console.error('\nNeither route accepts a periods field. Nothing can be fetched.');
     process.exit(1);
+  }
+  if (gameRoute && !gameWithData && !roundRoute) {
+    console.log('\n⚠️  The field EXISTS but every sampled game returned an empty array.');
+    console.log('    That is a real answer: PlayHQ is not exposing a breakdown through');
+    console.log('    this field for these games. Continuing anyway across the full set —');
+    console.log('    six games is a small sample and the run costs only calls — but do');
+    console.log('    not expect much.');
   }
   console.log(`\nRoute: ${roundRoute ? 'ROUND (cheap)' : 'GAME (one call per game)'}\n`);
 
