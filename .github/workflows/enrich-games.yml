@@ -1,0 +1,128 @@
+# .github/workflows/enrich-games.yml
+#
+# Backfills PlayHQ game ids and per-quarter scores across every stored season.
+#
+# ⚠️ ONE DISPATCH DOES THE WHOLE JOB. ~53,000 games will not fit in a six-hour
+# runner, so the script stops on a time budget, commits, and this workflow starts
+# a fresh run automatically. Nothing needs watching and nothing needs re-running
+# by hand.
+#
+# It commits and pushes every 200 records, so a cancelled or timed-out run keeps
+# everything up to its last push.
+
+name: Enrich Games
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'apply — write ids and quarter scores. Leave false for a dry run.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      year:
+        description: 'year — one season year, e.g. 2026. BLANK = every season, which is the point of this workflow.'
+        required: false
+        default: ''
+        type: string
+      comp:
+        description: 'comp — one competition, e.g. "EFNL 2026". Blank = all.'
+        required: false
+        default: ''
+        type: string
+      redo:
+        description: 'redo — re-fetch records that already have quarters, to add goals/behinds stored by an older version.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      budget_min:
+        description: 'budget_min — stop and hand over after this many minutes. Default 300 (GitHub kills a job at 360).'
+        required: false
+        default: '300'
+        type: string
+      chain:
+        description: 'chain — automatically start the next run when this one hits its budget. Default true.'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
+  actions: write        # needed to re-dispatch itself
+
+# Shares a lock with the other data writers. Two whole-file writers with
+# overlapping checkouts silently revert each other.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # Identity must exist BEFORE the fetch — the script commits at every
+      # checkpoint rather than leaving it all to the end.
+      - name: Configure git
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Enrich
+        id: run
+        env:
+          EG_APPLY: ${{ inputs.apply }}
+          EG_YEAR: ${{ inputs.year }}
+          EG_COMP: ${{ inputs.comp }}
+          EG_REDO: ${{ inputs.redo }}
+          EG_BUDGET_MIN: ${{ inputs.budget_min }}
+        run: |
+          set +e
+          node scripts/enrich-games.js
+          CODE=$?
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          # 75 means "budget reached, more to do" — a normal outcome, not a failure.
+          if [ "$CODE" = "75" ]; then exit 0; fi
+          exit $CODE
+
+      # Anything the script had not yet pushed. Runs on always() so a crash or a
+      # cancellation still commits what reached the disk.
+      - name: Commit the tail
+        if: ${{ always() && inputs.apply == 'true' }}
+        run: |
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "Nothing left to commit"
+            exit 0
+          fi
+          git commit -m "Enrich games: tail"
+          git pull --rebase
+          git push
+
+      # ⚠️ THE POINT OF THE WORKFLOW. Hands over to a fresh runner so the whole
+      # archive completes from a single dispatch.
+      - name: Continue in a new run
+        if: ${{ steps.run.outputs.code == '75' && inputs.chain == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Budget reached — starting the next run."
+          gh workflow run enrich-games.yml \
+            --ref "${{ github.ref_name }}" \
+            -f apply='${{ inputs.apply }}' \
+            -f year='${{ inputs.year }}' \
+            -f comp='${{ inputs.comp }}' \
+            -f redo='${{ inputs.redo }}' \
+            -f budget_min='${{ inputs.budget_min }}' \
+            -f chain='true'
