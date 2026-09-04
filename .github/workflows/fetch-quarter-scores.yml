@@ -1,0 +1,79 @@
+# .github/workflows/fetch-quarter-scores.yml
+#
+# Adds a per-quarter breakdown (hQ/aQ) to stored match records.
+#
+# `result.home.periods` is accepted on discoverGame on the MAIN API — every other
+# candidate field name was rejected. The earlier spectator-endpoint probe was
+# asking the wrong place.
+#
+# ALWAYS dry-run first: it reports how many games actually return quarters, and
+# how many reconcile against the stored score, before anything is written.
+
+name: Fetch Quarter Scores
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'apply — write hQ/aQ to the records. Leave false for a dry run.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      year:
+        description: 'year — season year to fetch. Default 2026.'
+        required: false
+        default: '2026'
+        type: string
+      comp:
+        description: 'comp — limit to one competition, e.g. "EFNL 2026". Blank = all in that year.'
+        required: false
+        default: ''
+        type: string
+      max_calls:
+        description: 'max_calls — safety cap on API requests. Default 4000.'
+        required: false
+        default: '4000'
+        type: string
+
+permissions:
+  contents: write
+
+# ⚠️ Serialised against the fetch workflow. Both write whole season files, and two
+# whole-file writers with overlapping checkouts silently revert each other — which
+# is exactly how the fixtures commit was lost on 2026-08-31.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  quarters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Fetch
+        env:
+          QS_APPLY: ${{ inputs.apply }}
+          QS_YEAR: ${{ inputs.year }}
+          QS_COMP: ${{ inputs.comp }}
+          QS_MAX_CALLS: ${{ inputs.max_calls }}
+        run: node scripts/fetch-quarter-scores.js
+
+      - name: Commit
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Add per-quarter scores"
+          git pull --rebase -X theirs
+          git push
