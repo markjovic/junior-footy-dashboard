@@ -1,0 +1,41 @@
+# .github/workflows/probe-round-periods.yml
+#
+# Can quarter scores come from the ROUND call the engine already makes?
+#
+# If discoverFixtureByRound exposes statistics.<side>.periods, quarters arrive
+# free with every results run and no separate pass is ever needed. If not, they
+# cost one discoverGame call per game.
+#
+# Probed in isolation because a rejected field fails the WHOLE query, and the
+# engine's fixture query is what every scheduled run depends on.
+#
+# READ-ONLY: makes GraphQL calls, writes nothing, commits nothing.
+
+name: Probe Round Periods
+
+on:
+  workflow_dispatch:
+    inputs:
+      grade:
+        description: 'grade — a gradeId known to have quarter scores. Blank = the first stored record that has them.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request, including
+      # session acquisition. See docs/playhq_api_reference.md.
+      - name: Probe
+        env:
+          PROBE_GRADE: ${{ inputs.grade }}
+        run: node scripts/probe-round-periods.js
