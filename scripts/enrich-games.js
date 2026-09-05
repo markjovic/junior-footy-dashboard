@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v10 2026-09-05 coverage-report';
+const VERSION = 'enrich-games v11 2026-09-05 upgrade-old-records';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -264,17 +264,34 @@ async function main() {
     return !(age >= 0 && age < QNO_DAYS);
   };
 
+  // ⚠️ `qV` IS THE ONLY THING THAT MEANS DONE — NOT THE PRESENCE OF `hQ`.
+  //
+  // The last line used to be `return !!(m.hQ && m.hQ.length)`, so ANY record with
+  // quarters counted as finished. About 3,300 were written by
+  // fetch-quarter-scores before goals and behinds were captured: they have hQ, no
+  // qV, and no hQGB — and were skipped for ever unless someone ran a full `redo`,
+  // which re-walks all 52,000.
+  //
+  // qV means "asked by THIS extraction", whatever it found. A record with
+  // quarters but no qV was written by an older one and is re-asked. A record
+  // written by this version with no goals and behinds is left alone, because
+  // PlayHQ genuinely did not report them and asking again returns the same.
   const done = (m) => {
-    if (m.qV === QV) return true;              // this version already got them
+    if (m.qV === QV) return true;              // this version asked; keep whatever it got
     if (REDO) return false;                    // upgrading — anything older is fair game
     if (m.qNo && !missIsStale(m)) return true; // asked, PlayHQ had nothing, still fresh
-    return !!(Array.isArray(m.hQ) && m.hQ.length); // data from some version, leave it
+    return false;                              // older version, or never asked — ask
   };
   const todo = inScope.filter(m => !done(m));
 
   const skippedMiss = inScope.filter(m => !todo.includes(m) && m.qNo && m.qV !== QV).length;
   console.log(`${inScope.length} completed record(s) in scope; ` +
     `${inScope.length - todo.length} already handled, ${todo.length} to do.`);
+  const upgrading = todo.filter(m => Array.isArray(m.hQ) && m.hQ.length && m.qV !== QV).length;
+  if (upgrading) {
+    console.log(`  ${upgrading} already have quarters from an older version and will be ` +
+      `re-asked to pick up goals and behinds.`);
+  }
   if (skippedMiss) {
     console.log(`  of those, ${skippedMiss} are known to have no quarters — asked ` +
       `before, PlayHQ had nothing, not asked again.`);
