@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v15 2026-09-05 adaptive-concurrency';
+const VERSION = 'enrich-games v16 2026-09-05 learned-ceiling';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -73,6 +73,9 @@ const DELAY      = Math.max(0, Number(process.env.EG_DELAY_MS || 120));
 // tripped at that rate today. This is a background walk with hours to spare, so
 // there is nothing to gain from crowding it.
 const CONC = Math.max(1, Math.min(12, Number(process.env.EG_CONC || 6)));
+// Minutes of clear running before concurrency steps back up. Time, not batches:
+// a batch is only `conc` requests and passes in seconds.
+const RECOVER_MIN = Math.max(0.5, Number(process.env.EG_RECOVER_MIN || 5));
 // ⚠️ PUSHING IS NOT FREE — EVERY PUSH REBUILDS AND REDEPLOYS GITHUB PAGES.
 //
 // v1 pushed at every checkpoint, roughly every 90 seconds, which over a 17-hour
@@ -483,9 +486,14 @@ async function main() {
     pending++;
   };
 
-  // Current concurrency, tuned as the run proceeds. CONC is the ceiling.
+  // Current concurrency, tuned as the run proceeds.
+  //
+  // `ceiling` is LEARNED: whenever a level gets blocked, the ceiling drops below
+  // it permanently for this run, so the walk converges on a rate PlayHQ tolerates
+  // instead of oscillating around the one that fails.
   let conc = CONC;
-  let clearBatches = 0;
+  let ceiling = CONC;
+  let lastBlockAt = 0;
   let gi = 0, stopped = false;
   for (const gradeId of grades) {
     if (overBudget()) { stopped = true; break; }
@@ -639,14 +647,27 @@ async function main() {
 
       if (blockedNow > 0) {
         const was = conc;
+        // ⚠️ REMEMBER THE LEVEL THAT FAILED. Without this the run climbs straight
+        // back to the concurrency that just got it blocked, and oscillates there
+        // for the whole walk — measured 2026-09-05: blocked at 6, dropped to 3,
+        // back to 4, blocked again, within three minutes.
+        ceiling = Math.max(1, Math.min(ceiling, was - 1));
         conc = Math.max(1, Math.floor(conc / 2));
-        clearBatches = 0;
+        lastBlockAt = Date.now();
         // The 80s wait has already happened inside gqlPost. Adding more here would
         // punish twice; the point is only to send fewer next time.
-        if (conc !== was) console.log(`    ↓ concurrency ${was} → ${conc} (rate limited)`);
-      } else if (++clearBatches >= 25 && conc < CONC) {
-        conc++; clearBatches = 0;
-        console.log(`    ↑ concurrency → ${conc} (25 clear batches)`);
+        if (conc !== was) {
+          console.log(`    ↓ concurrency ${was} → ${conc}, ceiling now ${ceiling} (rate limited)`);
+        }
+      } else if (conc < ceiling &&
+                 (Date.now() - lastBlockAt) / 60000 >= RECOVER_MIN) {
+        // ⚠️ RECOVERY IS MEASURED IN TIME, NOT BATCHES. A batch is `conc` games, so
+        // at concurrency 3 twenty-five batches is 75 games — about 25 seconds, and
+        // the run stepped up almost immediately. Minutes clear is the thing that
+        // actually indicates the API is happy.
+        conc++;
+        lastBlockAt = Date.now();
+        console.log(`    ↑ concurrency → ${conc} (${RECOVER_MIN} min clear, ceiling ${ceiling})`);
       }
 
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
@@ -721,7 +742,7 @@ async function main() {
   console.log(`  grade records no quarters      ${noGrade}`);
   console.log(`  refused (ambiguous or wrong)   ${refused}`);
   console.log(`  elapsed                        ${mins()} min`);
-  console.log(`  concurrency ended at           ${conc} (ceiling ${CONC})`);
+  console.log(`  concurrency ended at           ${conc} (learned ceiling ${ceiling}, started ${CONC})`);
   console.log(`  rate-limit blocks              ${summary().blocked}`);
   console.log('─'.repeat(70));
   if (emptyWhy.size) {
