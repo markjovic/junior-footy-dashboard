@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v12 2026-09-05 keep-goals-behinds';
+const VERSION = 'enrich-games v14 2026-09-05 qpart-is-a-list';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -453,11 +453,11 @@ async function main() {
         // qPart is [homeMissingIdx[], awayMissingIdx[]] — which quarters were
         // never recorded. Its presence tells the dashboard to show a gap rather
         // than a zero.
+        // ⚠️ A LIST, NOT A BOOLEAN. Two lines wrote this, the second overwriting
+        // the first with `true` — a leftover from an earlier edit. `true` says a
+        // breakdown has holes but not WHERE, so the dashboard could not tell a gap
+        // from a scoreless quarter, which is the whole reason the field exists.
         if (e.partial) m.qPart = e.partial; else delete m.qPart;
-        // qPart marks a breakdown with holes — some periods were never recorded.
-        // The dashboard shows a dash for those and offers no cumulative view,
-        // which cannot cross a gap.
-        if (e.partial) m.qPart = true; else delete m.qPart;
       }
       delete m._e;
       n++;
@@ -550,37 +550,33 @@ async function main() {
     }
     if (stopped) break;
 
-    // ── Periods, per game, CONC at a time ──
-    const queue = recs.filter(m => m.gameId);
-    for (let i = 0; i < queue.length; i += CONC) {
-      if (overBudget()) { stopped = true; break; }
-      const batch = queue.slice(i, i + CONC);
-      // Each worker handles its own record end to end. Results are applied in the
-      // order they arrive, which is fine — `note()` writes to the record itself,
-      // not to a shared list where order would matter.
-      await Promise.all(batch.map(m => handleGame(m)));
-      if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
-      if (DELAY) await sleep(DELAY);
-    }
-    if (stopped) break;
-    if (!stopped) walked.add(gradeId);
-    continue;
-
-    // eslint-disable-next-line no-unreachable
-    for (const m of recs) {
-      if (overBudget()) { stopped = true; break; }
-      if (!m.gameId) continue;
+    // ── Periods, CONC games at a time ──
+    //
+    // ⚠️ handleGame() IS DEFINED HERE. A previous edit introduced the concurrent
+    // batch loop and left the per-game body sitting below it as dead code after a
+    // `continue`, so the run died on the first grade with
+    // "ReferenceError: handleGame is not defined". node --check does not catch a
+    // missing function — only running it does.
+    //
+    // Each worker handles one record end to end. Results are applied as they
+    // arrive, which is safe because note() writes to the record itself rather than
+    // to a shared list where order would matter. The counters are incremented from
+    // several workers, but Node is single-threaded between awaits so ++ is atomic
+    // here.
+    const handleGame = async (m) => {
+      if (!m.gameId) return;
+      const today = new Date().toISOString().slice(0, 10);
       let g;
       try {
         const r = await gqlPost(Q_GAME, { gameID: m.gameId }, 'DiscoverGame');
         calls++;
         g = r?.data?.discoverGame;
-      } catch (e) { continue; }
-      const today = new Date().toISOString().slice(0, 10);
-      if (!g) { empty++; note(m, { qNo: today }); continue; }
+      } catch (e) { return; }
+
+      if (!g) { empty++; note(m, { qNo: today }); return; }
       // A grade that records no quarters at all is settled, not a gap.
       if (g.round?.grade?.hasPeriodScores === false) {
-        noGrade++; note(m, { qNo: today }); continue;
+        noGrade++; note(m, { qNo: today }); return;
       }
 
       const order = (g.round?.grade?.periods || []).map(x => x.value);
@@ -592,23 +588,21 @@ async function main() {
                   : !rh.q ? `home: ${rh.reason}` : `away: ${ra.reason}`;
         emptyWhy.set(why, (emptyWhy.get(why) || 0) + 1);
         note(m, { qNo: today });
-        continue;
+        return;
       }
 
       const isPartial = !!(rh.partial || ra.partial);
       // ⚠️ NO SUM CHECK ON A PARTIAL. Quarters with a hole in them cannot add up
-      // to the final score, and treating that as a mismatch would flag — or
-      // refuse — every one of the 1,343 games this exists to keep.
+      // to the final score, and treating that as a mismatch would refuse every
+      // one of them.
       let dh = 0, da = 0;
       if (!isPartial) {
         const hs = rh.q.reduce((x, y) => x + (y || 0), 0);
         const as = ra.q.reduce((x, y) => x + (y || 0), 0);
         dh = hs - m.hScore; da = as - m.aScore;
-        // Beyond a couple of goals is not a scorer slip — that is a different
-        // game. Marked so it is not re-asked, since re-asking returns the same
-        // wrong thing.
+        // Beyond a couple of goals is a different game, not a scorer slip.
         if (Math.abs(dh) > 12 || Math.abs(da) > 12) {
-          refused++; note(m, { qNo: today }); continue;
+          refused++; note(m, { qNo: today }); return;
         }
       }
       note(m, {
@@ -620,11 +614,20 @@ async function main() {
       });
       found++;
       if (isPartial) partialCount++;
-      if (dh || da) flagged++;
+      if (!isPartial && (dh || da)) flagged++;
       resolved++;
+    };
+
+    const queue = recs.filter(m => m.gameId);
+    for (let i = 0; i < queue.length; i += CONC) {
+      if (overBudget()) { stopped = true; break; }
+      const batch = queue.slice(i, i + CONC);
+      await Promise.all(batch.map(m => handleGame(m)));
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
-      await sleep(DELAY);
+      if (DELAY) await sleep(DELAY);
     }
+    if (stopped) break;
+    walked.add(gradeId);
     // Walked to completion — recorded so a later run skips it. NOT recorded if
     // the budget stopped us mid-grade, or the rest of that grade would be lost.
     if (!stopped) walked.add(gradeId);
