@@ -20402,7 +20402,7 @@
       "file": "data/seasons/48ad3050-core.json",
       "seasonId": "48ad3050",
       "kind": "core",
-      "bytes": 395830
+      "bytes": 398025
     },
     {
       "file": "data/seasons/48ad3050-players.json",
@@ -20534,7 +20534,7 @@
       "file": "data/seasons/feccaf1c-core.json",
       "seasonId": "feccaf1c",
       "kind": "core",
-      "bytes": 1867902
+      "bytes": 1897186
     },
     {
       "file": "data/seasons/feccaf1c-players.json",
