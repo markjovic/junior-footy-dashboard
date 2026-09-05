@@ -500,6 +500,7 @@ body{overflow-x:hidden}
 .mr-qtr .qv{min-width:26px;display:inline-block;text-align:right}
 .mr-qtr .qgb{display:block;font-style:normal;font-size:8px;opacity:.62;line-height:1.1}
 .mr-qtr .qv-der{color:var(--tx2);border-bottom:1px dotted var(--tx3);cursor:help}
+.mr-qtr .qv-gap{color:var(--b2);cursor:help}
 .qtr-btn{margin-left:8px;font-family:'DM Mono',monospace;font-size:9px;
   padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--b2);
   background:var(--s1);color:var(--tx3);white-space:nowrap}
@@ -571,7 +572,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.209</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.210</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -925,7 +926,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.209</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.210</span>
         </div>
 
 
@@ -5481,8 +5482,29 @@ function quarterLine(m) {
   if (S.qtrMode === 'off') return '';
   const hq = m.hQ, aq = m.aQ;
   if (!Array.isArray(hq) || !Array.isArray(aq) || !hq.length || hq.length !== aq.length) return '';
-  const h = S.qtrMode === 'cum' ? cumulate(hq) : hq;
-  const a = S.qtrMode === 'cum' ? cumulate(aq) : aq;
+  // ⚠️ A NULL QUARTER IS A GAP, NOT A ZERO.
+  //
+  // qPart marks quarters PlayHQ never recorded. About 1,340 games in one pass have
+  // two or three of four — real information, and worth showing. But a blank
+  // quarter and a scoreless quarter are different things: rendering the blank as 0
+  // would claim nobody scored when the truth is nobody wrote it down.
+  //
+  // In CUMULATIVE mode a gap also breaks the running total, so the total stops at
+  // the last known quarter and every figure after a gap is shown as a dash. A
+  // running total that silently skips a missing quarter is a wrong number.
+  const cumulatePartial = (arr) => {
+    const out = []; let t = 0, broken = false;
+    for (const v of arr) {
+      if (v === null || v === undefined) { broken = true; out.push(null); continue; }
+      if (broken) { out.push(null); continue; }
+      t += v; out.push(t);
+    }
+    return out;
+  };
+  const anyNull = hq.some(v => v === null || v === undefined) ||
+                  aq.some(v => v === null || v === undefined);
+  const h = S.qtrMode === 'cum' ? (anyNull ? cumulatePartial(hq) : cumulate(hq)) : hq;
+  const a = S.qtrMode === 'cum' ? (anyNull ? cumulatePartial(aq) : cumulate(aq)) : aq;
   // GOALS AND BEHINDS UNDER THE POINTS, when PlayHQ reported them — "1.4" says
   // more than "10", separating accurate kicking from near misses, and it is what
   // PlayHQ prints under each column. Points-only where the breakdown is absent.
@@ -5499,6 +5521,9 @@ function quarterLine(m) {
   // reconciles by construction, so without a mark it looks more certain than the
   // reported ones beside it.
   const cell = (v, i, gb, der) => {
+    if (v === null || v === undefined) {
+      return `<span class="qv qv-gap" title="Not recorded">–</span>`;
+    }
     const sub = gb && gb[i] ? `<i class="qgb">${gb[i][0]}.${gb[i][1]}</i>` : '';
     const isDer = der !== null && der !== undefined && der === i;
     return `<span class="qv${isDer ? ' qv-der' : ''}"` +
