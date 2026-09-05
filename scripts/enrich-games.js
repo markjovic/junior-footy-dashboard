@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v6 2026-09-04 seed-600-default';
+const VERSION = 'enrich-games v7 2026-09-04 seed-removed';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -95,17 +95,11 @@ const QNO_DAYS = Math.max(0, Number(process.env.EG_QNO_DAYS || 1));
 // cursor, so they are revisited on the NEXT pass once it clears. Nothing is
 // permanently skipped.
 //
-// ⚠️ DEFAULTS TO 600 — A TEMPORARY VALUE, NOT A DESIGN.
-//
-// Runs 1-3 walked roughly the first 900 grades under v1/v2, which wrote no
-// cursor. Defaulting to 600 lets the chained run pick up near where it stopped
-// without the dispatch having to say so — the chain passes no inputs of its own.
-//
-// ⚠️ SET THIS BACK TO 0 once a real cursor exists in core.json. Leaving it at 600
-// means every FUTURE pass silently skips its first 600 grades — the cursor would
-// then be seeded on top of nothing, every time, for ever. It is a carry-over, and
-// it expires the moment the first pass completes.
-const SKIP_FIRST = Math.max(0, Number(process.env.EG_SKIP_FIRST || 600));
+// Defaults to 0. It briefly defaulted to 600 to carry over runs 1-3, which were
+// made by versions that recorded no cursor. That pass has completed, so the
+// carry-over is done and leaving it in would make every future pass silently skip
+// its first 600 grades.
+const SKIP_FIRST = Math.max(0, Number(process.env.EG_SKIP_FIRST || 0));
 
 const started = Date.now();
 const overBudget = () => (Date.now() - started) / 60000 >= BUDGET_MIN;
