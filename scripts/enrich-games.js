@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v7 2026-09-04 seed-removed';
+const VERSION = 'enrich-games v9 2026-09-05 keep-partials';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -61,7 +61,15 @@ const COMMIT     = APPLY && process.env.EG_COMMIT !== 'false';
 // Stop this far into the run and hand over to the next one. GitHub's job limit is
 // 360 minutes; leaving 40 covers the final commit and the re-dispatch.
 const BUDGET_MIN = Math.max(5, Number(process.env.EG_BUDGET_MIN || 300));
-const DELAY      = Math.max(60, Number(process.env.EG_DELAY_MS || 120));
+const DELAY      = Math.max(0, Number(process.env.EG_DELAY_MS || 120));
+// ⚠️ CONCURRENCY. A serial walk measured 0.83 s per call — 13,120 calls in 182
+// minutes — because almost all of that is waiting for PlayHQ, not the 120 ms
+// delay. Six at a time turns three hours into about half an hour.
+//
+// Six, not more: the fetchers elsewhere in this repo use 8 and the WAF has been
+// tripped at that rate today. This is a background walk with hours to spare, so
+// there is nothing to gain from crowding it.
+const CONC = Math.max(1, Math.min(12, Number(process.env.EG_CONC || 6)));
 // ⚠️ PUSHING IS NOT FREE — EVERY PUSH REBUILDS AND REDEPLOYS GITHUB PAGES.
 //
 // v1 pushed at every checkpoint, roughly every 90 seconds, which over a 17-hour
@@ -177,6 +185,19 @@ function quarters(periods, order, total) {
   if (miss.length === 1 && total !== null && total !== undefined) {
     const d = total - out.reduce((a, v) => a + (Number(v) || 0), 0);
     if (d >= 0) { out[miss[0]] = d; return { q: out, gb: null, derivedAt: miss[0] }; }
+  }
+  // ⚠️ A PARTIAL BREAKDOWN IS KEPT, NOT DISCARDED.
+  //
+  // Two or three quarters recorded and the rest blank is still information —
+  // "10 – 26 –" says more than an empty row. Earlier versions threw all of it
+  // away because the set could not be completed, which on one 605-grade pass
+  // discarded about 1,340 records PlayHQ had real data for.
+  //
+  // The NULLS ARE PRESERVED so the dashboard can show a gap where a quarter was
+  // never recorded rather than a zero. A blank quarter and a scoreless quarter
+  // are different things and must not look the same.
+  if (miss.length < seq.length) {
+    return { q: out, gb: null, derivedAt: null, partial: miss };
   }
   return { reason: `${seq.length - miss.length} of ${seq.length}` };
 }
@@ -341,7 +362,7 @@ async function main() {
     writeCursor({ grades: [...walked], at: new Date().toISOString(), version: VERSION });
 
   let calls = 0, found = 0, empty = 0, flagged = 0, refused = 0;
-  let stamped = 0, noGrade = 0, resolved = 0, committed = 0;
+  let stamped = 0, noGrade = 0, resolved = 0, committed = 0, partialCount = 0;
   const emptyWhy = new Map();
 
   const gitCommit = (label) => {
@@ -351,18 +372,37 @@ async function main() {
       const staged = execFileSync('git', ['diff', '--staged', '--name-only'], { encoding: 'utf8' }).trim();
       if (!staged) return;
       execFileSync('git', ['commit', '-m', `Enrich games: ${label}`], { stdio: 'pipe' });
-      execFileSync('git', ['pull', '--rebase'], { stdio: 'pipe' });
-      execFileSync('git', ['push'], { stdio: 'pipe' });
+      // ⚠️ NAME THE BRANCH. A bare `git pull --rebase` fails on a DETACHED HEAD —
+      // "You are not currently on a branch" — which is what actions/checkout
+      // leaves behind without a `ref:`. The commits then pile up locally and the
+      // runner is discarded with them, having reported checkpoints all along.
+      const branch = process.env.GITHUB_REF_NAME || 'main';
+      execFileSync('git', ['pull', '--rebase', 'origin', branch], { stdio: 'pipe' });
+      execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'pipe' });
+      pushFailures = 0;
       console.log(`    …pushed (${label})`);
     } catch (e) {
       const msg = (e.stderr || e.stdout || e.message || '').toString().split('\n')[0];
-      console.error(`    ⚠️ push failed (${label}): ${msg.slice(0, 120)} — work is on disk, next checkpoint retries`);
+      pushFailures++;
+      console.error(`    ⚠️ push failed (${label}): ${msg.slice(0, 140)}`);
+      // ⚠️ A push that fails EVERY time is not transient, and "work is on disk"
+      // is false comfort — the disk goes away with the runner. Three in a row and
+      // the run stops, so a broken push costs one checkpoint rather than a whole
+      // three-hour walk.
+      if (pushFailures >= 3) {
+        console.error('');
+        console.error('    THREE CONSECUTIVE PUSH FAILURES — stopping.');
+        console.error('    Nothing after the last successful push will survive this runner.');
+        console.error('    Check the checkout has a `ref:` — a detached HEAD cannot rebase.');
+        throw new Error('push is not working; stopping rather than discarding hours of work');
+      }
     }
   };
 
   // Moves everything resolved onto the records, saves, and commits. Safe mid-run:
   // it only touches records this run resolved.
   let pending = 0;
+  let pushFailures = 0;
   let lastPush = Date.now();
   const flush = globalThis.__egFlush = (label) => {
     if (!APPLY) { for (const m of data.matches || []) delete m._e; pending = 0; return 0; }
@@ -381,6 +421,14 @@ async function main() {
         if (e.der && e.der[0] !== null) m.hQDer = e.der[0]; else delete m.hQDer;
         if (e.der && e.der[1] !== null) m.aQDer = e.der[1]; else delete m.aQDer;
         if (e.flag) m.qFlag = e.flag; else delete m.qFlag;
+        // qPart is [homeMissingIdx[], awayMissingIdx[]] — which quarters were
+        // never recorded. Its presence tells the dashboard to show a gap rather
+        // than a zero.
+        if (e.partial) m.qPart = e.partial; else delete m.qPart;
+        // qPart marks a breakdown with holes — some periods were never recorded.
+        // The dashboard shows a dash for those and offers no cumulative view,
+        // which cannot cross a gap.
+        if (e.partial) m.qPart = true; else delete m.qPart;
       }
       delete m._e;
       n++;
@@ -473,7 +521,23 @@ async function main() {
     }
     if (stopped) break;
 
-    // ── Periods, per game ──
+    // ── Periods, per game, CONC at a time ──
+    const queue = recs.filter(m => m.gameId);
+    for (let i = 0; i < queue.length; i += CONC) {
+      if (overBudget()) { stopped = true; break; }
+      const batch = queue.slice(i, i + CONC);
+      // Each worker handles its own record end to end. Results are applied in the
+      // order they arrive, which is fine — `note()` writes to the record itself,
+      // not to a shared list where order would matter.
+      await Promise.all(batch.map(m => handleGame(m)));
+      if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
+      if (DELAY) await sleep(DELAY);
+    }
+    if (stopped) break;
+    if (!stopped) walked.add(gradeId);
+    continue;
+
+    // eslint-disable-next-line no-unreachable
     for (const m of recs) {
       if (overBudget()) { stopped = true; break; }
       if (!m.gameId) continue;
@@ -502,21 +566,31 @@ async function main() {
         continue;
       }
 
-      const hs = rh.q.reduce((a, b) => a + b, 0), as = ra.q.reduce((a, b) => a + b, 0);
-      const dh = hs - m.hScore, da = as - m.aScore;
-      // Beyond a couple of goals is not a scorer slip — that is a different game.
-      if (Math.abs(dh) > 12 || Math.abs(da) > 12) {
-        // Not a scorer slip — a different game. Marked so it is not re-asked
-        // every run, since re-asking will return the same wrong thing.
-        refused++; note(m, { qNo: today }); continue;
+      const isPartial = !!(rh.partial || ra.partial);
+      // ⚠️ NO SUM CHECK ON A PARTIAL. Quarters with a hole in them cannot add up
+      // to the final score, and treating that as a mismatch would flag — or
+      // refuse — every one of the 1,343 games this exists to keep.
+      let dh = 0, da = 0;
+      if (!isPartial) {
+        const hs = rh.q.reduce((x, y) => x + (y || 0), 0);
+        const as = ra.q.reduce((x, y) => x + (y || 0), 0);
+        dh = hs - m.hScore; da = as - m.aScore;
+        // Beyond a couple of goals is not a scorer slip — that is a different
+        // game. Marked so it is not re-asked, since re-asking returns the same
+        // wrong thing.
+        if (Math.abs(dh) > 12 || Math.abs(da) > 12) {
+          refused++; note(m, { qNo: today }); continue;
+        }
       }
       note(m, {
         q: [rh.q, ra.q],
         gb: (rh.gb && ra.gb) ? [rh.gb, ra.gb] : null,
         der: [rh.derivedAt ?? null, ra.derivedAt ?? null],
-        flag: (dh || da) ? [dh, da] : null,
+        flag: (!isPartial && (dh || da)) ? [dh, da] : null,
+        partial: isPartial ? [rh.partial || [], ra.partial || []] : null,
       });
       found++;
+      if (isPartial) partialCount++;
       if (dh || da) flagged++;
       resolved++;
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
@@ -537,6 +611,7 @@ async function main() {
   console.log(`  grades walked                  ${gi} of ${grades.length}`);
   console.log(`  game ids stamped               ${stamped}`);
   console.log(`  quarters found                 ${found}  (${flagged} do not sum to the score, flagged)`);
+  console.log(`  ...of which PARTIAL            ${partialCount}  (1-3 of 4 periods recorded)`);
   console.log(`  returned nothing               ${empty}`);
   console.log(`  grade records no quarters      ${noGrade}`);
   console.log(`  refused (ambiguous or wrong)   ${refused}`);
