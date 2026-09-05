@@ -69,8 +69,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
+      # ⚠️ `ref:` IS REQUIRED. Without it actions/checkout leaves a DETACHED HEAD —
+      # it checks out the commit, not the branch. Commits then succeed, `git pull
+      # --rebase` fails with "You are not currently on a branch", and the push
+      # never happens. A three-hour run on 2026-09-05 committed 14 files locally
+      # and pushed none of them; the runner was discarded with the lot.
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       # Identity must exist BEFORE the fetch — the script commits at every
       # checkpoint rather than leaving it all to the end.
@@ -113,8 +120,10 @@ jobs:
             exit 0
           fi
           git commit -m "Enrich games: tail"
-          git pull --rebase
-          git push
+          # Named explicitly: a bare `git pull --rebase` fails on a detached HEAD
+          # and, on a branch with no upstream, on a fresh clone too.
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
 
       # ⚠️ THE POINT OF THE WORKFLOW. Hands over to a fresh runner so the whole
       # archive completes from a single dispatch.
