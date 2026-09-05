@@ -999,7 +999,7 @@
         "results": true,
         "players": true,
         "matches": 2098,
-        "players_n": 6768
+        "players_n": 6767
       }
     },
     {
@@ -1495,7 +1495,7 @@
         "results": true,
         "players": true,
         "matches": 2259,
-        "players_n": 8846
+        "players_n": 8850
       }
     },
     {
@@ -1552,7 +1552,7 @@
         "results": true,
         "players": true,
         "matches": 3105,
-        "players_n": 9163
+        "players_n": 9157
       }
     },
     {
@@ -20324,7 +20324,7 @@
   },
   "lastUpdated": "2026-09-05T13:29:24.730Z",
   "lastResultsFetch": "2026-09-05T13:29:24.730Z",
-  "lastStatsFetch": "2026-08-31T05:21:36.787Z",
+  "lastStatsFetch": "2026-09-05T14:10:47.779Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
@@ -20336,7 +20336,7 @@
       "file": "data/seasons/2170ac5a-players.json",
       "seasonId": "2170ac5a",
       "kind": "players",
-      "bytes": 4022011
+      "bytes": 4023867
     },
     {
       "file": "data/seasons/263ca13b-core.json",
@@ -20348,7 +20348,7 @@
       "file": "data/seasons/263ca13b-players.json",
       "seasonId": "263ca13b",
       "kind": "players",
-      "bytes": 3785117
+      "bytes": 3784624
     },
     {
       "file": "data/seasons/2dcbf383-core.json",
@@ -20360,7 +20360,7 @@
       "file": "data/seasons/2dcbf383-players.json",
       "seasonId": "2dcbf383",
       "kind": "players",
-      "bytes": 8122601
+      "bytes": 8122572
     },
     {
       "file": "data/seasons/3733598c-core.json",
@@ -20492,7 +20492,7 @@
       "file": "data/seasons/cda2f0ec-players.json",
       "seasonId": "cda2f0ec",
       "kind": "players",
-      "bytes": 4734745
+      "bytes": 4731812
     },
     {
       "file": "data/seasons/d6ed597a-core.json",
