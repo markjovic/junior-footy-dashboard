@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v25 2026-09-04 quarter-scores';
+const ENGINE_VERSION = 'v26 2026-09-05 keep-partial-quarters';
 
 'use strict';
 
@@ -517,6 +517,15 @@ function extractQuarters(periods, total) {
     const d = total - out.reduce((a, v) => a + (Number(v) || 0), 0);
     if (d >= 0) { out[miss[0]] = d; return { q: out, gb: null, derivedAt: miss[0] }; }
   }
+  // ⚠️ A PARTIAL IS KEPT, matching scripts/enrich-games.js. Two or three quarters
+  // recorded and the rest blank is still information — "10 – 26 –" says more than
+  // an empty row, and about 1,340 records per archive pass are in that state.
+  //
+  // The NULLS ARE PRESERVED so the dashboard shows a gap rather than a zero: a
+  // blank quarter and a scoreless quarter are different things.
+  if (miss.length < QTR_ORDER.length) {
+    return { q: out, gb: null, derivedAt: null, partial: miss };
+  }
   return null;
 }
 
@@ -527,15 +536,24 @@ function quarterFields(game, hScore, aScore) {
     const h = extractQuarters(game?.statistics?.home?.periods, hScore);
     const a = extractQuarters(game?.statistics?.away?.periods, aScore);
     if (!h || !a) return {};
-    const hs = h.q.reduce((x, y) => x + y, 0), as = a.q.reduce((x, y) => x + y, 0);
-    const dh = hs - hScore, da = as - aScore;
-    // Beyond a couple of goals is not a scorer slip — that is a different game.
-    if (Math.abs(dh) > 12 || Math.abs(da) > 12) return {};
+    const isPartial = !!(h.partial || a.partial);
     const out = { hQ: h.q, aQ: a.q, qV: QV };
+    // ⚠️ NO SUM CHECK ON A PARTIAL. Quarters with a hole in them cannot add up to
+    // the final score — that is what missing means — so testing them would refuse
+    // every one for being "too far out".
+    if (!isPartial) {
+      const hs = h.q.reduce((x, y) => x + (y || 0), 0);
+      const as = a.q.reduce((x, y) => x + (y || 0), 0);
+      const dh = hs - hScore, da = as - aScore;
+      // Beyond a couple of goals is not a scorer slip — that is a different game.
+      if (Math.abs(dh) > 12 || Math.abs(da) > 12) return {};
+      if (dh || da) out.qFlag = [dh, da];
+    } else {
+      out.qPart = [h.partial || [], a.partial || []];
+    }
     if (h.gb && a.gb) { out.hQGB = h.gb; out.aQGB = a.gb; }
     if (h.derivedAt !== null) out.hQDer = h.derivedAt;
     if (a.derivedAt !== null) out.aQDer = a.derivedAt;
-    if (dh || da) out.qFlag = [dh, da];
     return out;
   } catch (e) {
     // Never let an extra break a results run.
