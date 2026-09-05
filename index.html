@@ -487,20 +487,30 @@ body{overflow-x:hidden}
    and a badge tucked beside it was invisible on a phone — where a live score is
    most likely to be read from the sideline. Reported 2026-08-23. */
 .mr-live{margin-top:2px;line-height:1}
-/* QUARTER SCORES. A full-width strip UNDER the row, not a line inside .mr-score.
-   That column is 64px on a phone and .mr-det is display:none there, so anything
-   tucked beside it is invisible on exactly the device most likely to be reading a
-   score from the sideline — the mistake the LIVE badge made and had to have
-   undone. */
-.mr-qtr{grid-column:1/-1;display:flex;gap:14px;padding:2px 0 1px 30px;
-  font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);
-  letter-spacing:.4px;font-variant-numeric:tabular-nums}
-.mr-qtr b{font-weight:400;color:var(--tx2);min-width:26px;display:inline-block}
-.qtr-off{color:var(--amber,#f0a020);cursor:help;font-size:10px;padding-left:2px}
-.mr-qtr .qv{min-width:26px;display:inline-block;text-align:right}
-.mr-qtr .qgb{display:block;font-style:normal;font-size:8px;opacity:.62;line-height:1.1}
-.mr-qtr .qv-der{color:var(--tx2);border-bottom:1px dotted var(--tx3);cursor:help}
-.mr-qtr .qv-gap{color:var(--b2);cursor:help}
+/* QUARTER SCORES — a small aligned grid, not a run-on line.
+   The first version put both teams on ONE line ("NOR 0 14 14 22 LYS 7 8 14 17"),
+   so a reader could not scan DOWN a quarter to compare the two, which is the only
+   reason to show quarters at all. Now: one row per team, fixed columns, so Q3 sits
+   under Q3.
+   Full-width and UNDER the row, never inside .mr-score — that column is 64px on a
+   phone and .mr-det is display:none there. */
+.mr-qtr{grid-column:1/-1;margin:3px auto 1px;padding-top:3px;
+  border-top:1px solid rgba(255,255,255,.05);
+  display:grid;grid-template-columns:30px repeat(4,minmax(34px,44px));
+  gap:0 2px;align-items:baseline;width:fit-content;
+  font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}
+.mr-qtr .qteam{font-size:9px;color:var(--tx3);letter-spacing:.5px;text-align:left}
+.mr-qtr .qv{font-size:10px;color:var(--tx2);text-align:right;padding-right:3px}
+.mr-qtr .qgb{display:block;font-style:normal;font-size:8px;color:var(--tx3);
+  opacity:.75;line-height:1.25}
+.mr-qtr .qv-der{color:var(--tx3);border-bottom:1px dotted var(--b2);cursor:help}
+.mr-qtr .qv-gap{color:var(--b2)}
+.qtr-off{color:#f0a020;cursor:help;font-size:10px;padding-left:4px;align-self:center}
+@media(max-width:768px){
+  .mr-qtr{margin:3px auto 1px;grid-template-columns:26px repeat(4,minmax(30px,44px))}
+  .mr-qtr .qgb{display:none}   /* points only — the column is too narrow for both */
+}
+
 .qtr-btn{margin-left:8px;font-family:'DM Mono',monospace;font-size:9px;
   padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid var(--b2);
   background:var(--s1);color:var(--tx3);white-space:nowrap}
@@ -572,7 +582,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.211</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.213</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -926,7 +936,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.211</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.213</span>
         </div>
 
 
@@ -5530,29 +5540,33 @@ function quarterLine(m) {
       `${isDer ? ' title="Calculated from the final score — this quarter was not reported"' : ''}>` +
       `${v}${sub}</span>`;
   };
-
-  // ⚠️ SAY SO WHEN THE QUARTERS DO NOT ADD UP.
-  //
-  // qFlag is [homeDiff, awayDiff] — set by fetch-quarter-scores.js when the
-  // quarters do not sum to the final score. About 1% of games, almost all out by
-  // one behind or one goal on a single side, because the quarter figures and the
-  // final total are entered separately by the scorer. PlayHQ's own page shows the
-  // same discrepancy.
-  //
-  // It matters most in CUMULATIVE view, where the last figure sits directly under
-  // a score it does not equal — that reads as a rendering fault unless the row
-  // admits it. A marker is smaller and more honest than hiding the row.
+  // ⚠️ SAY SO WHEN THE QUARTERS DO NOT ADD UP. qFlag is [homeDiff, awayDiff],
+  // set when the quarters do not sum to the final score — about 1% of games,
+  // almost all out by one behind or one goal, because the quarter figures and the
+  // final total are entered separately by the scorer. It matters most in
+  // cumulative view, where the last figure sits under a score it does not equal.
   const f = Array.isArray(m.qFlag) ? m.qFlag : null;
   const note = f
     ? `<span class="qtr-off" title="PlayHQ's quarter figures do not sum to the ` +
       `final score — home ${f[0] >= 0 ? '+' : ''}${f[0]}, away ${f[1] >= 0 ? '+' : ''}${f[1]}. ` +
       `Entered separately by the scorer.">≠</span>`
     : '';
+
+  // ⚠️ SKIP A LEADING ARTICLE. "The Basin" abbreviated on the first word gives
+  // THE, which is the same for every club beginning with it and identifies none of
+  // them. Falls through to the next word.
+  const abbr = (n) => {
+    const parts = String(n || '').split(/\s+/).filter(Boolean);
+    const first = parts.find(w => !/^(the|a)$/i.test(w)) || parts[0] || '';
+    return first.slice(0, 3).toUpperCase();
+  };
+  const row = (name, vals, gb, der) =>
+    `<span class="qteam">${abbr(name)}</span>` +
+    vals.map((v, i) => cell(v, i, gb, der)).join('');
+
   return `<div class="mr-qtr">` +
-    `<span><b>${m.home.split(' ')[0].slice(0, 3).toUpperCase()}</b>` +
-      `${h.map((v, i) => cell(v, i, hG, m.hQDer)).join('')}</span>` +
-    `<span><b>${m.away.split(' ')[0].slice(0, 3).toUpperCase()}</b>` +
-      `${a.map((v, i) => cell(v, i, aG, m.aQDer)).join('')}</span>` +
+    row(m.home, h, hG, m.hQDer) +
+    row(m.away, a, aG, m.aQDer) +
     note +
     `</div>`;
 }
