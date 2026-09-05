@@ -1125,7 +1125,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 3425,
+        "matches": 3427,
         "players_n": 11438
       }
     },
@@ -1386,7 +1386,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 5499,
+        "matches": 5491,
         "players_n": 18183
       }
     },
@@ -1494,7 +1494,7 @@
       "phases": {
         "results": true,
         "players": true,
-        "matches": 2259,
+        "matches": 2269,
         "players_n": 8850
       }
     },
@@ -20330,7 +20330,7 @@
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
       "kind": "core",
-      "bytes": 1209301
+      "bytes": 1217191
     },
     {
       "file": "data/seasons/2170ac5a-players.json",
@@ -20354,7 +20354,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2899735
+      "bytes": 2893786
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
@@ -20534,7 +20534,7 @@
       "file": "data/seasons/feccaf1c-core.json",
       "seasonId": "feccaf1c",
       "kind": "core",
-      "bytes": 1925586
+      "bytes": 1927191
     },
     {
       "file": "data/seasons/feccaf1c-players.json",
@@ -20544,5 +20544,5 @@
     }
   ],
   "lastClubIndex": "2026-08-19T12:29:46.710Z",
-  "lastFixtureFetch": "2026-08-31T06:36:44.555Z"
+  "lastFixtureFetch": "2026-09-05T14:20:07.098Z"
 }
