@@ -39,12 +39,15 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v11 2026-09-05 upgrade-old-records';
+const VERSION = 'enrich-games v12 2026-09-05 keep-goals-behinds';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
 //   2  points + goals/behinds + derived quarter + qFlag
-const QV = 2;
+//   3  goals/behinds KEPT on derived and partial breakdowns — v2 discarded them
+//      whenever any quarter was calculated or missing, which is a large share of
+//      games, so a v2 record may be missing g.b it could have had
+const QV = 3;
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -184,7 +187,15 @@ function quarters(periods, order, total) {
   const miss = out.map((v, i) => (v === null || v === undefined) ? i : -1).filter(i => i >= 0);
   if (miss.length === 1 && total !== null && total !== undefined) {
     const d = total - out.reduce((a, v) => a + (Number(v) || 0), 0);
-    if (d >= 0) { out[miss[0]] = d; return { q: out, gb: null, derivedAt: miss[0] }; }
+    if (d >= 0) {
+      out[miss[0]] = d;
+      // ⚠️ KEEP THE GOALS AND BEHINDS THAT WERE REPORTED. Returning gb: null here
+      // threw away three good quarters' worth because the fourth was calculated —
+      // and a derived quarter is common, so this silently emptied the g.b line on
+      // a large share of games. Null only at the derived index, which has none.
+      const keep = gbs.slice(); keep[miss[0]] = null;
+      return { q: out, gb: keep.some(Boolean) ? keep : null, derivedAt: miss[0] };
+    }
   }
   // ⚠️ A PARTIAL BREAKDOWN IS KEPT, NOT DISCARDED.
   //
@@ -197,7 +208,8 @@ function quarters(periods, order, total) {
   // never recorded rather than a zero. A blank quarter and a scoreless quarter
   // are different things and must not look the same.
   if (miss.length < seq.length) {
-    return { q: out, gb: null, derivedAt: null, partial: miss };
+    // Same again: the quarters that WERE recorded keep their goals and behinds.
+    return { q: out, gb: gbs.some(Boolean) ? gbs : null, derivedAt: null, partial: miss };
   }
   return { reason: `${seq.length - miss.length} of ${seq.length}` };
 }
