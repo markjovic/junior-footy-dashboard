@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v14 2026-09-05 qpart-is-a-list';
+const VERSION = 'enrich-games v15 2026-09-05 adaptive-concurrency';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -52,7 +52,7 @@ const QV = 3;
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const store = require('./lib/store');
-const { gqlPost, sleep, logSummary } = require('./lib/playhq');
+const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 const engine = require('./lib/results-engine');
 
 const APPLY      = process.argv.includes('--apply') || process.env.EG_APPLY === 'true';
@@ -483,6 +483,9 @@ async function main() {
     pending++;
   };
 
+  // Current concurrency, tuned as the run proceeds. CONC is the ceiling.
+  let conc = CONC;
+  let clearBatches = 0;
   let gi = 0, stopped = false;
   for (const gradeId of grades) {
     if (overBudget()) { stopped = true; break; }
@@ -618,11 +621,34 @@ async function main() {
       resolved++;
     };
 
+    // ⚠️ ADAPTIVE CONCURRENCY. A fixed 6 tripped PlayHQ's rate limit roughly every
+    // two minutes: all six workers blocked at once, each waited 80 seconds, and
+    // about 40% of the run went on backoff. Measured 2026-09-05.
+    //
+    // Guessing a lower fixed number is another blind experiment costing a
+    // dispatch. Instead the run watches the WAF counter that lib/playhq.js already
+    // keeps and tunes itself: halve on a block, step back up after a clear spell.
+    // A run on a quiet API converges upward; one on a busy API settles low.
     const queue = recs.filter(m => m.gameId);
-    for (let i = 0; i < queue.length; i += CONC) {
+    for (let i = 0; i < queue.length; i += conc) {
       if (overBudget()) { stopped = true; break; }
-      const batch = queue.slice(i, i + CONC);
+      const before = summary().blocked;
+      const batch = queue.slice(i, i + conc);
       await Promise.all(batch.map(m => handleGame(m)));
+      const blockedNow = summary().blocked - before;
+
+      if (blockedNow > 0) {
+        const was = conc;
+        conc = Math.max(1, Math.floor(conc / 2));
+        clearBatches = 0;
+        // The 80s wait has already happened inside gqlPost. Adding more here would
+        // punish twice; the point is only to send fewer next time.
+        if (conc !== was) console.log(`    ↓ concurrency ${was} → ${conc} (rate limited)`);
+      } else if (++clearBatches >= 25 && conc < CONC) {
+        conc++; clearBatches = 0;
+        console.log(`    ↑ concurrency → ${conc} (25 clear batches)`);
+      }
+
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
       if (DELAY) await sleep(DELAY);
     }
@@ -695,6 +721,8 @@ async function main() {
   console.log(`  grade records no quarters      ${noGrade}`);
   console.log(`  refused (ambiguous or wrong)   ${refused}`);
   console.log(`  elapsed                        ${mins()} min`);
+  console.log(`  concurrency ended at           ${conc} (ceiling ${CONC})`);
+  console.log(`  rate-limit blocks              ${summary().blocked}`);
   console.log('─'.repeat(70));
   if (emptyWhy.size) {
     console.log('\n  Why nothing was returned:');
