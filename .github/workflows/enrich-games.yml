@@ -38,9 +38,9 @@ on:
         type: choice
         options: ['false', 'true']
       skip_first:
-        description: 'skip_first — mark the first N grades as walked WITHOUT asking. TEMPORARY: defaults to 600 to carry over runs 1-3, which recorded no cursor. Set to 0 once a pass has completed.'
+        description: 'skip_first — mark the first N grades as walked WITHOUT asking. Leave at 0. Only for carrying over progress from a run that recorded no cursor.'
         required: false
-        default: '600'
+        default: '0'
         type: string
       budget_min:
         description: 'budget_min — stop and hand over after this many minutes. Default 300 (GitHub kills a job at 360).'
