@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v9 2026-09-05 keep-partials';
+const VERSION = 'enrich-games v10 2026-09-05 coverage-report';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -605,7 +605,54 @@ async function main() {
   saveCursor();
   flush('final');
 
-  console.log('\nRESULT');
+  // ⚠️ WHAT THIS RUN DID IS NOT WHAT THE FILE HOLDS.
+  //
+  // Every report so far described only the current run — "quarters found 658" says
+  // nothing about the other 52,000 records, so "do all games have goals and
+  // behinds now?" could not be answered without re-reading the data by hand.
+  //
+  // Counted across EVERYTHING in scope, touched by this run or not.
+  const cov = { total: 0, q: 0, gb: 0, partial: 0, derived: 0, flagged: 0,
+                none: 0, asked: 0, noId: 0 };
+  for (const m of inScope) {
+    cov.total++;
+    if (!m.gameId) cov.noId++;
+    const hasQ = Array.isArray(m.hQ) && m.hQ.length;
+    if (hasQ) {
+      cov.q++;
+      if (Array.isArray(m.hQGB) && Array.isArray(m.aQGB)) cov.gb++;
+      if (m.qPart) cov.partial++;
+      if (m.hQDer !== undefined || m.aQDer !== undefined) cov.derived++;
+      if (m.qFlag) cov.flagged++;
+    } else if (m.qNo) { cov.asked++; }
+    else { cov.none++; }
+  }
+  const pc = (n) => cov.total ? `${(n / cov.total * 100).toFixed(1)}%` : '—';
+
+  console.log('\nCOVERAGE — the whole scope, not just this run');
+  console.log('─'.repeat(70));
+  console.log(`  records in scope               ${cov.total}`);
+  console.log(`  with quarter scores            ${cov.q}  (${pc(cov.q)})`);
+  console.log(`  ...WITH goals and behinds      ${cov.gb}  (${pc(cov.gb)})`);
+  console.log(`  ...partial, some quarters blank ${cov.partial}`);
+  console.log(`  ...a quarter calculated        ${cov.derived}`);
+  console.log(`  ...do not sum to the score     ${cov.flagged}`);
+  console.log(`  asked, PlayHQ had nothing      ${cov.asked}  (${pc(cov.asked)})`);
+  console.log(`  NEVER ASKED                    ${cov.none}  (${pc(cov.none)})`);
+  console.log(`  no gameId, cannot be asked     ${cov.noId}`);
+  console.log('─'.repeat(70));
+  if (cov.none === 0) {
+    console.log('  ✅ Every record in scope has been asked about.');
+  } else {
+    console.log(`  ⚠️ ${cov.none} record(s) have never been asked. Re-run to cover them.`);
+  }
+  if (cov.q && cov.gb < cov.q) {
+    console.log(`  ⚠️ ${cov.q - cov.gb} record(s) have quarters but NO goals/behinds —`);
+    console.log('     stored by a version before v10 captured them. `redo: true`');
+    console.log('     re-fetches those, at the cost of a full walk.');
+  }
+
+  console.log('\nTHIS RUN');
   console.log('─'.repeat(70));
   console.log(`  API calls                      ${calls}`);
   console.log(`  grades walked                  ${gi} of ${grades.length}`);
