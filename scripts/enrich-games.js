@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v16 2026-09-05 learned-ceiling';
+const VERSION = 'enrich-games v17 2026-09-05 gentle-and-recovering';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -75,7 +75,11 @@ const DELAY      = Math.max(0, Number(process.env.EG_DELAY_MS || 120));
 const CONC = Math.max(1, Math.min(12, Number(process.env.EG_CONC || 6)));
 // Minutes of clear running before concurrency steps back up. Time, not batches:
 // a batch is only `conc` requests and passes in seconds.
-const RECOVER_MIN = Math.max(0.5, Number(process.env.EG_RECOVER_MIN || 5));
+const RECOVER_MIN = Math.max(0.25, Number(process.env.EG_RECOVER_MIN || 2));
+// Minutes of clear running AT THE CEILING before the ceiling itself is lifted. The
+// blocks come in bursts rather than as a standing limit, so a cap earned during a
+// bad patch must not survive the whole run.
+const CEIL_RECOVER_MIN = Math.max(1, Number(process.env.EG_CEIL_RECOVER_MIN || 8));
 // ⚠️ PUSHING IS NOT FREE — EVERY PUSH REBUILDS AND REDEPLOYS GITHUB PAGES.
 //
 // v1 pushed at every checkpoint, roughly every 90 seconds, which over a 17-hour
@@ -494,6 +498,7 @@ async function main() {
   let conc = CONC;
   let ceiling = CONC;
   let lastBlockAt = 0;
+  let lastCeilingLift = Date.now();
   let gi = 0, stopped = false;
   for (const gradeId of grades) {
     if (overBudget()) { stopped = true; break; }
@@ -645,29 +650,40 @@ async function main() {
       await Promise.all(batch.map(m => handleGame(m)));
       const blockedNow = summary().blocked - before;
 
+      // ⚠️ A BLOCK COSTS 80 SECONDS WHATEVER THE CONCURRENCY.
+      //
+      // Every in-flight request waits the CloudFront window out IN PARALLEL, so
+      // the penalty per block event is the same at 1 as at 6 — but at 6 the run
+      // does six times as much work between blocks. Measured 2026-09-05 on this
+      // very walk: 17 grades in 0.5 min at concurrency 6, then 12 grades in 7 min
+      // at concurrency 1. Backing off hard made the run SLOWER, not safer.
+      //
+      // So the response is gentle: step down by one, not halve. And the ceiling
+      // RECOVERS — v16 ratcheted it down permanently, so one bad patch capped the
+      // rest of a five-hour walk at 1.
       if (blockedNow > 0) {
         const was = conc;
-        // ⚠️ REMEMBER THE LEVEL THAT FAILED. Without this the run climbs straight
-        // back to the concurrency that just got it blocked, and oscillates there
-        // for the whole walk — measured 2026-09-05: blocked at 6, dropped to 3,
-        // back to 4, blocked again, within three minutes.
-        ceiling = Math.max(1, Math.min(ceiling, was - 1));
-        conc = Math.max(1, Math.floor(conc / 2));
+        if (conc > 1) conc--;
+        ceiling = Math.max(2, Math.min(ceiling, was));
         lastBlockAt = Date.now();
-        // The 80s wait has already happened inside gqlPost. Adding more here would
-        // punish twice; the point is only to send fewer next time.
+        lastCeilingLift = Date.now();
         if (conc !== was) {
-          console.log(`    ↓ concurrency ${was} → ${conc}, ceiling now ${ceiling} (rate limited)`);
+          console.log(`    ↓ concurrency ${was} → ${conc} (rate limited, ceiling ${ceiling})`);
         }
-      } else if (conc < ceiling &&
-                 (Date.now() - lastBlockAt) / 60000 >= RECOVER_MIN) {
-        // ⚠️ RECOVERY IS MEASURED IN TIME, NOT BATCHES. A batch is `conc` games, so
-        // at concurrency 3 twenty-five batches is 75 games — about 25 seconds, and
-        // the run stepped up almost immediately. Minutes clear is the thing that
-        // actually indicates the API is happy.
-        conc++;
-        lastBlockAt = Date.now();
-        console.log(`    ↑ concurrency → ${conc} (${RECOVER_MIN} min clear, ceiling ${ceiling})`);
+      } else {
+        const clearMin = (Date.now() - lastBlockAt) / 60000;
+        if (conc < ceiling && clearMin >= RECOVER_MIN) {
+          conc++;
+          lastBlockAt = Date.now();
+          console.log(`    ↑ concurrency → ${conc} (${RECOVER_MIN} min clear)`);
+        } else if (conc >= ceiling && ceiling < CONC &&
+                   (Date.now() - lastCeilingLift) / 60000 >= CEIL_RECOVER_MIN) {
+          // Sustained clear running at the ceiling means the earlier block was a
+          // burst, not a standing limit. Lift the cap and try again.
+          ceiling++;
+          lastCeilingLift = Date.now();
+          console.log(`    ⇧ ceiling → ${ceiling} (${CEIL_RECOVER_MIN} min clear at the cap)`);
+        }
       }
 
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
