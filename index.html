@@ -592,7 +592,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.214</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.215</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -946,7 +946,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.214</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.215</span>
         </div>
 
 
@@ -4526,9 +4526,20 @@ function selLdrGrade(g) {
   //
   // It does NOT re-render — the tab swap is done by class toggling below, which is
   // why it never went near saveFilters. The URL write has to be explicit.
-  if (S.selLdrGrade === g) return;
+  //
+  // ⚠️ NO EARLY RETURN ON AN UNCHANGED VALUE. Beta 0.203 added
+  // `if (S.selLdrGrade === g) return;` to avoid a redundant URL write. But this
+  // function does not only set state — it toggles the .ldr-tab and .ldr-pane
+  // classes that decide WHICH PANE IS VISIBLE. After changing age or grade the
+  // panes are rebuilt and the visible one has to be re-selected, often to the same
+  // id; returning early left the previous age's pane showing until something else
+  // forced a render. Reported 2026-09-05.
+  //
+  // The redundant URL write it was avoiding costs nothing: syncURL already
+  // compares against the last hash and does nothing when they match.
+  const unchanged = S.selLdrGrade === g;
   S.selLdrGrade=g;
-  saveFilters();
+  if (!unchanged) saveFilters();
   document.querySelectorAll('.ldr-tab').forEach((b,i)=>{const grades=gradesForAge(S.selectedAge).filter(gr=>!S.selGrades.size||S.selGrades.has(gr));b.classList.toggle('on',grades[i]===g);b.style.color=grades[i]===g?(GRADE_COL[gLabel(g)]||GRADE_COL[abbrevGrade(gLabel(g))]||'#fff'):'';});
   document.querySelectorAll('.ldr-pane').forEach(p=>p.classList.toggle('on',p.id===`lp-${g}`));
 }
