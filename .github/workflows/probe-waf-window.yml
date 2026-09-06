@@ -1,0 +1,49 @@
+# .github/workflows/probe-waf-window.yml
+#
+# How long does a CloudFront block actually last?
+#
+# lib/playhq.js sleeps a flat 80 seconds, a figure inherited from a comment and
+# never measured. The enrich walk of 2026-09-05 recorded 122 blocks in 242
+# minutes — 163 minutes asleep, 67% of the run. If the real window is shorter,
+# most of that is waste on every walk and every weekly run.
+#
+# ⚠️ THIS DELIBERATELY TRIPS THE RATE LIMIT. Do not run it while an enrich walk or
+# a scheduled fetch is going — they share the limit.
+#
+# READ-ONLY: writes nothing, commits nothing.
+
+name: Probe WAF Window
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: 'rounds — how many blocks to measure (1-8). Default 3; one sample is not a window.'
+        required: false
+        default: '3'
+        type: string
+      burst:
+        description: 'burst — concurrent requests used to provoke a block (5-60). Default 20.'
+        required: false
+        default: '20'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # NOTE: no actions/setup-node. It changes the runner's outbound fingerprint
+      # and produces 403 CLOUDFRONT-BLOCK on every PlayHQ request — which would be
+      # indistinguishable from the block being measured.
+      - name: Probe
+        env:
+          PROBE_ROUNDS: ${{ inputs.rounds }}
+          PROBE_BURST: ${{ inputs.burst }}
+        run: node scripts/probe-waf-window.js
