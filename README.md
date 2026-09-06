@@ -1,5 +1,5 @@
 <!-- README.md -->
-# Local Footy Dashboard — Beta 0.201
+# Local Footy Dashboard — Beta 0.216
 
 A single-file HTML dashboard for AFL football results, automatically fetched from PlayHQ. Renders a live ladder, results, top scorers, Game of the Week, finals progress, and player profiles across all age groups and grades for multiple competitions simultaneously.
 
@@ -48,6 +48,8 @@ workers/
     probe-refetch-round.yml ← Manual, read-only diagnostic
     build-player-index.yml  ← SCHEDULED weekly (Mon 03:15 UTC) — the only workflow
                               with its own cron; everything else is Worker-driven
+    enrich-games.yml        ← Self-chaining archive walk. Shares the
+                              playhq-data-write concurrency lock
     repo-audit.yml          ← Manual, read-only — inventory, duplicates, orphans
     repo-tidy.yml           ← Manual — removes dead files, dry run by default
     probe-finals-rounds.yml ← Manual, read-only diagnostic
@@ -73,6 +75,16 @@ scripts/
   probe-refetch-round.js    ← Read-only: does discoverFixtureByRound re-serve a
                               completed round? (it does, settled 2026-08-19)
   build-player-index.js     ← Builds the cross-season search index; runs weekly
+  enrich-games.js           ← Backfills game ids AND quarter scores across every
+                              season, from one dispatch. Self-chaining: commits as
+                              it goes, stops on a time budget, restarts itself.
+                              Paced at 100 calls/80s — PlayHQ's measured limit
+  probe-waf-window.js       ← Read-only: how long does a rate-limit block last?
+                              (76-77s, measured; the 80s sleep is correct)
+  probe-round-periods.js    ← Read-only: can the fixture query carry quarters?
+                              (it can — engine v25 uses it)
+  probe-preseason-roster.js ← Read-only: can next season's registrations be seen
+                              before a fixture exists? (yes, 100% on afl)
   split-by-season.js        ← One-off migration: data/orgs → data/seasons
   audit-data.js             ← Read-only data audit (sizes, gaps, grade identity, coverage)
   report-field-usage.js     ← Which scripts reference a stored field. SOURCE files only —
@@ -752,6 +764,28 @@ Was scoped to the selected season.
 
 ---
 
+### Quarter scores
+
+A three-state control in the Results header — **off / total / each**. Cumulative
+matches PlayHQ's own "END OF PERIOD" display; per quarter shows where a game
+turned. Goals and behinds appear beneath the points where PlayHQ reported them.
+
+Roughly a third of games have no breakdown, because nobody recorded one. Those rows
+show nothing rather than a row of dashes.
+
+Fetched by `enrich-games.js` for history and, since engine v25, by every ordinary
+results run at no extra cost — `statistics.<side>.periods` rides along with the
+fixture query.
+
+### Live scores
+
+A game being scored on the PlayHQ app shows a running score with a LIVE badge and
+the age of the reading. It counts towards **no** ladder, percentage or tally until
+PlayHQ confirms the result, at which point the confirmed result supersedes it.
+
+Only games being scored on the app have one. A game that has finished and awaits
+confirmation carries no score in the API at all.
+
 ## Known issues
 
 - **`logoKey()` colour stripping does not work.** `new RegExp('\s+' + c + '\s*$')` uses a plain string, so `\s` becomes a literal `s`. Unnoticed because `teamLogos` is keyed by full team name and usually hits exactly.
@@ -805,6 +839,10 @@ Was scoped to the selected season.
 
 | Version | Key changes |
 |---------|-------------|
+| 0.210–0.216 | Quarter display rebuilt: aligned grid under the score, goals and behinds, gaps as dashes, cumulative totals stopping at a gap |
+| 0.207–0.209 | Quarter scores: a three-state toggle (off / total / each), goals and behinds, markers for calculated quarters and for breakdowns that do not sum |
+| 0.204–0.206 | Live scores from the spectator endpoint, counting towards nothing; finals state carried in the URL |
+| 0.202–0.203 | URL deep linking with a share button; the ladder tab travels in the link |
 | 0.201 | Search index fetched when a player panel opens, not only on a search |
 | 0.199–0.200 | Season switcher in the player panel header, year only |
 | 0.197 | Player panel rows join on PlayHQ's `gameId`, not on team names |
