@@ -592,7 +592,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.215</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.216</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -946,7 +946,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.215</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.216</span>
         </div>
 
 
@@ -5541,9 +5541,22 @@ function quarterLine(m) {
   // PlayHQ prints under each column. Points-only where the breakdown is absent.
   const hgb = Array.isArray(m.hQGB) ? m.hQGB : null;
   const agb = Array.isArray(m.aQGB) ? m.aQGB : null;
+  // ⚠️ AN ENTRY CAN BE NULL. Since engine v27 / enrich v12 the goals-and-behinds
+  // array keeps the quarters PlayHQ DID report and holds null for the rest —
+  // [[1,4], null, [4,2], null]. Destructuring null throws, which took render()
+  // down and left the whole page blank. Reported 2026-09-05.
+  //
+  // Once a quarter is missing the running total cannot continue, so everything
+  // after a gap is null too — the same rule the points use. A cumulative figure
+  // that silently skips a missing quarter is a wrong number.
   const cumGB = (gb) => {
-    let g = 0, b = 0;
-    return gb.map(([q, r]) => { g += q; b += r; return [g, b]; });
+    let g = 0, b = 0, broken = false;
+    return gb.map((x) => {
+      if (!Array.isArray(x)) { broken = true; return null; }
+      if (broken) return null;
+      g += (x[0] || 0); b += (x[1] || 0);
+      return [g, b];
+    });
   };
   const hG = hgb ? (S.qtrMode === 'cum' ? cumGB(hgb) : hgb) : null;
   const aG = agb ? (S.qtrMode === 'cum' ? cumGB(agb) : agb) : null;
