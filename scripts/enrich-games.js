@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v17 2026-09-05 gentle-and-recovering';
+const VERSION = 'enrich-games v18 2026-09-05 honest-gb-reason';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -708,7 +708,7 @@ async function main() {
   //
   // Counted across EVERYTHING in scope, touched by this run or not.
   const cov = { total: 0, q: 0, gb: 0, partial: 0, derived: 0, flagged: 0,
-                none: 0, asked: 0, noId: 0 };
+                none: 0, asked: 0, noId: 0, qOldVer: 0, gbMissingCurrent: 0 };
   for (const m of inScope) {
     cov.total++;
     if (!m.gameId) cov.noId++;
@@ -716,6 +716,8 @@ async function main() {
     if (hasQ) {
       cov.q++;
       if (Array.isArray(m.hQGB) && Array.isArray(m.aQGB)) cov.gb++;
+      else if (m.qV === QV) cov.gbMissingCurrent++;   // asked; PlayHQ had none
+      if (m.qV !== QV) cov.qOldVer++;                 // older extraction
       if (m.qPart) cov.partial++;
       if (m.hQDer !== undefined || m.aQDer !== undefined) cov.derived++;
       if (m.qFlag) cov.flagged++;
@@ -742,9 +744,23 @@ async function main() {
     console.log(`  ⚠️ ${cov.none} record(s) have never been asked. Re-run to cover them.`);
   }
   if (cov.q && cov.gb < cov.q) {
-    console.log(`  ⚠️ ${cov.q - cov.gb} record(s) have quarters but NO goals/behinds —`);
-    console.log('     stored by a version before v10 captured them. `redo: true`');
-    console.log('     re-fetches those, at the cost of a full walk.');
+    // ⚠️ SAY WHICH, DO NOT ASSERT A CAUSE.
+    //
+    // This used to blame "a version before v10" for every record without goals
+    // and behinds. Once qV reached 3 that was simply false — those records HAD
+    // been re-asked, and PlayHQ had not supplied the breakdown. A message that
+    // names a cause it cannot know sends the reader to re-run something that will
+    // change nothing.
+    const old = cov.qOldVer, now = cov.gbMissingCurrent;
+    console.log(`  ⚠️ ${cov.q - cov.gb} record(s) have quarters but no goals/behinds:`);
+    if (now) {
+      console.log(`       ${now} were asked by THIS extraction and PlayHQ did not`);
+      console.log('       supply them. Re-running changes nothing.');
+    }
+    if (old) {
+      console.log(`       ${old} were stored by an older extraction and will be`);
+      console.log('       re-asked on the next run.');
+    }
   }
 
   console.log('\nTHIS RUN');
