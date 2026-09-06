@@ -34,7 +34,7 @@
 
 'use strict';
 
-const VERSION = 'probe-waf-window v1 2026-09-05';
+const VERSION = 'probe-waf-window v2 2026-09-05 discovergame-sustained';
 
 const https = require('https');
 const crypto = require('crypto');
@@ -42,9 +42,15 @@ const store = require('./lib/store');
 const engine = require('./lib/results-engine');
 
 const ROUNDS = Math.max(1, Math.min(8, Number(process.env.PROBE_ROUNDS || 3)));
-const BURST  = Math.max(5, Math.min(60, Number(process.env.PROBE_BURST || 20)));
+// Concurrency, matching what the enrich walk actually uses rather than a burst
+// size — the point is to reproduce its conditions.
+const BURST  = Math.max(1, Math.min(20, Number(process.env.PROBE_BURST || 6)));
 const POLL_S = Math.max(2, Number(process.env.PROBE_POLL_S || 5));
 const GIVEUP_S = Math.max(60, Number(process.env.PROBE_GIVEUP_S || 240));
+// How long, and how many calls, to keep pushing before accepting that this rate
+// does not trip the limit.
+const PROVOKE_S = Math.max(30, Number(process.env.PROBE_PROVOKE_S || 300));
+const MAX_CALLS = Math.max(100, Number(process.env.PROBE_MAX_CALLS || 3000));
 
 // ⚠️ A RAW POST, NOT lib/playhq.js. That module sleeps 80 seconds on a block,
 // which is exactly the behaviour being measured — using it would return the
@@ -87,40 +93,74 @@ async function main() {
   console.log('⚠️ This deliberately trips the rate limit. Do not run it alongside');
   console.log('   an enrich walk or a scheduled fetch.\n');
 
+  // ⚠️ discoverGame, NOT discoverGrade.
+  //
+  // v1 burst 60 discoverGrade calls and never tripped the limit, while the enrich
+  // walk was blocked 122 times — EVERY ONE of them reported "blocked on
+  // DiscoverGame". Never on discoverGrade, never on discoverFixtureByRound. So
+  // v1 measured an operation that is not the one being limited, and concluded
+  // nothing.
+  //
+  // ⚠️ AND SUSTAINED, NOT A BURST. The enrich run reaches its first block after
+  // roughly a thousand calls, not sixty, so the limit may be cumulative over a
+  // window rather than about instantaneous concurrency. A short burst cannot
+  // reach it.
   const data = store.load(null, { players: false });
-  const grade = (data.matches || []).find(m => m.gradeId);
-  if (!grade) { console.error('No stored record carries a gradeId.'); process.exit(1); }
+  const ids = (data.matches || [])
+    .filter(m => m.gameId).slice(0, 4000).map(m => m.gameId);
+  if (ids.length < 100) {
+    console.error(`Only ${ids.length} stored record(s) carry a gameId — not enough`);
+    console.error('to sustain load. Run enrich-games first.');
+    process.exit(1);
+  }
+  console.log(`${ids.length} game id(s) available to cycle through.\n`);
 
-  const body = {
-    operationName: 'discoverGrade',
-    query: engine.Q_GRADE_ROUNDS,
-    variables: { gradeID: grade.gradeId },
-  };
+  const Q_GAME = `query DiscoverGame($gameID: ID!) {
+    discoverGame(gameID: $gameID) {
+      id
+      statistics { home { periods { period { value } statistics { count type { value } } } } }
+    }
+  }`;
+  let idx = 0;
+  const nextBody = () => ({
+    operationName: 'DiscoverGame',
+    query: Q_GAME,
+    variables: { gameID: ids[idx++ % ids.length] },
+  });
 
   const windows = [];
   for (let r = 1; r <= ROUNDS; r++) {
     console.log(`ROUND ${r} of ${ROUNDS}`);
 
-    // Burst until something blocks.
-    let blockedAt = null;
-    for (let i = 0; i < BURST && !blockedAt; i += 5) {
+    // Sustain load at the concurrency the enrich run uses, until it blocks.
+    let blockedAt = null, sent = 0;
+    const started = Date.now();
+    while (!blockedAt && sent < MAX_CALLS &&
+           (Date.now() - started) / 1000 < PROVOKE_S) {
       const batch = await Promise.all(
-        Array.from({ length: 5 }, () => rawPost(body)));
+        Array.from({ length: BURST }, () => rawPost(nextBody())));
+      sent += BURST;
       if (batch.some(isBlocked)) blockedAt = Date.now();
+      else if (sent % 200 < BURST) {
+        process.stdout.write(`    ${sent} calls, no block yet ` +
+          `(${((Date.now() - started) / 60000).toFixed(1)} min)\r`);
+      }
     }
     if (!blockedAt) {
-      console.log(`  ${BURST} concurrent request(s) did not trip it — raising the burst`);
-      console.log('  would be the next step, but a limit this tolerant is not what');
-      console.log('  the enrich run is hitting. Try PROBE_BURST=40.\n');
+      console.log(`    ${sent} call(s) in ${((Date.now() - started) / 60000).toFixed(1)} min ` +
+        `did not trip it.                `);
+      console.log('    So the block is not reached by volume alone at this rate —');
+      console.log('    which itself is worth knowing. Raise PROBE_BURST or MAX_CALLS.\n');
       continue;
     }
-    console.log(`  blocked after a burst — polling every ${POLL_S}s`);
+    console.log(`    blocked after ${sent} call(s) ` +
+      `(${((Date.now() - started) / 60000).toFixed(1)} min) — polling every ${POLL_S}s`);
 
     // Poll gently until it clears.
     let cleared = null;
     while (!cleared && (Date.now() - blockedAt) / 1000 < GIVEUP_S) {
       await sleep(POLL_S * 1000);
-      const res = await rawPost(body);
+      const res = await rawPost(nextBody());
       const secs = ((Date.now() - blockedAt) / 1000).toFixed(0);
       if (isBlocked(res)) {
         process.stdout.write(`    ${secs}s still blocked\r`);
