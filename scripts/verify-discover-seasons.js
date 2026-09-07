@@ -5,6 +5,8 @@
 // flags (storage_ingestion_design.md §6.1a) and, from v2, EVERY key it did not
 // itself derive — `state` and `stateAt` for off-season mode, or anything added
 // later. Measured 2026-09-07: v2 of the script wiped those on every run.
+// From v3 it also checks the season `state` the script derives — PlayHQ's status
+// first, the local backstop second (offseason_mode_design.md).
 //
 // It runs the REAL script end to end as a child process, with only the network
 // stubbed — a stubbed scripts/lib/playhq.js returning canned GraphQL responses.
@@ -23,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-discover-seasons v2 2026-09-07';
+const VERSION = 'verify-discover-seasons v3 2026-09-07';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'discover-seasons.js');
@@ -35,7 +37,7 @@ if (!fs.existsSync(REAL)) {
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'discover-verify-'));
 const CORE = path.join(TMP, 'data', 'core.json');
 fs.mkdirSync(path.join(TMP, 'scripts', 'lib'), { recursive: true });
-fs.mkdirSync(path.join(TMP, 'data'), { recursive: true });
+fs.mkdirSync(path.join(TMP, 'data', 'seasons'), { recursive: true });
 fs.copyFileSync(REAL, path.join(TMP, 'scripts', 'discover-seasons.js'));
 
 // ── The stub. Only the network. ──────────────────────────────────────────────
@@ -53,8 +55,17 @@ const COMPS = [{
       status: { name: 'Completed', value: 'COMPLETED' } },
   ],
 }];
+// A section can replace the canned competitions by writing stub-comps.json.
+// An array applies to every organisation; an object is keyed by organisation
+// code, and a code with no entry gets an empty array — a legitimate PlayHQ answer.
+function comps(code) {
+  const p = require('path').join(__dirname, '..', '..', 'stub-comps.json');
+  if (!require('fs').existsSync(p)) return COMPS;
+  const o = JSON.parse(require('fs').readFileSync(p, 'utf8'));
+  return Array.isArray(o) ? o : (o[code] || []);
+}
 async function gqlPost(query, vars, opName) {
-  if (opName === 'discoverCompetitions') return { data: { discoverCompetitions: COMPS } };
+  if (opName === 'discoverCompetitions') return { data: { discoverCompetitions: comps(vars.organisationID) } };
   if (opName === 'discoverOrganisation') {
     return { data: { discoverOrganisation: { id: '383836bb', type: 'ASSOCIATION',
       name: 'Eastern Football Netball League',
@@ -110,7 +121,7 @@ writeCore([
 ]);
 let r = run();
 ok('script ran without a fatal error', r.code === 0 || r.code === 2, `exit ${r.code}`);
-ok('version line printed', /v3 2026-09-07 carry-forward-all-keys/.test(r.out));
+ok('version line printed', /v4 2026-09-07 season-state/.test(r.out));
 ok('carry-forward count reported', /carried-forward phase records: 2/.test(r.out),
   (r.out.match(/carried-forward phase records: \d+/) || ['not printed'])[0]);
 ok('2025 kept results=true', phasesOf('75d8a232') && phasesOf('75d8a232').results === true,
@@ -203,10 +214,137 @@ ok('2026 kept stateAt', e26.stateAt === '2026-04-01T00:00:00.000Z', e26.stateAt)
 ok('2026 stale status recomputed from the API', e26.status === 'ACTIVE', e26.status);
 ok('2026 stale retired recomputed from the API', e26.retired === false, String(e26.retired));
 ok('2026 phases still carried', e26.phases && e26.phases.matches === 5420);
-ok('a season absent from the prior manifest has no state', (() => {
+ok('a season absent from the prior manifest still gets a state and stateAt', (() => {
   writeCore([]); run();
-  return read().manifest.every((m) => m.state === undefined && m.stateAt === undefined);
+  return read().manifest.every((m) => typeof m.state === 'string' && typeof m.stateAt === 'string');
 })());
+
+// ── 7. Season state ──────────────────────────────────────────────────────────
+// PlayHQ's status decides; the backstop only ever promotes an ACTIVE tracked
+// season to complete, and only with no scheduled fixture and 14+ quiet days.
+console.log('\n7  Season state: PlayHQ status first, local backstop second');
+
+const today = new Date().toISOString().slice(0, 10);
+function daysAgo(n) {
+  const [y, m, d] = today.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - n * 86400000).toISOString().slice(0, 10);
+}
+const STUB = path.join(TMP, 'stub-comps.json');
+const season = (id, name, status) => ({
+  id, name, startDate: `${+name - 1}-10-01`, endDate: `${name}-09-30`,
+  status: status === undefined ? null : (status === 'WEIRD' ? { name: 'Weird', value: 'DRAFT_THING' } : { name: status, value: status }),
+});
+function stubSeasons(list) {
+  fs.writeFileSync(STUB, JSON.stringify([{ id: '23965e53', name: 'Community Football',
+    organisation: { id: '383836bb', name: 'Eastern Football Netball League' }, seasons: list }]));
+}
+function writeSeasonFile(id, matches) {
+  fs.writeFileSync(path.join(TMP, 'data', 'seasons', `${id}-core.json`),
+    JSON.stringify({ meta: { seasonId: id }, matches, roster: {}, gradeMeta: {} }));
+}
+const result = (date) => ({ id: 'x', compName: 'EFNL 2026', round: 1, home: 'A', away: 'B', hScore: 1, aScore: 2, date });
+const fixture = (date) => ({ ...result(date), hScore: null, aScore: null, scheduled: true });
+const bye = () => ({ ...result(''), isBye: true });
+const entry = (id) => read().manifest.find((m) => m.seasonId === id);
+// EFNL 2026 is the tracked one (config.json names it), so the backstop reads its
+// file. 75d8a232 has no compName in these fixtures unless matched — it is 2025,
+// and config only names 2026, so it stays untracked... except the script matches
+// short name "EFNL" to the organisation and builds compName for EVERY season of
+// that organisation. So both are tracked. Use a third id for an untracked one by
+// giving it no season file.
+writeCore([]);
+
+// 7a. PlayHQ COMPLETED -> complete, whatever the file says
+stubSeasons([season('75d8a232', '2025', 'COMPLETED')]);
+writeSeasonFile('75d8a232', [result(daysAgo(1)), fixture(daysAgo(-7))]);
+r = run();
+ok('7a COMPLETED -> complete even with a fixture on file', entry('75d8a232').state === 'complete', entry('75d8a232').state);
+ok('7a stateAt set', /^\d{4}-\d{2}-\d{2}T/.test(entry('75d8a232').stateAt || ''), entry('75d8a232').stateAt);
+ok('7a state count reported', /season state: \{"complete":1\}/.test(r.out), (r.out.match(/season state: .*/) || ['not printed'])[0]);
+
+// 7b. ACTIVE with a scheduled fixture -> active, even if the last result is old
+stubSeasons([season('2dcbf383', '2026', 'ACTIVE')]);
+writeSeasonFile('2dcbf383', [result(daysAgo(30)), fixture(daysAgo(-5)), bye()]);
+r = run();
+ok('7b ACTIVE + fixture -> active', entry('2dcbf383').state === 'active', entry('2dcbf383').state);
+ok('7b backstop line names the fixture', /backstop .*1 scheduled fixture\(s\) remain/.test(r.out));
+const firstStateAt = entry('2dcbf383').stateAt;
+
+// 7c. ACTIVE, no fixture, last result 5 days ago -> still active; stateAt unchanged
+writeSeasonFile('2dcbf383', [result(daysAgo(5)), bye()]);
+r = run();
+ok('7c ACTIVE, quiet 5 days -> active', entry('2dcbf383').state === 'active', entry('2dcbf383').state);
+ok('7c stateAt did not move while state held', entry('2dcbf383').stateAt === firstStateAt);
+ok('7c no transition reported', /0 transition\(s\)/.test(r.out));
+
+// 7d. ACTIVE, no fixture, last result exactly 14 days ago -> complete via backstop
+writeSeasonFile('2dcbf383', [result(daysAgo(14)), bye()]);
+r = run();
+ok('7d ACTIVE, quiet 14 days -> complete', entry('2dcbf383').state === 'complete', entry('2dcbf383').state);
+ok('7d transition logged', /STATE 2dcbf383 EFNL 2026 active -> complete \(backstop/.test(r.out));
+ok('7d stateAt moved on the transition', entry('2dcbf383').stateAt !== firstStateAt);
+ok('7d run reports a change (exit 0)', r.code === 0, `exit ${r.code}`);
+const completeAt = entry('2dcbf383').stateAt;
+
+// 7e. 13 days is NOT enough — the day before the cutoff stays active
+writeSeasonFile('2dcbf383', [result(daysAgo(13)), bye()]);
+r = run();
+ok('7e quiet 13 days -> active (cutoff is inclusive at 14, not before)', entry('2dcbf383').state === 'active', entry('2dcbf383').state);
+ok('7e reversal logged', /STATE 2dcbf383 EFNL 2026 complete -> active/.test(r.out));
+
+// 7f. A late result arriving after a backstop-complete flips it back
+writeSeasonFile('2dcbf383', [result(daysAgo(20)), bye()]);
+run();
+ok('7f setup: complete again', entry('2dcbf383').state === 'complete');
+writeSeasonFile('2dcbf383', [result(daysAgo(20)), result(daysAgo(2)), bye()]);
+r = run();
+ok('7f late result -> back to active', entry('2dcbf383').state === 'active', entry('2dcbf383').state);
+
+// 7g. ACTIVE with no season file at all -> active, from status alone
+fs.rmSync(path.join(TMP, 'data', 'seasons', '2dcbf383-core.json'));
+r = run();
+ok('7g ACTIVE, no file -> active', entry('2dcbf383').state === 'active');
+ok('7g reason is status alone', /backstop 2dcbf383 EFNL 2026: PlayHQ ACTIVE — active/.test(r.out));
+
+// 7h. UPCOMING -> upcoming; a brand-new season is announced
+stubSeasons([season('2dcbf383', '2026', 'ACTIVE'), season('aaaa1111', '2027', 'UPCOMING')]);
+r = run();
+ok('7h UPCOMING -> upcoming', entry('aaaa1111').state === 'upcoming', entry('aaaa1111').state);
+ok('7h new season announced', /NEW season aaaa1111 EFNL 2027 status=UPCOMING/.test(r.out));
+ok('7h existing season not announced as new', !/NEW season 2dcbf383/.test(r.out));
+
+// 7i. Unrecognised status with a prior state -> prior kept, WARNING printed
+stubSeasons([season('2dcbf383', '2026', 'WEIRD')]);
+r = run();
+ok('7i unrecognised status keeps prior state', entry('2dcbf383').state === 'active', entry('2dcbf383').state);
+ok('7i status stored as-is', entry('2dcbf383').status === 'DRAFT_THING', entry('2dcbf383').status);
+ok('7i WARNING printed', /WARNING 2dcbf383 EFNL 2026: status "DRAFT_THING" unrecognised — prior state kept/.test(r.out));
+
+// 7j. Null status, no prior state -> active, WARNING printed. The configured
+// 2026 season stays in the stub, or the config match fails and the run exits 1
+// for a reason unrelated to state.
+stubSeasons([season('2dcbf383', '2026', 'ACTIVE'), season('bbbb2222', '2027')]);
+r = run();
+ok('7j null status, no prior -> active', entry('bbbb2222').state === 'active', entry('bbbb2222').state);
+ok('7j WARNING names the default', /WARNING bbbb2222 EFNL 2027: status null unrecognised, no prior state — defaulting to active/.test(r.out));
+
+// 7k. An organisation with no competitions at all is not a failure. A second
+// code is configured; the stub answers it with an empty array (462 of 1,175
+// real organisations do exactly this).
+const CONFIG = path.join(TMP, 'config.json');
+const savedConfig = fs.readFileSync(CONFIG, 'utf8');
+fs.writeFileSync(CONFIG, JSON.stringify({ ...JSON.parse(savedConfig), organisationCodes: ['383836bb', 'e0e0e0e0'] }));
+const stubObj = {}; stubObj['383836bb'] = [{ id: '23965e53', name: 'Community Football',
+  organisation: { id: '383836bb', name: 'Eastern Football Netball League' },
+  seasons: [season('2dcbf383', '2026', 'ACTIVE')] }];
+fs.writeFileSync(STUB, JSON.stringify(stubObj));
+r = run();
+ok('7k zero competitions -> ran, no failure exit', r.code === 0 || r.code === 2, `exit ${r.code}`);
+ok('7k zero competitions -> no FAILED line', !/FAILED/.test(r.out));
+ok('7k empty organisation reported as 0 comps, 0 seasons', /e0e0e0e0 .*0 comp\(s\), 0 season\(s\)/.test(r.out));
+ok('7k the real season still resolved', entry('2dcbf383').state === 'active');
+fs.writeFileSync(CONFIG, savedConfig);
+fs.rmSync(STUB);
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

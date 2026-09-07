@@ -42,9 +42,24 @@ const ORG_DISCOVERY_PATH = path.join(ROOT, 'data', 'org-discovery.json');
 // amended finals results.
 const RETIRE_AFTER_DAYS = 30;
 
+// ── Season state — offseason_mode_design.md, approved 2026-09-07 ─────────────
+// `state` is upcoming | active | complete, beside PlayHQ's own word in `status`.
+// `retired` is a DIFFERENT thing (no longer walked) and is not touched here.
+//
+// PlayHQ's status wins. The backstop exists for the window before PlayHQ flips
+// an ACTIVE season to COMPLETED: no scheduled fixture left in the season file,
+// and no new result for this many days. Measured 2026-08-31: EFNL Division 1's
+// finals started a week before Premier's, so one quiet weekend proves nothing —
+// two weeks is what protects the grand finals.
+const BACKSTOP_QUIET_DAYS = 14;
+const KNOWN_STATUS = new Set(['UPCOMING', 'ACTIVE', 'COMPLETED']);
+const SEASONS_DIR = path.join(ROOT, 'data', 'seasons');
+// One timestamp per run, so every transition in a run carries the same stateAt.
+const NOW = new Date().toISOString();
+
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'v3 2026-09-07 carry-forward-all-keys';
+const VERSION = 'v4 2026-09-07 season-state';
 
 // seasons takes a required organisationID argument, and organisationID must be
 // the 8-character organisation code rather than the UUID. Both verified
@@ -90,6 +105,58 @@ function isRetired(season) {
 
 function log(...a) {
   console.log(...a);
+}
+
+// Reads the season's core file and says whether the local evidence points to a
+// finished season. Returns null when there is no file to read — an untracked
+// season, or one nothing has fetched yet — so the caller falls back to status.
+//
+// Two conditions, both required. fetch-fixtures.js purges and rewrites every
+// `scheduled: true` record on each run, so their presence means PlayHQ still
+// lists future games, provisional finals included. `date` is '' on byes and
+// partial records and is skipped; it is otherwise a YYYY-MM-DD string, compared
+// as a string — never new Date(str).
+function backstop(seasonId) {
+  const p = path.join(SEASONS_DIR, `${seasonId}-core.json`);
+  if (!fs.existsSync(p)) return null;
+  let payload;
+  try { payload = JSON.parse(fs.readFileSync(p, 'utf8')); }
+  catch (e) { return { complete: false, reason: `season file unreadable: ${e.message}` }; }
+  const matches = Array.isArray(payload.matches) ? payload.matches : [];
+  let scheduled = 0;
+  let lastResult = '';
+  for (const m of matches) {
+    if (m.scheduled === true) { scheduled++; continue; }
+    if (m.date && m.date > lastResult) lastResult = m.date;
+  }
+  if (scheduled) return { complete: false, reason: `${scheduled} scheduled fixture(s) remain` };
+  if (!lastResult) return { complete: false, reason: 'no dated result stored' };
+  const quietFrom = addDays(lastResult, BACKSTOP_QUIET_DAYS);
+  if (quietFrom <= TODAY) {
+    return { complete: true, reason: `no fixtures, last result ${lastResult}, quiet ${BACKSTOP_QUIET_DAYS}+ days` };
+  }
+  return { complete: false, reason: `last result ${lastResult}, quiet since then but under ${BACKSTOP_QUIET_DAYS} days` };
+}
+
+// The rule, in order. `entry` is the manifest entry AFTER the prior one was
+// spread under it, so entry.state is whatever the last run decided.
+function deriveState(entry) {
+  const status = entry.status;
+  if (status === 'COMPLETED') return { state: 'complete', reason: 'PlayHQ COMPLETED' };
+  if (status === 'UPCOMING') return { state: 'upcoming', reason: 'PlayHQ UPCOMING' };
+  if (status === 'ACTIVE') {
+    // Only a tracked season has a file worth reading. Untracked ones follow
+    // status alone.
+    const b = entry.compName ? backstop(entry.seasonId) : null;
+    if (b && b.complete) return { state: 'complete', reason: `backstop: ${b.reason}` };
+    return { state: 'active', reason: b ? `PlayHQ ACTIVE; ${b.reason}` : 'PlayHQ ACTIVE' };
+  }
+  // Anything else — null, a draft state, a value PlayHQ adds later. Recorded
+  // as-is in `status` (the enum is not closed); for `state`, keep what the last
+  // run decided, or fail towards fetching too much rather than announcing a
+  // completed season that is not.
+  if (entry.state) return { state: entry.state, reason: `status ${JSON.stringify(status)} unrecognised — prior state kept`, warn: true };
+  return { state: 'active', reason: `status ${JSON.stringify(status)} unrecognised, no prior state — defaulting to active`, warn: true };
 }
 
 async function fetchOrganisation(code) {
@@ -366,6 +433,31 @@ async function main() {
 
   manifest.sort((a, b) => a.org.localeCompare(b.org) || String(b.endDate || '').localeCompare(String(a.endDate || '')));
 
+  // ── Season state ───────────────────────────────────────────────────────────
+  // Recomputed every run, not sticky: if PlayHQ reopens a season or a late
+  // result lands, the state follows. Only stateAt is history, and it moves only
+  // when the state does.
+  const byState = {};
+  let transitions = 0;
+  for (const m of manifest) {
+    const label = `${m.seasonId} ${m.compName || m.orgName + ' ' + m.seasonName}`;
+    if (!prior.has(m.seasonId)) log(`  NEW season ${label} status=${m.status}`);
+    const before = m.state;
+    const { state, reason, warn } = deriveState(m);
+    if (warn) log(`  WARNING ${label}: ${reason}`);
+    m.state = state;
+    if (state !== before || !m.stateAt) {
+      m.stateAt = NOW;
+      if (before !== undefined) {
+        transitions++;
+        log(`  STATE ${label} ${before} -> ${state} (${reason})`);
+      }
+    }
+    // Tracked ACTIVE seasons are the ones the backstop watches — say what it saw.
+    if (m.status === 'ACTIVE' && m.compName) log(`  backstop ${label}: ${reason} — ${state}`);
+    byState[state] = (byState[state] || 0) + 1;
+  }
+
   // ── Summary ────────────────────────────────────────────────────────────────
   const live = manifest.filter((m) => !m.retired);
   const byStatus = {};
@@ -375,6 +467,7 @@ async function main() {
   log(`organisations resolved: ${Object.keys(organisations).length} of ${codes.length}`);
   log(`seasons: ${manifest.length} (${live.length} live, ${manifest.length - live.length} retired)`);
   log(`season status: ${JSON.stringify(byStatus)}`);
+  log(`season state: ${JSON.stringify(byState)}, ${transitions} transition(s) this run`);
   log(`matched to existing config: ${shortNameByCode.size} of ${existingComps.length}`);
   if (failures.length) log(`failures: ${failures.length} — ${failures.map((f) => f.code).join(', ')}`);
   // A counter without examples cannot be checked.
