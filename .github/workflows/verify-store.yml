@@ -1,9 +1,9 @@
 # .github/workflows/verify-store.yml
 #
 # Runs every verification and prints ONE summary at the end, so a green or red
-# run is readable without expanding seven separate groups.
+# run is readable without expanding eight separate groups.
 #
-# All seven run even if an earlier one fails, so a single run gives the complete
+# All eight run even if an earlier one fails, so a single run gives the complete
 # picture rather than stopping at the first failure. The job fails at the end if
 # any of them did.
 #
@@ -58,7 +58,9 @@ jobs:
                    scripts/rebuild-grade-meta.js \
                    scripts/split-by-season.js \
                    scripts/verify-per-season.js \
-                   scripts/verify-audit.js; do
+                   scripts/verify-audit.js \
+                   scripts/walk-registrations.js \
+                   scripts/verify-registrations.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
           done
@@ -78,7 +80,8 @@ jobs:
           # on 2026-08-13 by repo-tidy.js in the storage2026 group.
           SUITES="verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades \
-                  verify-rebuild-grade-meta verify-per-season verify-audit"
+                  verify-rebuild-grade-meta verify-per-season verify-audit \
+                  verify-registrations"
           FAILED=0
           SUMMARY=""
           for s in $SUITES; do
