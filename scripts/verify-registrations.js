@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-registrations v1 2026-09-07';
+const VERSION = 'verify-registrations v2 2026-09-07';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'walk-registrations.js');
@@ -100,6 +100,15 @@ answers.profiles.w001 = [own('PARKSIDE', 'Parkside FC'), old25, reg27('PARKSIDE'
 answers.profiles.w002 = [own('PARKSIDE', 'Parkside FC'), reg27('NEWPORT', 'Newport FC', 'Newport U13 Blue')]; // moved, assigned
 answers.profiles.w003 = [own('PARKSIDE', 'Parkside FC'), gipps];                                                // gone to Gippsland
 answers.profiles.w004 = 'NOT_FOUND';
+// w009: CONCURRENT registrations — a tracked EFNL 2026 season (starts 2025-10-01,
+// overlaps) and an outside 2026 season starting in April. Neither is next season.
+const efnl26 = { id: 't-e', name: 'Blackburn U12', season: { id: E26, name: '2026', startDate: '2025-10-01', endDate: '2026-09-30', status: { value: 'ACTIVE' }, competition: { id: 'e', name: 'Eastern Football Netball League' } }, organisation: { id: 'BLACKBURN', name: 'Blackburn FC' } };
+const school26 = { id: 't-s', name: 'Scotch 1st XVIII', season: { id: 'aps2026', name: '2026', startDate: '2026-04-20', endDate: '2026-08-30', status: { value: 'ACTIVE' }, competition: { id: 'aps', name: 'APS Football' } }, organisation: { id: 'SCOTCH', name: 'Scotch College' } };
+answers.profiles.w009 = [own('PARKSIDE', 'Parkside FC'), efnl26, school26];
+// w010: a season starting the DAY AFTER ours ends must count (EFNL 2027 will start 2026-10-01 against an end of 2026-09-30).
+answers.profiles.w010 = [own('PARKSIDE', 'Parkside FC'), { ...reg27('PARKSIDE', 'Parkside FC'), season: { ...reg27('PARKSIDE', 'Parkside FC').season, startDate: '2026-09-22' } }];
+// w011: no own-season record at all — club cannot be harvested.
+answers.profiles.w011 = [old25];
 const saveAnswers = () => fs.writeFileSync(STUB_IN, JSON.stringify(answers));
 saveAnswers();
 
@@ -126,7 +135,7 @@ function ok(name, cond, detail) {
 // ── 1. First run: cohort, budget, never-checked first ────────────────────────
 console.log('\n1  First run builds the cohort and walks one slice');
 let r = run();
-ok('version line', /walk-registrations v1 2026-09-07/.test(r.out));
+ok('version line', /walk-registrations v2 2026-09-07/.test(r.out));
 ok('exit 0 (changed)', r.code === 0, `exit ${r.code}`);
 ok('cohort is the latest season per org, not 2025', /cohort: 21 people/.test(r.out), (r.out.match(/cohort: .*/) || [''])[0]);
 ok('2025-only players are not in the file', !read().players.old01);
@@ -159,6 +168,12 @@ ok('w002 from.club still the OLD club (Parkside)', w2.from.club === 'PARKSIDE');
 ok('w003 gone: nothing tracked, one other with league and season only', w3.tracked.length === 0 && w3.other.length === 1 && w3.other[0].league === 'Gippsland League' && w3.other[0].season === '2027' && !('club' in w3.other[0]), JSON.stringify(w3.other));
 ok('w004 NOT_FOUND recorded, not retried for 28 days', w4.missing === true && Math.round((Date.parse(w4.nextCheck) - Date.parse(w4.at)) / 86400000) === 28);
 ok('EFNL player harvested its own club', rec('e000').from.club === 'BLACKBURN');
+const w9 = rec('w009'), w10 = rec('w010'), w11 = rec('w011');
+ok('w009 concurrent tracked season (EFNL 2026 overlapping) NOT stored as next season', w9.tracked.length === 0, JSON.stringify(w9.tracked));
+ok('w009 concurrent outside season NOT stored as a departure', w9.other.length === 0, JSON.stringify(w9.other));
+ok('w009 therefore on the 7-day re-check, not 28', Math.round((Date.parse(w9.nextCheck) - Date.parse(w9.at)) / 86400000) === 7);
+ok('w010 season starting the day after ours ends IS next season', w10.tracked.length === 1, JSON.stringify(w10.tracked));
+ok('w011 no own record: club stays null, counted and logged', w11.from.club === null);
 
 // ── 4. Due ordering by nextCheck ─────────────────────────────────────────────
 console.log('\n4  Due ordering: overdue first, future not walked');
@@ -218,6 +233,31 @@ let violations = 0;
 for (let i = 2; i < times.length; i++) if (times[i] - times[i - 2] < 600 - 30) violations++;
 ok('no 600 ms window holds more than 2 calls', violations === 0, `${times.length} calls, ${violations} violation(s)`);
 ok('the run took at least (calls/2 - 1) windows', times.length >= 6 && (times[times.length - 1] - times[0]) >= (Math.ceil(times.length / 2) - 1) * 600 - 30);
+
+// ── 8. Migration of a v1 file ────────────────────────────────────────────────
+console.log('\n8  A v1 file (startDate rule) is migrated: stored registrations re-decided, clubs kept');
+const v1 = read();
+v1.meta.version = 1;
+v1.players.w000.tracked = [{ seasonId: E26, compName: 'EFNL 2026', status: 'ACTIVE', club: 'BLACKBURN', clubName: 'Blackburn FC', team: null, name: 'Blackburn FC' }];
+v1.players.w000.nextCheck = new Date(Date.now() + 20 * 86400000).toISOString();   // would not be due
+v1.players.w001.other = [{ league: 'APS Football', season: '2026', status: 'ACTIVE' }];
+v1.players.w001.nextCheck = new Date(Date.now() + 5 * 86400000).toISOString();
+const w002Before = JSON.stringify(v1.players.w002);
+fs.writeFileSync(OUT, JSON.stringify(v1));
+for (const u of wUuids) answers.profiles[u] = [own('PARKSIDE', 'Parkside FC')];
+answers.profiles.w000 = [own('PARKSIDE', 'Parkside FC'), efnl26];
+answers.profiles.w001 = [own('PARKSIDE', 'Parkside FC'), school26];
+saveAnswers();
+r = run({ WALK_DAILY_FRACTION: '1' });
+// Six: the two planted here plus w001, w002, w003 and w010 from earlier sections.
+ok('migration logged with the count', /migrated registrations.json v1 -> v2: 6 record\(s\)/.test(r.out), (r.out.match(/migrated .*/) || [''])[0]);
+ok('both re-decided players were walked', r.profiles.includes('w000') && r.profiles.includes('w001'));
+ok('under v2 the concurrent registrations are gone', rec('w000').tracked.length === 0 && rec('w001').other.length === 0);
+ok('harvested club kept through migration', rec('w000').from.club === 'PARKSIDE');
+ok('a record with nothing stored is untouched by migration', JSON.stringify(rec('w002')) === w002Before || r.profiles.includes('w002'));
+ok('file now marked v2', read().meta.version === 2);
+r = run();
+ok('a v2 file is not migrated again', !/migrated registrations.json/.test(r.out));
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

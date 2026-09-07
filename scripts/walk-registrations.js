@@ -31,10 +31,21 @@
 //
 // STORAGE. data/registrations.json, written whole by this script and nothing
 // else. Not core.json (a walk must never touch the manifest), not a season file
-// (never in a results run's checkout). Own-season and earlier registrations are
-// dropped — storage already has them; the comparison is startDate against
-// startDate, never year against year, because an AFL season's startDate precedes
-// the year in its name.
+// (never in a results run's checkout).
+//
+// WHICH REGISTRATIONS ARE "NEXT SEASON". v1 kept any season whose startDate was
+// after the cohort season's startDate. Measured on the first real run
+// (2026-09-07, 5,714 answers, no 2027 season in existence): 62 "next-season
+// tracked" and 1,145 "outside" registrations, every one of them ACTIVE — they were
+// CONCURRENT seasons. EFNL 2026 starts 2025-10-01, so a school or VAFA season
+// starting April 2026 read as "later". v2 keeps a season only if it starts AFTER
+// THE COHORT SEASON ENDS (startDate > endDate, both from the manifest), which
+// excludes anything overlapping. Never year against year: an AFL season's
+// startDate precedes the year in its name.
+//
+// FILE_VERSION 2 marks that rule. A version-1 file is migrated on load: every
+// record that stored a tracked or other registration is made due again so the
+// walk re-decides it under the new rule; harvested clubs are kept.
 //
 // Exit codes: 0 = changed, commit. 2 = nothing changed. 1 = fatal.
 //
@@ -48,7 +59,8 @@ const path = require('path');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v1 2026-09-07 daily-slice';
+const VERSION = 'walk-registrations v2 2026-09-07 after-season-end';
+const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT_PATH = path.join(ROOT, 'data', 'registrations.json');
@@ -121,7 +133,8 @@ function cohortSeasons(manifest) {
     if (!cur || String(m.startDate || '') > String(cur.startDate || '')) byOrg.set(m.org, m);
   }
   return [...byOrg.values()].map(m => ({
-    seasonId: m.seasonId, compName: m.compName, org: m.org, startDate: m.startDate || '',
+    seasonId: m.seasonId, compName: m.compName, org: m.org,
+    startDate: m.startDate || '', endDate: m.endDate || '',
   }));
 }
 
@@ -133,6 +146,16 @@ function loadRegistrations() {
   r.meta = r.meta || { version: 1 };
   r.meta.clubTeams = r.meta.clubTeams || {};
   r.players = r.players || {};
+  if ((r.meta.version || 1) < FILE_VERSION) {
+    let redo = 0;
+    for (const rec of Object.values(r.players)) {
+      if ((rec.tracked && rec.tracked.length) || (rec.other && rec.other.length)) {
+        rec.tracked = []; rec.other = []; rec.nextCheck = null; redo++;
+      }
+    }
+    log(`migrated registrations.json v${r.meta.version || 1} -> v${FILE_VERSION}: ${redo} record(s) with a stored registration made due again`);
+    r.meta.version = FILE_VERSION;
+  }
   return r;
 }
 
@@ -240,7 +263,8 @@ async function main() {
 
   // ── Walk ────────────────────────────────────────────────────────────────────
   let calls = 0, answered = 0, notFound = 0, errored = 0, stoppedForTime = false;
-  let clubsHarvested = 0, trackedFound = 0, otherFound = 0;
+  let clubsHarvested = 0, trackedFound = 0, otherFound = 0, noOwnRecord = 0;
+  const errorSamples = [], noOwnSamples = [];
   const byStatus = {};
   const rawUpcoming = [];
 
@@ -250,7 +274,7 @@ async function main() {
     calls++;
     let json;
     try { json = await gqlPost(Q_PROFILE, { profileID: uuid }, 'PublicProfileTeams'); }
-    catch (e) { errored++; continue; }              // left as it was; due again next run
+    catch (e) { errored++; if (errorSamples.length < 5) errorSamples.push(`${uuid}: thrown — ${e.message}`); continue; } // left as it was; due again next run
 
     const at = isoAt(Date.now());
     if (json.errors && json.errors.length) {
@@ -259,7 +283,7 @@ async function main() {
         notFound++;
         rec.at = at; rec.missing = true; rec.triggered = false;
         rec.nextCheck = isoAt(Date.now() + RECHECK_FOUND_DAYS * DAY_MS);
-      } else errored++;
+      } else { errored++; if (errorSamples.length < 5) errorSamples.push(`${uuid}: ${msg.slice(0, 160)}`); }
       continue;
     }
     answered++;
@@ -267,8 +291,12 @@ async function main() {
 
     const teams = json?.data?.publicProfileTeams || [];
     const fromSeason = cohortById.get(rec.from?.seasonId);
-    const fromStart = fromSeason ? fromSeason.startDate : '';
+    // A registration is next season only if its season starts after ours ENDS.
+    // Fall back to our startDate if the manifest lacks an endDate — that is the
+    // v1 rule and over-includes, so it is logged once below.
+    const fromEnd = fromSeason ? (fromSeason.endDate || fromSeason.startDate) : '';
     const tracked = [], other = [];
+    let sawOwn = false;
     for (const t of teams) {
       const sid = t.season?.id || null;
       const st = t.season?.status?.value || null;
@@ -276,13 +304,16 @@ async function main() {
 
       // Harvest before you strip: the player's own cohort-season record names
       // their club. Take it, then drop the record as already stored.
-      if (sid && sid === rec.from?.seasonId && t.organisation?.id) {
-        if (!rec.from.club) clubsHarvested++;
-        rec.from.club = t.organisation.id;
-        rec.from.clubName = t.organisation.name || null;
+      if (sid && sid === rec.from?.seasonId) {
+        sawOwn = true;
+        if (t.organisation?.id) {
+          if (!rec.from.club) clubsHarvested++;
+          rec.from.club = t.organisation.id;
+          rec.from.clubName = t.organisation.name || null;
+        }
       }
       const start = String(t.season?.startDate || '');
-      if (!start || start <= fromStart) continue;      // own season or earlier
+      if (!start || start <= fromEnd) continue;         // own season, earlier, or concurrent
 
       if (st && st !== 'COMPLETED' && st !== 'ACTIVE' && rawUpcoming.length < RAW_UPCOMING_LIMIT) rawUpcoming.push(t);
 
@@ -303,6 +334,10 @@ async function main() {
     rec.nextCheck = isoAt(Date.now() + (tracked.length ? RECHECK_FOUND_DAYS : RECHECK_UNFOUND_DAYS) * DAY_MS);
     if (tracked.length) trackedFound++;
     if (other.length) otherFound++;
+    if (!sawOwn) {
+      noOwnRecord++;
+      if (noOwnSamples.length < 5) noOwnSamples.push(`${uuid} ${rec.name || ''} (${rec.from?.compName}): ${teams.length} registration(s), seasons ${teams.map(t => `${t.season?.competition?.name || '?'} ${t.season?.name || '?'}`).join('; ') || 'none'}`);
+    }
 
     if (calls % 500 === 0) log(`  ${calls} calls — answered ${answered}, not found ${notFound}, errors ${errored}`);
   }
@@ -313,6 +348,12 @@ async function main() {
   log(`calls ${calls}  answered ${answered}  not found ${notFound}  errors ${errored}` + (stoppedForTime ? '  STOPPED FOR TIME' : ''));
   log(`clubs harvested this run: ${clubsHarvested}; players with a next-season tracked registration: ${trackedFound}; with only an outside one: ${otherFound}`);
   if (Object.keys(byStatus).length) log(`registration statuses seen: ${JSON.stringify(byStatus)}`);
+  if (cohort.some(c => !c.endDate)) log(`⚠️ a cohort season has no endDate in the manifest — falling back to the startDate rule for it, which over-includes concurrent seasons`);
+  if (noOwnRecord) {
+    log(`${noOwnRecord} answered player(s) returned no registration for their own cohort season — club not harvested; first ${noOwnSamples.length}:`);
+    for (const l of noOwnSamples) log('  ' + l);
+  }
+  if (errorSamples.length) { log('first error(s):'); for (const l of errorSamples) log('  ' + l); }
   if (rawUpcoming.length) {
     log(`first ${rawUpcoming.length} pre-season record(s) RAW — is name the club (unassigned) or a team (assigned)?`);
     for (const t of rawUpcoming) log('  ' + JSON.stringify(t));
@@ -320,7 +361,7 @@ async function main() {
   const remaining = Object.values(reg.players).filter(r => dueKey(r, Date.now()) !== null).length;
   log(`still due after this run: ${remaining}`);
 
-  reg.meta.version = 1;
+  reg.meta.version = FILE_VERSION;
   reg.meta.walkedAt = NOW;
   reg.meta.cohortSeasons = cohort.map(c => c.seasonId);
   reg.meta.people = people;
