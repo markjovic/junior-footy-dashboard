@@ -1,8 +1,10 @@
 // scripts/verify-discover-seasons.js
 //
-// Verifies that scripts/discover-seasons.js preserves the per-season completeness
-// flags in the manifest instead of resetting them. storage_ingestion_design.md
-// §6.1a.
+// Verifies that scripts/discover-seasons.js preserves what the manifest already
+// holds instead of rebuilding it from the API alone: the per-season completeness
+// flags (storage_ingestion_design.md §6.1a) and, from v2, EVERY key it did not
+// itself derive — `state` and `stateAt` for off-season mode, or anything added
+// later. Measured 2026-09-07: v2 of the script wiped those on every run.
 //
 // It runs the REAL script end to end as a child process, with only the network
 // stubbed — a stubbed scripts/lib/playhq.js returning canned GraphQL responses.
@@ -21,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-discover-seasons v1 2026-08-12';
+const VERSION = 'verify-discover-seasons v2 2026-09-07';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'discover-seasons.js');
@@ -108,7 +110,7 @@ writeCore([
 ]);
 let r = run();
 ok('script ran without a fatal error', r.code === 0 || r.code === 2, `exit ${r.code}`);
-ok('version line printed', /v2 2026-08-12 carry-forward-phases/.test(r.out));
+ok('version line printed', /v3 2026-09-07 carry-forward-all-keys/.test(r.out));
 ok('carry-forward count reported', /carried-forward phase records: 2/.test(r.out),
   (r.out.match(/carried-forward phase records: \d+/) || ['not printed'])[0]);
 ok('2025 kept results=true', phasesOf('75d8a232') && phasesOf('75d8a232').results === true,
@@ -168,6 +170,43 @@ const settled = JSON.stringify(read().manifest);
 r = run();                   // the run under test
 ok('exit 2, no change', r.code === 2, `exit ${r.code}`);
 ok('manifest byte-identical across runs', JSON.stringify(read().manifest) === settled);
+
+// ── 6. Keys this script did not derive must survive ─────────────────────────
+// Off-season mode writes `state` and `stateAt` onto manifest entries and runs
+// discovery DAILY. If discovery rebuilt entries from the API alone, the state
+// would be wiped every night and the feature would silently do nothing. The
+// third key is deliberately made up, so the assertion is about the mechanism
+// and not about a list of names. Against v2 of the script every line here fails.
+console.log('\n6  Keys discovery does not derive survive a run; keys it does derive are recomputed');
+writeCore([
+  { org: '383836bb', seasonId: '75d8a232', compName: 'EFNL 2025', retired: true,
+    status: 'COMPLETED', state: 'complete', stateAt: '2025-10-01T00:00:00.000Z',
+    futureKey: { anything: 1 },
+    phases: { results: true, players: false, matches: 4870, players_n: 0 } },
+  // Stale derived fields, to prove the API side still wins: status and retired
+  // are wrong here and must come back corrected.
+  { org: '383836bb', seasonId: '2dcbf383', compName: 'EFNL 2026', retired: true,
+    status: 'UPCOMING', state: 'active', stateAt: '2026-04-01T00:00:00.000Z',
+    phases: { results: true, players: true, matches: 5420, players_n: 44889 } },
+]);
+r = run();
+ok('script ran', r.code === 0 || r.code === 2, `exit ${r.code}`);
+ok('carry-forward entry count reported', /carried-forward manifest entries: 2/.test(r.out),
+  (r.out.match(/carried-forward manifest entries: \d+/) || ['not printed'])[0]);
+const e25 = read().manifest.find((m) => m.seasonId === '75d8a232');
+const e26 = read().manifest.find((m) => m.seasonId === '2dcbf383');
+ok('2025 kept state', e25.state === 'complete', e25.state);
+ok('2025 kept stateAt', e25.stateAt === '2025-10-01T00:00:00.000Z', e25.stateAt);
+ok('2025 kept an unknown key', e25.futureKey && e25.futureKey.anything === 1, JSON.stringify(e25.futureKey));
+ok('2026 kept state', e26.state === 'active', e26.state);
+ok('2026 kept stateAt', e26.stateAt === '2026-04-01T00:00:00.000Z', e26.stateAt);
+ok('2026 stale status recomputed from the API', e26.status === 'ACTIVE', e26.status);
+ok('2026 stale retired recomputed from the API', e26.retired === false, String(e26.retired));
+ok('2026 phases still carried', e26.phases && e26.phases.matches === 5420);
+ok('a season absent from the prior manifest has no state', (() => {
+  writeCore([]); run();
+  return read().manifest.every((m) => m.state === undefined && m.stateAt === undefined);
+})());
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

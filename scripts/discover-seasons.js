@@ -44,7 +44,7 @@ const RETIRE_AFTER_DAYS = 30;
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'v2 2026-08-12 carry-forward-phases';
+const VERSION = 'v3 2026-09-07 carry-forward-all-keys';
 
 // seasons takes a required organisationID argument, and organisationID must be
 // the 8-character organisation code rather than the UUID. Both verified
@@ -307,13 +307,24 @@ async function main() {
     catch (e) { log('Could not parse core.json — starting fresh'); }
   }
 
-  // seasonId -> phases, from whatever the manifest already holds. This script
-  // only PRESERVES the signal; it never sets it true. store.save() derives it
-  // from the records it actually wrote, and that stays the only writer.
-  const priorPhases = new Map();
+  // seasonId -> the existing manifest entry, whole. Until v3 this script carried
+  // forward exactly one key, `phases`, and rebuilt everything else from the API.
+  // Measured 2026-09-07: a `state` written onto an entry was gone after one run.
+  // Any key another writer adds to the manifest — `state` and `stateAt` for
+  // off-season mode, or anything after them — would be wiped every time discovery
+  // ran, and a daily run would wipe it every night. So the whole prior entry is
+  // spread under the derived fields below, the same shape store.save() uses:
+  // fields this script derives win, and anything it does not know about survives.
+  const prior = new Map();
   for (const m of core.manifest || []) {
-    if (m.seasonId && m.phases) priorPhases.set(m.seasonId, m.phases);
+    if (m.seasonId) prior.set(m.seasonId, m);
   }
+  // phases is still special: this script only PRESERVES it, never sets it true.
+  // store.save() derives it from the records it actually wrote, and that stays
+  // the only writer.
+  const priorPhases = new Map();
+  for (const [sid, m] of prior) if (m.phases) priorPhases.set(sid, m.phases);
+  log(`carried-forward manifest entries: ${prior.size}`);
   log(`carried-forward phase records: ${priorPhases.size}`);
 
   // Attach the resolved short name and flags, then build the flat manifest.
@@ -326,6 +337,9 @@ async function main() {
 
     for (const s of o.seasons) {
       manifest.push({
+        // Everything the existing entry holds, first, so the derived fields
+        // below override it and anything else rides through untouched.
+        ...(prior.get(s.id) || {}),
         org: code,
         orgName: o.orgName,
         seasonId: s.id,
