@@ -1,3 +1,4 @@
+# .github/workflows/fetch-results.yml
 name: Fetch PlayHQ Results & Stats
 
 on:
@@ -34,12 +35,34 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      ignore_season_gate:
+        description: 'Run even when every tracked season is complete — for a late correction after the grand final.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+# Shared with discover-seasons.yml and enrich-games.yml: every job that writes
+# data/core.json or a season file waits behind the others. store.save writes
+# WHOLE files, so a writer holding a stale checkout pushes the old file back over
+# whatever landed meanwhile — two jobs of THIS workflow did it to each other on
+# 2026-08-31 (see fetch-fixtures below) and the fix there was to chain the jobs.
+# This closes the same gap across workflows. Consequence: a dispatch that arrives
+# while another run holds the group QUEUES rather than starting; GitHub keeps one
+# queued run per group and drops an older queued one when a newer arrives.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
 
 jobs:
   fetch-results:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ref on every checkout that will push — a detached HEAD commits and
+          # pushes nothing. github.ref_name is the branch the dispatch ran on.
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -76,6 +99,31 @@ jobs:
           fi
           echo "=================="
 
+      # ── Season gate ─────────────────────────────────────────────────────────
+      # offseason_mode_design.md: no ACTIVE and no UPCOMING tracked season means
+      # nothing to fetch. `state` is written daily by discover-seasons.js v4. A
+      # manifest with no `state` anywhere predates v4 and is treated as in season
+      # — the failure that costs a few calls, not a missed weekend.
+      - name: Season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_season_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}`);
+            const stated = tracked.filter(m => m.state !== undefined);
+            const live = tracked.filter(m => m.state === "active" || m.state === "upcoming");
+            let inSeason = true;
+            if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
+            else if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
+            else { inSeason = false; console.log("OFF SEASON — every tracked season is complete; skipping the fetch"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
+          '
+
       - name: Determine results mode
         id: mode
         run: |
@@ -90,7 +138,7 @@ jobs:
 
       - name: Fetch results
         id: fetch
-        if: steps.mode.outputs.run_results == 'true'
+        if: steps.mode.outputs.run_results == 'true' && steps.gate.outputs.in_season == 'true'
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
         run: |
@@ -100,7 +148,7 @@ jobs:
           set -e
 
       - name: Commit results
-        if: steps.mode.outputs.run_results == 'true' && steps.fetch.outputs.exit_code == '0'
+        if: steps.mode.outputs.run_results == 'true' && steps.gate.outputs.in_season == 'true' && steps.fetch.outputs.exit_code == '0'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -115,10 +163,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      # ── Season gate ─────────────────────────────────────────────────────────
+      # offseason_mode_design.md: no ACTIVE and no UPCOMING tracked season means
+      # nothing to fetch. `state` is written daily by discover-seasons.js v4. A
+      # manifest with no `state` anywhere predates v4 and is treated as in season
+      # — the failure that costs a few calls, not a missed weekend.
+      - name: Season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_season_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}`);
+            const stated = tracked.filter(m => m.state !== undefined);
+            const live = tracked.filter(m => m.state === "active" || m.state === "upcoming");
+            let inSeason = true;
+            if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
+            else if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
+            else { inSeason = false; console.log("OFF SEASON — every tracked season is complete; skipping the fetch"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
+          '
 
       - name: Determine stats mode
         id: mode
@@ -140,7 +213,7 @@ jobs:
           exit 0
 
       - name: Fetch stats
-        if: steps.mode.outputs.run == 'true'
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true'
         id: stats
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
@@ -155,7 +228,7 @@ jobs:
           set -e
 
       - name: Commit stats
-        if: steps.mode.outputs.run == 'true' && steps.stats.outputs.exit_code == '0'
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true' && steps.stats.outputs.exit_code == '0'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -190,13 +263,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           # 20, matching the other two jobs. This job alone was on 22; a version
           # difference between jobs in one workflow is a difference nobody
           # remembers choosing and everybody has to rule out.
           node-version: '20'
+
+      # ── Season gate ─────────────────────────────────────────────────────────
+      # offseason_mode_design.md: no ACTIVE and no UPCOMING tracked season means
+      # nothing to fetch. `state` is written daily by discover-seasons.js v4. A
+      # manifest with no `state` anywhere predates v4 and is treated as in season
+      # — the failure that costs a few calls, not a missed weekend.
+      - name: Season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_season_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}`);
+            const stated = tracked.filter(m => m.state !== undefined);
+            const live = tracked.filter(m => m.state === "active" || m.state === "upcoming");
+            let inSeason = true;
+            if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
+            else if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
+            else { inSeason = false; console.log("OFF SEASON — every tracked season is complete; skipping the fetch"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
+          '
 
       - name: Determine fixtures mode
         id: mode
@@ -222,7 +320,7 @@ jobs:
           echo "vip_only=${{ github.event.inputs.vip_only }}" >> $GITHUB_OUTPUT
 
       - name: Fetch fixtures
-        if: steps.mode.outputs.run == 'true'
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true'
         id: fixtures
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
@@ -235,7 +333,7 @@ jobs:
           set -e
 
       - name: Commit fixtures
-        if: steps.mode.outputs.run == 'true' && steps.fixtures.outputs.exit_code == '0'
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true' && steps.fixtures.outputs.exit_code == '0'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
