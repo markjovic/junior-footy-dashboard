@@ -596,7 +596,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.218</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.219</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -838,6 +838,7 @@ body{overflow-x:hidden}
       <div style="flex:1;min-width:0">
         <div class="team-modal-title" id="pm-name"></div>
         <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
+        <div id="pm-next" style="font-size:10px;color:var(--tx2);margin-top:2px;display:none"></div>
       </div>
       <div id="pm-seasons" class="pm-season-strip"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
@@ -950,7 +951,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.218</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.219</span>
         </div>
 
 
@@ -1222,6 +1223,11 @@ let S = {
   // keystroke, then held for the session. cross_season_search_design.md.
   playerIndex: null,       // { seasons, teams, ages, grades, people } once loaded
   playerIndexState: '',    // '' | 'loading' | 'ready' | 'failed'
+  // Next-season registrations — data/registrations.json.gz, written daily by
+  // scripts/walk-registrations.js. Fetched on the first player panel open, then
+  // held for the session. registrations_design.md.
+  registrations: null,     // { meta, players: { uuid: { at, from, tracked, other } } }
+  registrationsState: '',  // '' | 'loading' | 'ready' | 'failed'
   // Quarter-by-quarter display: 'off' | 'cum' | 'q'.
   //   cum  10 16 42 42  — running total, what PlayHQ shows ("END OF PERIOD")
   //   q    10  6 26  0  — per quarter, which is how it is STORED and which shows
@@ -5081,6 +5087,15 @@ async function openPlayerPanel(uuid) {
   // Drawn from what is known now, then redrawn if the index arrives.
   buildSeasonStrip(uuid, shownYear, allRecs);
 
+  // ── Next season ───────────────────────────────────────────────────────────
+  // Rendered from what is loaded now (nothing, on the first open), then again
+  // when the registrations file arrives — guarded on the panel still showing
+  // this player.
+  renderNextSeason(uuid, shownYear);
+  if (S.registrationsState !== 'ready' && S.registrationsState !== 'failed') {
+    loadRegistrations().then(() => { if (_panelUuid === uuid) renderNextSeason(uuid, shownYear); });
+  }
+
   // ⚠️ FETCH THE INDEX ON PANEL OPEN, not only on a search keystroke.
   //
   // The strip could only show seasons already in memory, so opening a player from
@@ -5470,6 +5485,108 @@ function closePlayerModal() {
 //
 // Loaded ONCE, on the first search keystroke. Never on page load: it is bigger
 // than everything else the page fetches to render a ladder.
+// ── Next-season registrations ─────────────────────────────────────────────
+// data/registrations.json.gz — walk-registrations.js. Gzip only (decided
+// 2026-09-07: the plain file was 8.7 MB for 40,002 people, the .gz ~1.4 MB).
+// Decompressed here with DecompressionStream; a browser without it reports
+// 'failed' and the panel simply shows no next-season line.
+let registrationsLoading = null;
+function loadRegistrations() {
+  if (registrationsLoading) return registrationsLoading;
+  if (S.registrationsState === 'ready') return Promise.resolve(S.registrations);
+  S.registrationsState = 'loading';
+  registrationsLoading = (async () => {
+    try {
+      const r = await fetch('data/registrations.json.gz');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // If the server served it with Content-Encoding: gzip the browser has
+      // already inflated it and the body is JSON; inflating again would fail.
+      // Look at the magic bytes rather than assume either way.
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let text;
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        if (typeof DecompressionStream !== 'function') throw new Error('no DecompressionStream');
+        text = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      } else {
+        text = new TextDecoder().decode(buf);
+      }
+      const reg = JSON.parse(text);
+      if (!reg || !reg.players || typeof reg.players !== 'object') throw new Error('unexpected shape');
+      S.registrations = reg;
+      S.registrationsState = 'ready';
+    } catch (e) {
+      S.registrationsState = 'failed';
+      console.warn('registrations unavailable:', e.message);
+    }
+    registrationsLoading = null;
+    return S.registrations;
+  })();
+  return registrationsLoading;
+}
+
+// One line under the team line, for the season AFTER the player's latest one.
+// registrations_design.md §5 — the rules, in order:
+//   registered with <club>   a tracked registration in a later season
+//   now at <league>          nothing tracked, and an outside registration that
+//                            is a real season (60+ days), not a carnival
+//   no registration yet      the next season for their competition exists in
+//                            the manifest, they were checked after it appeared,
+//                            they had a harvested club, and nothing was found
+//   nothing                  everything else — including every season view
+//                            except the player's latest
+// Days from YYYY-MM-DD parts via Date.UTC — never new Date(string).
+const NEXT_SEASON_MIN_DAYS = 60;
+const stripYear = (c) => String(c || '').replace(/\s*\d{4}$/, '');
+function nextSeasonLine(uuid, shownYear) {
+  const reg = S.registrationsState === 'ready' ? S.registrations : null;
+  const rec = reg && reg.players[uuid];
+  if (!rec || !rec.at || !rec.from) return '';
+  // Latest season only — the one the walker started from.
+  if (String(shownYear) !== seasonYearOf(rec.from.compName)) return '';
+
+  const tracked = rec.tracked || [];
+  if (tracked.length) {
+    // The earliest later tracked season; a player registered in two shows the first.
+    const t = tracked.slice().sort((a, b) => seasonYearOf(a.compName || compNameOfSeason(a.seasonId)).localeCompare(seasonYearOf(b.compName || compNameOfSeason(b.seasonId))))[0];
+    const comp = t.compName || compNameOfSeason(t.seasonId);
+    const sameComp = stripYear(comp) === stripYear(rec.from.compName);
+    return `${seasonYearOf(comp)} — registered with ${t.clubName || t.name || 'a club'}` +
+      (t.team ? ` · ${t.team}` : '') + (sameComp ? '' : ` (${stripYear(comp)})`);
+  }
+
+  const days = (a, b) => {
+    const p = (d) => { const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number); return (y && m && dd) ? Date.UTC(y, m - 1, dd) : NaN; };
+    return (p(b) - p(a)) / 86400000;
+  };
+  const realOther = (rec.other || []).filter(o =>
+    (o.status === 'ACTIVE' || o.status === 'UPCOMING') &&
+    o.startDate && o.endDate && days(o.startDate, o.endDate) >= NEXT_SEASON_MIN_DAYS);
+  if (realOther.length) {
+    const o = realOther.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))[0];
+    return `${o.season ? o.season + ' — ' : ''}now at ${o.league || 'another league'}`;
+  }
+
+  // The next manifest season for this competition: same org, starts after ours ends.
+  const from = (S.manifest || []).find(m => m.seasonId === rec.from.seasonId);
+  const next = from ? (S.manifest || [])
+    .filter(m => m.org === from.org && m.compName && String(m.startDate || '') > String(from.endDate || from.startDate || ''))
+    .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))[0] : null;
+  if (next && rec.from.club && String(rec.at) > String(next.stateAt || '')) {
+    return `${seasonYearOf(next.compName)} — no registration yet`;
+  }
+  return '';
+}
+function renderNextSeason(uuid, shownYear) {
+  const el = document.getElementById('pm-next');
+  if (!el) return;
+  const text = nextSeasonLine(uuid, shownYear);
+  const rec = S.registrations && S.registrations.players ? S.registrations.players[uuid] : null;
+  el.textContent = text;
+  el.title = text && rec ? `From PlayHQ registrations, checked ${String(rec.at || '').slice(0, 10)}` : '';
+  el.style.display = text ? '' : 'none';
+}
+
 let playerIndexLoading = null;
 function loadPlayerIndex() {
   if (playerIndexLoading) return playerIndexLoading;
