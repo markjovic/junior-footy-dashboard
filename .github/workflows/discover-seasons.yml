@@ -2,7 +2,11 @@
 name: Discover seasons
 
 # Writes the `organisations` and `manifest` keys of data/core.json and commits
-# them. Changes no existing behaviour: nothing reads core.json yet.
+# them. Since discover-seasons v4 the manifest also carries each season's `state`
+# (upcoming | active | complete) and `stateAt` — offseason_mode_design.md — so
+# this workflow runs DAILY: a new season is known the day it appears, and a
+# finished one is marked complete without anyone dispatching anything. About 30
+# PlayHQ calls per run.
 #
 # Exit codes follow the repo convention: 0 = changed, 2 = no change, 1 = fatal.
 # Unlike the older workflows, a fatal exit fails this run rather than showing
@@ -12,12 +16,21 @@ name: Discover seasons
 
 on:
   workflow_dispatch:
+  schedule:
+    # 18:30 UTC = 04:30 AEST daily. Clear of the weekend results runs and of the
+    # Monday 03:15 UTC player-index build. GitHub cron is best-effort and can run
+    # late; nothing here depends on the exact minute.
+    - cron: '30 18 * * *'
 
 permissions:
   contents: write
 
+# Shared with every other job that writes data/core.json or a season file. A
+# writer holding a stale checkout of core.json would push the whole file back over
+# whatever landed in between — two jobs did exactly that to each other on
+# 2026-08-31. Queue behind them instead.
 concurrency:
-  group: discover-seasons
+  group: playhq-data-write
   cancel-in-progress: false
 
 jobs:
@@ -28,16 +41,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Without ref, a scheduled run checks out a DETACHED HEAD: the commit
+          # succeeds, `git pull --rebase` fails, nothing is pushed.
+          ref: ${{ github.ref_name }}
+
+      # No actions/setup-node here. It changes the runner's outbound fingerprint
+      # and PlayHQ answers every request with 403 CLOUDFRONT-BLOCK. ubuntu-latest
+      # ships Node 20 already.
 
       - name: Discover seasons
         id: run
         run: |
           set +e
+          node --version
           node scripts/discover-seasons.js
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
