@@ -1,0 +1,59 @@
+# .github/workflows/probe-registration-budget.yml
+name: Probe registration budget
+
+# READ-ONLY. Measures the publicProfileTeams call budget and prints any
+# pre-season registration records — registrations_design.md §8. Writes nothing,
+# commits nothing.
+#
+# It shares the WAF budget with every other PlayHQ run, so it takes the data-write
+# concurrency group even though it writes no data: that stops it overlapping a
+# results run, and stops a results run starting into the block it leaves behind.
+# Do not dispatch it within a few minutes of discovery (04:30 AEST) or a weekend.
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'Competition whose players to sample (a compName from the manifest)'
+        required: false
+        default: 'WFNL 2026'
+        type: string
+      max_calls:
+        description: 'Upper bound on profile calls (50–2000)'
+        required: false
+        default: '600'
+        type: string
+      windows:
+        description: 'Stop after this many WAF blocks (1–4). Two windows show whether the budget refills.'
+        required: false
+        default: '2'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Measure publicProfileTeams
+    runs-on: ubuntu-latest
+    # Two windows at ~120 calls plus two 80 s waits is a few minutes; the bound
+    # is for a run that never blocks and walks all 2000.
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          PROBE_COMP: ${{ github.event.inputs.comp }}
+          PROBE_MAX: ${{ github.event.inputs.max_calls }}
+          PROBE_WINDOWS: ${{ github.event.inputs.windows }}
+        run: |
+          node --version
+          node scripts/probe-registration-budget.js
