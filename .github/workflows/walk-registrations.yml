@@ -1,0 +1,98 @@
+# .github/workflows/walk-registrations.yml
+name: Walk registrations
+
+# Daily slice of the registrations walk — registrations_design.md v2. Writes
+# data/registrations.json and nothing else. About a seventh of the cohort per
+# run at 100 calls per 80 s: 5–6k calls, roughly 75 minutes.
+#
+# Runs in the OFF-SEASON only: the season gate inverted. When every tracked season
+# is active there is nothing to learn about next season, and the run skips.
+# Manual dispatch ignores the gate.
+#
+# Exit codes: 0 = changed, commit. 2 = nothing changed. 1 = fatal (fails the run).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ignore_gate:
+        description: 'Run even when every tracked season is active'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+  schedule:
+    # 19:30 UTC = 05:30 AEST, an hour after discovery (18:30 UTC) so the manifest
+    # it reads is that morning's. Both hold the data-write group, so if discovery
+    # is still running this waits rather than overlapping it.
+    - cron: '30 19 * * *'
+
+permissions:
+  contents: write
+
+# It writes no core.json or season file, but it takes the group anyway: the WAF
+# budget is shared across every PlayHQ run on this account, and a 75-minute walk
+# beside a results run would hand both of them blocks.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  walk:
+    name: Walk one slice of the cohort
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Without ref a scheduled run is on a DETACHED HEAD: the commit succeeds
+          # and the push never happens.
+          ref: ${{ github.ref_name }}
+
+      # ── Off-season gate ─────────────────────────────────────────────────────
+      # Inverse of fetch-results.yml's Season gate: run when any tracked season
+      # is complete or upcoming. A manifest with no `state` (pre discover-seasons
+      # v4) is treated as in season, so this SKIPS — registrations depend on the
+      # state field existing.
+      - name: Off-season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}`);
+            const off = tracked.filter(m => m.state === "complete" || m.state === "upcoming");
+            let run = true;
+            if (process.env.IGNORE === "true") console.log("ignore_gate=true — running regardless");
+            else if (off.length) console.log(`OFF SEASON for: ${off.map(m => m.compName).join(", ")} — walking`);
+            else { run = false; console.log("every tracked season is active (or has no state) — nothing to learn about next season; skipping"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `run=${run}\n`);
+          '
+
+      - name: Walk
+        id: walk
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set +e
+          node --version
+          node scripts/walk-registrations.js
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "1" ]; then
+            echo "Script exited 1 (fatal)."
+            exit 1
+          fi
+          exit 0
+
+      - name: Commit
+        if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code == '0'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/registrations.json
+          git diff --staged --quiet || git commit -m "registrations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
