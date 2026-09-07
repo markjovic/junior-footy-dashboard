@@ -265,7 +265,7 @@
           "competitionName": "South East Regional",
           "startDate": "2026-01-01",
           "endDate": "2026-09-01",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -686,7 +686,7 @@
           "competitionName": "South Metro Junior Football League (SMJFL)",
           "startDate": "2026-04-17",
           "endDate": "2026-09-06",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -824,7 +824,7 @@
           "competitionName": "Frankston and District Junior Football League",
           "startDate": "2025-11-01",
           "endDate": "2026-09-01",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -932,7 +932,7 @@
           "competitionName": "South East Juniors",
           "startDate": "2025-11-01",
           "endDate": "2026-09-01",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -990,7 +990,7 @@
       "seasonName": "2026",
       "compName": "SER 2026",
       "competitionId": "7790360a",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-01-01",
       "endDate": "2026-09-01",
       "retired": false,
@@ -1000,7 +1000,9 @@
         "players": true,
         "matches": 2098,
         "players_n": 6767
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "0f20da4f",
@@ -1019,7 +1021,9 @@
         "players": true,
         "matches": 2050,
         "players_n": 6724
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cd834de",
@@ -1036,7 +1040,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cd834de",
@@ -1053,7 +1059,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cd834de",
@@ -1070,7 +1078,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cf85e52",
@@ -1079,7 +1089,7 @@
       "seasonName": "2026",
       "compName": "SEJ 2026",
       "competitionId": "0edb85d5",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-09-01",
       "retired": false,
@@ -1089,7 +1099,9 @@
         "players": true,
         "matches": 794,
         "players_n": 2085
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cf85e52",
@@ -1108,7 +1120,9 @@
         "players": true,
         "matches": 759,
         "players_n": 2059
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cf85e52",
@@ -1127,7 +1141,9 @@
         "players": true,
         "matches": 3427,
         "players_n": 11438
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cf85e52",
@@ -1146,7 +1162,9 @@
         "players": true,
         "matches": 3315,
         "players_n": 10466
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "1cf85e52",
@@ -1165,7 +1183,9 @@
         "players": true,
         "matches": 3071,
         "players_n": 9614
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2377ec77",
@@ -1174,7 +1194,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "effc6355",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-09-01",
       "retired": false,
@@ -1182,7 +1202,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2377ec77",
@@ -1199,7 +1221,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2e137b81",
@@ -1216,7 +1240,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2e137b81",
@@ -1233,7 +1259,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2e137b81",
@@ -1250,7 +1278,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2e137b81",
@@ -1267,7 +1297,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "2e137b81",
@@ -1284,7 +1316,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3686b395",
@@ -1301,7 +1335,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3686b395",
@@ -1318,7 +1354,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3686b395",
@@ -1335,7 +1373,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3686b395",
@@ -1352,7 +1392,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3686b395",
@@ -1369,7 +1411,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "383836bb",
@@ -1388,7 +1432,9 @@
         "players": true,
         "matches": 5498,
         "players_n": 18184
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "383836bb",
@@ -1407,7 +1453,9 @@
         "players": true,
         "matches": 5035,
         "players_n": 17567
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "383836bb",
@@ -1426,7 +1474,9 @@
         "players": true,
         "matches": 4633,
         "players_n": 17425
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3f7be677",
@@ -1443,7 +1493,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3f7be677",
@@ -1460,7 +1512,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "3f7be677",
@@ -1477,7 +1531,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4c8b472e",
@@ -1496,7 +1552,9 @@
         "players": true,
         "matches": 2272,
         "players_n": 8852
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4c8b472e",
@@ -1515,7 +1573,9 @@
         "players": true,
         "matches": 2544,
         "players_n": 8899
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4c8b472e",
@@ -1534,7 +1594,9 @@
         "players": true,
         "matches": 2362,
         "players_n": 8944
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4f9a099e",
@@ -1553,7 +1615,9 @@
         "players": true,
         "matches": 3109,
         "players_n": 9157
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4f9a099e",
@@ -1572,7 +1636,9 @@
         "players": true,
         "matches": 3071,
         "players_n": 9590
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4f9a099e",
@@ -1591,7 +1657,9 @@
         "players": true,
         "matches": 3104,
         "players_n": 10596
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4f9a099e",
@@ -1610,7 +1678,9 @@
         "players": true,
         "matches": 3273,
         "players_n": 10425
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "4f9a099e",
@@ -1629,7 +1699,9 @@
         "players": true,
         "matches": 3722,
         "players_n": 10986
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "5b77d8cc",
@@ -1646,7 +1718,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "5b77d8cc",
@@ -1663,7 +1737,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "5b77d8cc",
@@ -1680,7 +1756,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "5b77d8cc",
@@ -1697,7 +1775,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "5b77d8cc",
@@ -1714,7 +1794,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "6ad68fba",
@@ -1731,7 +1813,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "6ad68fba",
@@ -1748,7 +1832,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "6ad68fba",
@@ -1765,7 +1851,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "6ad68fba",
@@ -1782,7 +1870,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "6ad68fba",
@@ -1799,7 +1889,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "768f3833",
@@ -1816,7 +1908,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "768f3833",
@@ -1833,7 +1927,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "768f3833",
@@ -1850,7 +1946,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "768f3833",
@@ -1867,7 +1965,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "768f3833",
@@ -1884,7 +1984,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "803dd171",
@@ -1893,7 +1995,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "e8746f4c",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-17",
       "endDate": "2026-09-06",
       "retired": false,
@@ -1901,7 +2003,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "803dd171",
@@ -1918,7 +2022,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "803dd171",
@@ -1935,7 +2041,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "803dd171",
@@ -1952,7 +2060,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "803dd171",
@@ -1969,7 +2079,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "8162176f",
@@ -1986,7 +2098,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "8162176f",
@@ -2003,7 +2117,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "8162176f",
@@ -2020,7 +2136,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "862f96f9",
@@ -2037,7 +2155,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "862f96f9",
@@ -2054,7 +2174,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "862f96f9",
@@ -2071,7 +2193,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "94ebee61",
@@ -2088,7 +2212,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "active",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "94ebee61",
@@ -2105,7 +2231,9 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     },
     {
       "org": "94ebee61",
@@ -2122,10 +2250,12 @@
       "phases": {
         "results": false,
         "players": false
-      }
+      },
+      "state": "complete",
+      "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-08-11T10:11:48.537Z",
+  "lastSeasonDiscovery": "2026-09-07T01:00:55.638Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
