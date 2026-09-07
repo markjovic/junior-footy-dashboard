@@ -58,6 +58,10 @@ body{overflow-x:hidden}
 
 /* ── Sidebar ── */
 .flabel{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);padding:0 2px;margin-bottom:4px}
+/* Season state tag beside the Season label — SEASON COMPLETE / UPCOMING. Read
+   from the manifest's per-season `state`, written daily by discover-seasons.js
+   v4. Hidden for an active season and before the first v4 run. */
+.season-state{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:1px;color:var(--tx2);border:1px solid var(--b2);border-radius:4px;padding:1px 6px;white-space:nowrap}
 .fgroup{display:flex;flex-direction:column;gap:2px}
 .fchip{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--r);border:1px solid transparent;cursor:pointer;transition:all .12s;font-size:12px;color:var(--tx2);background:none;width:100%;text-align:left}
 .fchip:hover{background:var(--s2);color:var(--tx)}
@@ -592,7 +596,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.216</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.217</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -615,7 +619,7 @@ body{overflow-x:hidden}
     <button id="sidebar-close" onclick="toggleSidebar()">✕ Close</button>
 
     <div class="fgroup" id="comp-filter-group">
-      <div class="flabel">Season</div>
+      <div class="flabel" style="display:flex;justify-content:space-between;align-items:center">Season<span class="season-state" id="season-state" style="display:none"></span></div>
       <select class="fsel" id="year-sel" onchange="selectYear(this.value)"></select>
     </div>
     <div class="fgroup" id="player-search-group">
@@ -946,7 +950,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.216</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.217</span>
         </div>
 
 
@@ -2149,6 +2153,27 @@ function seasonFilePresent(id) {
   return !S.seasonFiles.size || S.seasonFiles.has(`data/seasons/${id}-core.json`);
 }
 
+// The selected competition's season state, from its manifest entry. `state` is
+// upcoming | active | complete, written daily by discover-seasons.js v4 beside
+// PlayHQ's own `status`; `stateAt` is when it last changed. It is PER SEASON —
+// SEJ 2026 was complete on 1 September while EFNL 2026 had finals to play — so
+// the tag follows the competition chip, not the year. No fetch: the manifest is
+// already in memory. Nothing is shown for an active season, or for a manifest
+// written before v4, where `state` is absent.
+function seasonStateOf(compName) {
+  const m = (S.manifest || []).find(x => x.compName === compName);
+  return { state: (m && m.state) || '', stateAt: (m && m.stateAt) || '' };
+}
+function renderSeasonState() {
+  const el = document.getElementById('season-state');
+  if (!el) return;
+  const { state, stateAt } = seasonStateOf(S.selComp);
+  const text = state === 'complete' ? 'SEASON COMPLETE' : state === 'upcoming' ? 'UPCOMING' : '';
+  el.textContent = text;
+  el.title = text && stateAt ? `Since ${stateAt.slice(0, 10)}` : '';
+  el.style.display = text ? '' : 'none';
+}
+
 // The manifest entries for a year — what the competition list is built from.
 function seasonsForYear(year) {
   return S.manifest.filter(m =>
@@ -2292,6 +2317,7 @@ function renderAgeTabs() {
   if (compGroup) compGroup.style.display = comps.length > 1 ? '' : 'none';
   // Always ensure one competition is selected — critical for matchesComp() to work
   if (!S.selComp || !comps.includes(S.selComp)) S.selComp = comps[0] || null;
+  renderSeasonState();
   if (comps.length > 1) {
     document.getElementById('comp-filters').innerHTML = comps.map(c => {
       const logo = S.compLogos[c];
