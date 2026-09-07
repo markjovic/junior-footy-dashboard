@@ -56,14 +56,22 @@
 
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v3 2026-09-07 other-dates';
+const VERSION = 'walk-registrations v4 2026-09-07 gzip-only';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT_PATH = path.join(ROOT, 'data', 'registrations.json');
+// GZIP ONLY (decided 2026-09-07). The plain file was 8.7 MB with 14% of the cohort
+// walked — 40,002 records — and would be committed daily and fetched whole by the
+// browser for one player's line. The .gz is ~1 MB; the page decompresses it with
+// DecompressionStream the way it would any gzipped asset. Cost: the file is no
+// longer readable in the GitHub web UI; the run log prints what you would look
+// for. A leftover plain .json from v1–v3 is read once, converted and deleted.
+const OUT_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
+const LEGACY_PATH = path.join(ROOT, 'data', 'registrations.json');
 
 const RECHECK_UNFOUND_DAYS = 7;
 const RECHECK_FOUND_DAYS = 28;
@@ -139,10 +147,13 @@ function cohortSeasons(manifest) {
 }
 
 function loadRegistrations() {
-  if (!fs.existsSync(OUT_PATH)) {
+  let raw = null;
+  if (fs.existsSync(OUT_PATH)) raw = zlib.gunzipSync(fs.readFileSync(OUT_PATH)).toString('utf8');
+  else if (fs.existsSync(LEGACY_PATH)) { raw = fs.readFileSync(LEGACY_PATH, 'utf8'); log(`reading legacy ${path.relative(ROOT, LEGACY_PATH)} — it will be replaced by the .gz`); }
+  if (raw === null) {
     return { meta: { version: 1, walkedAt: null, cohortSeasons: [], clubTeams: {} }, players: {} };
   }
-  const r = JSON.parse(fs.readFileSync(OUT_PATH, 'utf8'));
+  const r = JSON.parse(raw);
   r.meta = r.meta || { version: 1 };
   r.meta.clubTeams = r.meta.clubTeams || {};
   r.players = r.players || {};
@@ -373,11 +384,14 @@ async function main() {
   reg.meta.lastRun = { calls, answered, notFound, errored, triggered, stoppedForTime };
 
   if (typeof logSummary === 'function') logSummary('walk-registrations');
-  if (canon(reg) === before) { log('No change — exit 2'); process.exit(2); }
+  const legacyPresent = fs.existsSync(LEGACY_PATH);
+  if (canon(reg) === before && fs.existsSync(OUT_PATH) && !legacyPresent) { log('No change — exit 2'); process.exit(2); }
   const out = JSON.stringify(reg);
+  const gz = zlib.gzipSync(Buffer.from(out, 'utf8'), { level: 9 });
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
-  fs.writeFileSync(OUT_PATH, out);
-  log(`Wrote ${path.relative(ROOT, OUT_PATH)} (${(out.length / 1024).toFixed(0)} KB) — exit 0`);
+  fs.writeFileSync(OUT_PATH, gz);
+  if (legacyPresent) { fs.unlinkSync(LEGACY_PATH); log(`removed legacy ${path.relative(ROOT, LEGACY_PATH)}`); }
+  log(`Wrote ${path.relative(ROOT, OUT_PATH)} (${(gz.length / 1024).toFixed(0)} KB gzipped, ${(out.length / 1024).toFixed(0)} KB plain) — exit 0`);
   process.exit(0);
 }
 

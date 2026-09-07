@@ -17,8 +17,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const zlib = require('zlib');
 
-const VERSION = 'verify-registrations v3 2026-09-07';
+const VERSION = 'verify-registrations v4 2026-09-07';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'walk-registrations.js');
@@ -30,7 +31,8 @@ for (const f of [REAL, REAL_STORE]) {
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'walk-verify-'));
 const SEASONS = path.join(TMP, 'data', 'seasons');
 const CORE = path.join(TMP, 'data', 'core.json');
-const OUT = path.join(TMP, 'data', 'registrations.json');
+const OUT = path.join(TMP, 'data', 'registrations.json.gz');
+const LEGACY = path.join(TMP, 'data', 'registrations.json');
 const STUB_IN = path.join(TMP, 'stub-answers.json');
 const STUB_LOG = path.join(TMP, 'stub-calls.json');
 fs.mkdirSync(path.join(TMP, 'scripts', 'lib'), { recursive: true });
@@ -121,9 +123,10 @@ function run(env) {
   return { code: r.status, out: r.stdout + r.stderr, calls,
     profiles: calls.filter(c => c.op === 'PublicProfileTeams').map(c => c.vars.profileID) };
 }
-const read = () => JSON.parse(fs.readFileSync(OUT, 'utf8'));
+const read = () => JSON.parse(zlib.gunzipSync(fs.readFileSync(OUT)).toString('utf8'));
+const write = (obj) => fs.writeFileSync(OUT, zlib.gzipSync(Buffer.from(JSON.stringify(obj))));
 const rec = (u) => read().players[u];
-const setRec = (u, patch) => { const r = read(); Object.assign(r.players[u], patch); fs.writeFileSync(OUT, JSON.stringify(r)); };
+const setRec = (u, patch) => { const r = read(); Object.assign(r.players[u], patch); write(r); };
 const daysAgoIso = (d) => new Date(Date.now() - d * 86400000).toISOString();
 
 let pass = 0, fail = 0;
@@ -135,7 +138,7 @@ function ok(name, cond, detail) {
 // ── 1. First run: cohort, budget, never-checked first ────────────────────────
 console.log('\n1  First run builds the cohort and walks one slice');
 let r = run();
-ok('version line', /walk-registrations v3 2026-09-07/.test(r.out));
+ok('version line', /walk-registrations v4 2026-09-07/.test(r.out));
 ok('exit 0 (changed)', r.code === 0, `exit ${r.code}`);
 ok('cohort is the latest season per org, not 2025', /cohort: 21 people/.test(r.out), (r.out.match(/cohort: .*/) || [''])[0]);
 ok('2025-only players are not in the file', !read().players.old01);
@@ -243,7 +246,7 @@ v1.players.w000.nextCheck = new Date(Date.now() + 20 * 86400000).toISOString(); 
 v1.players.w001.other = [{ league: 'APS Football', season: '2026', status: 'ACTIVE' }];
 v1.players.w001.nextCheck = new Date(Date.now() + 5 * 86400000).toISOString();
 const w002Before = JSON.stringify(v1.players.w002);
-fs.writeFileSync(OUT, JSON.stringify(v1));
+write(v1);
 for (const u of wUuids) answers.profiles[u] = [own('PARKSIDE', 'Parkside FC')];
 answers.profiles.w000 = [own('PARKSIDE', 'Parkside FC'), efnl26];
 answers.profiles.w001 = [own('PARKSIDE', 'Parkside FC'), school26];
@@ -258,6 +261,17 @@ ok('a record with nothing stored is untouched by migration', JSON.stringify(rec(
 ok('file now marked v2', read().meta.version === 2);
 r = run();
 ok('a v2 file is not migrated again', !/migrated registrations.json/.test(r.out));
+
+// ── 9. Legacy plain .json is converted to .gz once and removed ───────────────
+console.log('\n9  A plain registrations.json from v1–v3 is read, written as .gz, and deleted');
+const legacy = read(); fs.rmSync(OUT); fs.writeFileSync(LEGACY, JSON.stringify(legacy));
+r = run({ WALK_DAILY_FRACTION: '100000' });
+ok('legacy read logged', /reading legacy data\/registrations.json/.test(r.out));
+ok('.gz written', fs.existsSync(OUT));
+ok('plain file removed and logged', !fs.existsSync(LEGACY) && /removed legacy/.test(r.out));
+ok('contents carried over', Object.keys(read().players).length === Object.keys(legacy.players).length);
+ok('exit 0 even with nothing else changed (the conversion is the change)', r.code === 0, `exit ${r.code}`);
+ok('gzipped output is a real gzip (magic bytes)', fs.readFileSync(OUT)[0] === 0x1f && fs.readFileSync(OUT)[1] === 0x8b);
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
