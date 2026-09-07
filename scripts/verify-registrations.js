@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-registrations v2 2026-09-07';
+const VERSION = 'verify-registrations v3 2026-09-07';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'walk-registrations.js');
@@ -135,7 +135,7 @@ function ok(name, cond, detail) {
 // ── 1. First run: cohort, budget, never-checked first ────────────────────────
 console.log('\n1  First run builds the cohort and walks one slice');
 let r = run();
-ok('version line', /walk-registrations v2 2026-09-07/.test(r.out));
+ok('version line', /walk-registrations v3 2026-09-07/.test(r.out));
 ok('exit 0 (changed)', r.code === 0, `exit ${r.code}`);
 ok('cohort is the latest season per org, not 2025', /cohort: 21 people/.test(r.out), (r.out.match(/cohort: .*/) || [''])[0]);
 ok('2025-only players are not in the file', !read().players.old01);
@@ -165,7 +165,7 @@ ok('w001 registered unassigned: tracked, team null', w1.tracked.length === 1 && 
 ok('w001 found -> due again in 28 days', Math.round((Date.parse(w1.nextCheck) - Date.parse(w1.at)) / 86400000) === 28);
 ok('w002 moved and assigned: club NEWPORT, team named', w2.tracked[0].club === 'NEWPORT' && w2.tracked[0].team === 'Newport U13 Blue', JSON.stringify(w2.tracked));
 ok('w002 from.club still the OLD club (Parkside)', w2.from.club === 'PARKSIDE');
-ok('w003 gone: nothing tracked, one other with league and season only', w3.tracked.length === 0 && w3.other.length === 1 && w3.other[0].league === 'Gippsland League' && w3.other[0].season === '2027' && !('club' in w3.other[0]), JSON.stringify(w3.other));
+ok('w003 gone: nothing tracked, one other with league, season and dates but no club', w3.tracked.length === 0 && w3.other.length === 1 && w3.other[0].league === 'Gippsland League' && w3.other[0].season === '2027' && w3.other[0].startDate === '2027-04-01' && w3.other[0].endDate === '2027-09-01' && !('club' in w3.other[0]), JSON.stringify(w3.other));
 ok('w004 NOT_FOUND recorded, not retried for 28 days', w4.missing === true && Math.round((Date.parse(w4.nextCheck) - Date.parse(w4.at)) / 86400000) === 28);
 ok('EFNL player harvested its own club', rec('e000').from.club === 'BLACKBURN');
 const w9 = rec('w009'), w10 = rec('w010'), w11 = rec('w011');

@@ -59,7 +59,7 @@ const path = require('path');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v2 2026-09-07 after-season-end';
+const VERSION = 'walk-registrations v3 2026-09-07 other-dates';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -324,7 +324,12 @@ async function main() {
           club: t.organisation?.id || null, clubName,
           team: t.name && t.name !== clubName ? t.name : null, name: t.name || null });
       } else {
-        other.push({ league: t.season?.competition?.name || null, season: t.season?.name || null, status: st });
+        // Dates travel with outside registrations so the panel can tell a season
+        // from a carnival: the first real run (2026-09-07) found "AFL Nines at
+        // Byron", a two-day event in October, as a player's only post-season
+        // registration. A departure line needs a season, not a weekend.
+        other.push({ league: t.season?.competition?.name || null, season: t.season?.name || null, status: st,
+          startDate: start || null, endDate: t.season?.endDate || null });
       }
     }
     rec.tracked = tracked;
@@ -346,7 +351,7 @@ async function main() {
 
   log('\n--- summary ---');
   log(`calls ${calls}  answered ${answered}  not found ${notFound}  errors ${errored}` + (stoppedForTime ? '  STOPPED FOR TIME' : ''));
-  log(`clubs harvested this run: ${clubsHarvested}; players with a next-season tracked registration: ${trackedFound}; with only an outside one: ${otherFound}`);
+  log(`clubs harvested this run: ${clubsHarvested}; players with a next-season tracked registration: ${trackedFound}; with an outside one: ${otherFound}`);
   if (Object.keys(byStatus).length) log(`registration statuses seen: ${JSON.stringify(byStatus)}`);
   if (cohort.some(c => !c.endDate)) log(`⚠️ a cohort season has no endDate in the manifest — falling back to the startDate rule for it, which over-includes concurrent seasons`);
   if (noOwnRecord) {
