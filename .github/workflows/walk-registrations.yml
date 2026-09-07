@@ -2,7 +2,7 @@
 name: Walk registrations
 
 # Daily slice of the registrations walk — registrations_design.md v2. Writes
-# data/registrations.json and nothing else. About a seventh of the cohort per
+# data/registrations.json.gz and nothing else (gzip only, decided 2026-09-07). About a seventh of the cohort per
 # run at 100 calls per 80 s: 5–6k calls, roughly 75 minutes.
 #
 # Runs in the OFF-SEASON only: the season gate inverted. When every tracked season
@@ -92,7 +92,9 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/registrations.json
+          # -A so the one-off removal of the plain registrations.json is staged
+          # too. Nothing else under data/ changes in this checkout.
+          git add -A data/registrations.json.gz data/registrations.json 2>/dev/null || git add -A data/
           git diff --staged --quiet || git commit -m "registrations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
