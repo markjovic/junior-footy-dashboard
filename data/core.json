@@ -544,7 +544,7 @@
           "competitionName": "Yarra Junior Football League (YJFL)",
           "startDate": "2026-04-19",
           "endDate": "2026-09-07",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -1605,7 +1605,7 @@
       "seasonName": "2026",
       "compName": "YJFL 2026",
       "competitionId": "a0abf2bc",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-19",
       "endDate": "2026-09-07",
       "retired": false,
@@ -1616,8 +1616,8 @@
         "matches": 3109,
         "players_n": 9157
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-08T02:03:13.634Z"
     },
     {
       "org": "4f9a099e",
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-07T01:00:55.638Z",
+  "lastSeasonDiscovery": "2026-09-08T02:03:34.256Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
