@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-discover-seasons v4 2026-09-08';
+const VERSION = 'verify-discover-seasons v5 2026-09-08';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'discover-seasons.js');
@@ -121,7 +121,7 @@ writeCore([
 ]);
 let r = run();
 ok('script ran without a fatal error', r.code === 0 || r.code === 2, `exit ${r.code}`);
-ok('version line printed', /v5 2026-09-08 tracked-orgs-round-trip/.test(r.out));
+ok('version line printed', /v6 2026-09-08 new-shape-summary/.test(r.out));
 ok('carry-forward count reported', /carried-forward phase records: 2/.test(r.out),
   (r.out.match(/carried-forward phase records: \d+/) || ['not printed'])[0]);
 ok('2025 kept results=true', phasesOf('75d8a232') && phasesOf('75d8a232').results === true,
@@ -365,6 +365,8 @@ ok('8a config shape reported as organisations[]', /config shape: organisations\[
 ok('8a round trip proven for both stored names', /round trip proven for 2 stored compName\(s\)/.test(r.out), (r.out.match(/round trip .*/) || [''])[0]);
 ok('8a compName preserved exactly', read().manifest.every((m) => m.compName === `EFNL ${m.seasonName}`), JSON.stringify(read().manifest.map((m) => m.compName)));
 ok('8a state carried through', read().manifest.find((m) => m.seasonId === '2dcbf383').state === 'active');
+ok('8a new-shape summary names the tracked organisations', /tracked organisations: 1 \(EFNL\); watched only: 0/.test(r.out), (r.out.match(/tracked organisations.*/) || [''])[0]);
+ok('8a no proposed config and no UNPROVEN warning under the new shape', !/proposed config.json/.test(r.out) && !/UNPROVEN/.test(r.out));
 // 8b. A brand-new season of a tracked organisation gets its compName without any config change
 stubSeasons([season('2dcbf383', '2026', 'ACTIVE'), season('75d8a232', '2025', 'COMPLETED'), season('eeee2027', '2027', 'UPCOMING')]);
 r = run();
@@ -394,6 +396,7 @@ ok('8e core.json untouched', fs.readFileSync(CORE, 'utf8') === beforeBytes);
 fs.writeFileSync(CONFIG, oldConfig);
 r = run();
 ok('8f proposed config marks the matched organisation tracked', /"tracked": true/.test(r.out));
+ok('8f old shape still prints the matched-count line', /matched to existing config: 1 of 1/.test(r.out));
 fs.rmSync(STUB, { force: true });
 
 fs.rmSync(TMP, { recursive: true, force: true });

@@ -59,7 +59,7 @@ const NOW = new Date().toISOString();
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'v5 2026-09-08 tracked-orgs-round-trip';
+const VERSION = 'v6 2026-09-08 new-shape-summary';
 
 // seasons takes a required organisationID argument, and organisationID must be
 // the 8-character organisation code rather than the UUID. Both verified
@@ -499,14 +499,23 @@ async function main() {
   log(`seasons: ${manifest.length} (${live.length} live, ${manifest.length - live.length} retired)`);
   log(`season status: ${JSON.stringify(byStatus)}`);
   log(`season state: ${JSON.stringify(byState)}, ${transitions} transition(s) this run`);
-  log(`matched to existing config: ${shortNameByCode.size} of ${existingComps.length}`);
+  if (newShape) {
+    const tracked = [...trackedNames.keys()].sort((a, b) => trackedNames.get(a).localeCompare(trackedNames.get(b)));
+    log(`tracked organisations: ${tracked.length} (${tracked.map((c) => trackedNames.get(c)).join(', ')}); watched only: ${codes.length - tracked.length}`);
+  } else {
+    log(`matched to existing config: ${shortNameByCode.size} of ${existingComps.length}`);
+  }
   if (failures.length) log(`failures: ${failures.length} — ${failures.map((f) => f.code).join(', ')}`);
   // A counter without examples cannot be checked.
   for (const m of live.slice(0, 10)) {
     log(`  LIVE ${m.org} ${m.seasonId} ${String(m.compName || m.orgName).slice(0, 34).padEnd(34)} ${m.status} ${m.startDate}..${m.endDate}`);
   }
 
-  // ── Proposed config.json, printed not written ─────────────────────────────
+  // ── Proposed config.json, printed not written — OLD SHAPE ONLY ─────────────
+  // Under organisations[] the config already is this, and the twelve untracked
+  // organisations are untracked by decision, not unproven — so neither the
+  // proposal nor the warning below has anything to say. v6.
+  if (!newShape) {
   const proposed = {
     organisations: Object.keys(organisations)
       .sort((a, b) => organisations[a].name.localeCompare(organisations[b].name))
@@ -539,6 +548,7 @@ async function main() {
       log(`    ${c}  name="${o.name}"  ->  compName would be "${o.name} ${sample ? sample.name : 'YYYY'}"`);
     }
   }
+  } // end old-shape-only block
   if (unmatched.length) {
     log(`\n  ⚠️ ${unmatched.length} configured competition(s) did not match — see above.`);
     log('  Do not migrate config.json until that is explained.');
