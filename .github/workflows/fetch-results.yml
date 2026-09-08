@@ -120,7 +120,10 @@ jobs:
             const fs = require("fs");
             const RECONCILE_DAYS = 7;
             const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
-            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            // Not retired: a retired season is never walked, whatever its state. Every
+            // stateAt was stamped the day state was introduced, so without this the
+            // 2022–2025 seasons read as "complete for a day" and held the gate open.
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId && !m.retired);
             for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}  stateAt=${m.stateAt || "-"}`);
             const now = Date.now();
             const dayMs = 86400000;
@@ -131,6 +134,7 @@ jobs:
             const reconciling = tracked.filter(m => m.state === "complete" && daysSince(m.stateAt) < RECONCILE_DAYS);
             let inSeason = true;
             if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!tracked.length) { inSeason = false; console.log("OFF SEASON — no tracked season in the manifest that is not retired; nothing to fetch"); }
             else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
             else if (live.length || reconciling.length) {
               if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
@@ -209,7 +213,10 @@ jobs:
             const fs = require("fs");
             const RECONCILE_DAYS = 7;
             const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
-            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            // Not retired: a retired season is never walked, whatever its state. Every
+            // stateAt was stamped the day state was introduced, so without this the
+            // 2022–2025 seasons read as "complete for a day" and held the gate open.
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId && !m.retired);
             for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}  stateAt=${m.stateAt || "-"}`);
             const now = Date.now();
             const dayMs = 86400000;
@@ -220,6 +227,7 @@ jobs:
             const reconciling = tracked.filter(m => m.state === "complete" && daysSince(m.stateAt) < RECONCILE_DAYS);
             let inSeason = true;
             if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!tracked.length) { inSeason = false; console.log("OFF SEASON — no tracked season in the manifest that is not retired; nothing to fetch"); }
             else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
             else if (live.length || reconciling.length) {
               if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
@@ -329,7 +337,10 @@ jobs:
             const fs = require("fs");
             const RECONCILE_DAYS = 7;
             const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
-            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
+            // Not retired: a retired season is never walked, whatever its state. Every
+            // stateAt was stamped the day state was introduced, so without this the
+            // 2022–2025 seasons read as "complete for a day" and held the gate open.
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId && !m.retired);
             for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}  stateAt=${m.stateAt || "-"}`);
             const now = Date.now();
             const dayMs = 86400000;
@@ -340,6 +351,7 @@ jobs:
             const reconciling = tracked.filter(m => m.state === "complete" && daysSince(m.stateAt) < RECONCILE_DAYS);
             let inSeason = true;
             if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!tracked.length) { inSeason = false; console.log("OFF SEASON — no tracked season in the manifest that is not retired; nothing to fetch"); }
             else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
             else if (live.length || reconciling.length) {
               if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
