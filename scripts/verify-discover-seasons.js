@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-discover-seasons v3 2026-09-07';
+const VERSION = 'verify-discover-seasons v4 2026-09-08';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'discover-seasons.js');
@@ -121,7 +121,7 @@ writeCore([
 ]);
 let r = run();
 ok('script ran without a fatal error', r.code === 0 || r.code === 2, `exit ${r.code}`);
-ok('version line printed', /v4 2026-09-07 season-state/.test(r.out));
+ok('version line printed', /v5 2026-09-08 tracked-orgs-round-trip/.test(r.out));
 ok('carry-forward count reported', /carried-forward phase records: 2/.test(r.out),
   (r.out.match(/carried-forward phase records: \d+/) || ['not printed'])[0]);
 ok('2025 kept results=true', phasesOf('75d8a232') && phasesOf('75d8a232').results === true,
@@ -345,6 +345,56 @@ ok('7k empty organisation reported as 0 comps, 0 seasons', /e0e0e0e0 .*0 comp\(s
 ok('7k the real season still resolved', entry('2dcbf383').state === 'active');
 fs.writeFileSync(CONFIG, savedConfig);
 fs.rmSync(STUB);
+
+// ── 8. The organisations[] config shape ──────────────────────────────────────
+// season_rollover_design.md §2–§3. Before v5, this shape nulled every compName.
+console.log('\n8  organisations[] config: tracked names rebuild compName; untracked stay null; drift is fatal');
+const oldConfig = fs.readFileSync(CONFIG, 'utf8');
+fs.rmSync(STUB, { force: true });
+writeCore([
+  { org: '383836bb', seasonId: '75d8a232', compName: 'EFNL 2025', retired: true, state: 'complete', stateAt: '2025-10-01T00:00:00.000Z',
+    phases: { results: true, players: true } },
+  { org: '383836bb', seasonId: '2dcbf383', compName: 'EFNL 2026', retired: false, state: 'active', stateAt: '2026-09-07T00:00:00.000Z',
+    phases: { results: true, players: true } },
+]);
+// 8a. Correct name, tracked
+fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [{ code: '383836bb', name: 'EFNL', tracked: true, vip: true, excludeGrades: [] }] }));
+r = run();
+ok('8a ran', r.code === 0 || r.code === 2, `exit ${r.code}`);
+ok('8a config shape reported as organisations[]', /config shape: organisations\[\]/.test(r.out));
+ok('8a round trip proven for both stored names', /round trip proven for 2 stored compName\(s\)/.test(r.out), (r.out.match(/round trip .*/) || [''])[0]);
+ok('8a compName preserved exactly', read().manifest.every((m) => m.compName === `EFNL ${m.seasonName}`), JSON.stringify(read().manifest.map((m) => m.compName)));
+ok('8a state carried through', read().manifest.find((m) => m.seasonId === '2dcbf383').state === 'active');
+// 8b. A brand-new season of a tracked organisation gets its compName without any config change
+stubSeasons([season('2dcbf383', '2026', 'ACTIVE'), season('75d8a232', '2025', 'COMPLETED'), season('eeee2027', '2027', 'UPCOMING')]);
+r = run();
+ok('8b new season named from the tracked short name', entry('eeee2027') && entry('eeee2027').compName === 'EFNL 2027', JSON.stringify(entry('eeee2027') && entry('eeee2027').compName));
+ok('8b new season is upcoming', entry('eeee2027').state === 'upcoming');
+// 8c. Untracked organisation with a name still gets null compName
+fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [{ code: '383836bb', name: 'EFNL', tracked: false, vip: false }] }));
+writeCore([]);
+r = run();
+ok('8c untracked -> compName null even with a name', read().manifest.every((m) => m.compName === null), JSON.stringify(read().manifest.map((m) => m.compName)));
+// 8d. Wrong short name against stored data is FATAL and writes nothing
+writeCore([
+  { org: '383836bb', seasonId: '2dcbf383', compName: 'EFNL 2026', retired: false, state: 'active', stateAt: '2026-09-07T00:00:00.000Z', phases: { results: true, players: true } },
+]);
+const beforeBytes = fs.readFileSync(CORE, 'utf8');
+fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [{ code: '383836bb', name: 'Eastern FNL', tracked: true }] }));
+r = run();
+ok('8d exit 1', r.code === 1, `exit ${r.code}`);
+ok('8d names the drift', /FATAL: 1 stored compName\(s\) would change/.test(r.out) && /EFNL 2026 -> "Eastern FNL 2026"/.test(r.out), (r.out.match(/FATAL.*/) || [''])[0]);
+ok('8d core.json byte-identical', fs.readFileSync(CORE, 'utf8') === beforeBytes);
+// 8e. Dropping `tracked` from an organisation that has stored names is ALSO drift (compName would become null)
+fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [{ code: '383836bb', name: 'EFNL', tracked: false }] }));
+r = run();
+ok('8e untracking a stored organisation is fatal', r.code === 1 && /EFNL 2026 -> null/.test(r.out), `exit ${r.code}`);
+ok('8e core.json untouched', fs.readFileSync(CORE, 'utf8') === beforeBytes);
+// 8f. The proposed config now carries `tracked`, true only for proven names
+fs.writeFileSync(CONFIG, oldConfig);
+r = run();
+ok('8f proposed config marks the matched organisation tracked', /"tracked": true/.test(r.out));
+fs.rmSync(STUB, { force: true });
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);

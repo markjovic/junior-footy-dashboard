@@ -500,7 +500,7 @@ if (require.main === module) {
 
   // Bump on every change. Printed first so a stale copy in an Actions log is
   // distinguishable from a real failure.
-  const VERSION = 'fetch-stats v2 2026-08-12 skip-retired';
+  const VERSION = 'fetch-stats v3 2026-09-08 manifest-targets';
 
   async function main() {
     console.log(`=== ${VERSION} ===`);
@@ -531,15 +531,31 @@ if (require.main === module) {
       console.warn(`Could not read the manifest (${e.message}) — treating every season as live.`);
     }
 
-    // VIP_ONLY: filter grades to VIP competitions only
+    // Which competitions this run covers — season_rollover_design.md §5.
+    // Two filters. VIP: under the NEW config shape a competition is VIP when its
+    // organisation is; under the OLD shape when config names it. Scope: under the
+    // NEW shape, unless STATS_INCLUDE_RETIRED is set, only the manifest's tracked
+    // live seasons (store.fetchTargets) — the retired filter below then has
+    // nothing left to do. Under the OLD shape every grade, as before.
     const vipOnly = process.env.VIP_ONLY === 'true';
+    const cfg = store.readConfig();
     let vipComps = new Set();
-    if (vipOnly && fs.existsSync(path.join(ROOT, 'config.json'))) {
-      const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
-      vipComps = new Set((cfg.competitions||[]).filter(c=>c.vip).map(c=>c.name));
+    if (cfg.shape === 'new') {
+      const vipOrgs = new Set([...cfg.organisations.values()].filter(o => o.vip).map(o => o.code));
+      try {
+        const core = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'core.json'), 'utf8'));
+        for (const m of core.manifest || []) if (m.compName && vipOrgs.has(String(m.org))) vipComps.add(m.compName);
+      } catch (e) { console.warn(`Could not read the manifest for VIP organisations (${e.message}).`); }
+    } else {
+      vipComps = new Set(cfg.competitions.filter(c => c.vip).map(c => c.name));
     }
-
     let grades = vipOnly ? allGrades.filter(g => vipComps.has(g.compName)) : allGrades;
+    if (cfg.shape === 'new' && !includeRetired) {
+      const targets = store.fetchTargets({ vipOnly });
+      const targetComps = new Set(targets.map(t => t.name));
+      grades = grades.filter(g => targetComps.has(g.compName));
+      console.log(`targets from the manifest: ${targets.map(t => `${t.name}[${t.state}]`).join(', ') || '(none)'}`);
+    }
     const beforeRetired = grades.length;
     if (!includeRetired && retiredComps.size) {
       grades = grades.filter(g => !retiredComps.has(g.compName));

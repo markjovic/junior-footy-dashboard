@@ -15,6 +15,16 @@
 // writeLastRound argument this script used to pass is gone.
 // lastround_gotw_keying_design.md.
 //
+// v4 (2026-09-08): the competitions come from store.fetchTargets(), not from
+// config.json's competitions[] — season_rollover_design.md. Under the NEW config
+// shape (organisations[] with tracked/vip/excludeGrades and no season ids) the
+// manifest decides: tracked organisations' seasons that are active or upcoming,
+// or complete for under 7 days — the same rule as the workflow's season gate. A
+// 2027 season is fetched the morning discovery records it, with nobody editing
+// anything. Under the OLD shape fetchTargets returns competitions[] verbatim and
+// nothing here changes. FETCH_INCLUDE_COMPLETE=true (the workflow's
+// ignore_season_gate) adds every non-retired complete season.
+//
 // Exit codes, unchanged: 0 = changed, commit. 2 = no change, skip commit.
 // 1 = fatal.
 
@@ -23,8 +33,9 @@
 const fs = require('fs');
 const path = require('path');
 const engine = require('./lib/results-engine');
+const store = require('./lib/store');
 
-const VERSION = 'v3 2026-08-13 lastround-rekey';
+const VERSION = 'v4 2026-09-08 manifest-targets';
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 
@@ -35,21 +46,23 @@ async function main() {
     console.error('config.json not found at', CONFIG_PATH);
     process.exit(1);
   }
-  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  const all = config.competitions || [];
-  if (!all.length) {
-    console.error('No competitions defined in config.json');
-    process.exit(1);
-  }
-
-  // VIP_ONLY: only fetch VIP competitions. Set by the workflow for most runs.
+  const cfg = store.readConfig();
   const vipOnly = process.env.VIP_ONLY === 'true';
+  const includeComplete = process.env.FETCH_INCLUDE_COMPLETE === 'true';
+  const all = store.fetchTargets({ includeComplete });
+  console.log(`config shape: ${cfg.shape === 'new' ? 'organisations[] — targets from the manifest' : 'competitions[] — targets from config.json'}`);
+  if (!all.length) {
+    if (cfg.shape === 'old') { console.error('No competitions defined in config.json'); process.exit(1); }
+    console.log('No tracked season is active, upcoming or recently complete — nothing to fetch. Skipping commit');
+    process.exit(2);
+  }
   const competitions = vipOnly ? all.filter(c => c.vip) : all;
   if (!competitions.length) {
-    console.error('VIP_ONLY is set but no competition in config.json has vip: true');
+    console.error(`VIP_ONLY is set but no ${cfg.shape === 'new' ? 'tracked organisation' : 'competition in config.json'} has vip: true`);
     process.exit(1);
   }
-  console.log(`Fetching ${vipOnly ? 'VIP' : 'ALL'} competitions`);
+  console.log(`Fetching ${vipOnly ? 'VIP' : 'ALL'} competitions:`);
+  for (const c of competitions) console.log(`  ${c.name}  ${c.seasonID}${c.state ? `  state=${c.state}` : ''}${c.excludeGrades.length ? `  excludeGrades=${c.excludeGrades.join(',')}` : ''}`);
 
   const r = await engine.run({
     competitions,

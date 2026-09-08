@@ -59,7 +59,7 @@ const NOW = new Date().toISOString();
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'v4 2026-09-07 season-state';
+const VERSION = 'v5 2026-09-08 tracked-orgs-round-trip';
 
 // seasons takes a required organisationID argument, and organisationID must be
 // the 8-character organisation code rather than the UUID. Both verified
@@ -211,6 +211,15 @@ async function main() {
   const existingComps = cfg.competitions || [];
   const vipByCode = new Map(newShape ? cfg.organisations.map((o) => [o.code, !!o.vip]) : []);
   const excludeByCode = new Map(newShape ? cfg.organisations.map((o) => [o.code, o.excludeGrades || []]) : []);
+  // NEW SHAPE (season_rollover_design.md §3): `tracked: true` means this
+  // organisation's seasons are fetched, walked and shown, and its `name` IS the
+  // short name compName is built from. Untracked organisations are watched only
+  // and keep compName null, exactly as unmatched ones do in the old shape.
+  // ⚠️ Until v5 the new shape had no way to supply a short name at all, so
+  // switching to it nulled every compName — the failure §2 of the design records.
+  const trackedNames = new Map(newShape
+    ? cfg.organisations.filter((o) => o.tracked === true && o.name).map((o) => [o.code, String(o.name)])
+    : []);
 
   log(`=== season discovery === ${VERSION}`);
   log(`today: ${TODAY}`);
@@ -282,7 +291,7 @@ async function main() {
   // existing one. "EFNL 2026" minus "2026" is "EFNL", and "EFNL" + " " + "2026"
   // reproduces the stored compName byte for byte. Anything that does not match
   // is reported rather than assumed.
-  const shortNameByCode = new Map();
+  const shortNameByCode = new Map(trackedNames);
   const unmatched = [];
 
   for (const comp of existingComps) {
@@ -433,6 +442,28 @@ async function main() {
 
   manifest.sort((a, b) => a.org.localeCompare(b.org) || String(b.endDate || '').localeCompare(String(a.endDate || '')));
 
+  // ── Round-trip guard: no stored compName may change ────────────────────────
+  // compName is the first half of every match id, roster key and player key. A
+  // prior entry that had one must get the identical string back, or nothing is
+  // written. This is what makes the config migration safe to attempt: a wrong
+  // short name in config.json fails here, loudly, before it can orphan a record.
+  const drift = [];
+  let proven = 0;
+  for (const m of manifest) {
+    const before = prior.get(m.seasonId);
+    if (!before || !before.compName) continue;
+    if (m.compName === before.compName) { proven++; continue; }
+    drift.push(`${m.seasonId} ${before.compName} -> ${m.compName === null ? 'null' : JSON.stringify(m.compName)}`);
+  }
+  if (drift.length) {
+    console.error(`\nFATAL: ${drift.length} stored compName(s) would change — nothing written.`);
+    for (const d of drift) console.error(`  ${d}`);
+    console.error('compName is half of every stored key. Fix config.json (the tracked');
+    console.error('organisation\'s `name` must rebuild the stored compName exactly) and rerun.');
+    process.exit(1);
+  }
+  log(`round trip proven for ${proven} stored compName(s)`);
+
   // ── Season state ───────────────────────────────────────────────────────────
   // Recomputed every run, not sticky: if PlayHQ reopens a season or a late
   // result lands, the state follows. Only stateAt is history, and it moves only
@@ -482,6 +513,8 @@ async function main() {
       .map((code) => ({
         code,
         name: organisations[code].name,
+        // Only organisations whose short name is PROVEN are proposed as tracked.
+        tracked: organisations[code].migrated === true,
         vip: organisations[code].vip,
         excludeGrades: organisations[code].excludeGrades,
       })),

@@ -34,8 +34,9 @@
 const fs = require('fs');
 const path = require('path');
 const engine = require('./lib/results-engine');
+const store = require('./lib/store');
 
-const VERSION = 'backfill v3 2026-08-13 (phase A, per-season)';
+const VERSION = 'backfill v4 2026-09-08 (phase A, per-season, both config shapes)';
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
@@ -143,18 +144,27 @@ async function main() {
   // ── excludeGrades, carried across from config by matching the season id ────
   // excludeGrades shifts grade ranks, so a backfilled season must use the same
   // list the live season does or its gradeMeta ranks will not line up.
+  // Both config shapes (season_rollover_design.md §3): the new one keys the list
+  // by organisation code directly; the old one is matched through a season id.
   let excludeGrades = [];
   if (fs.existsSync(CONFIG_PATH)) {
     try {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-      const idsForOrg = new Set(forOrg.map(m => m.seasonId));
-      const hit = (cfg.competitions || []).find(c => idsForOrg.has(c.seasonID));
-      if (hit) {
-        excludeGrades = hit.excludeGrades || [];
-        console.log(`excludeGrades from config entry "${hit.name}": ` +
-          (excludeGrades.length ? excludeGrades.join(', ') : '(none)'));
+      const cfg = store.readConfig();
+      if (cfg.shape === 'new') {
+        const o = cfg.organisations.get(org);
+        excludeGrades = o ? o.excludeGrades : [];
+        console.log(o ? `excludeGrades from config organisation ${org} (${o.name}): ${excludeGrades.length ? excludeGrades.join(', ') : '(none)'}`
+                      : `Organisation ${org} is not in config.json — excludeGrades empty.`);
       } else {
-        console.log(`No config.json competition matches organisation ${org} — excludeGrades empty.`);
+        const idsForOrg = new Set(forOrg.map(m => m.seasonId));
+        const hit = cfg.competitions.find(c => idsForOrg.has(c.seasonID));
+        if (hit) {
+          excludeGrades = hit.excludeGrades || [];
+          console.log(`excludeGrades from config entry "${hit.name}": ` +
+            (excludeGrades.length ? excludeGrades.join(', ') : '(none)'));
+        } else {
+          console.log(`No config.json competition matches organisation ${org} — excludeGrades empty.`);
+        }
       }
     } catch (e) {
       console.warn(`Could not read config.json for excludeGrades: ${e.message} — using none.`);

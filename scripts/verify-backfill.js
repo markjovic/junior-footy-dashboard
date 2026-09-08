@@ -23,7 +23,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-backfill v8 2026-09-04 relative-season-window';
+const VERSION = 'verify-backfill v9 2026-09-08 manifest-targets';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -364,6 +364,54 @@ ok('both competitions were fetched', /2 competition-season\(s\)/.test(r.out));
 ok('and both compLogos survive an unscoped run',
   Object.keys(read(CORE).compLogos).length >= 2,
   JSON.stringify(Object.keys(read(CORE).compLogos)));
+
+// ── 4b. The NEW config shape: targets from the manifest ─────────────────────
+// season_rollover_design.md §3–§5. No season id anywhere in config.json; the
+// manifest decides. The fixture manifest has no `state` (pre discover-seasons
+// v4), so the status fallback is what is exercised here — and it must agree
+// with the old shape's answer exactly.
+console.log('\n4b  organisations[] config: fetch-results takes its targets from the manifest');
+const NEW_CONFIG = () => fs.writeFileSync(CONFIG(), JSON.stringify({
+  organisations: [
+    { code: '383836bb', name: 'EFNL', tracked: true,  vip: true,  excludeGrades: [] },
+    { code: '4f9a099e', name: 'YJFL', tracked: true,  vip: false, excludeGrades: [] },
+    { code: '0f20da4f', name: 'Unnamed org', tracked: false },
+  ],
+}, null, 2));
+reset(); NEW_CONFIG();
+r = run('fetch-results.js', { VIP_ONLY: 'true' });
+ok('4b VIP run exit 0', r.code === 0, `exit ${r.code}`);
+ok('4b reports the manifest as the source', /targets from the manifest/.test(r.out));
+ok('4b VIP run fetched EFNL 2026 only', /1 competition-season\(s\)/.test(r.out) && /EFNL 2026  2dcbf383  state=active/.test(r.out),
+  (r.out.match(/Fetching VIP competitions:[\s\S]{0,120}/) || [''])[0]);
+ok('4b 2026 matches written, as under the old shape', read(EFNL_CUR).matches.length === 2);
+ok('4b compLogos still MERGED', read(CORE).compLogos['YJFL 2026'] === 'http://x/yjfl.png');
+reset(); NEW_CONFIG();
+r = run('fetch-results.js', {});
+ok('4b full run covers both tracked live seasons', r.code === 0 && /2 competition-season\(s\)/.test(r.out), `exit ${r.code}`);
+ok('4b the retired EFNL 2025 and the untracked organisation were NOT targets', !/EFNL 2025  75d8a232/.test(r.out) && !/ffff9999/.test(r.out));
+// A tracked organisation's season the manifest calls complete for a month is out; a fresh one is in (the reconciliation window).
+{
+  const m = MANIFEST();
+  m.find(x => x.seasonId === 'cda2f0ec').state = 'complete';
+  m.find(x => x.seasonId === 'cda2f0ec').stateAt = new Date(Date.now() - 30 * 86400000).toISOString();
+  m.find(x => x.seasonId === '2dcbf383').state = 'complete';
+  m.find(x => x.seasonId === '2dcbf383').stateAt = new Date(Date.now() - 2 * 86400000).toISOString();
+  reset(m); NEW_CONFIG();
+  r = run('fetch-results.js', {});
+  ok('4b complete 2 days -> still fetched; complete 30 days -> not', /1 competition-season\(s\)/.test(r.out) && /EFNL 2026  2dcbf383  state=complete/.test(r.out) && !/YJFL 2026  cda2f0ec/.test(r.out),
+    (r.out.match(/Fetching ALL competitions:[\s\S]{0,160}/) || [''])[0]);
+  r = run('fetch-results.js', { FETCH_INCLUDE_COMPLETE: 'true' });
+  ok('4b FETCH_INCLUDE_COMPLETE brings the old complete season back', /2 competition-season\(s\)/.test(r.out));
+  for (const x of m) if (!x.retired) { x.state = 'complete'; x.stateAt = '2026-01-01T00:00:00.000Z'; }
+  reset(m); NEW_CONFIG();
+  r = run('fetch-results.js', {});
+  ok('4b nothing live -> exit 2, nothing fetched, plain message', r.code === 2 && /nothing to fetch/.test(r.out), `exit ${r.code}`);
+}
+// backfill reads excludeGrades by organisation under the new shape
+reset(); fs.writeFileSync(CONFIG(), JSON.stringify({ organisations: [{ code: '383836bb', name: 'EFNL', tracked: true, vip: true, excludeGrades: ['Veterans'] }] }));
+r = run('backfill.js', { BACKFILL_ORG: '383836bb', BACKFILL_SEASON: '2025', BACKFILL_DRY_RUN: 'true' });
+ok('4b backfill takes excludeGrades from the organisation entry', r.code === 2 && /excludeGrades from config organisation 383836bb \(EFNL\): Veterans/.test(r.out), (r.out.match(/excludeGrades.*/) || [''])[0]);
 
 // ── 5. Failure path: a live season ───────────────────────────────────────────
 console.log('\n5  Guards must refuse rather than produce something wrong');

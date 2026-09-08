@@ -198,7 +198,7 @@ function ensureDataDir() {
 
 // Bump on every change. Printed at the top of every run so a stale copy in an
 // Actions log is distinguishable from a real failure.
-const VERSION = 'fetch-fixtures v6 2026-08-31 dry-run-and-id-logging';
+const VERSION = 'fetch-fixtures v7 2026-09-08 manifest-targets';
 
 async function main() {
   console.log(`=== ${VERSION} ===`);
@@ -210,15 +210,19 @@ async function main() {
     console.error('grades.json not found — run fetch-results.js first');
     process.exit(1);
   }
-  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   const allGrades = JSON.parse(fs.readFileSync(GRADES_PATH, 'utf8'));
 
+  // Which competitions this run covers — season_rollover_design.md §5.
+  // NEW config shape: the manifest's tracked live seasons via store.fetchTargets
+  // (which also stops a non-VIP run walking every retired grade since 2022 —
+  // 1,006 grades on 2026-09-07). OLD shape: unchanged, every grade, VIP by name.
   const vipOnly = process.env.VIP_ONLY === 'true';
-  let vipComps = new Set();
-  if (vipOnly) {
-    vipComps = new Set((config.competitions || []).filter(c => c.vip).map(c => c.name));
-  }
-  const grades = vipOnly ? allGrades.filter(g => vipComps.has(g.compName)) : allGrades;
+  const cfg = store.readConfig();
+  const targets = store.fetchTargets({ vipOnly, includeComplete: process.env.FETCH_INCLUDE_COMPLETE === 'true' });
+  const targetComps = new Set(targets.map(t => t.name));
+  const grades = (cfg.shape === 'new' || vipOnly) ? allGrades.filter(g => targetComps.has(g.compName)) : allGrades;
+  if (cfg.shape === 'new') console.log(`targets from the manifest: ${targets.map(t => `${t.name}[${t.state}]`).join(', ') || '(none)'}`);
+  if (!grades.length) { console.log('No grade in scope — nothing to fetch. Skipping commit'); process.exit(2); }
 
   console.log(`Fetching fixtures for ${vipOnly ? 'VIP' : 'ALL'} comps (${grades.length} grades)`);
 

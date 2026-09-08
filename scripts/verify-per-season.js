@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-per-season v2 2026-08-19 lastround-removed';
+const VERSION = 'verify-per-season v3 2026-09-08 fetch-targets';
 console.log(`=== ${VERSION} ===`);
 
 const SCRIPTS = __dirname;
@@ -336,6 +336,56 @@ console.log('\n8  The fixture is real');
     read(CORE).manifest.filter(m => m.org === '383836bb').length === 2);
   ok('players outnumber matches in the fixture, as they do in reality',
     read(sPlayers('2dcbf383')).players.length > 0);
+}
+
+// ── 9. readConfig / fetchTargets — both config shapes ────────────────────────
+// season_rollover_design.md §3–§4. store v8. The rule that decides what the
+// scheduled fetch walks; it must match the season gate in fetch-results.yml.
+console.log('\n9  fetchTargets: old shape verbatim; new shape from the manifest by state');
+{
+  const CONFIG = path.join(TMP, 'config.json');
+  const iso = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
+  fs.writeFileSync(CORE, JSON.stringify({ manifest: [
+    { org: 'A', seasonId: 'a26', compName: 'EFNL 2026', status: 'ACTIVE',    retired: false, state: 'active' },
+    { org: 'A', seasonId: 'a27', compName: 'EFNL 2027', status: 'UPCOMING',  retired: false, state: 'upcoming' },
+    { org: 'A', seasonId: 'a25', compName: 'EFNL 2025', status: 'COMPLETED', retired: true,  state: 'complete', stateAt: iso(300) },
+    { org: 'S', seasonId: 's26', compName: 'SEJ 2026',  status: 'COMPLETED', retired: false, state: 'complete', stateAt: iso(3) },
+    { org: 'W', seasonId: 'w26', compName: 'WFNL 2026', status: 'COMPLETED', retired: false, state: 'complete', stateAt: iso(40) },
+    { org: 'V', seasonId: 'v26', compName: null,        status: 'ACTIVE',    retired: false, state: 'active' },
+    { org: 'N', seasonId: 'n26', compName: 'Named untracked 2026', status: 'ACTIVE', retired: false, state: 'active' },
+  ] }));
+  const names = (o) => store.fetchTargets(o).map(t => t.name);
+
+  fs.writeFileSync(CONFIG, JSON.stringify({ competitions: [
+    { name: 'EFNL 2026', seasonID: 'a26', vip: true, excludeGrades: ['Veterans'] },
+    { name: 'SEJ 2026',  seasonID: 's26', vip: false } ], organisationCodes: ['A', 'S'] }));
+  ok('old shape detected', store.readConfig().shape === 'old');
+  ok('old shape: competitions[] verbatim, manifest ignored', JSON.stringify(names()) === JSON.stringify(['EFNL 2026', 'SEJ 2026']), JSON.stringify(names()));
+  ok('old shape: vipOnly filters by c.vip', JSON.stringify(names({ vipOnly: true })) === JSON.stringify(['EFNL 2026']));
+  ok('old shape: excludeGrades carried', store.fetchTargets()[0].excludeGrades[0] === 'Veterans');
+
+  fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [
+    { code: 'A', name: 'EFNL', tracked: true,  vip: true, excludeGrades: ['Veterans'] },
+    { code: 'S', name: 'SEJ',  tracked: true },
+    { code: 'W', name: 'WFNL', tracked: true },
+    { code: 'N', name: 'Named untracked', tracked: false } ] }));
+  ok('new shape detected', store.readConfig().shape === 'new');
+  ok('new shape: active + upcoming + complete<7d; not retired, not complete 40d, not untracked, not compName null',
+    JSON.stringify(names()) === JSON.stringify(['EFNL 2026', 'EFNL 2027', 'SEJ 2026']), JSON.stringify(names()));
+  ok('new shape: states carried', store.fetchTargets().map(t => t.state).join(',') === 'active,upcoming,complete');
+  ok('new shape: vipOnly by organisation', JSON.stringify(names({ vipOnly: true })) === JSON.stringify(['EFNL 2026', 'EFNL 2027']));
+  ok('new shape: excludeGrades from the organisation, on every season of it', store.fetchTargets().filter(t => t.org === 'A').every(t => t.excludeGrades[0] === 'Veterans'));
+  ok('new shape: includeComplete adds the 40-day-old complete season but not the retired one',
+    JSON.stringify(names({ includeComplete: true })) === JSON.stringify(['EFNL 2026', 'EFNL 2027', 'SEJ 2026', 'WFNL 2026']), JSON.stringify(names({ includeComplete: true })));
+  ok('new shape: a complete season exactly 7 days old is out', (() => {
+    const c = read(CORE); c.manifest.find(m => m.seasonId === 's26').stateAt = iso(7); fs.writeFileSync(CORE, JSON.stringify(c));
+    return !names().includes('SEJ 2026'); })());
+  ok('new shape: a manifest with no state falls back to status', (() => {
+    const c = read(CORE); for (const m of c.manifest) delete m.state; fs.writeFileSync(CORE, JSON.stringify(c));
+    return JSON.stringify(names()) === JSON.stringify(['EFNL 2026', 'EFNL 2027']); })(), JSON.stringify(names()));
+  ok('new shape: empty organisations[] is treated as the old shape (nothing to fetch, not a crash)', (() => {
+    fs.writeFileSync(CONFIG, JSON.stringify({ organisations: [] })); return store.readConfig().shape === 'old' && names().length === 0; })());
+  ok('no config.json at all -> old shape, empty', (() => { fs.rmSync(CONFIG); return store.readConfig().shape === 'old' && names().length === 0; })());
 }
 
 process.chdir(os.tmpdir());
