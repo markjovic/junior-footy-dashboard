@@ -1,54 +1,5 @@
 {
   "organisations": {
-    "1cd834de": {
-      "code": "1cd834de",
-      "orgName": "Victorian Amateur Football Association (VAFA)",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Elsternwick",
-      "competitions": [
-        {
-          "id": "46a51ab6",
-          "name": "Victorian Amateur Football Association (VAFA)"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "2af0bc11",
-          "name": "2026",
-          "competitionId": "46a51ab6",
-          "competitionName": "Victorian Amateur Football Association (VAFA)",
-          "startDate": "2026-04-01",
-          "endDate": "2026-09-25",
-          "status": "ACTIVE",
-          "retired": false
-        },
-        {
-          "id": "eb054883",
-          "name": "2025",
-          "competitionId": "46a51ab6",
-          "competitionName": "Victorian Amateur Football Association (VAFA)",
-          "startDate": "2025-04-05",
-          "endDate": "2025-09-26",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "19ace630",
-          "name": "2024",
-          "competitionId": "46a51ab6",
-          "competitionName": "Victorian Amateur Football Association (VAFA)",
-          "startDate": "2024-01-01",
-          "endDate": "2024-10-30",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Victorian Amateur Football Association (VAFA)",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
-    },
     "383836bb": {
       "code": "383836bb",
       "orgName": "Eastern Football Netball League",
@@ -98,152 +49,74 @@
       "excludeGrades": [],
       "migrated": true
     },
-    "3f7be677": {
-      "code": "3f7be677",
-      "orgName": "Southern Football Netball League",
+    "1cf85e52": {
+      "code": "1cf85e52",
+      "orgName": "South East Juniors",
       "type": "ASSOCIATION",
       "state": "VIC",
-      "suburb": "Moorabbin",
+      "suburb": "Cranbourne",
       "competitions": [
         {
-          "id": "e698385f",
-          "name": "Southern Football Netball League"
+          "id": "0edb85d5",
+          "name": "South East Juniors"
         }
       ],
       "seasons": [
         {
-          "id": "aea5195c",
+          "id": "4dfaaab5",
           "name": "2026",
-          "competitionId": "e698385f",
-          "competitionName": "Southern Football Netball League",
-          "startDate": "2026-04-02",
-          "endDate": "2026-09-20",
-          "status": "ACTIVE",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
+          "startDate": "2025-11-01",
+          "endDate": "2026-09-01",
+          "status": "COMPLETED",
           "retired": false
         },
         {
-          "id": "d927d910",
+          "id": "48ad3050",
           "name": "2025",
-          "competitionId": "e698385f",
-          "competitionName": "Southern Football Netball League",
-          "startDate": "2025-04-04",
-          "endDate": "2025-09-30",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
+          "startDate": "2024-11-01",
+          "endDate": "2025-09-01",
           "status": "COMPLETED",
           "retired": true
         },
         {
-          "id": "ec2738eb",
+          "id": "feccaf1c",
           "name": "2024",
-          "competitionId": "e698385f",
-          "competitionName": "Southern Football Netball League",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
           "startDate": "2023-11-01",
-          "endDate": "2024-10-31",
+          "endDate": "2024-08-26",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "ef761f0e",
+          "name": "2023",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
+          "startDate": "2022-11-01",
+          "endDate": "2023-08-28",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "3fff6775",
+          "name": "2022",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
+          "startDate": "2021-11-24",
+          "endDate": "2022-11-24",
           "status": "COMPLETED",
           "retired": true
         }
       ],
-      "name": "Southern Football Netball League",
+      "name": "SEJ",
       "vip": false,
       "excludeGrades": [],
-      "migrated": false
-    },
-    "8162176f": {
-      "code": "8162176f",
-      "orgName": "Essendon District Football League (EDFL)",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Essendon",
-      "competitions": [
-        {
-          "id": "33f0fa7b",
-          "name": "Essendon District Football League (EDFL)"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "07a9daa6",
-          "name": "2026",
-          "competitionId": "33f0fa7b",
-          "competitionName": "Essendon District Football League (EDFL)",
-          "startDate": "2026-04-02",
-          "endDate": "2026-09-20",
-          "status": "ACTIVE",
-          "retired": false
-        },
-        {
-          "id": "6c1ae29c",
-          "name": "2025",
-          "competitionId": "33f0fa7b",
-          "competitionName": "Essendon District Football League (EDFL)",
-          "startDate": "2025-03-29",
-          "endDate": "2025-09-21",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "b9f747a9",
-          "name": "2024",
-          "competitionId": "33f0fa7b",
-          "competitionName": "Essendon District Football League (EDFL)",
-          "startDate": "2024-04-12",
-          "endDate": "2024-09-22",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Essendon District Football League (EDFL)",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
-    },
-    "862f96f9": {
-      "code": "862f96f9",
-      "orgName": "Northern Football Netball League (NFNL)",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Bundoora",
-      "competitions": [
-        {
-          "id": "79434cd1",
-          "name": "Northern Football Netball League (NFNL)"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "516e4c42",
-          "name": "2026",
-          "competitionId": "79434cd1",
-          "competitionName": "Northern Football Netball League (NFNL)",
-          "startDate": "2026-03-30",
-          "endDate": "2026-09-20",
-          "status": "ACTIVE",
-          "retired": false
-        },
-        {
-          "id": "fde9f6d9",
-          "name": "2025",
-          "competitionId": "79434cd1",
-          "competitionName": "Northern Football Netball League (NFNL)",
-          "startDate": "2025-04-05",
-          "endDate": "2025-09-30",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "7a26fcc0",
-          "name": "2024",
-          "competitionId": "79434cd1",
-          "competitionName": "Northern Football Netball League (NFNL)",
-          "startDate": "2023-12-15",
-          "endDate": "2024-09-21",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Northern Football Netball League (NFNL)",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
+      "migrated": true
     },
     "0f20da4f": {
       "code": "0f20da4f",
@@ -280,6 +153,124 @@
         }
       ],
       "name": "SER",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": true
+    },
+    "4c8b472e": {
+      "code": "4c8b472e",
+      "orgName": "Western Football Netball League (WFNL)",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Footscray",
+      "competitions": [
+        {
+          "id": "c1d04617",
+          "name": "Western Football Netball League (WFNL)"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "2170ac5a",
+          "name": "2026",
+          "competitionId": "c1d04617",
+          "competitionName": "Western Football Netball League (WFNL)",
+          "startDate": "2026-04-01",
+          "endDate": "2026-09-21",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
+          "id": "5488f6a0",
+          "name": "2025",
+          "competitionId": "c1d04617",
+          "competitionName": "Western Football Netball League (WFNL)",
+          "startDate": "2025-04-04",
+          "endDate": "2025-09-22",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "c8e95577",
+          "name": "2024",
+          "competitionId": "c1d04617",
+          "competitionName": "Western Football Netball League (WFNL)",
+          "startDate": "2024-03-28",
+          "endDate": "2024-09-22",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "WFNL",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": true
+    },
+    "4f9a099e": {
+      "code": "4f9a099e",
+      "orgName": "Yarra Junior Football League (YJFL)",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Bulleen",
+      "competitions": [
+        {
+          "id": "a0abf2bc",
+          "name": "Yarra Junior Football League (YJFL)"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "cda2f0ec",
+          "name": "2026",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2026-04-19",
+          "endDate": "2026-09-07",
+          "status": "COMPLETED",
+          "retired": false
+        },
+        {
+          "id": "fbe5e275",
+          "name": "2025",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2025-04-06",
+          "endDate": "2025-09-08",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "3733598c",
+          "name": "2024",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2024-04-07",
+          "endDate": "2024-09-08",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "d6ed597a",
+          "name": "2023",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2023-04-13",
+          "endDate": "2023-09-17",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "3c56297e",
+          "name": "2022",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2022-04-03",
+          "endDate": "2022-09-05",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "YJFL",
       "vip": false,
       "excludeGrades": [],
       "migrated": true
@@ -353,54 +344,162 @@
       "excludeGrades": [],
       "migrated": false
     },
-    "4c8b472e": {
-      "code": "4c8b472e",
-      "orgName": "Western Football Netball League (WFNL)",
+    "3686b395": {
+      "code": "3686b395",
+      "orgName": "Bendigo Junior Football League",
       "type": "ASSOCIATION",
       "state": "VIC",
-      "suburb": "Footscray",
+      "suburb": "Bendigo",
       "competitions": [
         {
-          "id": "c1d04617",
-          "name": "Western Football Netball League (WFNL)"
+          "id": "e2a39961",
+          "name": "Bendigo Junior Football League (BJFL)"
         }
       ],
       "seasons": [
         {
-          "id": "2170ac5a",
+          "id": "48080e44",
           "name": "2026",
-          "competitionId": "c1d04617",
-          "competitionName": "Western Football Netball League (WFNL)",
-          "startDate": "2026-04-01",
-          "endDate": "2026-09-21",
+          "competitionId": "e2a39961",
+          "competitionName": "Bendigo Junior Football League (BJFL)",
+          "startDate": "2026-04-24",
+          "endDate": "2026-09-13",
           "status": "ACTIVE",
           "retired": false
         },
         {
-          "id": "5488f6a0",
+          "id": "2e54bb6b",
           "name": "2025",
-          "competitionId": "c1d04617",
-          "competitionName": "Western Football Netball League (WFNL)",
+          "competitionId": "e2a39961",
+          "competitionName": "Bendigo Junior Football League (BJFL)",
           "startDate": "2025-04-04",
-          "endDate": "2025-09-22",
+          "endDate": "2025-09-14",
           "status": "COMPLETED",
           "retired": true
         },
         {
-          "id": "c8e95577",
+          "id": "2303b8e5",
           "name": "2024",
-          "competitionId": "c1d04617",
-          "competitionName": "Western Football Netball League (WFNL)",
-          "startDate": "2024-03-28",
+          "competitionId": "e2a39961",
+          "competitionName": "Bendigo Junior Football League (BJFL)",
+          "startDate": "2024-04-19",
+          "endDate": "2024-09-15",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "ba3676dd",
+          "name": "2023",
+          "competitionId": "e2a39961",
+          "competitionName": "Bendigo Junior Football League (BJFL)",
+          "startDate": "2022-11-01",
+          "endDate": "2023-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "1635ba7a",
+          "name": "2022",
+          "competitionId": "e2a39961",
+          "competitionName": "Bendigo Junior Football League (BJFL)",
+          "startDate": "2022-04-01",
+          "endDate": "2022-09-11",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "Bendigo Junior Football League",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": false
+    },
+    "8162176f": {
+      "code": "8162176f",
+      "orgName": "Essendon District Football League (EDFL)",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Essendon",
+      "competitions": [
+        {
+          "id": "33f0fa7b",
+          "name": "Essendon District Football League (EDFL)"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "07a9daa6",
+          "name": "2026",
+          "competitionId": "33f0fa7b",
+          "competitionName": "Essendon District Football League (EDFL)",
+          "startDate": "2026-04-02",
+          "endDate": "2026-09-20",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
+          "id": "6c1ae29c",
+          "name": "2025",
+          "competitionId": "33f0fa7b",
+          "competitionName": "Essendon District Football League (EDFL)",
+          "startDate": "2025-03-29",
+          "endDate": "2025-09-21",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "b9f747a9",
+          "name": "2024",
+          "competitionId": "33f0fa7b",
+          "competitionName": "Essendon District Football League (EDFL)",
+          "startDate": "2024-04-12",
           "endDate": "2024-09-22",
           "status": "COMPLETED",
           "retired": true
         }
       ],
-      "name": "WFNL",
+      "name": "Essendon District Football League (EDFL)",
       "vip": false,
       "excludeGrades": [],
-      "migrated": true
+      "migrated": false
+    },
+    "2377ec77": {
+      "code": "2377ec77",
+      "orgName": "Frankston and District Junior Football League",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Cranbourne",
+      "competitions": [
+        {
+          "id": "effc6355",
+          "name": "Frankston and District Junior Football League"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "d383fabb",
+          "name": "2026",
+          "competitionId": "effc6355",
+          "competitionName": "Frankston and District Junior Football League",
+          "startDate": "2025-11-01",
+          "endDate": "2026-09-01",
+          "status": "COMPLETED",
+          "retired": false
+        },
+        {
+          "id": "775ca111",
+          "name": "2025",
+          "competitionId": "effc6355",
+          "competitionName": "Frankston and District Junior Football League",
+          "startDate": "2024-11-01",
+          "endDate": "2025-09-01",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "Frankston and District Junior Football League",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": false
     },
     "5b77d8cc": {
       "code": "5b77d8cc",
@@ -471,128 +570,6 @@
       "excludeGrades": [],
       "migrated": false
     },
-    "94ebee61": {
-      "code": "94ebee61",
-      "orgName": "Riddell District Football Netball League (RDFNL)",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Melton West",
-      "competitions": [
-        {
-          "id": "d6291cf2",
-          "name": "RDFNL Practice Matches"
-        },
-        {
-          "id": "64b5d12c",
-          "name": "Riddell District Football Netball League (RDFNL)"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "15e87e9a",
-          "name": "2026",
-          "competitionId": "64b5d12c",
-          "competitionName": "Riddell District Football Netball League (RDFNL)",
-          "startDate": "2025-11-01",
-          "endDate": "2026-10-31",
-          "status": "ACTIVE",
-          "retired": false
-        },
-        {
-          "id": "34897d0f",
-          "name": "2025",
-          "competitionId": "64b5d12c",
-          "competitionName": "Riddell District Football Netball League (RDFNL)",
-          "startDate": "2024-11-01",
-          "endDate": "2025-10-31",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "24de1985",
-          "name": "2024",
-          "competitionId": "64b5d12c",
-          "competitionName": "Riddell District Football Netball League (RDFNL)",
-          "startDate": "2023-11-01",
-          "endDate": "2024-10-31",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Riddell District Football Netball League (RDFNL)",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
-    },
-    "4f9a099e": {
-      "code": "4f9a099e",
-      "orgName": "Yarra Junior Football League (YJFL)",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Bulleen",
-      "competitions": [
-        {
-          "id": "a0abf2bc",
-          "name": "Yarra Junior Football League (YJFL)"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "cda2f0ec",
-          "name": "2026",
-          "competitionId": "a0abf2bc",
-          "competitionName": "Yarra Junior Football League (YJFL)",
-          "startDate": "2026-04-19",
-          "endDate": "2026-09-07",
-          "status": "COMPLETED",
-          "retired": false
-        },
-        {
-          "id": "fbe5e275",
-          "name": "2025",
-          "competitionId": "a0abf2bc",
-          "competitionName": "Yarra Junior Football League (YJFL)",
-          "startDate": "2025-04-06",
-          "endDate": "2025-09-08",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "3733598c",
-          "name": "2024",
-          "competitionId": "a0abf2bc",
-          "competitionName": "Yarra Junior Football League (YJFL)",
-          "startDate": "2024-04-07",
-          "endDate": "2024-09-08",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "d6ed597a",
-          "name": "2023",
-          "competitionId": "a0abf2bc",
-          "competitionName": "Yarra Junior Football League (YJFL)",
-          "startDate": "2023-04-13",
-          "endDate": "2023-09-17",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "3c56297e",
-          "name": "2022",
-          "competitionId": "a0abf2bc",
-          "competitionName": "Yarra Junior Football League (YJFL)",
-          "startDate": "2022-04-03",
-          "endDate": "2022-09-05",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "YJFL",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": true
-    },
     "768f3833": {
       "code": "768f3833",
       "orgName": "MPFNL",
@@ -658,6 +635,177 @@
         }
       ],
       "name": "MPFNL",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": false
+    },
+    "862f96f9": {
+      "code": "862f96f9",
+      "orgName": "Northern Football Netball League (NFNL)",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Bundoora",
+      "competitions": [
+        {
+          "id": "79434cd1",
+          "name": "Northern Football Netball League (NFNL)"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "516e4c42",
+          "name": "2026",
+          "competitionId": "79434cd1",
+          "competitionName": "Northern Football Netball League (NFNL)",
+          "startDate": "2026-03-30",
+          "endDate": "2026-09-20",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
+          "id": "fde9f6d9",
+          "name": "2025",
+          "competitionId": "79434cd1",
+          "competitionName": "Northern Football Netball League (NFNL)",
+          "startDate": "2025-04-05",
+          "endDate": "2025-09-30",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "7a26fcc0",
+          "name": "2024",
+          "competitionId": "79434cd1",
+          "competitionName": "Northern Football Netball League (NFNL)",
+          "startDate": "2023-12-15",
+          "endDate": "2024-09-21",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "Northern Football Netball League (NFNL)",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": false
+    },
+    "6ad68fba": {
+      "code": "6ad68fba",
+      "orgName": "Outer East FN - Senior Football",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Kilsyth",
+      "competitions": [
+        {
+          "id": "ad745851",
+          "name": "Outer East Football Netball - Senior Football"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "b7301563",
+          "name": "2026",
+          "competitionId": "ad745851",
+          "competitionName": "Outer East Football Netball - Senior Football",
+          "startDate": "2025-11-01",
+          "endDate": "2026-09-30",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
+          "id": "d5252450",
+          "name": "2025",
+          "competitionId": "ad745851",
+          "competitionName": "Outer East Football Netball - Senior Football",
+          "startDate": "2024-11-01",
+          "endDate": "2025-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "859a9f72",
+          "name": "2024",
+          "competitionId": "ad745851",
+          "competitionName": "Outer East Football Netball - Senior Football",
+          "startDate": "2023-11-01",
+          "endDate": "2024-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "9bcea509",
+          "name": "2023",
+          "competitionId": "ad745851",
+          "competitionName": "Outer East Football Netball - Senior Football",
+          "startDate": "2022-11-01",
+          "endDate": "2023-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "6883b2b2",
+          "name": "2022",
+          "competitionId": "ad745851",
+          "competitionName": "Outer East Football Netball - Senior Football",
+          "startDate": "2021-11-01",
+          "endDate": "2022-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "Outer East FN - Senior Football",
+      "vip": false,
+      "excludeGrades": [],
+      "migrated": false
+    },
+    "94ebee61": {
+      "code": "94ebee61",
+      "orgName": "Riddell District Football Netball League (RDFNL)",
+      "type": "ASSOCIATION",
+      "state": "VIC",
+      "suburb": "Melton West",
+      "competitions": [
+        {
+          "id": "d6291cf2",
+          "name": "RDFNL Practice Matches"
+        },
+        {
+          "id": "64b5d12c",
+          "name": "Riddell District Football Netball League (RDFNL)"
+        }
+      ],
+      "seasons": [
+        {
+          "id": "15e87e9a",
+          "name": "2026",
+          "competitionId": "64b5d12c",
+          "competitionName": "Riddell District Football Netball League (RDFNL)",
+          "startDate": "2025-11-01",
+          "endDate": "2026-10-31",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
+          "id": "34897d0f",
+          "name": "2025",
+          "competitionId": "64b5d12c",
+          "competitionName": "Riddell District Football Netball League (RDFNL)",
+          "startDate": "2024-11-01",
+          "endDate": "2025-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        },
+        {
+          "id": "24de1985",
+          "name": "2024",
+          "competitionId": "64b5d12c",
+          "competitionName": "Riddell District Football Netball League (RDFNL)",
+          "startDate": "2023-11-01",
+          "endDate": "2024-10-31",
+          "status": "COMPLETED",
+          "retired": true
+        }
+      ],
+      "name": "Riddell District Football Netball League (RDFNL)",
       "vip": false,
       "excludeGrades": [],
       "migrated": false
@@ -735,251 +883,103 @@
       "excludeGrades": [],
       "migrated": false
     },
-    "3686b395": {
-      "code": "3686b395",
-      "orgName": "Bendigo Junior Football League",
+    "3f7be677": {
+      "code": "3f7be677",
+      "orgName": "Southern Football Netball League",
       "type": "ASSOCIATION",
       "state": "VIC",
-      "suburb": "Bendigo",
+      "suburb": "Moorabbin",
       "competitions": [
         {
-          "id": "e2a39961",
-          "name": "Bendigo Junior Football League (BJFL)"
+          "id": "e698385f",
+          "name": "Southern Football Netball League"
         }
       ],
       "seasons": [
         {
-          "id": "48080e44",
+          "id": "aea5195c",
           "name": "2026",
-          "competitionId": "e2a39961",
-          "competitionName": "Bendigo Junior Football League (BJFL)",
-          "startDate": "2026-04-24",
-          "endDate": "2026-09-13",
+          "competitionId": "e698385f",
+          "competitionName": "Southern Football Netball League",
+          "startDate": "2026-04-02",
+          "endDate": "2026-09-20",
           "status": "ACTIVE",
           "retired": false
         },
         {
-          "id": "2e54bb6b",
+          "id": "d927d910",
           "name": "2025",
-          "competitionId": "e2a39961",
-          "competitionName": "Bendigo Junior Football League (BJFL)",
+          "competitionId": "e698385f",
+          "competitionName": "Southern Football Netball League",
           "startDate": "2025-04-04",
-          "endDate": "2025-09-14",
+          "endDate": "2025-09-30",
           "status": "COMPLETED",
           "retired": true
         },
         {
-          "id": "2303b8e5",
+          "id": "ec2738eb",
           "name": "2024",
-          "competitionId": "e2a39961",
-          "competitionName": "Bendigo Junior Football League (BJFL)",
-          "startDate": "2024-04-19",
-          "endDate": "2024-09-15",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "ba3676dd",
-          "name": "2023",
-          "competitionId": "e2a39961",
-          "competitionName": "Bendigo Junior Football League (BJFL)",
-          "startDate": "2022-11-01",
-          "endDate": "2023-10-31",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "1635ba7a",
-          "name": "2022",
-          "competitionId": "e2a39961",
-          "competitionName": "Bendigo Junior Football League (BJFL)",
-          "startDate": "2022-04-01",
-          "endDate": "2022-09-11",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Bendigo Junior Football League",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
-    },
-    "2377ec77": {
-      "code": "2377ec77",
-      "orgName": "Frankston and District Junior Football League",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Cranbourne",
-      "competitions": [
-        {
-          "id": "effc6355",
-          "name": "Frankston and District Junior Football League"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "d383fabb",
-          "name": "2026",
-          "competitionId": "effc6355",
-          "competitionName": "Frankston and District Junior Football League",
-          "startDate": "2025-11-01",
-          "endDate": "2026-09-01",
-          "status": "COMPLETED",
-          "retired": false
-        },
-        {
-          "id": "775ca111",
-          "name": "2025",
-          "competitionId": "effc6355",
-          "competitionName": "Frankston and District Junior Football League",
-          "startDate": "2024-11-01",
-          "endDate": "2025-09-01",
-          "status": "COMPLETED",
-          "retired": true
-        }
-      ],
-      "name": "Frankston and District Junior Football League",
-      "vip": false,
-      "excludeGrades": [],
-      "migrated": false
-    },
-    "6ad68fba": {
-      "code": "6ad68fba",
-      "orgName": "Outer East FN - Senior Football",
-      "type": "ASSOCIATION",
-      "state": "VIC",
-      "suburb": "Kilsyth",
-      "competitions": [
-        {
-          "id": "ad745851",
-          "name": "Outer East Football Netball - Senior Football"
-        }
-      ],
-      "seasons": [
-        {
-          "id": "b7301563",
-          "name": "2026",
-          "competitionId": "ad745851",
-          "competitionName": "Outer East Football Netball - Senior Football",
-          "startDate": "2025-11-01",
-          "endDate": "2026-09-30",
-          "status": "ACTIVE",
-          "retired": false
-        },
-        {
-          "id": "d5252450",
-          "name": "2025",
-          "competitionId": "ad745851",
-          "competitionName": "Outer East Football Netball - Senior Football",
-          "startDate": "2024-11-01",
-          "endDate": "2025-10-31",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "859a9f72",
-          "name": "2024",
-          "competitionId": "ad745851",
-          "competitionName": "Outer East Football Netball - Senior Football",
+          "competitionId": "e698385f",
+          "competitionName": "Southern Football Netball League",
           "startDate": "2023-11-01",
           "endDate": "2024-10-31",
           "status": "COMPLETED",
           "retired": true
-        },
-        {
-          "id": "9bcea509",
-          "name": "2023",
-          "competitionId": "ad745851",
-          "competitionName": "Outer East Football Netball - Senior Football",
-          "startDate": "2022-11-01",
-          "endDate": "2023-10-31",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "6883b2b2",
-          "name": "2022",
-          "competitionId": "ad745851",
-          "competitionName": "Outer East Football Netball - Senior Football",
-          "startDate": "2021-11-01",
-          "endDate": "2022-10-31",
-          "status": "COMPLETED",
-          "retired": true
         }
       ],
-      "name": "Outer East FN - Senior Football",
+      "name": "Southern Football Netball League",
       "vip": false,
       "excludeGrades": [],
       "migrated": false
     },
-    "1cf85e52": {
-      "code": "1cf85e52",
-      "orgName": "South East Juniors",
+    "1cd834de": {
+      "code": "1cd834de",
+      "orgName": "Victorian Amateur Football Association (VAFA)",
       "type": "ASSOCIATION",
       "state": "VIC",
-      "suburb": "Cranbourne",
+      "suburb": "Elsternwick",
       "competitions": [
         {
-          "id": "0edb85d5",
-          "name": "South East Juniors"
+          "id": "46a51ab6",
+          "name": "Victorian Amateur Football Association (VAFA)"
         }
       ],
       "seasons": [
         {
-          "id": "4dfaaab5",
+          "id": "2af0bc11",
           "name": "2026",
-          "competitionId": "0edb85d5",
-          "competitionName": "South East Juniors",
-          "startDate": "2025-11-01",
-          "endDate": "2026-09-01",
-          "status": "COMPLETED",
+          "competitionId": "46a51ab6",
+          "competitionName": "Victorian Amateur Football Association (VAFA)",
+          "startDate": "2026-04-01",
+          "endDate": "2026-09-25",
+          "status": "ACTIVE",
           "retired": false
         },
         {
-          "id": "48ad3050",
+          "id": "eb054883",
           "name": "2025",
-          "competitionId": "0edb85d5",
-          "competitionName": "South East Juniors",
-          "startDate": "2024-11-01",
-          "endDate": "2025-09-01",
+          "competitionId": "46a51ab6",
+          "competitionName": "Victorian Amateur Football Association (VAFA)",
+          "startDate": "2025-04-05",
+          "endDate": "2025-09-26",
           "status": "COMPLETED",
           "retired": true
         },
         {
-          "id": "feccaf1c",
+          "id": "19ace630",
           "name": "2024",
-          "competitionId": "0edb85d5",
-          "competitionName": "South East Juniors",
-          "startDate": "2023-11-01",
-          "endDate": "2024-08-26",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "ef761f0e",
-          "name": "2023",
-          "competitionId": "0edb85d5",
-          "competitionName": "South East Juniors",
-          "startDate": "2022-11-01",
-          "endDate": "2023-08-28",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "3fff6775",
-          "name": "2022",
-          "competitionId": "0edb85d5",
-          "competitionName": "South East Juniors",
-          "startDate": "2021-11-24",
-          "endDate": "2022-11-24",
+          "competitionId": "46a51ab6",
+          "competitionName": "Victorian Amateur Football Association (VAFA)",
+          "startDate": "2024-01-01",
+          "endDate": "2024-10-30",
           "status": "COMPLETED",
           "retired": true
         }
       ],
-      "name": "SEJ",
+      "name": "Victorian Amateur Football Association (VAFA)",
       "vip": false,
       "excludeGrades": [],
-      "migrated": true
+      "migrated": false
     }
   },
   "manifest": [
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-08T02:03:34.256Z",
+  "lastSeasonDiscovery": "2026-09-08T02:10:32.984Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
