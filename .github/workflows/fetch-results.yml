@@ -157,6 +157,10 @@ jobs:
         if: steps.mode.outputs.run_results == 'true' && steps.gate.outputs.in_season == 'true'
         env:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
+          # Under the organisations[] config shape the scripts choose seasons by
+          # manifest state with the same rule as the gate above; this carries the
+          # gate override through so a forced run also fetches complete seasons.
+          FETCH_INCLUDE_COMPLETE: ${{ github.event.inputs.ignore_season_gate }}
         run: |
           set +e
           node scripts/fetch-results.js
@@ -253,6 +257,7 @@ jobs:
           # every season since the Phase A backfill, and re-fetching thirteen
           # completed ones took a stats run past three hours.
           STATS_INCLUDE_RETIRED: ${{ github.event.inputs.include_retired }}
+          FETCH_INCLUDE_COMPLETE: ${{ github.event.inputs.ignore_season_gate }}
         run: |
           set +e
           node scripts/fetch-stats.js
@@ -374,6 +379,7 @@ jobs:
           VIP_ONLY: ${{ steps.mode.outputs.vip_only }}
           FIXTURES_DRY_RUN: ${{ github.event.inputs.fixtures_dry_run }}
           FIXTURES_TRACE: ${{ github.event.inputs.fixtures_trace }}
+          FETCH_INCLUDE_COMPLETE: ${{ github.event.inputs.ignore_season_gate }}
         run: |
           set +e
           node scripts/fetch-fixtures.js
