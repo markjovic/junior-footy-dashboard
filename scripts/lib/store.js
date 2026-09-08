@@ -42,7 +42,7 @@ const path = require('path');
 
 // Bump on every change. Printed by report() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const STORE_VERSION = 'v7 2026-08-19 lastround-removed';
+const STORE_VERSION = 'v8 2026-09-08 fetch-targets';
 
 const ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -484,6 +484,79 @@ function saveCore(data) {
   return { written: ['data/core.json'], skipped: 0, untouched: 0, emptied: [], unplaced: {}, seasonPhases: [] };
 }
 
+// ── config.json — two shapes, one reader ──────────────────────────────────────
+// OLD: { competitions: [{ name, seasonID, vip, excludeGrades }], organisationCodes: [] }
+// NEW: { organisations: [{ code, name, tracked, vip, excludeGrades }] }
+// season_rollover_design.md §3. Returns a normalised view either way:
+//   { shape: 'old'|'new', organisations: Map<code, {code,name,tracked,vip,excludeGrades}>,
+//     competitions: [...] (old shape only, verbatim), raw }
+// The new shape carries NO season ids; what to fetch comes from the manifest.
+const CONFIG_PATH = path.join(ROOT, 'config.json');
+function readConfig() {
+  const raw = readJson(CONFIG_PATH, {});
+  const organisations = new Map();
+  if (Array.isArray(raw.organisations) && raw.organisations.length) {
+    for (const o of raw.organisations) {
+      if (!o || !o.code) continue;
+      organisations.set(String(o.code), {
+        code: String(o.code), name: o.name || null, tracked: o.tracked === true,
+        vip: o.vip === true, excludeGrades: Array.isArray(o.excludeGrades) ? o.excludeGrades : [],
+      });
+    }
+    return { shape: 'new', organisations, competitions: [], raw };
+  }
+  return { shape: 'old', organisations, competitions: raw.competitions || [], raw };
+}
+
+// The seasons a scheduled fetch should walk — season_rollover_design.md §4.
+// One rule, shared with the season gate in fetch-results.yml:
+//   a manifest entry with a compName, not retired, whose organisation is tracked,
+//   and whose state is active or upcoming, or complete for under RECONCILE_DAYS.
+// opts.includeComplete adds every non-retired complete season (ignore_season_gate).
+// opts.vipOnly keeps VIP organisations only.
+//
+// OLD config shape: returns competitions[] verbatim (name, seasonID, vip,
+// excludeGrades), so behaviour is byte-identical until the config flips.
+//
+// `state` written by discover-seasons v4; a manifest without it (pre-v4) falls
+// back to PlayHQ's status, which is the same rule minus the backstop.
+const RECONCILE_DAYS = 7;
+function fetchTargets(opts) {
+  opts = opts || {};
+  const cfg = readConfig();
+  if (cfg.shape === 'old') {
+    const list = cfg.competitions.map(c => ({
+      name: c.name, seasonID: c.seasonID, org: null, vip: c.vip === true,
+      excludeGrades: c.excludeGrades || [], state: null, source: 'config',
+    }));
+    return opts.vipOnly ? list.filter(c => c.vip) : list;
+  }
+  const core = loadCore();
+  const now = Date.now();
+  const stateOf = (m) => m.state !== undefined ? m.state
+    : m.status === 'ACTIVE' ? 'active' : m.status === 'UPCOMING' ? 'upcoming'
+    : m.status === 'COMPLETED' ? 'complete' : null;
+  const daysSince = (iso) => {
+    const x = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return x ? (now - Date.UTC(+x[1], +x[2] - 1, +x[3])) / 86400000 : Infinity;
+  };
+  const out = [];
+  for (const m of core.manifest || []) {
+    if (!m.compName || !m.seasonId || m.retired) continue;
+    const o = cfg.organisations.get(String(m.org));
+    if (!o || !o.tracked) continue;
+    if (opts.vipOnly && !o.vip) continue;
+    const st = stateOf(m);
+    const live = st === 'active' || st === 'upcoming';
+    const reconciling = st === 'complete' && daysSince(m.stateAt) < RECONCILE_DAYS;
+    if (!(live || reconciling || (opts.includeComplete && st === 'complete'))) continue;
+    out.push({ name: m.compName, seasonID: m.seasonId, org: m.org, vip: o.vip,
+      excludeGrades: o.excludeGrades, state: st, source: 'manifest' });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
+
 // Competition names that are live, from the manifest. Lets a writer restrict
 // itself to seasons that can still change.
 function liveComps(statuses) {
@@ -516,6 +589,6 @@ function report(result, label) {
 }
 
 module.exports = {
-  load, save, saveCore, liveComps, report,
-  CORE_PATH, SEASONS_DIR, CORE_KEYS, RETIRED_KEYS, STORE_VERSION,
+  load, save, saveCore, liveComps, report, readConfig, fetchTargets,
+  CORE_PATH, SEASONS_DIR, CONFIG_PATH, CORE_KEYS, RETIRED_KEYS, STORE_VERSION, RECONCILE_DAYS,
 };
