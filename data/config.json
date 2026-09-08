@@ -1,0 +1,99 @@
+{
+  "organisations": [
+    {
+      "code": "383836bb",
+      "name": "EFNL",
+      "tracked": true,
+      "vip": true,
+      "excludeGrades": []
+    },
+    {
+      "code": "1cf85e52",
+      "name": "SEJ",
+      "tracked": true,
+      "vip": false,
+      "excludeGrades": []
+    },
+    {
+      "code": "0f20da4f",
+      "name": "SER",
+      "tracked": true,
+      "vip": false,
+      "excludeGrades": []
+    },
+    {
+      "code": "4c8b472e",
+      "name": "WFNL",
+      "tracked": true,
+      "vip": false,
+      "excludeGrades": []
+    },
+    {
+      "code": "4f9a099e",
+      "name": "YJFL",
+      "tracked": true,
+      "vip": false,
+      "excludeGrades": []
+    },
+    {
+      "code": "2e137b81",
+      "name": "AFL Barwon FNL",
+      "tracked": false
+    },
+    {
+      "code": "3686b395",
+      "name": "Bendigo Junior Football League",
+      "tracked": false
+    },
+    {
+      "code": "8162176f",
+      "name": "Essendon District Football League (EDFL)",
+      "tracked": false
+    },
+    {
+      "code": "2377ec77",
+      "name": "Frankston and District Junior Football League",
+      "tracked": false
+    },
+    {
+      "code": "5b77d8cc",
+      "name": "Goulburn Murray Juniors",
+      "tracked": false
+    },
+    {
+      "code": "768f3833",
+      "name": "MPFNL",
+      "tracked": false
+    },
+    {
+      "code": "862f96f9",
+      "name": "Northern Football Netball League (NFNL)",
+      "tracked": false
+    },
+    {
+      "code": "6ad68fba",
+      "name": "Outer East FN - Senior Football",
+      "tracked": false
+    },
+    {
+      "code": "94ebee61",
+      "name": "Riddell District Football Netball League (RDFNL)",
+      "tracked": false
+    },
+    {
+      "code": "803dd171",
+      "name": "South Metro Junior Football League (SMJFL)",
+      "tracked": false
+    },
+    {
+      "code": "3f7be677",
+      "name": "Southern Football Netball League",
+      "tracked": false
+    },
+    {
+      "code": "1cd834de",
+      "name": "Victorian Amateur Football Association (VAFA)",
+      "tracked": false
+    }
+  ]
+}
