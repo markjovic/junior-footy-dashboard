@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./lib/store');
 
-const VERSION = 'top-stats v2 2026-09-09';
+const VERSION = 'top-stats v3 2026-09-09 grades-on-players';
 const TOP = Math.max(1, Math.min(100, Number(process.env.TOP || 10)));
 const COMP = (process.env.COMP || '').trim();
 const AGE = (process.env.AGE || '').trim();
@@ -69,7 +69,7 @@ function main() {
         if (!p.uuid) continue;
         if (AGE && p.age !== AGE) continue;
         playerRows.push({ uuid: p.uuid, name: p.name, compName: p.compName || m.compName, team: p.team, age: p.age,
-          goals: Number(p.goals) || 0, gp: Number(p.gp) || 0 });
+          grade: p.rawGrade || '', goals: Number(p.goals) || 0, gp: Number(p.gp) || 0 });
       }
     }
   }
@@ -148,21 +148,25 @@ function main() {
   const bySeason = new Map();
   for (const r of playerRows) {
     const k = `${r.uuid}|${r.compName}`;
-    const cur = bySeason.get(k) || { uuid: r.uuid, name: r.name, compName: r.compName, teams: new Set(), ages: new Set(), goals: 0, gp: 0 };
+    const cur = bySeason.get(k) || { uuid: r.uuid, name: r.name, compName: r.compName, teams: new Set(), ages: new Set(), where: [], goals: 0, gp: 0 };
     cur.goals += r.goals; cur.gp += r.gp; cur.teams.add(r.team); cur.ages.add(r.age);
+    // One "age grade (team) goals" per row, so a person who turned out in two
+    // grades in one season shows both and can be looked up in either.
+    const grade = r.grade && r.grade !== r.age ? ' ' + r.grade : '';   // seniors repeat the age as the grade
+    cur.where.push(`${r.age}${grade} (${r.team}) ${r.goals}`);
     bySeason.set(k, cur);
   }
   log(`\n4  MOST GOALS BY A PLAYER IN ONE SEASON (top ${TOP})`);
   log('─'.repeat(110));
   for (const r of [...bySeason.values()].sort((a, b) => b.goals - a.goals).slice(0, TOP)) {
-    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${pad([...r.teams].join(' / '), 34)} ${pad([...r.ages].join('/'), 14)} ${r.compName}  (${r.gp} games, ${(r.goals / Math.max(1, r.gp)).toFixed(1)}/game)`);
+    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${r.compName}  ${r.gp} games, ${(r.goals / Math.max(1, r.gp)).toFixed(1)}/game  —  ${r.where.join('; ')}`);
   }
 
   // ── 5. Most goals by a player, all seasons ─────────────────────────────────
   const career = new Map();
   for (const r of bySeason.values()) {
     const cur = career.get(r.uuid) || { uuid: r.uuid, name: r.name, goals: 0, gp: 0, seasons: [] };
-    cur.goals += r.goals; cur.gp += r.gp; cur.seasons.push(`${r.compName}:${r.goals}`);
+    cur.goals += r.goals; cur.gp += r.gp; cur.seasons.push(`${r.compName} ${r.where.join('; ')}`);
     career.set(r.uuid, cur);
   }
   log(`\n5  MOST GOALS BY A PLAYER ACROSS ALL STORED SEASONS (top ${TOP})`);
@@ -170,8 +174,10 @@ function main() {
   for (const r of [...career.values()].sort((a, b) => b.goals - a.goals).slice(0, TOP)) {
     // Sort by the year at the end of the competition name, so two competitions in
     // one year sit together and the list reads chronologically.
-    const bySeasonYear = (a, b) => a.replace(/^.*\s(\d{4}):.*$/, '$1').localeCompare(b.replace(/^.*\s(\d{4}):.*$/, '$1')) || a.localeCompare(b);
-    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${r.gp} games over ${r.seasons.length} season(s): ${r.seasons.sort(bySeasonYear).join(', ')}`);
+    const yearOf = (l) => (l.match(/\b(\d{4})\b/) || ['', ''])[1];
+    const bySeasonYear = (a, b) => yearOf(a).localeCompare(yearOf(b)) || a.localeCompare(b);
+    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${r.gp} games over ${r.seasons.length} season(s)`);
+    for (const line of r.seasons.sort(bySeasonYear)) log(`          ${line}`);
   }
 
   log(`\n6  MOST GOALS BY A PLAYER IN ONE GAME`);
