@@ -27,7 +27,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./lib/store');
 
-const VERSION = 'top-stats v1 2026-09-09';
+const VERSION = 'top-stats v2 2026-09-09';
 const TOP = Math.max(1, Math.min(100, Number(process.env.TOP || 10)));
 const COMP = (process.env.COMP || '').trim();
 const AGE = (process.env.AGE || '').trim();
@@ -107,7 +107,11 @@ function main() {
       const q = x[`${side}Q`];
       if (!Array.isArray(q)) continue;
       const total = x[`${side}Score`];
-      const wholeGameInOne = total >= WHOLE_GAME_MIN && q.filter(v => v === 0).length === q.length - 1 && q.includes(total);
+      // Whole game in one quarter, whether the other three are recorded zeros
+      // ([0,0,0,205]) or absent ([null,null,null,216] — Mount Eliza SEJ 2022 R2,
+      // the first full run's "record"). Either way one quarter holds the total.
+      const nonZero = q.filter(v => v != null && v !== 0);
+      const wholeGameInOne = total >= WHOLE_GAME_MIN && nonZero.length === 1 && nonZero[0] === total;
       // Quarters that cannot be true: one bigger than the final score, or four that
       // do not add up to it. Measured 2026-09-09: Bulleen Templestowe R5 stored
       // [null,null,null,205] against a full-time 181.
@@ -158,13 +162,16 @@ function main() {
   const career = new Map();
   for (const r of bySeason.values()) {
     const cur = career.get(r.uuid) || { uuid: r.uuid, name: r.name, goals: 0, gp: 0, seasons: [] };
-    cur.goals += r.goals; cur.gp += r.gp; cur.seasons.push(`${r.compName.replace(/^.*\s/, '')}:${r.goals}`);
+    cur.goals += r.goals; cur.gp += r.gp; cur.seasons.push(`${r.compName}:${r.goals}`);
     career.set(r.uuid, cur);
   }
   log(`\n5  MOST GOALS BY A PLAYER ACROSS ALL STORED SEASONS (top ${TOP})`);
   log('─'.repeat(110));
   for (const r of [...career.values()].sort((a, b) => b.goals - a.goals).slice(0, TOP)) {
-    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${r.gp} games over ${r.seasons.length} season(s): ${r.seasons.sort().join(', ')}`);
+    // Sort by the year at the end of the competition name, so two competitions in
+    // one year sit together and the list reads chronologically.
+    const bySeasonYear = (a, b) => a.replace(/^.*\s(\d{4}):.*$/, '$1').localeCompare(b.replace(/^.*\s(\d{4}):.*$/, '$1')) || a.localeCompare(b);
+    log(`  ${rpad(r.goals, 4)}  ${pad(r.name, 26)} ${r.gp} games over ${r.seasons.length} season(s): ${r.seasons.sort(bySeasonYear).join(', ')}`);
   }
 
   log(`\n6  MOST GOALS BY A PLAYER IN ONE GAME`);
