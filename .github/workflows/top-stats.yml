@@ -1,0 +1,49 @@
+# .github/workflows/top-stats.yml
+name: Top stats report
+
+# READ-ONLY. Prints record tables from the stored seasons to the run log:
+# biggest winning margin, most points and most goals in a quarter, most goals by
+# a player in a season and across all seasons. No PlayHQ call, no write, no
+# commit — so no concurrency group and no token beyond checkout.
+
+on:
+  workflow_dispatch:
+    inputs:
+      top:
+        description: 'Rows per table (1–100)'
+        required: false
+        default: '10'
+        type: string
+      comp:
+        description: 'Restrict to one competition, e.g. "EFNL 2026" (blank = all)'
+        required: false
+        default: ''
+        type: string
+      age:
+        description: 'Restrict to one age group, e.g. "U12" (blank = all)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Records across stored seasons
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Report
+        env:
+          TOP: ${{ github.event.inputs.top }}
+          COMP: ${{ github.event.inputs.comp }}
+          AGE: ${{ github.event.inputs.age }}
+        run: |
+          node --version
+          node scripts/top-stats.js
