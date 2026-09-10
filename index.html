@@ -596,7 +596,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.219</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.220</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -839,6 +839,7 @@ body{overflow-x:hidden}
         <div class="team-modal-title" id="pm-name"></div>
         <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
         <div id="pm-next" style="font-size:10px;color:var(--tx2);margin-top:2px;display:none"></div>
+        <div id="pm-career-line" style="font-size:11px;color:var(--tx2);margin-top:5px;padding-top:5px;border-top:1px dashed var(--gold3);display:none"></div>
       </div>
       <div id="pm-seasons" class="pm-season-strip"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
@@ -850,6 +851,7 @@ body{overflow-x:hidden}
           <div class="spinner"></div><span style="font-size:12px">Loading stats…</span>
         </div>
       </div>
+      <div id="pm-career"></div>
     </div>
   </div>
 </div>
@@ -951,7 +953,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.219</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.220</span>
         </div>
 
 
@@ -5152,6 +5154,12 @@ async function openPlayerPanel(uuid) {
     <div class="spinner"></div><span style="font-size:12px">Loading game stats…</span></div>`;
   modal.style.display = 'flex';
 
+  // Career file, in parallel with the profile fetch and never awaited with it —
+  // a 404 or a slow read must not delay the games list. Guarded on _panelUuid so
+  // a late answer cannot repaint a panel the reader has closed or replaced.
+  renderCareerSection(null, uuid);
+  loadCareer(uuid).then(rec => { if (_panelUuid === uuid) renderCareerSection(rec, uuid); });
+
   // Fetch profile stats from PlayHQ
   try {
     const res = await fetch('https://solitary-snowflake-cb3e.insanoflash.workers.dev/', {
@@ -5468,9 +5476,172 @@ function renderPlayerGames(data, p) {
   </div>`;
 }
 
+
+// ── CAREER ON PLAYHQ ─────────────────────────────────────────────────────────
+// One file per player at players/<first two hex of uuid>/<uuid>.json, written by
+// fetch-career-stats.js over the off-season. ~3 KB, one request, cached for the
+// session. career_stats_design.md revision 3 §5.
+const _careerCache = new Map();
+const careerPath = (uuid) => `players/${String(uuid).slice(0, 2).toLowerCase()}/${uuid}.json`;
+
+// A 404 is the NORMAL answer for anyone the sweep has not reached, so it resolves
+// to null rather than throwing. null is cached too: without that, every panel
+// open for an unwalked player re-requests a file that is not there.
+async function loadCareer(uuid) {
+  if (_careerCache.has(uuid)) return _careerCache.get(uuid);
+  let rec = null;
+  try {
+    const res = await fetch(careerPath(uuid), { cache: 'no-cache' });
+    if (res.ok) rec = await res.json();
+  } catch (e) { /* offline or blocked — the section simply does not appear */ }
+  _careerCache.set(uuid, rec);
+  return rec;
+}
+
+// ⚠️ SUM OVER SEASON IDS. NOT arithmetic on PlayHQ's career total.
+//
+// For each season on the record use OUR figures when we hold that season and have
+// it loaded, otherwise the stored PlayHQ row. Every season counts exactly once
+// because season.id is the key; two concurrent seasons are two ids and both
+// count; and the current season contributes live data rather than whatever it was
+// when the walk ran months ago.
+//
+// PlayHQ's own `career` then becomes a CHECKSUM rather than the source. A
+// disagreement means something is in their total that is not in their own season
+// list — worth surfacing quietly, not worth reconciling silently.
+function careerSummary(rec, uuid) {
+  const sidOf = (c) => ((S.manifest || []).find(m => m.compName === c) || {}).seasonId || '';
+  const ours = new Map();
+  for (const pl of (S.players || [])) {
+    if (pl.uuid !== uuid) continue;
+    const sid = sidOf(pl.compName);
+    if (!sid) continue;
+    const cur = ours.get(sid) || { gp: 0, goals: 0, best: 0 };
+    cur.gp += pl.gp || 0; cur.goals += pl.goals || 0; cur.best += pl.bestPlayer || 0;
+    ours.set(sid, cur);
+  }
+  let gp = 0, goals = 0, best = 0, from = null;
+  const rows = [];
+  for (const sn of (rec.seasons || [])) {
+    // `held` says the season is in the manifest; `ours` says it is also LOADED.
+    // A held season we have not loaded still falls back to PlayHQ's row, which is
+    // right — the alternative is a zero.
+    const mine = sn.held ? ours.get(sn.sid) : null;
+    const use = mine || { gp: sn.gp || 0, goals: sn.goals || 0, best: sn.best || 0 };
+    gp += use.gp; goals += use.goals; best += use.best;
+    const y = String(sn.year || '');
+    if (y && (!from || y < from)) from = y;
+    rows.push(Object.assign({}, sn, use, { live: !!mine }));
+  }
+  rows.sort((a, b) => String(b.year || '').localeCompare(String(a.year || '')));
+  return { gp, goals, best, from, rows,
+           drift: rec.career ? gp - (rec.career.gp || 0) : 0 };
+}
+
+// A record renders only when it has a value. A card reading "0 best" beside a real
+// goals record looks like a defect rather than a fact.
+function careerRecordCard(r, label) {
+  if (!r || !r.v) return '';
+  const m = r.gameId ? (S.matches || []).find(x => x.gameId === r.gameId) : null;
+  let detail = '';
+  if (m) {
+    const rd = m.isFinals ? 'Finals' : `R${m.round}`;
+    const sc = (m.hScore !== null && m.hScore !== undefined && m.aScore !== null && m.aScore !== undefined)
+      ? ` ${m.hScore}–${m.aScore}` : '';
+    detail = `${rd} · ${m.home} v ${m.away}${sc}`;
+  } else {
+    // The game is real and we do not hold it. Say where it was rather than
+    // showing a dash, which would read as missing data.
+    const sn = null;
+    detail = 'a game outside this dashboard';
+  }
+  return `<div style="flex:1;background:var(--s3);border-radius:var(--r);padding:9px 11px;min-width:0">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:1px;margin-bottom:3px">${label}</div>
+    <div style="font-size:15px;font-weight:500">${r.v}
+      <span style="font-size:11px;color:var(--tx2);font-weight:400">· ${detail}</span></div>
+  </div>`;
+}
+
+function renderCareerSection(rec, uuid) {
+  const line = document.getElementById('pm-career-line');
+  const box  = document.getElementById('pm-career');
+  if (!line || !box) return;
+  line.style.display = 'none';
+  line.innerHTML = '';
+  box.innerHTML = '';
+  if (!rec) return;                       // not walked yet — say nothing at all
+
+  // ⚠️ "PLAYHQ HAS NOTHING" AND "WE HAVE NOT LOOKED" ARE OPPOSITE FACTS.
+  // A private profile, a deleted one and one PlayHQ's own resolver throws on all
+  // answer definitively; the walker stamps which. Shown as a quiet line so the
+  // absence is explained rather than looking like a gap in our data.
+  if (!rec.career || !(rec.seasons || []).length) {
+    const why = rec.private || rec.noStats ? 'This profile is private on PlayHQ.'
+      : rec.missing ? 'PlayHQ has no profile for this player.'
+      : rec.serverError ? 'PlayHQ could not return statistics for this profile.'
+      : '';
+    if (!why) return;
+    box.innerHTML = `<div style="padding:12px 20px;background:var(--s2);border-top:1px solid var(--b1);
+      font-size:11px;color:var(--tx3)">${why} Their games in these competitions are still shown above.</div>`;
+    return;
+  }
+
+  const c = careerSummary(rec, uuid);
+  const bits = [`${c.gp} game${c.gp === 1 ? '' : 's'}`];
+  if (c.goals) bits.push(`${c.goals} goal${c.goals === 1 ? '' : 's'}`);
+  if (c.best) bits.push(`${c.best} best`);
+  if (c.from) bits.push(`since ${c.from}`);
+  line.innerHTML = `<span style="color:var(--gold);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.5px">CAREER</span>` +
+    ` &nbsp;${bits.join(' · ')}`;
+  line.style.display = '';
+  line.title = rec.career
+    ? `PlayHQ's own career total: ${rec.career.gp || 0} games, ${rec.career.goals || 0} goals, ${rec.career.best || 0} best` +
+      (c.drift ? ` — our sum differs by ${c.drift}` : '')
+    : '';
+
+  const outside = c.rows.filter(r => !r.held).length;
+  const records = careerRecordCard(rec.records && rec.records.goalsHeld, 'MOST GOALS IN A GAME')
+    || careerRecordCard(rec.records && rec.records.goalsAny, 'MOST GOALS IN A GAME');
+
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const cell = 'padding:6px 0;font-family:\'DM Mono\',monospace;font-size:11px';
+
+  box.innerHTML = `<div style="padding:14px 20px;background:var(--s2);border-top:1px solid var(--b1)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-family:'Syne',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;color:var(--gold)">CAREER ON PLAYHQ</span>
+      <span style="flex:1;height:1px;background:var(--b1)"></span>
+      <span style="font-size:10px;color:var(--tx3)">${c.rows.length} season${c.rows.length === 1 ? '' : 's'}</span>
+    </div>
+    ${records ? `<div style="display:flex;gap:8px;margin-bottom:14px">${records}</div>` : ''}
+    <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
+      <tr style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-align:left">
+        <th style="font-weight:400;padding:0 0 6px;width:44px">YEAR</th>
+        <th style="font-weight:400;padding:0 0 6px">LEAGUE</th>
+        <th style="font-weight:400;padding:0 0 6px;width:84px">GRADE</th>
+        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">GP</th>
+        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">G</th>
+        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">B</th>
+      </tr>
+      ${c.rows.map(r => `<tr style="border-top:1px solid var(--b1);color:${r.held ? 'var(--tx3)' : 'var(--tx2)'}">
+        <td style="${cell};color:${r.held ? 'var(--tx3)' : 'var(--gold)'}">${esc(r.year)}</td>
+        <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${esc(r.club || '')}">${esc(r.league || '—')}</td>
+        <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.grade || '')}</td>
+        <td style="${cell};text-align:right">${r.gp || '–'}</td>
+        <td style="${cell};text-align:right;color:${r.goals ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
+        <td style="${cell};text-align:right">${r.best || '–'}</td>
+      </tr>`).join('')}
+    </table>
+    ${outside ? `<div style="font-size:10px;color:var(--tx3);margin-top:9px">
+      <span style="color:var(--gold)">■</span> ${outside} season${outside === 1 ? '' : 's'} not held in this dashboard</div>` : ''}
+  </div>`;
+}
+
 function closePlayerModal() {
   // Cleared so a late index fetch does not repaint a closed panel.
   _panelUuid = null;
+  renderCareerSection(null, null);
   document.getElementById('player-modal').style.display = 'none';
   if (_playerPanelSource === 'team') {
     document.getElementById('team-modal').style.display = 'flex';
