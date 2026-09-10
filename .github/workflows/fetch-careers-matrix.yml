@@ -1,0 +1,347 @@
+# .github/workflows/fetch-careers-matrix.yml
+name: Fetch career stats (matrix)
+
+# career_stats_design.md revision 3 §3 and §6. Walks publicProfileStatistics for
+# every player who has ever appeared in one of our competitions and writes one
+# file per player under players/<xx>/.
+#
+# SHAPE, copied from sports-players-stats because it is proven there over 412,100
+# players:
+#   generate-shards -> fetch (256 matrix, max-parallel 20) -> apply-and-commit -> retrigger
+#
+# ⚠️ THE LOCK GOES ON THE AGGREGATOR ONLY, NEVER AT WORKFLOW LEVEL. The fan-out
+# runs for a long time and writes nothing; locking the whole workflow would hold
+# playhq-data-write for the entire sweep and starve the registrations walk,
+# discovery and the weekend results runs.
+#
+# ⚠️ NO actions/setup-node. Measured on the sibling account with a same-day
+# control: it changes the runner's outbound fingerprint and PlayHQ answers 403
+# CLOUDFRONT-BLOCK from request #1, including session acquisition. ubuntu-latest
+# ships Node already.
+#
+# ⚠️ THE SHARD JOBS DO NO GIT. They upload their changed files as an artifact and
+# the aggregator makes one commit. Per-job pushes race and wedge on MERGE_HEAD.
+#
+# Two windows a year (design §3): September/October and February/March. Dispatch
+# only — there is no schedule, on purpose, because a sweep should be started
+# deliberately and watched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: 'JSON array of shards, e.g. ["00","01"]. Empty = all 256.'
+        required: false
+        default: ''
+      force:
+        description: 'Re-fetch every player regardless of statsChecked'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      limit:
+        description: 'Max players per shard (0 = no limit). Use for a first probe run.'
+        required: false
+        default: '0'
+      run_number:
+        description: 'Chain position — leave blank when starting a sweep by hand'
+        required: false
+        default: '1'
+
+permissions:
+  contents: write
+  actions: write          # the retrigger step dispatches this workflow again
+
+jobs:
+  # ── 1. Which shards this run covers ────────────────────────────────────────
+  generate-shards:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - name: Build the shard list
+        id: plan
+        env:
+          INPUT_SHARDS: ${{ github.event.inputs.shards }}
+        run: |
+          node -e '
+            const raw = (process.env.INPUT_SHARDS || "").trim();
+            let list = [];
+            if (raw) {
+              try { list = JSON.parse(raw); }
+              catch (e) { console.error("shards input is not JSON: " + e.message); process.exit(1); }
+              if (!Array.isArray(list) || !list.length) { console.error("shards input is not a non-empty array"); process.exit(1); }
+              const bad = list.filter(s => !/^[0-9a-f]{2}$/.test(String(s)));
+              if (bad.length) { console.error("not two lowercase hex digits: " + bad.join(",")); process.exit(1); }
+            } else {
+              list = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
+            }
+            console.log(`run ${process.env.GITHUB_RUN_NUMBER}: ${list.length} shard(s)`);
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `shards=${JSON.stringify(list)}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `count=${list.length}\n`);
+          '
+
+  # ── 2. The fan-out. No git here. ───────────────────────────────────────────
+  fetch:
+    name: Shard ${{ matrix.shard }}
+    needs: generate-shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJson(needs.generate-shards.outputs.shards) }}
+    steps:
+      # ⚠️ NARROW SPARSE CHECKOUT, and never widened afterwards. actions/checkout
+      # applies filter=blob:none whenever sparse-checkout is set, so EXPANDING the
+      # set later fetches every blob over the network one at a time. Set it once.
+      #
+      # ⚠️ Paths outside the sparse set carry skip-worktree, so anything the script
+      # writes outside players/<shard>/ is silently dropped by git add with no
+      # error. verify-careers.js §7 asserts the script writes nowhere else.
+      #
+      # ref: main, not the triggering ref — a chained dispatch would otherwise pin
+      # the job to the tree of the run that dispatched it.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts/fetch-career-stats.js
+            scripts/lib
+            data/core.json
+            players/${{ matrix.shard }}
+          sparse-checkout-cone-mode: false
+
+      - name: Walk the shard
+        env:
+          CAREER_FORCE: ${{ github.event.inputs.force }}
+          CAREER_LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          node --version
+          ARGS="--shard=${{ matrix.shard }}"
+          if [ "$CAREER_FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          if [ -n "$CAREER_LIMIT" ] && [ "$CAREER_LIMIT" != "0" ]; then ARGS="$ARGS --limit=$CAREER_LIMIT"; fi
+          echo "args: $ARGS"
+          node scripts/fetch-career-stats.js $ARGS
+
+      # git itself is the change detector: whatever the script rewrote in the
+      # working tree, plus any file it created.
+      - name: Package changed player files
+        if: always()
+        run: |
+          git diff --name-only HEAD > /tmp/changed.txt 2>/dev/null || true
+          git ls-files --others --exclude-standard players/${{ matrix.shard }}/ >> /tmp/changed.txt 2>/dev/null || true
+          if [ -s /tmp/changed.txt ]; then
+            tar -czf /tmp/career-files.tar.gz -T /tmp/changed.txt
+            echo "Packaged $(wc -l < /tmp/changed.txt) changed file(s)"
+          else
+            echo "No changed files"
+          fi
+
+      - name: Upload changed files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-files-${{ matrix.shard }}
+          path: /tmp/career-files.tar.gz
+          if-no-files-found: ignore
+          retention-days: 1
+
+      # ⚠️ ALWAYS uploaded, even for a shard with nothing to do. The aggregator
+      # treats a MISSING summary as a crashed job and carries the shard forward,
+      # so silence and success must not look the same.
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-summary-${{ matrix.shard }}
+          path: career-summary-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 1
+
+  # ── 3. One job, one lock, one commit ───────────────────────────────────────
+  apply-and-commit:
+    name: Apply and commit
+    needs: fetch
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # !cancelled(), not always(): the aggregator must still run when shards FAIL,
+    # or a run's writes are thrown away — but cancelling the run should actually
+    # stop the chain rather than apply and retrigger anyway.
+    if: ${{ !cancelled() }}
+    concurrency:
+      group: playhq-data-write
+      cancel-in-progress: false
+    outputs:
+      result: ${{ steps.commit.outcome }}
+      written: ${{ steps.decide.outputs.written }}
+      next: ${{ steps.decide.outputs.next }}
+    steps:
+      - name: Download changed files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: career-files-*
+          path: /tmp/career-artifacts/
+          merge-multiple: false
+
+      - name: Download summaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: career-summary-*
+          path: /tmp/career-summaries/
+          merge-multiple: true
+
+      - name: Anything to apply?
+        id: check
+        run: |
+          has_files=false
+          for dir in /tmp/career-artifacts/career-files-*/; do
+            [ -d "$dir" ] || continue
+            tarfile=$(ls "$dir"*.tar.gz 2>/dev/null | head -1)
+            if [ -n "$tarfile" ] && [ -s "$tarfile" ]; then has_files=true; fi
+          done
+          echo "has_files=$has_files" >> "$GITHUB_OUTPUT"
+          echo "Has files to apply: $has_files"
+
+      # PLAIN FULL CHECKOUT, deliberately. Expanding a sparse checkout to apply
+      # writes across many shards is what performed a promisor object fetch on the
+      # sibling repo and silently discarded a whole run.
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.has_files == 'true'
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Apply
+        if: steps.check.outputs.has_files == 'true'
+        run: |
+          applied=0
+          for dir in /tmp/career-artifacts/career-files-*/; do
+            [ -d "$dir" ] || continue
+            tarfile=$(ls "$dir"*.tar.gz 2>/dev/null | head -1)
+            if [ -n "$tarfile" ] && [ -s "$tarfile" ]; then
+              tar -xzf "$tarfile" --no-overwrite-dir
+              applied=$((applied + 1))
+            fi
+          done
+          echo "Applied $applied shard artifact(s)"
+
+      - name: Commit and push
+        id: commit
+        if: steps.check.outputs.has_files == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # ⚠️ ONE PATHSPEC PER LINE. `git add a b` is atomic — one unmatched
+          # pathspec and NOTHING stages, which is how a green run threw away
+          # 30,426 records on the sibling repo.
+          git add -- players/
+          if git diff --staged --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          count=$(git diff --staged --name-only | wc -l)
+          git diff --staged --shortstat
+          git commit -m "careers: run ${{ github.run_number }} — ${count} player file(s)"
+          pushed=false
+          for attempt in $(seq 1 20); do
+            git merge --abort 2>/dev/null || true
+            if ! git fetch origin main; then sleep $(( (RANDOM % 30) + 5 )); continue; fi
+            if ! git merge -X ours FETCH_HEAD --no-edit --no-stat; then
+              git merge --abort 2>/dev/null || true
+              sleep $(( (RANDOM % 30) + 5 )); continue
+            fi
+            if git push origin main; then echo "pushed on attempt $attempt"; pushed=true; break; fi
+            sleep $(( (RANDOM % 30) + 5 ))
+          done
+          if [ "$pushed" != "true" ]; then echo "push failed after 20 attempts"; exit 1; fi
+
+      - name: Decide what runs next
+        id: decide
+        if: always()
+        env:
+          INPUT_SHARDS: ${{ github.event.inputs.shards }}
+          APPLY_RESULT: ${{ steps.commit.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json, os, glob
+          carry, seen, written = [], set(), 0
+          for f in glob.glob('/tmp/career-summaries/**/*.json', recursive=True):
+              try:
+                  d = json.load(open(f))
+              except Exception:
+                  continue
+              sh = d.get('shard')
+              if not sh:
+                  continue
+              seen.add(sh)
+              written += int(d.get('written') or 0)
+              # A BLOCKED shard has work left even when `remaining` looks small.
+              if int(d.get('remaining') or 0) > 0 or d.get('blocked'):
+                  carry.append(sh)
+          # A shard that ran but produced NO summary crashed; its state is unknown,
+          # so it is retried rather than silently dropped.
+          raw = (os.environ.get('INPUT_SHARDS') or '').strip()
+          try:
+              requested = json.loads(raw) if raw else []
+          except Exception:
+              requested = []
+          expected = requested if requested else ['%02x' % i for i in range(256)]
+          for sh in expected:
+              if sh not in seen:
+                  carry.append(sh)
+          carry = sorted(set(carry))
+          # ⚠️ PERSISTENCE GATE. Shard summaries are written by the shard jobs, so
+          # `written` can be large while the commit FAILED and nothing landed.
+          # Counting that as progress is how a failed run reports a healthy sweep.
+          if os.environ.get('APPLY_RESULT') not in ('success', 'skipped'):
+              written = 0
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              fh.write('written=%d\n' % written)
+              fh.write('next=%s\n' % json.dumps(carry, separators=(',', ':')))
+          print('summaries seen: %d, carrying %d shard(s), written %d' % (len(seen), len(carry), written))
+          PY
+
+  # ── 4. The chain ───────────────────────────────────────────────────────────
+  retrigger:
+    name: Re-dispatch the leftovers
+    needs: apply-and-commit
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Decide and dispatch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT: ${{ needs.apply-and-commit.outputs.next }}
+          WRITTEN: ${{ needs.apply-and-commit.outputs.written }}
+          RUN_NO: ${{ github.event.inputs.run_number }}
+        run: |
+          set -e
+          RUN_NO="${RUN_NO:-1}"
+          NEXT_NO=$((RUN_NO + 1))
+          echo "chain position $RUN_NO, written this run: ${WRITTEN:-0}, carrying: ${NEXT:-[]}"
+          if [ "$RUN_NO" -ge 60 ]; then
+            echo "chain cap of 60 runs reached — stopping. Dispatch by hand to continue."
+            exit 0
+          fi
+          if [ -z "$NEXT" ] || [ "$NEXT" = "[]" ]; then
+            echo "nothing carried forward — sweep complete."
+            exit 0
+          fi
+          if [ "${WRITTEN:-0}" = "0" ]; then
+            echo "no writes landed this run — stopping rather than looping on a stuck sweep."
+            echo "Read the shard summaries, then dispatch by hand."
+            exit 0
+          fi
+          gh workflow run fetch-careers-matrix.yml \
+            --ref main \
+            -f shards="$NEXT" \
+            -f force=${{ github.event.inputs.force }} \
+            -f limit=${{ github.event.inputs.limit }} \
+            -f run_number="$NEXT_NO"
+          echo "dispatched run $NEXT_NO"
