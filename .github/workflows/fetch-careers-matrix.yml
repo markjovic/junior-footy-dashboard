@@ -47,6 +47,10 @@ on:
         description: 'Chain position — leave blank when starting a sweep by hand'
         required: false
         default: '1'
+      zero_runs:
+        description: 'Consecutive runs that wrote nothing — chain bookkeeping, leave blank'
+        required: false
+        default: '0'
 
 permissions:
   contents: write
@@ -271,6 +275,10 @@ jobs:
           python3 - <<'PY'
           import json, os, glob
           carry, seen, written = [], set(), 0
+          # Sample uuids per negative kind, merged across every shard, so one
+          # place in the run says which players got no record and where to check
+          # them. Without this a 256-shard sweep gives counts and nothing else.
+          samples, totals = {}, {}
           for f in glob.glob('/tmp/career-summaries/**/*.json', recursive=True):
               try:
                   d = json.load(open(f))
@@ -281,6 +289,13 @@ jobs:
                   continue
               seen.add(sh)
               written += int(d.get('written') or 0)
+              for k in ('serverErrors', 'noStats', 'notFound', 'errors'):
+                  totals[k] = totals.get(k, 0) + int(d.get(k) or 0)
+              for kind, ids in (d.get('samples') or {}).items():
+                  samples.setdefault(kind, [])
+                  for u in ids:
+                      if len(samples[kind]) < 10 and u not in samples[kind]:
+                          samples[kind].append(u)
               # A BLOCKED shard has work left even when `remaining` looks small.
               if int(d.get('remaining') or 0) > 0 or d.get('blocked'):
                   carry.append(sh)
@@ -305,6 +320,24 @@ jobs:
               fh.write('written=%d\n' % written)
               fh.write('next=%s\n' % json.dumps(carry, separators=(',', ':')))
           print('summaries seen: %d, carrying %d shard(s), written %d' % (len(seen), len(carry), written))
+          if any(totals.values()):
+              print('players with no career record: ' + ', '.join(
+                  '%s %d' % (k, v) for k, v in sorted(totals.items()) if v))
+          LABEL = {
+              'serverError': "PlayHQ's own resolver threw - a 200 carrying a JavaScript TypeError",
+              'noStats': 'returned 200 with null data - private profile, or no statistics',
+              'private': 'returned 403 - private profile',
+              'missing': 'returned NOT_FOUND - no such profile',
+              'transport': 'the transport gave up - NOT stamped, retried next run',
+          }
+          if samples:
+              print('')
+              print('-- where to check them (up to 10 per kind, across the whole sweep) --')
+              for kind in sorted(samples):
+                  print('  %s - %s' % (kind, LABEL.get(kind, '')))
+                  for u in samples[kind]:
+                      print('    https://www.playhq.com/public/profile/%s/statistics?tenant=afl' % u)
+              print('  Open one: if the page shows statistics, the walker is wrong about that player.')
           PY
 
   # ── 4. The chain ───────────────────────────────────────────────────────────
@@ -320,6 +353,7 @@ jobs:
           NEXT: ${{ needs.apply-and-commit.outputs.next }}
           WRITTEN: ${{ needs.apply-and-commit.outputs.written }}
           RUN_NO: ${{ github.event.inputs.run_number }}
+          ZERO_RUNS: ${{ github.event.inputs.zero_runs }}
           LIMIT: ${{ github.event.inputs.limit }}
           # ⚠️ gh infers the repository from the git remote, and this job does NOT
           # check out — it needs nothing from the tree. Without --repo it fails
@@ -347,9 +381,27 @@ jobs:
             echo "limit=$LIMIT — this is a probe run, not a sweep. Not chaining."
             exit 0
           fi
+          # ⚠️ THREE CONSECUTIVE ZERO-WRITE RUNS, NOT ONE. A single empty run is a
+          # normal thing in a tail: every remaining shard can be blocked at call 1
+          # on one pass and walk fine on the next, because the allowance is
+          # account-wide and moves. Stopping on the first zero abandons a sweep
+          # that would have finished — which is what happened on 2026-09-10, when
+          # run 3 wrote nothing and the chain ended with 11 shards still carrying.
+          #
+          # An apply failure is folded in rather than counted separately: the
+          # persistence gate in the aggregator already zeroes `written` when the
+          # commit did not land, so three failed applies are three zero-write runs
+          # and hit the same stop.
+          ZERO_RUNS="${ZERO_RUNS:-0}"
           if [ "${WRITTEN:-0}" = "0" ]; then
-            echo "no writes landed this run — stopping rather than looping on a stuck sweep."
-            echo "Read the shard summaries, then dispatch by hand."
+            ZERO_RUNS=$((ZERO_RUNS + 1))
+            echo "this run wrote nothing — $ZERO_RUNS consecutive zero-write run(s)"
+          else
+            ZERO_RUNS=0
+          fi
+          if [ "$ZERO_RUNS" -ge 3 ]; then
+            echo "three consecutive runs wrote nothing — stopping. The sweep is stuck, not slow."
+            echo "Read a carried shard's log for the blocked flag and the error counts, then dispatch by hand."
             exit 0
           fi
           gh workflow run fetch-careers-matrix.yml \
@@ -358,5 +410,6 @@ jobs:
             -f shards="$NEXT" \
             -f force=${{ github.event.inputs.force }} \
             -f limit=${{ github.event.inputs.limit }} \
-            -f run_number="$NEXT_NO"
-          echo "dispatched run $NEXT_NO"
+            -f run_number="$NEXT_NO" \
+            -f zero_runs="$ZERO_RUNS"
+          echo "dispatched run $NEXT_NO (zero-write streak $ZERO_RUNS)"
