@@ -90,14 +90,16 @@ const zlib = require('zlib');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'probe-career-stats v4 2026-09-10 opname-fix-and-trial-spacing';
+const VERSION = 'probe-career-stats v5 2026-09-10 private-profile-lookup';
 
 const ROOT = path.resolve(__dirname, '..');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
 const REG_LEGACY = path.join(ROOT, 'data', 'registrations.json');
 
-const PER_COMP = Math.max(1, Number(process.env.PROBE_PER_COMP || 4));
+// 0 means "skip the cohort walk entirely" — for a targeted lookup of supplied
+// ids, which is what players_per_comp=0 with extra_profile_ids is for.
+const PER_COMP = Math.max(0, Number(process.env.PROBE_PER_COMP || 4));
 const RAW_LIMIT = Math.max(0, Number(process.env.PROBE_RAW || 2));
 const RATE = Math.max(1, Number(process.env.PROBE_RATE || 100));
 const WINDOW_MS = Math.max(1, Number(process.env.PROBE_WINDOW_MS || 80000));
@@ -139,6 +141,23 @@ query publicProfileStatistics($profileID: ID!) {
     }
   }
   publicProfile(profileID: $profileID) { id firstName lastName }
+}`;
+
+// walk-registrations.js's Q_PROFILE, copied verbatim. Used only for supplied
+// ids, to answer whether a PRIVATE profile hides registrations as well as
+// statistics — measured 2026-09-10: publicProfileStatistics returns 200 with
+// null data for a private profile, and nothing says whether the other operation
+// behaves the same way. If it does, ~500 people of 70,933 silently never get a
+// next-season line and nobody has looked.
+const Q_TEAMS = `query PublicProfileTeams($profileID: ID!) {
+  publicProfileTeams(profileID: $profileID) {
+    ... on DiscoverTeam {
+      id
+      name
+      season { id name startDate endDate status { value } competition { id name } }
+      organisation { id name }
+    }
+  }
 }`;
 
 // ── Trials — each is the base query with ONE substitution, run alone ─────────
@@ -235,6 +254,9 @@ function readCohort() {
 // Deterministic: walked players first (their record is known real), then uuid
 // order, so two runs on the same file pick the same people.
 function select(cohort, perComp, extraIds) {
+  // The supplied ids have already been reported in full above; with perComp 0
+  // there is nothing else to walk and the answers block is skipped.
+  if (perComp === 0) return [];
   const byComp = new Map();
   for (const [uuid, rec] of Object.entries(cohort.players)) {
     const comp = rec.from && rec.from.compName ? rec.from.compName : '(no competition)';
@@ -344,14 +366,69 @@ async function main() {
   const walkedN = Object.values(cohort.players).filter(r => r.at).length;
   log(`cohort file: ${people} people, ${walkedN} walked at least once (version ${cohort.meta && cohort.meta.version})`);
 
+  // Declared here, not in the walk below: the targeted lookup runs first and
+  // makes calls of its own, and the summary must count them.
+  let calls = 0, answered = 0, failed = 0;
+
+  // ── Targeted lookup for supplied ids ──────────────────────────────────────
+  // Three questions per id, and the registrations one costs no call at all
+  // because the walker's own file is already open.
+  for (const id of extraIds) {
+    log(`\n═══ SUPPLIED ID ${id} ═══`);
+    const reg = cohort.players[id];
+    if (!reg) {
+      log('  registrations.json.gz: NOT IN THE COHORT FILE');
+    } else {
+      log(`  registrations.json.gz: name ${JSON.stringify(reg.name)}, checked ${reg.at || '(never)'}`);
+      log(`    from: ${JSON.stringify(reg.from)}`);
+      log(`    club harvested: ${reg.from && reg.from.club ? 'YES — ' + reg.from.club + ' ' + (reg.from.clubName || '') : 'NO'}`);
+      log(`    tracked ${(reg.tracked || []).length}, other ${(reg.other || []).length}` +
+          (reg.missing ? ', MISSING flag set' : ''));
+    }
+    await pace();
+    calls++;
+    let teams;
+    try { teams = await gqlPost(Q_TEAMS, { profileID: id }, 'PublicProfileTeams'); }
+    catch (e) { log(`  publicProfileTeams: THREW — ${String(e.message).slice(0, 160)}`); teams = null; }
+    if (teams) {
+      if (teams.errors && teams.errors.length) {
+        log(`  publicProfileTeams: error — ${String(teams.errors[0].message).slice(0, 160)}`);
+      } else {
+        const list = teams.data ? teams.data.publicProfileTeams : undefined;
+        log(`  publicProfileTeams: ${list === null ? 'NULL — private hides registrations too'
+          : list === undefined ? 'field absent from the response'
+          : `${list.length} registration(s) — private does NOT hide registrations`}`);
+        for (const t of (list || []).slice(0, 5)) {
+          log(`    ${JSON.stringify({ name: t.name, season: t.season && t.season.name,
+            comp: t.season && t.season.competition && t.season.competition.name,
+            org: t.organisation && t.organisation.name })}`);
+        }
+      }
+    }
+    await pace();
+    calls++;
+    const r = await askProfile(id);
+    log(`  publicProfileStatistics: ${r.ok
+      ? `${r.seasons.length} season block(s)` + (r.seasons.length ? '' : ' — 200 with null or empty data (private or no stats)')
+      : 'FAILED — ' + r.reason}`);
+  }
+
   const picked = select(cohort, PER_COMP, extraIds);
+  // players_per_comp=0 means the supplied ids WERE the job. Stop cleanly here:
+  // running on to the answers block would compute it from nothing, and the
+  // no-answers guard would exit 1 on a run that did exactly what was asked.
+  if (!picked.length) {
+    log(`\nplayers_per_comp is 0 — the supplied id(s) above were the whole run. ${calls} call(s) made.`);
+    playhq.logSummary('probe-career-stats');
+    log('Read-only: nothing was written. Exit 0.');
+    process.exit(0);
+  }
   log(`\nselected ${picked.length} player(s): up to ${PER_COMP} per competition` +
       (extraIds.length ? `, including ${extraIds.length} supplied id(s) — a supplied id already in the cohort counts inside its own competition's quota` : ''));
   for (const p of picked) log(`  ${p.uuid}  ${(p.name || '(name unknown)').padEnd(24)} ${p.comp}`);
 
   // ── The walk ──────────────────────────────────────────────────────────────
   log('\n── per player ──');
-  let calls = 0, answered = 0, failed = 0;
   let burstFired = 0;
   const failures = [];
   const regs = [];          // one per club registration
