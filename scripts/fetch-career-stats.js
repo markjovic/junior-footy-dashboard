@@ -43,7 +43,7 @@ const path = require('path');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'fetch-career-stats v1 2026-09-10 shard-walker';
+const VERSION = 'fetch-career-stats v2 2026-09-10 null-data-is-an-answer';
 const FILE_VERSION = 1;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -245,7 +245,7 @@ async function main() {
   // ever; silence and success must not look the same.
   const summary = {
     version: FILE_VERSION, script: VERSION, shard: SHARD,
-    players: 0, due: 0, checked: 0, written: 0, notFound: 0, errors: 0,
+    players: 0, due: 0, checked: 0, written: 0, notFound: 0, noStats: 0, errors: 0,
     remaining: 0, blocked: false, batches_completed: 0, blocked_at_call: null,
     drifted: 0, ranAt: new Date().toISOString(),
   };
@@ -287,6 +287,7 @@ async function main() {
   }
 
   const roundSamples = [];
+  const noStatsSamples = [];
   let call = 0;
   let blocked = false;
 
@@ -347,7 +348,24 @@ async function main() {
         continue;
       }
       const parsed = parseProfile(json, heldIds, roundSamples);
-      if (!parsed) { summary.errors++; continue; }
+      // ⚠️ A 200 WITH `publicProfileStatistics: null` AND NO errors ARRAY IS AN
+      // ANSWER, NOT A FAILURE. Measured on shard 00, 2026-09-10: two of 274
+      // players came back this way, and v1 counted them as errors, printed
+      // NOTHING about them, and left them unstamped — so they were due again on
+      // the next run, `remaining` never reached 0, and the chain would carry the
+      // shard for ever. The sibling project records the likely cause: a
+      // spectator-namespace id fed to this operation returns 200 with null data,
+      // which reads as "private or missing" but is a namespace mismatch.
+      //
+      // Stamped like any other definitive negative, so it comes round again with
+      // the max-age window rather than never or every run. And the uuids are
+      // PRINTED: a tool that reports something is absent must show what it found.
+      if (!parsed) {
+        summary.noStats++;
+        if (noStatsSamples.length < 5) noStatsSamples.push(item.uuid);
+        stampNegative(item, 'noStats');
+        continue;
+      }
       summary.checked++;
       if (parsed.drift !== 0) summary.drifted++;
 
@@ -380,14 +398,18 @@ async function main() {
 
   // `remaining` is what is still UNANSWERED, so a private profile does not keep
   // the shard alive in the chain for ever.
-  summary.remaining = Math.max(0, due.length - summary.checked - summary.notFound);
+  summary.remaining = Math.max(0, due.length - summary.checked - summary.notFound - summary.noStats);
 
   log(`\n--- shard ${SHARD} ---`);
   log(`players ${summary.players}  due ${summary.due}  checked ${summary.checked}  written ${summary.written}`);
   log(`batches ${summary.batches_completed}  blocked ${summary.blocked}` +
       (summary.blocked_at_call ? ` at call ${summary.blocked_at_call}` : '') +
       `  remaining ${summary.remaining}`);
-  log(`not found ${summary.notFound}  errors ${summary.errors}`);
+  log(`not found ${summary.notFound}  no stats ${summary.noStats}  errors ${summary.errors}`);
+  if (noStatsSamples.length) {
+    log(`${summary.noStats} player(s) returned 200 with null publicProfileStatistics; first ${noStatsSamples.length}:`);
+    for (const u of noStatsSamples) log('  ' + u);
+  }
   // The §9 step 1 check, reported every run rather than probed once.
   log(`career total vs summed registrations — disagreed for ${summary.drifted} of ${summary.checked}`);
   if (roundSamples.length) {

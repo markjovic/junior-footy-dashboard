@@ -26,7 +26,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-careers v1 2026-09-10';
+const VERSION = 'verify-careers v2 2026-09-10 null-data';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'fetch-career-stats.js');
@@ -64,6 +64,7 @@ async function gqlPost(query, vars, op) {
   if (r === undefined) { counters.ok++; return { data: { publicProfileStatistics: { careerStatistics: { totalStatistics: [] }, seasonStatistics: [] } } }; }
   if (r === 'NOT_FOUND') { counters.graphqlError++; return { errors: [{ message: '5 NOT_FOUND: failed to find profile' }] }; }
   if (r === 'PRIVATE') { counters.auth403++; throw new Error('403 not accessible: publicProfileStatistics'); }
+  if (r === 'NULLDATA') { counters.ok++; return { data: { publicProfileStatistics: null } }; }
   counters.ok++;
   return { data: { publicProfileStatistics: r } };
 }
@@ -140,6 +141,11 @@ mk('00c-gone', null, 'NOT_FOUND');
 mk('00d-fresh', { statsChecked: iso(5) }, p1);          // not due
 mk('00e-stale', { statsChecked: iso(400) }, p1);        // due, stale
 mk('00f-flag', { statsChecked: iso(1), refetch: true }, p1); // due, flagged
+// A 200 carrying `publicProfileStatistics: null` and NO errors array. Measured
+// live on shard 00, 2026-09-10 — two of 274 players. v1 counted it as an error,
+// printed nothing, and never stamped it, so the player was due for ever and the
+// shard's `remaining` never reached zero.
+mk('00g-null', null, 'NULLDATA');
 const saveAnswers = () => fs.writeFileSync(STUB_IN, JSON.stringify(answers));
 saveAnswers();
 
@@ -173,7 +179,7 @@ function ok(name, cond, detail) {
 // ── 1. Due selection ─────────────────────────────────────────────────────────
 console.log('\n1  Which players a run picks up');
 let r = run([], { CAREER_BATCH: '10' });
-ok('version line', /fetch-career-stats v1 /.test(r.out));
+ok('version line', /fetch-career-stats v2 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('never-checked, stale and flagged are fetched', ['00a-rich', '00b-priv', '00c-gone', '00e-stale', '00f-flag']
   .every(u => r.fetched.includes(u)), r.fetched.join(','));
@@ -220,8 +226,29 @@ ok('drift reported in the log', /disagreed for \d+ of \d+/.test(r.out), (r.out.m
 // ── 5. Not-found and private are answers, not errors ─────────────────────────
 console.log('\n5  A private profile and a missing one do not fail the shard');
 ok('both counted as notFound', r.summary && r.summary.notFound === 2, JSON.stringify(r.summary && r.summary.notFound));
-ok('errors stayed at zero', r.summary && r.summary.errors === 0, JSON.stringify(r.summary && r.summary.errors));
+ok('a null publicProfileStatistics is counted separately, not as an error',
+  r.summary && r.summary.noStats === 1 && r.summary.errors === 0,
+  JSON.stringify(r.summary && { noStats: r.summary.noStats, errors: r.summary.errors }));
+ok('… and the uuid is PRINTED, not just counted', /00g-null/.test(r.out),
+  (r.out.match(/null publicProfileStatistics.*/) || [''])[0]);
 ok('a private profile is NOT written', !fs.readFileSync(path.join(DIR, '00b-priv.json'), 'utf8').includes('career'));
+
+// ── 5b. Every definitive negative is stamped, or the shard never finishes ────
+console.log('\n5b Negatives are stamped so remaining can reach zero');
+for (const u of ['00b-priv', '00c-gone', '00g-null']) {
+  const rec = player(u);
+  ok(`${u} stamped with statsChecked`, typeof rec.statsChecked === 'string' && rec.statsChecked.length > 10,
+    JSON.stringify(rec));
+}
+ok('each carries a marker saying WHICH negative it was',
+  player('00b-priv').private === true && player('00c-gone').missing === true && player('00g-null').noStats === true,
+  [player('00b-priv'), player('00c-gone'), player('00g-null')].map(x => JSON.stringify(x)).join(' '));
+{
+  const r2 = run([], { CAREER_BATCH: '10' });
+  ok('a second run re-fetches NONE of them', r2.fetched.length === 0, r2.fetched.join(','));
+  ok('… so remaining reaches zero and the chain lets the shard go',
+    r2.summary && r2.summary.remaining === 0, JSON.stringify(r2.summary && r2.summary.remaining));
+}
 
 // ── 6. The summary contract with the aggregator ──────────────────────────────
 console.log('\n6  The summary — silence must not look like success');
