@@ -43,7 +43,7 @@ const path = require('path');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'fetch-career-stats v2 2026-09-10 null-data-is-an-answer';
+const VERSION = 'fetch-career-stats v5 2026-09-10 samples-in-summary';
 const FILE_VERSION = 1;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -111,6 +111,11 @@ query publicProfileStatistics($profileID: ID!) {
     }
   }
 }`;
+
+// The public profile page for a uuid. Printed beside every negative so a claim
+// that PlayHQ has nothing for a player can be checked in a browser in one click,
+// rather than taken on trust from a log. `?tenant=afl` is what makes it resolve.
+const profileUrl = (uuid) => `https://www.playhq.com/public/profile/${uuid}/statistics?tenant=afl`;
 
 const statOf = (arr, value) => {
   for (const s of (arr || [])) if (s && s.details && s.details.value === value) return s.count || 0;
@@ -245,9 +250,13 @@ async function main() {
   // ever; silence and success must not look the same.
   const summary = {
     version: FILE_VERSION, script: VERSION, shard: SHARD,
-    players: 0, due: 0, checked: 0, written: 0, notFound: 0, noStats: 0, errors: 0,
+    players: 0, due: 0, checked: 0, written: 0, notFound: 0, noStats: 0, errors: 0, serverErrors: 0,
     remaining: 0, blocked: false, batches_completed: 0, blocked_at_call: null,
     drifted: 0, ranAt: new Date().toISOString(),
+    // Up to five uuids per negative kind. The counts alone ask to be taken on
+    // trust; these let the aggregator print one checkable list for the whole
+    // sweep rather than a person opening 256 jobs to find them.
+    samples: {},
   };
   const writeSummary = () => fs.writeFileSync(summaryPath, JSON.stringify(summary));
 
@@ -287,17 +296,20 @@ async function main() {
   }
 
   const roundSamples = [];
-  const noStatsSamples = [];
+  // uuid samples per negative kind, so the closing report can print a link for
+  // each. Capped — five is enough to check a pattern and short enough to read.
+  const samples = { noStats: [], serverError: [], missing: [], private: [], transport: [] };
+  const sample = (kind, uuid) => { if (samples[kind].length < 5) samples[kind].push(uuid); };
   let call = 0;
   let blocked = false;
 
   // A private or deleted profile is an ANSWER. Stamp it so it is not re-fetched
   // until the max-age window comes round, and keep the marker so the panel can
   // tell "no data" from "not walked yet". No career or seasons key is written.
-  function stampNegative(item, kind) {
+  function stampNegative(item, kind, detail) {
     if (!item) return;
     const next = { uuid: item.uuid, name: item.rec.name || null,
-                   statsChecked: new Date().toISOString(), [kind]: true };
+                   statsChecked: new Date().toISOString(), [kind]: detail || true };
     fs.writeFileSync(item.p, JSON.stringify(next));
     summary.written++;
   }
@@ -336,15 +348,52 @@ async function main() {
         // ANSWER, so it must be stamped. Left unstamped the player has no
         // statsChecked, is due again on the next run for ever, and `remaining`
         // never reaches zero, so the chain carries the shard indefinitely.
-        if (/403 not accessible/.test(msg)) { summary.notFound++; stampNegative(r.reason.item, 'private'); }
-        else { summary.errors++; if (summary.errors <= 5) log(`  error: ${msg.slice(0, 160)}`); }
+        if (/403 not accessible/.test(msg)) {
+          summary.notFound++;
+          sample('private', r.reason.item && r.reason.item.uuid);
+          stampNegative(r.reason.item, 'private');
+        }
+        else {
+          // A THROW is the transport giving up after its retries — a network
+          // fault, not a verdict on this player. Left UNSTAMPED so the next run
+          // tries again; the chain's three-zero-write stop is what catches it if
+          // it never clears. The first stack frame is printed because a crash in
+          // OUR code arrives here looking exactly like a transport failure.
+          summary.errors++;
+          sample('transport', r.reason.item && r.reason.item.uuid);
+          if (summary.errors <= 5) {
+            const frame = String(r.reason && r.reason.stack || '').split('\n')[1] || '';
+            log(`  transport error: ${msg.slice(0, 160)}${frame ? '\n    ' + frame.trim() : ''}`);
+          }
+        }
         continue;
       }
       const { item, json } = r.value;
       if (json && json.errors && json.errors.length) {
         const msg = String(json.errors[0].message || '');
-        if (/NOT_FOUND|failed to find profile/i.test(msg)) { summary.notFound++; stampNegative(item, 'missing'); }
-        else { summary.errors++; if (summary.errors <= 5) log(`  error ${item.uuid}: ${msg.slice(0, 160)}`); }
+        if (/NOT_FOUND|failed to find profile/i.test(msg)) {
+          summary.notFound++;
+          sample('missing', item.uuid);
+          stampNegative(item, 'missing');
+        }
+        else {
+          // ⚠️ A 200 CARRYING A GraphQL `errors` ARRAY IS PLAYHQ'S ANSWER, AND
+          // FOR THESE PROFILES IT IS THEIR SERVER CRASHING IN OUR WORDS-BACK:
+          // "Cannot read properties of undefined (reading '0')" is a JavaScript
+          // TypeError from PlayHQ's own resolver, not from this script.
+          // Measured 2026-09-10: 11 of 70,933 players, identical on every retry
+          // across three chained runs.
+          //
+          // It is therefore a VERDICT, not a fault to retry for ever. Stamped
+          // like the other definitive negatives so `remaining` can reach zero and
+          // the shard is released, with the message kept in the file so it is
+          // visible without reading a log, and re-checked when the max-age window
+          // comes round in case PlayHQ fixes it.
+          summary.serverErrors++;
+          sample('serverError', item.uuid);
+          if (summary.serverErrors <= 5) log(`  PlayHQ server error for ${item.uuid}: ${msg.slice(0, 200)}`);
+          stampNegative(item, 'serverError', msg.slice(0, 200));
+        }
         continue;
       }
       const parsed = parseProfile(json, heldIds, roundSamples);
@@ -362,7 +411,7 @@ async function main() {
       // PRINTED: a tool that reports something is absent must show what it found.
       if (!parsed) {
         summary.noStats++;
-        if (noStatsSamples.length < 5) noStatsSamples.push(item.uuid);
+        sample('noStats', item.uuid);
         stampNegative(item, 'noStats');
         continue;
       }
@@ -398,23 +447,43 @@ async function main() {
 
   // `remaining` is what is still UNANSWERED, so a private profile does not keep
   // the shard alive in the chain for ever.
-  summary.remaining = Math.max(0, due.length - summary.checked - summary.notFound - summary.noStats);
+  summary.remaining = Math.max(0, due.length - summary.checked - summary.notFound - summary.noStats - summary.serverErrors);
 
   log(`\n--- shard ${SHARD} ---`);
   log(`players ${summary.players}  due ${summary.due}  checked ${summary.checked}  written ${summary.written}`);
   log(`batches ${summary.batches_completed}  blocked ${summary.blocked}` +
       (summary.blocked_at_call ? ` at call ${summary.blocked_at_call}` : '') +
       `  remaining ${summary.remaining}`);
-  log(`not found ${summary.notFound}  no stats ${summary.noStats}  errors ${summary.errors}`);
-  if (noStatsSamples.length) {
-    log(`${summary.noStats} player(s) returned 200 with null publicProfileStatistics; first ${noStatsSamples.length}:`);
-    for (const u of noStatsSamples) log('  ' + u);
+  log(`not found ${summary.notFound}  no stats ${summary.noStats}  ` +
+      `PlayHQ server errors ${summary.serverErrors}  transport errors ${summary.errors}`);
+  const NEGATIVE_LABEL = {
+    serverError: "PlayHQ's own resolver threw — a 200 carrying a JavaScript TypeError",
+    noStats: 'returned 200 with null data — private profile, or no statistics',
+    private: 'returned 403 — private profile',
+    missing: 'returned NOT_FOUND — no such profile',
+    transport: 'the transport gave up after its retries — NOT stamped, retried next run',
+  };
+  const anyNegative = Object.values(samples).some(a => a.length);
+  if (anyNegative) {
+    log(`\n── players with no career record, and where to check them ──`);
+    for (const kind of Object.keys(samples)) {
+      if (!samples[kind].length) continue;
+      const total = kind === 'transport' ? summary.errors
+        : kind === 'serverError' ? summary.serverErrors
+        : kind === 'noStats' ? summary.noStats : null;
+      log(`  ${kind}${total !== null ? ` (${total} this run)` : ''} — ${NEGATIVE_LABEL[kind]}`);
+      for (const u of samples[kind]) log(`    ${profileUrl(u)}`);
+    }
+    log('  Open one: if the page shows statistics, this script is wrong about that player.');
   }
   // The §9 step 1 check, reported every run rather than probed once.
   log(`career total vs summed registrations — disagreed for ${summary.drifted} of ${summary.checked}`);
   if (roundSamples.length) {
     log(`first ${roundSamples.length} round object(s) RAW — are number and isFinalsRound populated?`);
     for (const r of roundSamples) log('  ' + JSON.stringify(r));
+  }
+  for (const kind of Object.keys(samples)) {
+    if (samples[kind].length) summary.samples[kind] = samples[kind];
   }
   playhq.logSummary(`career-${SHARD}`);
   writeSummary();

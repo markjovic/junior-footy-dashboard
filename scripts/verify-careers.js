@@ -26,7 +26,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-careers v2 2026-09-10 null-data';
+const VERSION = 'verify-careers v5 2026-09-10 samples-in-summary';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'fetch-career-stats.js');
@@ -65,6 +65,7 @@ async function gqlPost(query, vars, op) {
   if (r === 'NOT_FOUND') { counters.graphqlError++; return { errors: [{ message: '5 NOT_FOUND: failed to find profile' }] }; }
   if (r === 'PRIVATE') { counters.auth403++; throw new Error('403 not accessible: publicProfileStatistics'); }
   if (r === 'NULLDATA') { counters.ok++; return { data: { publicProfileStatistics: null } }; }
+  if (r === 'SERVERERR') { counters.graphqlError++; return { errors: [{ message: "Cannot read properties of undefined (reading '0')" }] }; }
   counters.ok++;
   return { data: { publicProfileStatistics: r } };
 }
@@ -146,6 +147,11 @@ mk('00f-flag', { statsChecked: iso(1), refetch: true }, p1); // due, flagged
 // printed nothing, and never stamped it, so the player was due for ever and the
 // shard's `remaining` never reached zero.
 mk('00g-null', null, 'NULLDATA');
+// A 200 carrying a GraphQL errors array whose MESSAGE IS A JAVASCRIPT TypeError
+// from PlayHQ's own resolver. Measured 2026-09-10: 11 of 70,933 players, the
+// same message on every retry across three chained runs. It is a verdict, not a
+// transient fault, and leaving it unstamped kept 11 shards in the chain for ever.
+mk('00h-crash', null, 'SERVERERR');
 const saveAnswers = () => fs.writeFileSync(STUB_IN, JSON.stringify(answers));
 saveAnswers();
 
@@ -179,7 +185,7 @@ function ok(name, cond, detail) {
 // ── 1. Due selection ─────────────────────────────────────────────────────────
 console.log('\n1  Which players a run picks up');
 let r = run([], { CAREER_BATCH: '10' });
-ok('version line', /fetch-career-stats v2 /.test(r.out));
+ok('version line', /fetch-career-stats v5 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('never-checked, stale and flagged are fetched', ['00a-rich', '00b-priv', '00c-gone', '00e-stale', '00f-flag']
   .every(u => r.fetched.includes(u)), r.fetched.join(','));
@@ -230,18 +236,48 @@ ok('a null publicProfileStatistics is counted separately, not as an error',
   r.summary && r.summary.noStats === 1 && r.summary.errors === 0,
   JSON.stringify(r.summary && { noStats: r.summary.noStats, errors: r.summary.errors }));
 ok('… and the uuid is PRINTED, not just counted', /00g-null/.test(r.out),
-  (r.out.match(/null publicProfileStatistics.*/) || [''])[0]);
+  (r.out.match(/null data.*/) || [''])[0]);
+// A count on its own asks to be taken on trust. Every negative kind prints a
+// profile URL for its first few, so a claim that PlayHQ has nothing for a player
+// can be checked in a browser.
+ok('a checkable profile link is printed for a null-data player',
+  r.out.includes(`https://www.playhq.com/public/profile/00g-null/statistics?tenant=afl`));
+ok('… and for a PlayHQ resolver crash',
+  r.out.includes(`https://www.playhq.com/public/profile/00h-crash/statistics?tenant=afl`));
+ok('… and for a 403 private profile',
+  r.out.includes(`https://www.playhq.com/public/profile/00b-priv/statistics?tenant=afl`));
+ok('… and for a NOT_FOUND profile',
+  r.out.includes(`https://www.playhq.com/public/profile/00c-gone/statistics?tenant=afl`));
+// The aggregator can only report what the summary carries. Without the uuids a
+// 256-shard sweep gives counts and no way to check any of them.
+ok('the summary carries sample uuids per negative kind',
+  r.summary && r.summary.samples && r.summary.samples.serverError
+  && r.summary.samples.serverError.includes('00h-crash')
+  && r.summary.samples.noStats.includes('00g-null'),
+  JSON.stringify(r.summary && r.summary.samples));
+ok('… capped, so a bad shard cannot fill the summary',
+  r.summary && Object.values(r.summary.samples || {}).every(a => a.length <= 5));
+ok('each kind is labelled with what the answer MEANT',
+  /private profile, or no statistics/.test(r.out) && /JavaScript TypeError/.test(r.out),
+  (r.out.match(/serverError.*/) || [''])[0]);
+ok('a PlayHQ resolver crash is counted as a server error, not a transport one',
+  r.summary && r.summary.serverErrors === 1 && r.summary.errors === 0,
+  JSON.stringify(r.summary && { serverErrors: r.summary.serverErrors, errors: r.summary.errors }));
+ok('… and its message is kept in the player file, not just the log',
+  /Cannot read properties/.test(String(player('00h-crash').serverError || '')),
+  JSON.stringify(player('00h-crash')));
 ok('a private profile is NOT written', !fs.readFileSync(path.join(DIR, '00b-priv.json'), 'utf8').includes('career'));
 
 // ── 5b. Every definitive negative is stamped, or the shard never finishes ────
 console.log('\n5b Negatives are stamped so remaining can reach zero');
-for (const u of ['00b-priv', '00c-gone', '00g-null']) {
+for (const u of ['00b-priv', '00c-gone', '00g-null', '00h-crash']) {
   const rec = player(u);
   ok(`${u} stamped with statsChecked`, typeof rec.statsChecked === 'string' && rec.statsChecked.length > 10,
     JSON.stringify(rec));
 }
 ok('each carries a marker saying WHICH negative it was',
-  player('00b-priv').private === true && player('00c-gone').missing === true && player('00g-null').noStats === true,
+  player('00b-priv').private === true && player('00c-gone').missing === true
+  && player('00g-null').noStats === true && !!player('00h-crash').serverError,
   [player('00b-priv'), player('00c-gone'), player('00g-null')].map(x => JSON.stringify(x)).join(' '));
 {
   const r2 = run([], { CAREER_BATCH: '10' });
