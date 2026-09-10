@@ -249,7 +249,7 @@ body{overflow-x:hidden}
 .team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
 .team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
 .team-stat-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
-.pm-scope{background:var(--s2);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--tx3);writing-mode:vertical-rl;transform:rotate(180deg);padding:6px 0}
+.pm-scope{background:var(--s2);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;line-height:1.35;letter-spacing:1px;color:var(--tx3);writing-mode:vertical-rl;transform:rotate(180deg);padding:6px 0;white-space:pre;text-align:center}
 /* auto-fit, not a fixed count. The Finals cell is conditional — a team with no
    finals gets two cells and a team with finals gets three — and a hard
    `1fr 1fr` wrapped the third onto its own row. */
@@ -597,7 +597,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.221</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.224</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -953,7 +953,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.221</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.224</span>
         </div>
 
 
@@ -5638,10 +5638,32 @@ function renderStatStrip(recs, rec, uuid) {
   const c = rec && rec.career ? careerSummary(rec, uuid) : null;
 
   const rows = [];
-  if (c) rows.push({ scope: 'CAREER', v: c, t: c.from ? `Every season PlayHQ holds, from ${c.from}` : '' });
-  if (c && rec.career && (rec.career.gp !== c.gp || rec.career.goals !== c.goals || rec.career.best !== c.best)) {
-    rows.push({ scope: 'PLAYHQ', v: rec.career, dim: true,
-      t: "PlayHQ's own career total. It disagrees with the sum of its own season rows." });
+  if (c) {
+    const drift = rec && rec.career ? c.gp - (rec.career.gp || 0) : 0;
+    rows.push({ scope: 'CAREER', v: c,
+      t: (c.from ? `Every season PlayHQ holds, from ${c.from}. ` : '') +
+         (rec && rec.career ? `PlayHQ's own total: ${rec.career.gp || 0} games, ${rec.career.goals || 0} goals, ${rec.career.best || 0} best` +
+           (drift ? ` — ours differs by ${drift}, usually because this season has moved since the last walk` : '') : '') });
+  }
+  // ⚠️ THE MIDDLE ROW IS WHAT THIS DASHBOARD HOLDS, not PlayHQ's own total.
+  // It reads as the answer to "and how much of that is in here?" — Lewis Stanton's
+  // 398 games of which we hold 60. An earlier cut showed PlayHQ's career figure
+  // whenever it disagreed with our sum, which would have fired on nearly every
+  // panel from March: the career file is an off-season snapshot, so our live
+  // season grows past it and a whole row would appear to say a snapshot is a
+  // snapshot. The disagreement that DOES matter stays on the tooltip.
+  if (c) {
+    const h = c.rows.filter(r => r.held);
+    if (h.length) {
+      const held = h.reduce((a, r) => ({ gp: a.gp + (r.gp || 0), goals: a.goals + (r.goals || 0),
+                                         best: a.best + (r.best || 0) }), { gp: 0, goals: 0, best: 0 });
+      // Hidden when it repeats the row above — a player whose every season is
+      // held would otherwise see the same four numbers twice.
+      if (held.gp !== c.gp || held.goals !== c.goals || held.best !== c.best) {
+        rows.push({ scope: 'GAMES\nSTORED', v: held, dim: true,
+          t: `${h.length} season${h.length === 1 ? '' : 's'} of that career are stored in this dashboard` });
+      }
+    }
   }
   const top = rows.length ? rows[rows.length - 1].v : null;
   if (!top || top.gp !== season.gp || top.goals !== season.goals || top.best !== season.best) {
@@ -5653,7 +5675,7 @@ function renderStatStrip(recs, rec, uuid) {
     `<div class="team-stat-val"${dim ? ' style="color:var(--tx2)"' : ''}>${v}</div>` +
     `<div class="team-stat-lbl">${l}</div></div>`;
 
-  el.style.gridTemplateColumns = '22px repeat(4,1fr)';
+  el.style.gridTemplateColumns = '32px repeat(4,1fr)';
   el.innerHTML = rows.map(r => {
     const gp = r.v.gp || 0, goals = r.v.goals || 0, best = r.v.best || 0;
     return `<div class="pm-scope">${r.scope}</div>` +
@@ -5709,20 +5731,49 @@ function renderCareerSection(rec, uuid, recs) {
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">G</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">B</th>
       </tr>
-      ${c.rows.map(r => `<tr style="border-top:1px solid var(--b1);color:${r.held ? 'var(--tx3)' : 'var(--tx2)'}">
-        <td style="${cell};color:${r.held ? 'var(--tx3)' : 'var(--gold)'}">${esc(r.year)}</td>
+      ${c.rows.map(r => {
+        // A row for a season we HOLD switches the panel to it — the same call the
+        // year chips in the header make. A row we do not hold has nothing to load,
+        // so it stays inert rather than looking clickable and doing nothing.
+        const here = String(r.year || '') === String(S.selYear || '');
+        const go = r.held && r.sid && !here;
+        // ⚠️ GREY MEANS WE DO NOT HOLD IT. The first cut had this the other way
+        // round — the seasons you can actually open were the dim ones.
+        return `<tr style="border-top:1px solid var(--b1);color:${r.held ? 'var(--tx)' : 'var(--tx3)'}${
+          go ? ';cursor:pointer' : ''}${here ? ';background:var(--s3)' : ''}"
+        ${go ? `data-sid="${esc(r.sid)}"
+          onmouseover="this.style.background='var(--s3)'"
+          onmouseout="this.style.background=''"
+          title="Show this season"` : here ? 'title="Currently showing"' : ''}>
+        <td style="${cell};color:${r.held ? 'var(--gold)' : 'var(--tx3)'}">${esc(r.year)}</td>
         <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${esc(r.club || '')}">${esc(r.league || '—')}</td>
         <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${esc(r.grade || '')}">${esc(r.grade || '')}</td>
         <td style="${cell};text-align:right">${r.gp || '–'}</td>
-        <td style="${cell};text-align:right;color:${r.goals ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
+        <td style="${cell};text-align:right;color:${r.goals && r.held ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
         <td style="${cell};text-align:right">${r.best || '–'}</td>
-      </tr>`).join('')}
+      </tr>`;
+      }).join('')}
     </table>
     ${outside ? `<div style="font-size:10px;color:var(--tx3);margin-top:9px">
-      <span style="color:var(--gold)">■</span> ${outside} season${outside === 1 ? '' : 's'} not held in this dashboard</div>` : ''}
+      ${outside} of ${c.rows.length} season${c.rows.length === 1 ? '' : 's'} are not held in this dashboard —
+      shown in grey, and not openable</div>` : ''}
   </div>`;
+
+  // One listener on the container, re-bound with the markup it serves.
+  box.onclick = (ev) => {
+    const tr = ev.target && ev.target.closest ? ev.target.closest('tr[data-sid]') : null;
+    if (!tr) return;
+    const sid = tr.getAttribute('data-sid');
+    if (!sid) return;
+    // Scroll the panel back to the top. Without it the games list changes above a
+    // reader who is looking at the career table, and a working click reads as a
+    // dead one.
+    const sc = document.querySelector('#player-modal .team-modal-scroll');
+    if (sc && sc.scrollTo) sc.scrollTo(0, 0); else if (sc) sc.scrollTop = 0;
+    openPlayerFromSearch(uuid, sid);
+  };
 }
 
 function closePlayerModal() {
