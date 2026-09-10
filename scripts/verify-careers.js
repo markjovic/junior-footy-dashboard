@@ -1,0 +1,286 @@
+// scripts/verify-careers.js
+//
+// Runs the REAL scripts/fetch-career-stats.js as a child process in a temporary
+// tree, with only scripts/lib/playhq.js stubbed. The stub reads its answers from
+// a JSON file the test writes and logs every call, so a section can say exactly
+// who was fetched.
+//
+// Covers the SILENT failures only:
+//   * the same game counted twice because a regrade puts it under two grades
+//   * a single-game record pointing at a game we do not hold when a held one exists
+//   * a shard that did nothing writing NO summary, which the aggregator reads as
+//     a crash and carries forward for ever
+//   * a WAF block reported as a clean finish, so the chain never retries the shard
+//   * `held` false for a season that is in the manifest
+//   * the league taken from the club-name bracket instead of season.competition
+//   * a fresh player re-fetched, or a stale one skipped
+//   * a write landing outside players/<shard>/, which git silently drops under
+//     the workflow's sparse checkout
+//
+// Run: node scripts/verify-careers.js   Exit 0 all passed, 1 any failed.
+
+'use strict';
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const VERSION = 'verify-careers v1 2026-09-10';
+console.log(`=== ${VERSION} ===`);
+
+const REAL = path.join(__dirname, 'fetch-career-stats.js');
+if (!fs.existsSync(REAL)) {
+  console.error(`FATAL: ${REAL} not found. Run from the repository root.`);
+  process.exit(1);
+}
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'careers-verify-'));
+const SHARD = '00';
+const DIR = path.join(TMP, 'players', SHARD);
+const STUB_IN = path.join(TMP, 'stub-answers.json');
+const STUB_LOG = path.join(TMP, 'stub-calls.json');
+fs.mkdirSync(path.join(TMP, 'scripts', 'lib'), { recursive: true });
+fs.mkdirSync(DIR, { recursive: true });
+fs.mkdirSync(path.join(TMP, 'data'), { recursive: true });
+fs.copyFileSync(REAL, path.join(TMP, 'scripts', 'fetch-career-stats.js'));
+
+fs.writeFileSync(path.join(TMP, 'scripts', 'lib', 'playhq.js'), `
+'use strict';
+const fs = require('fs'), path = require('path');
+const IN = path.join(__dirname, '..', '..', 'stub-answers.json');
+const LOG = path.join(__dirname, '..', '..', 'stub-calls.json');
+const counters = { ok:0, graphqlError:0, blocked:0, auth403:0, transient:0, retries:0, sessionRefreshes:0 };
+const calls = [];
+let n = 0;
+const BLOCK_AT = Number(process.env.STUB_BLOCK_AT || 0);
+async function gqlPost(query, vars, op) {
+  n++;
+  calls.push({ op, id: vars.profileID });
+  fs.writeFileSync(LOG, JSON.stringify(calls));
+  if (BLOCK_AT && n >= BLOCK_AT) counters.blocked++;
+  const a = JSON.parse(fs.readFileSync(IN, 'utf8'));
+  const r = a.profiles[vars.profileID];
+  if (r === undefined) { counters.ok++; return { data: { publicProfileStatistics: { careerStatistics: { totalStatistics: [] }, seasonStatistics: [] } } }; }
+  if (r === 'NOT_FOUND') { counters.graphqlError++; return { errors: [{ message: '5 NOT_FOUND: failed to find profile' }] }; }
+  if (r === 'PRIVATE') { counters.auth403++; throw new Error('403 not accessible: publicProfileStatistics'); }
+  counters.ok++;
+  return { data: { publicProfileStatistics: r } };
+}
+module.exports = { gqlPost,
+  sleep: (ms) => new Promise(r => setTimeout(r, Math.min(ms, 5))),
+  refreshSession: async () => { counters.sessionRefreshes++; return process.env.STUB_NO_SESSION !== 'true'; },
+  summary: () => ({ ...counters }),
+  logSummary: () => {} };
+`);
+
+// ── Fixture ──────────────────────────────────────────────────────────────────
+const HELD = '2dcbf383';       // in the manifest
+const OUT = 'mpjfl2023';       // not in the manifest
+fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify({
+  manifest: [{ seasonId: HELD, compName: 'EFNL 2026' }, { seasonId: 'other', compName: 'WFNL 2026' }],
+}));
+
+const st = (o) => Object.entries(o).map(([value, count]) => ({ count, details: { value } }));
+const line = (id, goals) => ({
+  game: { id, round: { name: 'Round 1', number: 1, isFinalsRound: false, abbreviatedName: 'R1' },
+          date: '2026-05-02', home: { id: 'h', name: 'A' }, away: { id: 'a', name: 'B' } },
+  statistics: st({ APPEARANCE: 1, GOAL_COUNT: goals }),
+});
+
+// ⚠️ THE FIXTURE MUST DISTINGUISH THE DEFECT.
+// p1's held season is a REGRADE: one team, two grade entries, and game `g-dup`
+// appears under BOTH. Correct behaviour counts 2 lines; a missing dedup counts 3.
+// Its OUTSIDE season carries a HIGHER-scoring game (11) than any held game (9),
+// so goalsHeld and goalsAny must differ — a fixture where the best game is held
+// could not tell a broken split from a working one.
+// The club name carries a bracket that is NOT the competition, so a league read
+// from the bracket gives a different answer from one read from competition.name.
+const p1 = {
+  careerStatistics: { totalStatistics: st({ APPEARANCE: 187, GOAL_COUNT: 9, BEST_PLAYER: 32 }) },
+  seasonStatistics: [
+    { name: '2026', statistics: [{
+      season: { id: HELD, name: '2026', startDate: '2025-10-01', endDate: '2026-09-30',
+                status: { value: 'ACTIVE' }, competition: { id: 'k1', name: 'Eastern Football Netball League' } },
+      club: { id: 'c2', name: 'Vermont (EFNL)' },
+      totalStatistics: st({ APPEARANCE: 13, GOAL_COUNT: 9, BEST_PLAYER: 2 }),
+      teamStatistics: [{ team: { id: 't2', name: 'Vermont U12' }, gradeStatistics: [
+        { grade: { id: 'gB', name: 'U12 - B' }, totalStatistics: st({ APPEARANCE: 13 }),
+          gameStatistics: [line('g-dup', 4), line('g-two', 9)] },
+        { grade: { id: 'gR', name: 'U12 - BRES' }, totalStatistics: st({ APPEARANCE: 13 }),
+          gameStatistics: [line('g-dup', 4)] },
+      ] }],
+    }] },
+    { name: '2023', statistics: [{
+      season: { id: OUT, name: '2023', startDate: '2022-10-01', endDate: '2023-09-30',
+                status: { value: 'COMPLETED' }, competition: { id: 'k2', name: 'Mornington Peninsula JFL' } },
+      club: { id: 'c3', name: 'Balnarring' },
+      totalStatistics: st({ APPEARANCE: 5, GOAL_COUNT: 12 }),
+      teamStatistics: [{ team: { id: 't3', name: 'Balnarring U15' }, gradeStatistics: [
+        { grade: { id: 'g3', name: '15D 2023' }, totalStatistics: st({ APPEARANCE: 5 }),
+          gameStatistics: [line('g-out', 11)] },
+      ] }],
+    }] },
+  ],
+};
+
+let answers = { profiles: {} };
+const uuids = [];
+const mk = (u, extra, answer) => {
+  uuids.push(u);
+  fs.writeFileSync(path.join(DIR, `${u}.json`),
+    JSON.stringify(Object.assign({ uuid: u, name: 'Player ' + u, statsChecked: null }, extra || {})));
+  if (answer !== undefined) answers.profiles[u] = answer;
+};
+const iso = (d) => new Date(Date.now() - d * 86400000).toISOString();
+
+mk('00a-rich', null, p1);
+mk('00b-priv', null, 'PRIVATE');
+mk('00c-gone', null, 'NOT_FOUND');
+mk('00d-fresh', { statsChecked: iso(5) }, p1);          // not due
+mk('00e-stale', { statsChecked: iso(400) }, p1);        // due, stale
+mk('00f-flag', { statsChecked: iso(1), refetch: true }, p1); // due, flagged
+const saveAnswers = () => fs.writeFileSync(STUB_IN, JSON.stringify(answers));
+saveAnswers();
+
+function run(args, env) {
+  fs.rmSync(STUB_LOG, { force: true });
+  const r = spawnSync(process.execPath,
+    ['scripts/fetch-career-stats.js', `--shard=${SHARD}`, ...(args || [])],
+    { cwd: TMP, encoding: 'utf8', env: { ...process.env, CAREER_BATCH_GAP_MS: '0', ...(env || {}) } });
+  if (r.error) throw r.error;
+  const calls = fs.existsSync(STUB_LOG) ? JSON.parse(fs.readFileSync(STUB_LOG, 'utf8')) : [];
+  const sPath = path.join(TMP, `career-summary-${SHARD}.json`);
+  return {
+    code: r.status, out: r.stdout + r.stderr,
+    fetched: calls.map(c => c.id),
+    summary: fs.existsSync(sPath) ? JSON.parse(fs.readFileSync(sPath, 'utf8')) : null,
+  };
+}
+const player = (u) => JSON.parse(fs.readFileSync(path.join(DIR, `${u}.json`), 'utf8'));
+const reset = () => { for (const u of uuids) {
+  const f = path.join(DIR, `${u}.json`);
+  const cur = JSON.parse(fs.readFileSync(f, 'utf8'));
+  fs.writeFileSync(f, JSON.stringify({ uuid: cur.uuid, name: cur.name, statsChecked: null }));
+} };
+
+let pass = 0, fail = 0;
+function ok(name, cond, detail) {
+  if (cond) { pass++; console.log(`  PASS  ${name}${detail ? ' — ' + detail : ''}`); }
+  else { fail++; console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); }
+}
+
+// ── 1. Due selection ─────────────────────────────────────────────────────────
+console.log('\n1  Which players a run picks up');
+let r = run([], { CAREER_BATCH: '10' });
+ok('version line', /fetch-career-stats v1 /.test(r.out));
+ok('exit 0', r.code === 0, `exit ${r.code}`);
+ok('never-checked, stale and flagged are fetched', ['00a-rich', '00b-priv', '00c-gone', '00e-stale', '00f-flag']
+  .every(u => r.fetched.includes(u)), r.fetched.join(','));
+ok('a player checked 5 days ago is NOT fetched', !r.fetched.includes('00d-fresh'), r.fetched.join(','));
+ok('never-checked sort ahead of stale', r.fetched.indexOf('00a-rich') < r.fetched.indexOf('00e-stale'));
+
+// ── 2. The stored shape ──────────────────────────────────────────────────────
+console.log('\n2  What is stored');
+const p = player('00a-rich');
+const held = p.seasons.find(s => s.sid === HELD);
+const out = p.seasons.find(s => s.sid === OUT);
+ok('career comes from careerStatistics, not a sum', p.career.gp === 187 && p.career.goals === 9 && p.career.best === 32,
+  JSON.stringify(p.career));
+ok('career.from is the earliest season year', p.career.from === '2023', String(p.career.from));
+ok('held flag true for a manifest season', held && held.held === true);
+ok('held flag false for a season we do not hold', out && out.held === false);
+ok('league from season.competition, NOT the club bracket', held && held.league === 'Eastern Football Netball League',
+  held && `${held.league} (club is ${held.club})`);
+ok('outside league is captured too', out && out.league === 'Mornington Peninsula JFL', out && String(out.league));
+ok('grade stored for a season we do not hold', out && out.grade === '15D 2023', out && String(out.grade));
+ok('both grades kept when a season has more than one', held && Array.isArray(held.grades) && held.grades.length === 2,
+  held && JSON.stringify(held.grades));
+ok('statsChecked stamped', typeof p.statsChecked === 'string' && p.statsChecked.length > 10);
+
+// ── 3. The dedup, and the record split ───────────────────────────────────────
+console.log('\n3  Deduplication by game id, and the two records');
+ok('regraded season counts g-dup ONCE (2 lines, not 3)', held && held.lines === 2, held && `lines=${held.lines}`);
+ok('outside season counts its one line', out && out.lines === 1, out && `lines=${out.lines}`);
+ok('goalsHeld points at the best game in a season we hold', p.records.goalsHeld
+  && p.records.goalsHeld.v === 9 && p.records.goalsHeld.gameId === 'g-two' && p.records.goalsHeld.sid === HELD,
+  JSON.stringify(p.records.goalsHeld));
+ok('goalsAny points at the best game anywhere, which is the outside one', p.records.goalsAny
+  && p.records.goalsAny.v === 11 && p.records.goalsAny.gameId === 'g-out' && p.records.goalsAny.sid === OUT,
+  JSON.stringify(p.records.goalsAny));
+ok('the two records DIFFER, so a fixture could tell them apart',
+  p.records.goalsHeld.gameId !== p.records.goalsAny.gameId);
+
+// ── 4. The drift check (career total vs summed registrations) ────────────────
+console.log('\n4  The career-total check reports rather than silently reconciling');
+ok('drift stored when the sum disagrees', p.drift === (13 + 5) - 187, `drift=${p.drift}`);
+ok('drift counted in the summary', r.summary && r.summary.drifted >= 1, JSON.stringify(r.summary && r.summary.drifted));
+ok('drift reported in the log', /disagreed for \d+ of \d+/.test(r.out), (r.out.match(/career total vs.*/) || [''])[0]);
+
+// ── 5. Not-found and private are answers, not errors ─────────────────────────
+console.log('\n5  A private profile and a missing one do not fail the shard');
+ok('both counted as notFound', r.summary && r.summary.notFound === 2, JSON.stringify(r.summary && r.summary.notFound));
+ok('errors stayed at zero', r.summary && r.summary.errors === 0, JSON.stringify(r.summary && r.summary.errors));
+ok('a private profile is NOT written', !fs.readFileSync(path.join(DIR, '00b-priv.json'), 'utf8').includes('career'));
+
+// ── 6. The summary contract with the aggregator ──────────────────────────────
+console.log('\n6  The summary — silence must not look like success');
+reset();
+r = run([], { CAREER_BATCH: '2', STUB_BLOCK_AT: '3' });
+ok('a block is recorded, not swallowed', r.summary && r.summary.blocked === true, JSON.stringify(r.summary));
+ok('blocked_at_call is recorded', r.summary && typeof r.summary.blocked_at_call === 'number' && r.summary.blocked_at_call > 0,
+  String(r.summary && r.summary.blocked_at_call));
+ok('batches_completed is recorded', r.summary && r.summary.batches_completed >= 1);
+ok('remaining is non-zero after a block, so the chain retries', r.summary && r.summary.remaining > 0,
+  String(r.summary && r.summary.remaining));
+ok('the run still exits 0 — a block is not a failure', r.code === 0, `exit ${r.code}`);
+ok('it stopped rather than working through every batch', r.fetched.length < uuids.length,
+  `${r.fetched.length} fetched of ${uuids.length}`);
+
+fs.rmSync(path.join(TMP, `career-summary-${SHARD}.json`), { force: true });
+r = run([], { CAREER_BATCH: '10' });   // everything already fresh from the block run? force nothing
+ok('a shard with nothing due STILL writes a summary', r.summary !== null);
+ok('… reporting remaining 0 rather than staying silent', r.summary && r.summary.remaining === 0,
+  JSON.stringify(r.summary && r.summary.remaining));
+
+fs.rmSync(path.join(TMP, `career-summary-${SHARD}.json`), { force: true });
+r = run(['--force'], { STUB_NO_SESSION: 'true' });
+ok('no session: summary written and shard marked blocked for retry',
+  r.summary && r.summary.blocked === true && r.summary.remaining > 0, JSON.stringify(r.summary));
+ok('no session: no profile calls made', r.fetched.length === 0, `${r.fetched.length}`);
+
+fs.rmSync(path.join(TMP, `career-summary-ff.json`), { force: true });
+const rf = spawnSync(process.execPath, ['scripts/fetch-career-stats.js', '--shard=ff'],
+  { cwd: TMP, encoding: 'utf8', env: process.env });
+ok('a shard directory that does not exist writes a summary and exits 0',
+  rf.status === 0 && fs.existsSync(path.join(TMP, 'career-summary-ff.json')), `exit ${rf.status}`);
+
+// ── 7. Blast radius ──────────────────────────────────────────────────────────
+console.log('\n7  Writes stay inside players/<shard>/ — anything else is dropped by git');
+reset();
+const before = new Set();
+const walk = (d) => { for (const n of fs.readdirSync(d)) {
+  const f = path.join(d, n);
+  if (fs.statSync(f).isDirectory()) walk(f); else before.add(path.relative(TMP, f));
+} };
+walk(TMP);
+r = run(['--force'], { CAREER_BATCH: '10' });
+const after = new Set(); walk(TMP);
+const added = [...after].filter(f => !before.has(f));
+ok('the only new file is this shard\'s summary', added.length === 0
+  || added.every(f => f === `career-summary-${SHARD}.json`), added.join(','));
+const strayDir = fs.readdirSync(path.join(TMP, 'players')).filter(d => d !== SHARD);
+ok('no other shard directory was created', strayDir.length === 0, strayDir.join(','));
+
+// ── 8. Bad input ─────────────────────────────────────────────────────────────
+console.log('\n8  Bad input fails loudly');
+const rb = spawnSync(process.execPath, ['scripts/fetch-career-stats.js', '--shard=zz'],
+  { cwd: TMP, encoding: 'utf8', env: process.env });
+ok('a shard name that is not two hex digits exits 1', rb.status === 1, `exit ${rb.status}`);
+const rn = spawnSync(process.execPath, ['scripts/fetch-career-stats.js'],
+  { cwd: TMP, encoding: 'utf8', env: process.env });
+ok('a missing --shard exits 1', rn.status === 1, `exit ${rn.status}`);
+
+fs.rmSync(TMP, { recursive: true, force: true });
+console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
