@@ -1,0 +1,81 @@
+# .github/workflows/build-career-tops.yml
+name: Build career leaderboards
+
+# Builds data/leaderboard/ from players/** — career_leaderboards_design.md.
+# Offline: no PlayHQ calls, no session, no matrix. It ranks what is already on
+# disk, so it is fast and safe to run at any time.
+#
+# Dispatch only, and dispatched AFTER a career sweep. The underlying files change
+# twice a year, so a schedule would commit nothing 363 days out of 365.
+#
+# ⚠️ REBUILD THE DATA, CONFIRM IT, THEN SHIP THE HTML THAT READS IT. A view
+# deployed before its boards exist shows empty categories, and every push
+# rebuilds Pages — so committing a half-built pair publishes it.
+#
+# It shares playhq-data-write with everything else that writes the repo tree.
+# It is not a PlayHQ job; it takes the lock because two writers must queue.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report the boards and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      top_n:
+        description: 'Entries stored per category (the view shows ten)'
+        required: false
+        default: '15'
+      min_gp:
+        description: 'Career games required to appear in a per-game rate'
+        required: false
+        default: '20'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Rank the career store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full checkout: it reads all 256 player directories, and a sparse set would
+      # silently give it a partial cohort to rank — a leaderboard that is merely
+      # wrong looks exactly like one that is right.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Build
+        env:
+          TOPS_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          TOPS_N: ${{ github.event.inputs.top_n }}
+          TOPS_MIN_GP: ${{ github.event.inputs.min_gp }}
+        run: |
+          node --version
+          node scripts/build-career-tops.js
+
+      - name: Commit
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # One pathspec. `git add a b` is atomic — one unmatched path and nothing
+          # stages at all.
+          git add -- data/leaderboard/
+          if git diff --staged --quiet; then
+            echo "Boards unchanged — nothing to commit."
+            exit 0
+          fi
+          git diff --staged --shortstat
+          git commit -m "career leaderboards: run #${{ github.run_number }}"
+          git pull --rebase -X theirs
+          git push

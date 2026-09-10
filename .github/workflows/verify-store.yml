@@ -3,7 +3,7 @@
 # Runs every verification and prints ONE summary at the end, so a green or red
 # run is readable without expanding eight separate groups.
 #
-# All nine run even if an earlier one fails, so a single run gives the complete
+# All ten run even if an earlier one fails, so a single run gives the complete
 # picture rather than stopping at the first failure. The job fails at the end if
 # any of them did.
 #
@@ -63,7 +63,9 @@ jobs:
                    scripts/verify-registrations.js \
                    scripts/fetch-career-stats.js \
                    scripts/build-career-stubs.js \
-                   scripts/verify-careers.js; do
+                   scripts/verify-careers.js \
+                   scripts/build-career-tops.js \
+                   scripts/verify-career-tops.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
           done
@@ -84,7 +86,7 @@ jobs:
           SUITES="verify-discover-seasons verify-backfill \
                   verify-migrate-grade-ids verify-dashboard-grades \
                   verify-rebuild-grade-meta verify-per-season verify-audit \
-                  verify-registrations verify-careers"
+                  verify-registrations verify-careers verify-career-tops"
           FAILED=0
           SUMMARY=""
           for s in $SUITES; do
