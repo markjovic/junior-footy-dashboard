@@ -249,6 +249,7 @@ body{overflow-x:hidden}
 .team-stat-cell{background:var(--s1);padding:10px 12px;text-align:center}
 .team-stat-val{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--gold)}
 .team-stat-lbl{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.pm-scope{background:var(--s2);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--tx3);writing-mode:vertical-rl;transform:rotate(180deg);padding:6px 0}
 /* auto-fit, not a fixed count. The Finals cell is conditional — a team with no
    finals gets two cells and a team with finals gets three — and a hard
    `1fr 1fr` wrapped the third onto its own row. */
@@ -596,7 +597,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.220</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.221</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -839,7 +840,6 @@ body{overflow-x:hidden}
         <div class="team-modal-title" id="pm-name"></div>
         <div id="pm-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
         <div id="pm-next" style="font-size:10px;color:var(--tx2);margin-top:2px;display:none"></div>
-        <div id="pm-career-line" style="font-size:11px;color:var(--tx2);margin-top:5px;padding-top:5px;border-top:1px dashed var(--gold3);display:none"></div>
       </div>
       <div id="pm-seasons" class="pm-season-strip"></div>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
@@ -953,7 +953,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.220</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.221</span>
         </div>
 
 
@@ -5121,23 +5121,13 @@ async function openPlayerPanel(uuid) {
 
   // Summary strip from local data
   if (p) {
-    const sum = (k) => recs.reduce((n, x) => n + (x[k] || 0), 0);
-    const gp = sum('gp'), goals = sum('goals'), bp = sum('bestPlayer');
-    const gpg = gp ? (goals / gp).toFixed(1) : '–';
-    // When a player turned out for more than one team, the split is on the
-    // tooltip. A single total with no way to see its parts is what made the old
-    // figure impossible to reconcile against the list below it.
-    const split = recs.length > 1
-      ? recs.slice().sort((x, y) => (y.gp || 0) - (x.gp || 0))
-          .map(x => `${x.age} ${abbrevGrade(x.rawGrade || '')}: ${x.gp || 0} game(s), ${x.goals || 0} goal(s)`)
-          .join(' · ')
-      : '';
-    statsEl.innerHTML = [
-      {v: gp,        l: 'Played', t: split},
-      {v: goals||'–', l: 'Goals',  t: split},
-      {v: gpg,       l: 'G/Game', t: split},
-      {v: bp||'–',   l: 'Best Player', t: split},
-    ].map(s=>`<div class="team-stat-cell" title="${s.t || ''}"><div class="team-stat-val">${s.v}</div><div class="team-stat-lbl">${s.l}</div></div>`).join('');
+    // The per-team split moved into renderStatStrip with the totals it explains —
+    // two copies of the same sum is how the strip and the list below it came to
+    // disagree in the first place.
+    // The season row alone until the career file lands, which then rebuilds the
+    // strip with the rows above it. renderStatStrip owns the markup so the two
+    // paths cannot drift.
+    renderStatStrip(recs, null, uuid);
     // A quiet note under the name, so the total is self-explanatory on screen and
     // not only on hover.
     if (recs.length > 1) {
@@ -5157,8 +5147,8 @@ async function openPlayerPanel(uuid) {
   // Career file, in parallel with the profile fetch and never awaited with it —
   // a 404 or a slow read must not delay the games list. Guarded on _panelUuid so
   // a late answer cannot repaint a panel the reader has closed or replaced.
-  renderCareerSection(null, uuid);
-  loadCareer(uuid).then(rec => { if (_panelUuid === uuid) renderCareerSection(rec, uuid); });
+  renderCareerSection(null, uuid, null);
+  loadCareer(uuid).then(rec => { if (_panelUuid === uuid) renderCareerSection(rec, uuid, recs); });
 
   // Fetch profile stats from PlayHQ
   try {
@@ -5562,12 +5552,122 @@ function careerRecordCard(r, label) {
   </div>`;
 }
 
-function renderCareerSection(rec, uuid) {
-  const line = document.getElementById('pm-career-line');
-  const box  = document.getElementById('pm-career');
-  if (!line || !box) return;
-  line.style.display = 'none';
-  line.innerHTML = '';
+function careerSeasonCard(rows, held, label) {
+  const pool = rows.filter(r => held ? r.held : true).filter(r => r.goals);
+  if (!pool.length) return null;
+  const b = pool.slice().sort((x, y) => (y.goals || 0) - (x.goals || 0))[0];
+  return { v: b.goals, label,
+    detail: `${b.year} · ${b.league || 'unknown league'}${b.grade ? ' · ' + b.grade : ''}`,
+    sid: b.sid };
+}
+
+// ⚠️ SHOW BOTH CARDS WHEN THE BEST IS SOMEWHERE WE DO NOT HOLD.
+// The first cut rendered goalsHeld OR goalsAny, so a player whose best game was
+// in a league outside this dashboard had that number SUPPRESSED by a lesser one
+// we happen to store — which is the opposite of what the career view is for.
+// One card when the two point at the same game, two when they do not.
+function careerCards(rec, c) {
+  const out = [];
+  const held = rec.records && rec.records.goalsHeld;
+  const any  = rec.records && rec.records.goalsAny;
+  const best = (any && any.v) ? any : held;
+  if (best && best.v) {
+    const sameGame = held && any && held.gameId === any.gameId;
+    if (sameGame || !held || !held.v) out.push(gameCard(best, c, 'MOST GOALS IN A GAME'));
+    else {
+      out.push(gameCard(any, c, 'MOST GOALS IN A GAME'));
+      out.push(gameCard(held, c, 'BEST IN A GAME WE HOLD'));
+    }
+  }
+  const sBest = careerSeasonCard(c.rows, false, 'BEST SEASON FOR GOALS');
+  const sHeld = careerSeasonCard(c.rows, true, 'BEST SEASON WE HOLD');
+  if (sBest) {
+    out.push(valueCard(sBest));
+    if (sHeld && sHeld.sid !== sBest.sid) out.push(valueCard(sHeld));
+  }
+  return out.filter(Boolean);
+}
+
+// ⚠️ ESCAPE HERE TOO. The table cells were escaped and these were not, and both
+// render the SAME league and club strings straight from PlayHQ. Caught by a
+// fixture carrying a script tag in a league name.
+function valueCard(c) {
+  const e = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  c = { v: e(c.v), label: e(c.label), detail: e(c.detail) };
+  return `<div style="flex:1;background:var(--s3);border-radius:var(--r);padding:9px 11px;min-width:0">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:1px;margin-bottom:3px">${c.label}</div>
+    <div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.v}
+      <span style="font-size:11px;color:var(--tx2);font-weight:400">· ${c.detail}</span></div>
+  </div>`;
+}
+
+// The game is named from a stored match when we hold it, and from the career row
+// otherwise. There is no per-game view in the dashboard to link to — the deep
+// link addresses a year, competition, age and team, never a single game — so the
+// card states the game rather than pretending to be a link.
+function gameCard(r, c, label) {
+  if (!r || !r.v) return null;
+  const m = r.gameId ? (S.matches || []).find(x => x.gameId === r.gameId) : null;
+  let detail;
+  if (m) {
+    const sc = (m.hScore != null && m.aScore != null) ? ` ${m.hScore}–${m.aScore}` : '';
+    detail = `${m.isFinals ? 'Finals' : 'R' + m.round} · ${m.home} v ${m.away}${sc}`;
+  } else {
+    const sn = (c.rows || []).find(x => x.sid === r.sid);
+    detail = sn ? `${sn.year} · ${sn.league || 'a league we do not hold'}` : 'a game outside this dashboard';
+  }
+  return valueCard({ v: r.v, label, detail });
+}
+
+// ── THE STAT STRIP — up to three rows, each labelled down the left ───────────
+// Career always. PlayHQ's own total only when it disagrees with our sum, because
+// a row repeating the one above it says nothing. The selected season only when it
+// differs from the row above — a player with one season would otherwise see the
+// same four numbers three times.
+function renderStatStrip(recs, rec, uuid) {
+  const el = document.getElementById('pm-stats');
+  if (!el) return;
+  const sum = (k) => recs.reduce((n, x) => n + (x[k] || 0), 0);
+  const split = recs.length > 1
+    ? recs.slice().sort((x, y) => (y.gp || 0) - (x.gp || 0))
+        .map(x => `${x.age} ${abbrevGrade(x.rawGrade || '')}: ${x.gp || 0} game(s), ${x.goals || 0} goal(s)`)
+        .join(' · ')
+    : '';
+  const season = { gp: sum('gp'), goals: sum('goals'), best: sum('bestPlayer') };
+  const c = rec && rec.career ? careerSummary(rec, uuid) : null;
+
+  const rows = [];
+  if (c) rows.push({ scope: 'CAREER', v: c, t: c.from ? `Every season PlayHQ holds, from ${c.from}` : '' });
+  if (c && rec.career && (rec.career.gp !== c.gp || rec.career.goals !== c.goals || rec.career.best !== c.best)) {
+    rows.push({ scope: 'PLAYHQ', v: rec.career, dim: true,
+      t: "PlayHQ's own career total. It disagrees with the sum of its own season rows." });
+  }
+  const top = rows.length ? rows[rows.length - 1].v : null;
+  if (!top || top.gp !== season.gp || top.goals !== season.goals || top.best !== season.best) {
+    rows.push({ scope: String(S.selYear || 'SEASON'), v: season, t: split });
+  }
+
+  const cell = (v, l, t, dim) =>
+    `<div class="team-stat-cell" title="${String(t || '').replace(/"/g, '&quot;')}">` +
+    `<div class="team-stat-val"${dim ? ' style="color:var(--tx2)"' : ''}>${v}</div>` +
+    `<div class="team-stat-lbl">${l}</div></div>`;
+
+  el.style.gridTemplateColumns = '22px repeat(4,1fr)';
+  el.innerHTML = rows.map(r => {
+    const gp = r.v.gp || 0, goals = r.v.goals || 0, best = r.v.best || 0;
+    return `<div class="pm-scope">${r.scope}</div>` +
+      cell(gp || '–', 'Played', r.t, r.dim) +
+      cell(goals || '–', 'Goals', r.t, r.dim) +
+      cell(gp ? (goals / gp).toFixed(1) : '–', 'G/Game', r.t, r.dim) +
+      cell(best || '–', 'Best Player', r.t, r.dim);
+  }).join('');
+}
+
+function renderCareerSection(rec, uuid, recs) {
+  const box = document.getElementById('pm-career');
+  if (recs) renderStatStrip(recs, rec, uuid);
+  if (!box) return;
   box.innerHTML = '';
   if (!rec) return;                       // not walked yet — say nothing at all
 
@@ -5587,22 +5687,8 @@ function renderCareerSection(rec, uuid) {
   }
 
   const c = careerSummary(rec, uuid);
-  const bits = [`${c.gp} game${c.gp === 1 ? '' : 's'}`];
-  if (c.goals) bits.push(`${c.goals} goal${c.goals === 1 ? '' : 's'}`);
-  if (c.best) bits.push(`${c.best} best`);
-  if (c.from) bits.push(`since ${c.from}`);
-  line.innerHTML = `<span style="color:var(--gold);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.5px">CAREER</span>` +
-    ` &nbsp;${bits.join(' · ')}`;
-  line.style.display = '';
-  line.title = rec.career
-    ? `PlayHQ's own career total: ${rec.career.gp || 0} games, ${rec.career.goals || 0} goals, ${rec.career.best || 0} best` +
-      (c.drift ? ` — our sum differs by ${c.drift}` : '')
-    : '';
-
   const outside = c.rows.filter(r => !r.held).length;
-  const records = careerRecordCard(rec.records && rec.records.goalsHeld, 'MOST GOALS IN A GAME')
-    || careerRecordCard(rec.records && rec.records.goalsAny, 'MOST GOALS IN A GAME');
-
+  const cards = careerCards(rec, c);
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const cell = 'padding:6px 0;font-family:\'DM Mono\',monospace;font-size:11px';
@@ -5613,7 +5699,7 @@ function renderCareerSection(rec, uuid) {
       <span style="flex:1;height:1px;background:var(--b1)"></span>
       <span style="font-size:10px;color:var(--tx3)">${c.rows.length} season${c.rows.length === 1 ? '' : 's'}</span>
     </div>
-    ${records ? `<div style="display:flex;gap:8px;margin-bottom:14px">${records}</div>` : ''}
+    ${cards.length ? `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">${cards.join('')}</div>` : ''}
     <table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed">
       <tr style="color:var(--tx3);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1px;text-align:left">
         <th style="font-weight:400;padding:0 0 6px;width:44px">YEAR</th>
@@ -5627,7 +5713,8 @@ function renderCareerSection(rec, uuid) {
         <td style="${cell};color:${r.held ? 'var(--tx3)' : 'var(--gold)'}">${esc(r.year)}</td>
         <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${esc(r.club || '')}">${esc(r.league || '—')}</td>
-        <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.grade || '')}</td>
+        <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${esc(r.grade || '')}">${esc(r.grade || '')}</td>
         <td style="${cell};text-align:right">${r.gp || '–'}</td>
         <td style="${cell};text-align:right;color:${r.goals ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
         <td style="${cell};text-align:right">${r.best || '–'}</td>
@@ -5641,7 +5728,7 @@ function renderCareerSection(rec, uuid) {
 function closePlayerModal() {
   // Cleared so a late index fetch does not repaint a closed panel.
   _panelUuid = null;
-  renderCareerSection(null, null);
+  renderCareerSection(null, null, null);
   document.getElementById('player-modal').style.display = 'none';
   if (_playerPanelSource === 'team') {
     document.getElementById('team-modal').style.display = 'flex';
