@@ -1,0 +1,72 @@
+# .github/workflows/build-career-stubs.yml
+name: Build career stubs
+
+# Creates players/<xx>/<uuid>.json for every person in data/player-index.json who
+# does not already have one — career_stats_design.md revision 3 §4. The stub is
+# what makes a player due, so this is what defines the career walk's cohort.
+#
+# ⚠️ THE FIRST RUN CREATES ABOUT 70,000 FILES IN ONE COMMIT. That is expected and
+# is a one-off; later runs create only the people who have appeared since.
+#
+# Offline — no PlayHQ calls, no session, no matrix. Dispatch only: it should
+# follow a Build Player Index run and precede a sweep, both of which are things
+# somebody decides rather than a schedule.
+#
+# It shares playhq-data-write with the career matrix's aggregator because both
+# write under players/. It is not a PlayHQ job; it takes the lock because two
+# writers of the same tree must queue, which is the lesson from 2026-08-31.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would be created and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Create missing player stubs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Full checkout on purpose: this writes across all 256 directories, and a
+      # sparse set would silently drop everything outside it from `git add`.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Build
+        env:
+          STUBS_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          node --version
+          node scripts/build-career-stubs.js
+
+      - name: Commit
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # One pathspec. `git add a b` is atomic — one unmatched path and nothing
+          # stages at all, which is how a green run once discarded 30,426 records.
+          git add -- players/
+          if git diff --staged --quiet; then
+            echo "No new stubs to commit."
+            exit 0
+          fi
+          echo "staging:"
+          git diff --staged --shortstat
+          git commit -m "career stubs: $(git diff --staged --name-only | wc -l) new player file(s) (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
