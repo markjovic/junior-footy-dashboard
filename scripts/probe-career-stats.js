@@ -88,9 +88,9 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const playhq = require('./lib/playhq');
-const { gqlPost, sleep } = playhq;
+const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'probe-career-stats v3 2026-09-10 status-and-career-totals';
+const VERSION = 'probe-career-stats v4 2026-09-10 opname-fix-and-trial-spacing';
 
 const ROOT = path.resolve(__dirname, '..');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
@@ -103,6 +103,8 @@ const RATE = Math.max(1, Number(process.env.PROBE_RATE || 100));
 const WINDOW_MS = Math.max(1, Number(process.env.PROBE_WINDOW_MS || 80000));
 const BURST = String(process.env.PROBE_BURST || 'false') === 'true';
 const BURST_CALLS = Math.max(1, Number(process.env.PROBE_BURST_CALLS || 250));
+const TRIAL_GAP_MS = Math.max(0, Number(process.env.PROBE_TRIAL_GAP_MS || 20000));
+const TRIAL_MAX_REJECT = Math.max(1, Number(process.env.PROBE_TRIAL_MAX_REJECT || 3));
 
 const log = (...a) => console.log(...a);
 
@@ -264,11 +266,19 @@ function select(cohort, perComp, extraIds) {
 // A 403 on this operation is DATA, not an expired session — lib/playhq.js holds
 // publicProfileStatistics in AUTH_403_IS_DATA and throws rather than refreshing.
 // Caught per player so one private profile cannot end the run.
-async function askProfile(uuid, query, extraVars) {
-  const vars = Object.assign({ profileID: uuid }, extraVars || {});
+async function askProfile(uuid, query, opName) {
+  // ⚠️ THE OPERATION NAME MUST MATCH THE DOCUMENT. v3 sent every trial under
+  // 'publicProfileStatistics', including the introspection trial whose document
+  // declares `query IntrospectCareer`. A name matching no operation in the
+  // document is rejected before execution, and that rejection would have read as
+  // "introspection is disabled" — a negative result manufactured by the test.
+  // Derived from the query text rather than passed in, so the two cannot drift.
+  const op = opName || (/^\s*query\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(query || Q_BASE) || [])[1]
+    || 'publicProfileStatistics';
+  const vars = { profileID: uuid };
   let json;
   try {
-    json = await gqlPost(query || Q_BASE, vars, 'publicProfileStatistics');
+    json = await gqlPost(query || Q_BASE, vars, op);
   } catch (e) {
     const msg = String(e && e.message ? e.message : e);
     return { ok: false, reason: /403 not accessible/.test(msg) ? 'private (403)' : msg, json: null };
@@ -304,6 +314,22 @@ async function main() {
   const heldIds = new Set(manifest.filter(m => m.seasonId).map(m => m.seasonId));
   const compOf = new Map(manifest.filter(m => m.seasonId).map(m => [m.seasonId, m.compName || null]));
   log(`manifest: ${manifest.length} entries, ${heldIds.size} season id(s) this project holds`);
+
+  // ⚠️ ACQUIRE THE SESSION BEFORE ANYTHING ELSE. v3 walked twenty players without
+  // one and printed twenty FAILED lines above an answers block of zeros, which
+  // reads like a measurement of nothing rather than a failure to measure.
+  // fetch-stats.js opens the same way.
+  const gotSession = await refreshSession();
+  if (!gotSession) {
+    console.error('FATAL: no PlayHQ session. Every call would fail and the answers');
+    console.error('block would be zeros, which is not a measurement.');
+    console.error('If the log above shows CloudFront blocks on TenantConfig/ProfileSearch,');
+    console.error('the WAF is refusing the handshake — dashboard_context.md §8d records a');
+    console.error('burst of rejected-field probes on one run refusing every session attempt');
+    console.error('on the next. Wait, then re-dispatch. Nothing was written.');
+    process.exit(1);
+  }
+  if (playhq.summary().blocked) log(`⚠️ session acquired, but ${playhq.summary().blocked} block(s) on the way — the window is tight; treat timings below with suspicion`);
 
   const cohort = readCohort();
   if (!cohort) {
@@ -423,6 +449,14 @@ async function main() {
   log(outLine ? JSON.stringify(outLine.raw) : '  (none returned — see point 5)');
 
   // ── ANSWERS ───────────────────────────────────────────────────────────────
+  // ⚠️ An answers block computed from nothing looks exactly like a measurement.
+  if (!answered) {
+    log('\n═══ NO ANSWERS ═══');
+    log('Not one player answered, so there is nothing to summarise and the trials are');
+    log('SKIPPED — a dead run must not add rejected-field probes to the next run\'s problem.');
+    playhq.logSummary('probe-career-stats');
+    process.exit(1);
+  }
   log('\n═══ ANSWERS ═══');
 
   const blockNames = [...new Set(regs.map(r => r.blockName).filter(Boolean))].sort();
@@ -609,7 +643,21 @@ async function main() {
   log(`trial profile: ${trialUuid} ${richest ? `(${richest.regs} registrations, ${richest.games} game lines, ${richest.blocks} blocks)` : '(no player answered; using the first selected)'}`);
   log('⚠️ result { home { score } } is NOT retried — settled rejected 2026-08-16.');
 
+  // ⚠️ REJECTED FIELDS ARE THE EXPENSIVE PART OF A PROBE. dashboard_context.md
+  // §8d: a burst of rejected-field probes on one run is the most likely reason
+  // the WAF refused every session attempt on the NEXT run. So they are spaced
+  // deliberately and capped — the token bucket permits 100 in 80 s and was doing
+  // nothing to separate them. Better a second dispatch tomorrow than a poisoned
+  // one in ten minutes.
+  let rejections = 0;
+  let trialIdx = 0;
   for (const t of TL) {
+    if (rejections >= TRIAL_MAX_REJECT) {
+      log(`\n${t.id}: NOT RUN — ${rejections} rejection(s) already this run, and a burst of them`);
+      log('  is what refuses the NEXT run its session (dashboard_context.md §8d). Re-dispatch for the rest.');
+      continue;
+    }
+    if (trialIdx++) { log(`  [spacing ${TRIAL_GAP_MS / 1000}s before the next trial]`); await sleep(TRIAL_GAP_MS); }
     let q;
     if (t.full) {
       q = t.full;
@@ -650,6 +698,7 @@ async function main() {
         log('    ⚠️ accepted but returned no season blocks — that is not the same as the field working');
       }
     } else {
+      rejections++;
       log(`  REJECTED — ${r.reason}`);
     }
   }
