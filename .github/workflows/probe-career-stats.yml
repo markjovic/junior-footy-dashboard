@@ -1,0 +1,69 @@
+# .github/workflows/probe-career-stats.yml
+name: Probe career stats
+
+# READ-ONLY probe for career_stats_design.md §2 and §8. Makes about 25 PlayHQ
+# calls, writes nothing and commits nothing. Dispatch only — there is no
+# schedule and there should never be one; when the measurements are in, this
+# workflow and its script are retired to repo-tidy.js's `probes` group.
+#
+# Paste the whole log back. The four answers are under the `═══ ANSWERS ═══`
+# header and the field trials under `═══ TRIALS ═══`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      players_per_comp:
+        description: 'Cohort players to walk per competition (5 comps, so 4 = 20 players)'
+        required: false
+        default: '4'
+      extra_profile_ids:
+        description: 'Extra PlayHQ profile ids, comma separated — a long career answers more than four short ones'
+        required: false
+        default: ''
+      unpaced_burst:
+        description: 'Also fire an unpaced burst to measure the WAF budget for this operation'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      burst_calls:
+        description: 'Upper bound on the burst (only used when unpaced_burst is true)'
+        required: false
+        default: '250'
+
+# Nothing is written, so read access is all this needs. A probe that cannot
+# commit cannot damage anything it is measuring.
+permissions:
+  contents: read
+
+# It writes no file at all, but it takes the data-write group for the reason
+# walk-registrations.yml does: the WAF budget is shared across every PlayHQ run
+# on this account, and a probe firing beside the 05:30 walk would hand both of
+# them blocks. ⚠️ A dispatch arriving during the walk QUEUES for up to 100
+# minutes rather than starting.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Measure publicProfileStatistics
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # This job commits nothing, so the detached-HEAD trap does not apply
+          # to it. Kept so every workflow in the repo reads the same way.
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          PROBE_PER_COMP: ${{ github.event.inputs.players_per_comp }}
+          PROBE_EXTRA_IDS: ${{ github.event.inputs.extra_profile_ids }}
+          PROBE_BURST: ${{ github.event.inputs.unpaced_burst }}
+          PROBE_BURST_CALLS: ${{ github.event.inputs.burst_calls }}
+        run: |
+          node --version
+          node scripts/probe-career-stats.js
