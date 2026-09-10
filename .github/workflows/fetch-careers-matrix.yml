@@ -320,6 +320,13 @@ jobs:
           NEXT: ${{ needs.apply-and-commit.outputs.next }}
           WRITTEN: ${{ needs.apply-and-commit.outputs.written }}
           RUN_NO: ${{ github.event.inputs.run_number }}
+          LIMIT: ${{ github.event.inputs.limit }}
+          # ⚠️ gh infers the repository from the git remote, and this job does NOT
+          # check out — it needs nothing from the tree. Without --repo it fails
+          # with "fatal: not a git repository" AFTER the sweep has already
+          # committed, so the work lands and the chain silently stops. Seen
+          # 2026-09-10, run 1. GH_REPO is the env form of --repo.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -e
           RUN_NO="${RUN_NO:-1}"
@@ -333,12 +340,20 @@ jobs:
             echo "nothing carried forward — sweep complete."
             exit 0
           fi
+          # A run with a per-shard limit is a PROBE, not a sweep: it stops early by
+          # construction, so it always carries its shard forward and would chain
+          # for ever N players at a time. Chain only an unlimited run.
+          if [ -n "$LIMIT" ] && [ "$LIMIT" != "0" ]; then
+            echo "limit=$LIMIT — this is a probe run, not a sweep. Not chaining."
+            exit 0
+          fi
           if [ "${WRITTEN:-0}" = "0" ]; then
             echo "no writes landed this run — stopping rather than looping on a stuck sweep."
             echo "Read the shard summaries, then dispatch by hand."
             exit 0
           fi
           gh workflow run fetch-careers-matrix.yml \
+            --repo "$GH_REPO" \
             --ref main \
             -f shards="$NEXT" \
             -f force=${{ github.event.inputs.force }} \
