@@ -3,7 +3,18 @@
 //
 // READ-ONLY. Writes no file, commits nothing, touches no season file.
 //
-// v2 REBASES THE PROBE ON index.html's PLAYER_PROFILE_QUERY. v1 used
+// v3 (2026-09-10, after the v2 run and career_stats_design.md approval):
+//   * T1's season selection is PROMOTED INTO THE BASE QUERY. It was measured
+//     ACCEPTED, but only demonstrated on a HELD season — so whether
+//     `competition` is POPULATED for an outside league was never measured, and
+//     it is the ONLY source of a league name (both name fields are bare years).
+//     Answer block 6 measures that, and the season STATUS distribution with it,
+//     which is the one figure career_stats_design.md §3 records as unknown.
+//   * T1-T4 and T6 are SETTLED and are not re-run. T5 is replaced by the T7
+//     series: its rejection named the type `CareerStatistics`, so the field
+//     EXISTS and only the selection set was wrong.
+//
+// v2 REBASED THE PROBE ON index.html's PLAYER_PROFILE_QUERY. v1 used
 // fetch-stats.js's Q_PROFILE_STATS, which stops at season totals. Reading
 // index.html (Beta 0.219, lines 4881-4911) settled that gameStatistics is NOT a
 // second route: it is nested inside publicProfileStatistics, four levels down,
@@ -79,7 +90,7 @@ const zlib = require('zlib');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep } = playhq;
 
-const VERSION = 'probe-career-stats v2 2026-09-10 game-lines';
+const VERSION = 'probe-career-stats v3 2026-09-10 status-and-career-totals';
 
 const ROOT = path.resolve(__dirname, '..');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
@@ -102,7 +113,7 @@ query publicProfileStatistics($profileID: ID!) {
     seasonStatistics {
       name
       statistics {
-        season { id name }
+        season { id name startDate endDate status { value } competition { id name } }
         club { id name }
         totalStatistics { count details { value } }
         teamStatistics {
@@ -131,57 +142,67 @@ query publicProfileStatistics($profileID: ID!) {
 // ── Trials — each is the base query with ONE substitution, run alone ─────────
 // `find` must occur exactly once; the loop refuses an ambiguous anchor rather
 // than silently probing the wrong place.
-function trials(sampleSeasonId) {
+function trials() {
+  // v2 SETTLED T1-T6 on 2026-09-10 and they are NOT re-run:
+  //   T1 season detail          ACCEPTED — promoted into Q_BASE above
+  //   T2 season { sport }       REJECTED on DiscoverSeason
+  //   T3 season { organisation} REJECTED on DiscoverSeason
+  //   T4 details { name }       REJECTED on GameStatistic
+  //   T6 (seasonID:) argument   REJECTED — Unknown argument on Query.publicProfileStatistics
+  //
+  // T5 asked for `careerStatistics { count details { value } }` and PlayHQ answered
+  // `Cannot query field "count" on type "CareerStatistics"`.
+  //
+  // ⚠️ THAT REJECTION IS EVIDENCE THE FIELD EXISTS. An error naming a type means
+  // the server resolved the field and rejected only the selection set — the mirror
+  // of the result.periods trap, where an accepted field was always empty. The
+  // series below settles its shape. Each is one call and a 400 is not retried.
   return [
     {
-      id: 'T1 season detail',
-      why: 'The selection walk-registrations.js proves on DiscoverTeam.season. I am ' +
-           'INFERRING publicProfileStatistics hangs the same type. THIS IS THE CRITICAL ' +
-           'ONE: if the block label is a bare year, an outside season\'s LEAGUE has ' +
-           'nowhere else to come from — club.name\'s bracket is the club\'s home ' +
-           'association, not the competition it played in (API reference §10).',
-      find: '        season { id name }\n',
-      with: '        season { id name startDate endDate status { value } competition { id name } }\n',
+      id: 'T7a introspect CareerStatistics',
+      why: 'If introspection is enabled this answers the whole question in one call. ' +
+           'working_practice.md says it is disabled, so I expect a rejection — but the ' +
+           'claim has no run number against it, and the answer also tells P1 whether ' +
+           'per_game_stats_design.md §3 route 2 can introspect the Query type.',
+      full: `query IntrospectCareer {
+  __type(name: "CareerStatistics") {
+    name
+    fields { name type { name kind ofType { name kind } } }
+  }
+}`,
+      show: (json) => JSON.stringify(json && json.data ? json.data : json).slice(0, 1200),
     },
     {
-      id: 'T2 season sport',
-      why: 'GUESS. Settles measurement 2 outright instead of by reading names.',
-      find: '        season { id name }\n',
-      with: '        season { id name sport { name } }\n',
-    },
-    {
-      id: 'T3 season organisation',
-      why: 'GUESS. A league organisation id would join an outside season to something ' +
-           'stable rather than to a parsed name.',
-      find: '        season { id name }\n',
-      with: '        season { id name organisation { id name } }\n',
-    },
-    {
-      id: 'T4 statistic label on a GAME line',
-      why: 'GUESS. If details carries a human label as well as the enum, a box score can ' +
-           'print PlayHQ\'s own wording for a statistic we have never seen before.',
-      find: '              statistics { count details { value } }\n',
-      with: '              statistics { count details { value name } }\n',
-    },
-    {
-      id: 'T5 career totals',
-      why: 'GUESS, and the one that decides the header strip. PlayHQ\'s page shows a career ' +
-           'total (398 games, 630 goals). If a field serves it, the file stores it instead ' +
-           'of summing, and the strip cannot drift from PlayHQ.',
+      id: 'T7b careerStatistics { __typename }',
+      why: '__typename is legal on ANY object type, so this cannot fail for the reason ' +
+           'T5 did. If it is accepted the field is an object and we learn its concrete ' +
+           'type name; if it is rejected, careerStatistics is not an object field and ' +
+           'the T5 error meant something else.',
       find: '    seasonStatistics {\n',
-      with: '    careerStatistics { count details { value } }\n    seasonStatistics {\n',
+      with: '    careerStatistics { __typename }\n    seasonStatistics {\n',
+      probe: 'careerStatistics',
     },
     {
-      id: 'T6 season-scoped argument',
-      why: 'GUESS, and it decides the refresh cadence. index.html fetches the whole career ' +
-           'and filters client-side, which is NOT evidence the argument is absent — it may ' +
-           'simply never have been tried. If publicProfileStatistics takes a seasonID, an ' +
-           'in-season re-check asks for one season instead of a career, and the weekly ' +
-           're-walk is far cheaper than either design assumes.',
-      find: 'query publicProfileStatistics($profileID: ID!) {\n  publicProfileStatistics(profileID: $profileID) {\n',
-      with: 'query publicProfileStatistics($profileID: ID!, $seasonID: ID!) {\n  publicProfileStatistics(profileID: $profileID, seasonID: $seasonID) {\n',
-      vars: sampleSeasonId ? { seasonID: sampleSeasonId } : null,
-      needs: 'a season id from the manifest',
+      id: 'T7c careerStatistics { statistics { count details { value } } }',
+      why: 'GUESS. The shape every other level of this response uses.',
+      find: '    seasonStatistics {\n',
+      with: '    careerStatistics { statistics { count details { value } } }\n    seasonStatistics {\n',
+      probe: 'careerStatistics',
+    },
+    {
+      id: 'T7d careerStatistics { totalStatistics { count details { value } } }',
+      why: 'GUESS. The name used on the season and grade levels.',
+      find: '    seasonStatistics {\n',
+      with: '    careerStatistics { totalStatistics { count details { value } } }\n    seasonStatistics {\n',
+      probe: 'careerStatistics',
+    },
+    {
+      id: 'T7e careerStatistics { details { value } count }',
+      why: 'GUESS. T5 put count OUTSIDE details; this puts it inside, in case ' +
+           'CareerStatistics is itself the statistic rather than a wrapper.',
+      find: '    seasonStatistics {\n',
+      with: '    careerStatistics { details { value } }\n    seasonStatistics {\n',
+      probe: 'careerStatistics',
     },
   ];
 }
@@ -282,9 +303,6 @@ async function main() {
   }
   const heldIds = new Set(manifest.filter(m => m.seasonId).map(m => m.seasonId));
   const compOf = new Map(manifest.filter(m => m.seasonId).map(m => [m.seasonId, m.compName || null]));
-  // For T6: any real season id, so the argument has a genuine value to reject or accept.
-  const sampleSeason = (manifest.find(m => m.seasonId && m.compName && m.state === 'active')
-    || manifest.find(m => m.seasonId && m.compName) || {}).seasonId || null;
   log(`manifest: ${manifest.length} entries, ${heldIds.size} season id(s) this project holds`);
 
   const cohort = readCohort();
@@ -338,6 +356,11 @@ async function main() {
           blockName: block.name || null,
           seasonName: reg.season ? reg.season.name : null,
           seasonId: sid,
+          status: reg.season && reg.season.status ? reg.season.status.value : null,
+          compName: reg.season && reg.season.competition ? reg.season.competition.name : null,
+          compId: reg.season && reg.season.competition ? reg.season.competition.id : null,
+          startDate: reg.season ? reg.season.startDate : null,
+          endDate: reg.season ? reg.season.endDate : null,
           held: isHeld,
           heldComp: isHeld ? compOf.get(sid) : null,
           club: reg.club ? reg.club.name : null,
@@ -512,6 +535,41 @@ async function main() {
   log('   ⚠️ career_stats_design.md §7 says "no grades for outside seasons". If the line');
   log('      above is non-empty, §7 is wrong and a career table can carry a grade.');
 
+  // 6. season status and league — the §3 unknown, and the "accepted is not
+  //    populated" check on competition. T1 was ACCEPTED in v2 but demonstrated on
+  //    a HELD season only, so whether competition is POPULATED for an outside
+  //    league was never measured. It is the only source of a league name.
+  log(`\n6. season status and league (the T1 fields, now in the base query)`);
+  const statusTally = new Map();
+  for (const r of regs) bump(statusTally, `${r.status || '(null)'} ${r.held ? '[held]' : '[NOT held]'}`);
+  log('   status × held:');
+  log(tallyLine(statusTally, '     ') || '     (none)');
+  const withComp = regs.filter(r => r.compName).length;
+  const outRegs = regs.filter(r => !r.held);
+  const outWithComp = outRegs.filter(r => r.compName).length;
+  log(`   registrations carrying competition.name: ${withComp} of ${regs.length}`);
+  log(`   ...of the ${outRegs.length} NOT held: ${outWithComp} carry one` +
+      ` <- if this is short of ${outRegs.length}, an outside season has NO league name anywhere`);
+  const outLeagues = [...new Set(outRegs.map(r => r.compName).filter(Boolean))].sort();
+  log(`   distinct leagues on seasons we do NOT hold: ${outLeagues.length}`);
+  for (const l of outLeagues.slice(0, 25)) log(`     ${JSON.stringify(l)}`);
+  const outNoComp = outRegs.filter(r => !r.compName);
+  if (outNoComp.length) {
+    log(`   ${outNoComp.length} NOT-held registration(s) with no competition — first few:`);
+    for (const r of outNoComp.slice(0, 5)) log(`     ${r.uuid} ${r.blockName} club=${JSON.stringify(r.club)}`);
+  }
+  // The weekly re-check set: a person with any season that is not COMPLETED and
+  // that we do not hold. career_stats_design.md §3 says this figure is unknown;
+  // this is the first measurement of it.
+  const weeklyPeople = new Set(regs.filter(r => !r.held && r.status && r.status !== 'COMPLETED').map(r => r.uuid));
+  log(`   PLAYERS needing a WEEKLY re-check (a live season we do not hold): ${weeklyPeople.size} of ${answered}`);
+  log(`   -> extrapolated to 40,002 that is ~${Math.round(40002 * weeklyPeople.size / Math.max(1, answered)).toLocaleString('en-AU')} people a week,` +
+      ` ${(40002 * weeklyPeople.size / Math.max(1, answered) / 75 / 60).toFixed(1)} hours at 75/min`);
+  log('   ⚠️ TWENTY PLAYERS IS NOT A POPULATION. This sets an order of magnitude, not a budget.');
+  const dateForms = regs.filter(r => r.startDate).length;
+  log(`   registrations carrying startDate/endDate: ${dateForms} of ${regs.length}` +
+      (regs.find(r => r.startDate) ? `; sample ${JSON.stringify(regs.find(r => r.startDate).startDate)} to ${JSON.stringify(regs.find(r => r.startDate).endDate)}` : ''));
+
   // ── Cost, for both designs ────────────────────────────────────────────────
   log('\n── cost (career_stats_design.md §3/§4, per_game_stats_design.md §4/§5) ──');
   const stat = (arr) => {
@@ -546,41 +604,43 @@ async function main() {
   // ── TRIALS ────────────────────────────────────────────────────────────────
   const richest = perPlayer.slice().sort((a, b) => b.regs - a.regs)[0];
   const trialUuid = richest ? richest.uuid : (picked[0] && picked[0].uuid);
-  const TL = trials(sampleSeason);
+  const TL = trials();
   log(`\n═══ TRIALS — one candidate field group per call, never combined ═══`);
   log(`trial profile: ${trialUuid} ${richest ? `(${richest.regs} registrations, ${richest.games} game lines, ${richest.blocks} blocks)` : '(no player answered; using the first selected)'}`);
   log('⚠️ result { home { score } } is NOT retried — settled rejected 2026-08-16.');
 
   for (const t of TL) {
-    const occurrences = Q_BASE.split(t.find).length - 1;
-    if (occurrences !== 1) {
-      log(`\n${t.id}: NOT RUN — its anchor appears ${occurrences} time(s) in the base query, not once.`);
-      log('  That is a defect in this probe, not an answer from PlayHQ.');
-      continue;
+    let q;
+    if (t.full) {
+      q = t.full;
+    } else {
+      const occurrences = Q_BASE.split(t.find).length - 1;
+      if (occurrences !== 1) {
+        log(`\n${t.id}: NOT RUN — its anchor appears ${occurrences} time(s) in the base query, not once.`);
+        log('  That is a defect in this probe, not an answer from PlayHQ.');
+        continue;
+      }
+      q = Q_BASE.replace(t.find, t.with);
     }
-    if (t.needs && !t.vars) {
-      log(`\n${t.id}: NOT RUN — needs ${t.needs}, and none was available.`);
-      continue;
-    }
-    const q = Q_BASE.replace(t.find, t.with);
     await pace();
     calls++;
-    const r = await askProfile(trialUuid, q, t.vars);
+    const r = await askProfile(trialUuid, q);
     log(`\n${t.id}`);
     log(`  why: ${t.why}`);
-    log(`  asked for: ${t.with.replace(/\s+/g, ' ').trim()}`);
-    if (t.vars) log(`  extra variables: ${JSON.stringify(t.vars)}`);
+    log(`  asked for: ${(t.full || t.with).replace(/\s+/g, ' ').trim()}`);
     if (r.ok) {
       log('  ACCEPTED');
-      if (t.id.startsWith('T5')) {
-        log(`    careerStatistics: ${r.career === undefined
-          ? '(absent from the response — accepted but empty is NOT the same as working)'
-          : JSON.stringify(r.career)}`);
+      if (t.full) {
+        // An introspection query returns no publicProfileStatistics at all, so the
+        // normal "first block" reporting below would say nothing about it.
+        log(`    payload: ${t.show ? t.show(r.json) : JSON.stringify(r.json).slice(0, 1200)}`);
+        continue;
       }
-      if (t.id.startsWith('T6')) {
-        log(`    season blocks returned: ${r.seasons.length}; the unscoped call returned ${richest ? richest.blocks : '?'}`);
-        log('    -> if these DIFFER the argument filters; if they are equal it is accepted and ignored,');
-        log('       which is the "accepted is not populated" trap and must not be read as working.');
+      if (t.probe === 'careerStatistics') {
+        log(`    careerStatistics: ${r.career === undefined
+          ? '⚠️ ACCEPTED BUT ABSENT FROM THE RESPONSE — that is the result.periods trap, NOT a working field'
+          : JSON.stringify(r.career)}`);
+        continue;
       }
       const first = r.seasons[0];
       if (first) {
