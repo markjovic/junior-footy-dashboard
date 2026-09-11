@@ -37,6 +37,16 @@ on:
         required: false
         default: '0'
         type: string
+      push_min:
+        description: 'push_min — minutes between pushes. ⚠️ EVERY PUSH REBUILDS PAGES and a .gz commits whole, so use 60 for a long backfill and 20 for a weekly top-up.'
+        required: false
+        default: '20'
+        type: string
+      rate:
+        description: 'rate — calls per 80 s. 100 = 75/min and has never been blocked. Lower it if a run reports blocks.'
+        required: false
+        default: '100'
+        type: string
       budget_min:
         description: 'budget_min — stop and hand over after this many minutes. Default 300 (GitHub kills a job at 360).'
         required: false
@@ -93,6 +103,8 @@ jobs:
           FGL_YEAR: ${{ inputs.year }}
           FGL_MAX_GAMES: ${{ inputs.max_games }}
           FGL_BUDGET_MIN: ${{ inputs.budget_min }}
+          FGL_PUSH_MIN: ${{ inputs.push_min }}
+          FGL_RATE: ${{ inputs.rate }}
         run: |
           set +e
           node --version
@@ -131,5 +143,7 @@ jobs:
             -f comp='${{ inputs.comp }}' \
             -f year='${{ inputs.year }}' \
             -f max_games='${{ inputs.max_games }}' \
+            -f push_min='${{ inputs.push_min }}' \
+            -f rate='${{ inputs.rate }}' \
             -f budget_min='${{ inputs.budget_min }}' \
             -f chain='true'
