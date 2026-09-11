@@ -597,7 +597,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.229</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.230</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -977,7 +977,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.229</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.230</span>
         </div>
 
 
@@ -5635,7 +5635,12 @@ function careerCards(rec, c) {
 function valueCard(c) {
   const e = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const gid = c.gameId;
   c = { v: e(c.v), label: e(c.label), detail: e(c.detail) };
+  // ⚠️ LINK ONLY WHAT WE CAN NAME. A game we do not hold has no round or teams,
+  // so the detail is "2023 · NTFL SENIORS" — a link on that would promise a game
+  // page for a season this dashboard knows nothing about beyond its id.
+  if (gid) c.detail = gameLink(gid, c.detail);
   return `<div style="flex:1;background:var(--s3);border-radius:var(--r);padding:9px 11px;min-width:0">
     <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:1px;margin-bottom:3px">${c.label}</div>
     <div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.v}
@@ -5658,7 +5663,7 @@ function gameCard(r, c, label) {
     const sn = (c.rows || []).find(x => x.sid === r.sid);
     detail = sn ? `${sn.year} · ${sn.league || 'a league we do not hold'}` : 'a game outside this dashboard';
   }
-  return valueCard({ v: r.v, label, detail });
+  return valueCard({ v: r.v, label, detail, gameId: m ? r.gameId : null });
 }
 
 // ── THE STAT STRIP — up to three rows, each labelled down the left ───────────
@@ -5818,6 +5823,17 @@ function renderCareerSection(rec, uuid, recs) {
 }
 
 
+// PlayHQ's own game centre. VERIFIED on the afl tenant 2026-09-11: only the
+// gameId matters and the org path segments are ignored, so a stored gameId is a
+// link without anything else being looked up. Note this is NOT the shape the
+// profile links use — those carry the tenant as a query parameter.
+const gameUrl = (gameId) => `https://www.playhq.com/afl/org/a/a/a/game-centre/${gameId}`;
+const gameLink = (gameId, text) => gameId
+  ? `<a href="${gameUrl(gameId)}" target="_blank" rel="noopener"
+       style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--tx3)"
+       title="Open this game on PlayHQ">${text} \u2197</a>`
+  : text;
+
 // ── CAREER LEADERBOARDS ─────────────────────────────────────────────────────
 // data/leaderboard/all-time.json and data/leaderboard/comp/<leagueId>.json,
 // written by build-career-tops.js. Ranked at build time because a browser cannot
@@ -5848,8 +5864,9 @@ function setLeaderSubject(v) { S.lbSubject = v; S.lbCat = null; saveFilters(); r
 function lbTeamRow(e, i) {
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-  const when = [e.year, e.round].filter(Boolean).join(' · ');
-  const extra = [when, e.score].filter(Boolean).join(' · ');
+  const when = [e.year, e.round].filter(Boolean).map(esc).join(' · ');
+  const extra0 = [when, esc(e.score)].filter(Boolean).join(' · ');
+  const extra = e.gameId ? gameLink(esc(e.gameId), extra0) : extra0;
   return `<div style="display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;
       padding:9px 12px;border-bottom:1px solid var(--b1)">
     <div style="font-family:'DM Mono',monospace;font-size:12px;color:${i < 3 ? 'var(--gold)' : 'var(--tx3)'}">${i + 1}</div>
@@ -5861,7 +5878,7 @@ function lbTeamRow(e, i) {
     </div>
     <div style="text-align:right">
       <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--gold)">${esc(e.v)}</div>
-      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${esc(extra)}</div>
+      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${extra}</div>
     </div>
   </div>`;
 }
@@ -5869,6 +5886,12 @@ function lbTeamRow(e, i) {
 // One row. `gameId` joins to a stored match exactly as the panel's record card
 // does, so a game we hold is named rather than numbered.
 function lbRow(e, i, cat) {
+  // ⚠️ DEFINED FIRST, AND EVERY PIECE ESCAPED AS IT IS BUILT. `extra` can now
+  // contain an anchor, so it cannot be escaped wholesale at the end — escaping a
+  // link would print the markup, and NOT escaping the pieces would let a team
+  // name carry a tag into the page.
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   // ⚠️ SOME VALUES IN PLAYHQ'S CLUB FIELD ARE LEAGUES. Measured on the career
   // probe: "Eastern Football League" and "EDFL Under 15 - Inactive" arrive as club
   // names, which rendered as "Eastern Football Netball League (AFL Vic Metro Rep
@@ -5890,15 +5913,17 @@ function lbRow(e, i, cat) {
     // ten fell back to a year and a league. build-career-tops.js reads the stored
     // season files and denormalises the round and both teams onto the entry, so
     // every row we hold a game for reads the same however the board was reached.
-    const when = e.year ? String(e.year) : '';
-    const what = (e.round && e.home && e.away) ? `${e.round} · ${e.home} v ${e.away}`
-                                               : (e.league || '');
+    const named = !!(e.round && e.home && e.away);
+    const when = e.year ? esc(e.year) : '';
+    const what = named ? `${esc(e.round)} · ${esc(e.home)} v ${esc(e.away)}` : esc(e.league || '');
     extra = [when, what].filter(Boolean).join(' · ');
-  } else if (cat === 'seasonGoals' && e.year) extra = e.year;
-  else if (cat === 'earliest') extra = `${e.seasons} season${e.seasons === 1 ? '' : 's'}`;
-  else if (e.gp) extra = `${e.gp} game${e.gp === 1 ? '' : 's'}`;
-  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    // Link only what we can name. A game we do not hold has no round or teams, so
+    // its line is a year and a league — a link there promises a page we cannot
+    // vouch for.
+    if (named) extra = gameLink(esc(e.gameId), extra);
+  } else if (cat === 'seasonGoals' && e.year) extra = esc(e.year);
+  else if (cat === 'earliest') extra = `${esc(e.seasons)} season${e.seasons === 1 ? '' : 's'}`;
+  else if (e.gp) extra = `${esc(e.gp)} game${e.gp === 1 ? '' : 's'}`;
   return `<div class="lb-row" data-uuid="${esc(e.uuid)}" style="display:grid;
       grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:9px 12px;
       border-bottom:1px solid var(--b1);cursor:pointer">
@@ -5909,7 +5934,7 @@ function lbRow(e, i, cat) {
     </div>
     <div style="text-align:right">
       <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--gold)">${esc(e.v)}</div>
-      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${esc(extra)}</div>
+      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${extra}</div>
     </div>
   </div>`;
 }
@@ -5996,7 +6021,11 @@ async function renderLeaders() {
 
   // Delegated, so it survives every repaint and can be fired in a test.
   body.onclick = (ev) => {
-    const row = ev.target && ev.target.closest ? ev.target.closest('.lb-row[data-uuid]') : null;
+    if (!ev.target || !ev.target.closest) return;
+    // ⚠️ A LINK INSIDE A CLICKABLE ROW. Without this, opening the game on PlayHQ
+    // ALSO opened the player panel behind it.
+    if (ev.target.closest('a')) return;
+    const row = ev.target.closest('.lb-row[data-uuid]');
     if (row) openPlayerFromSearch(row.getAttribute('data-uuid'));
   };
 }
