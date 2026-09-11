@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-career-tops v1 2026-09-11';
+const VERSION = 'verify-career-tops v2 2026-09-11 no-dedupe';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'build-career-tops.js');
@@ -96,17 +96,22 @@ const names = (b) => (b || []).map(e => `${e.name}:${e.v}`).join(', ');
 
 console.log('\n1  It runs and writes');
 let r = run();
-ok('version line', /build-career-tops v1 /.test(r.out));
+ok('version line', /build-career-tops v2 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('all-time board written', !!r.all);
 ok('one file per competition on a held season', !!r.comp('wfnl') && !!r.comp('efnl'), '');
 ok('a league we only see on UNHELD seasons gets no board', !r.comp('gv') && !r.comp('ntfl'));
 
-console.log('\n2  Duplicated rows are counted once');
+console.log('\n2  Two rows for one (season, club) are BOTH counted');
+// 11,829 players carry a pair, and fetch-career-stats.js reports their summed
+// registrations agreeing with PlayHQ's own career total — so the pair is two
+// distinct registrations, not a repeat, and dropping one undercounts.
 const dupe = (r.all.boards.goals || []).find(e => e.uuid === '01-dupe');
-ok('the duplicated (season, club) row is not doubled', dupe && dupe.v === 5, dupe ? `v=${dupe.v}` : 'absent');
-ok('… and its games are not doubled either', dupe && dupe.gp === 10, dupe ? `gp=${dupe.gp}` : 'absent');
-ok('the duplicate is reported in the log, not swallowed', /duplicate \(season, club\) row/.test(r.out));
+ok('both rows count toward the total (10, not 5)', dupe && dupe.v === 10, dupe ? `v=${dupe.v}` : 'absent');
+ok('… and both sets of games count (20, not 10)', dupe && dupe.gp === 20, dupe ? `gp=${dupe.gp}` : 'absent');
+ok('but it is ONE season, not two', dupe && dupe.seasons === 1, dupe ? `seasons=${dupe.seasons}` : 'absent');
+ok('the pair is reported so a change in the count is visible',
+  /hold two rows for one \(season, club\)/.test(r.out));
 
 console.log('\n3  The rate floor');
 const gpg = r.all.boards.goalsPerGame || [];

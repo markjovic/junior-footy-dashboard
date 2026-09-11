@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'build-career-tops v1 2026-09-11';
+const VERSION = 'build-career-tops v2 2026-09-11 no-dedupe';
 
 const ROOT = path.resolve(__dirname, '..');
 const PLAYERS = path.join(ROOT, 'players');
@@ -68,11 +68,19 @@ function summarise(rec, dupes) {
   const seasons = rec && Array.isArray(rec.seasons) ? rec.seasons : null;
   if (!rec || !rec.uuid || !seasons || !seasons.length) return null;
 
-  // ⚠️ ONE ROW PER (season, club). A player with two clubs in one season has two
-  // rows and both are real; a REGRADE is a second grade inside one row, not a
-  // second row, so the sibling's T20 double-count does not reach this shape. The
-  // assertion is here anyway rather than the assumption.
+  // ⚠️ TWO ROWS FOR ONE (season, club) ARE BOTH REAL — DO NOT DEDUPE THEM.
+  // 11,829 players carry a pair, and the first cut counted one and dropped the
+  // other. The evidence they are distinct registrations rather than duplicates:
+  // fetch-career-stats.js compares the SUM of a player's registration totals
+  // against PlayHQ's own careerStatistics on every run, and shard 00 reported
+  // "disagreed for 0 of 272". If the pairs were repeats the sum would have
+  // exceeded PlayHQ's total for roughly a sixth of them. They are counted, and
+  // the pair count is reported so a change in it is visible.
   const seen = new Set();
+  // "Seasons played" counts SEASONS, not registrations — two clubs in one year is
+  // one season. build-player-index.js draws the same distinction and records that
+  // getting it wrong made "seasons each" mean something else.
+  const sids = new Set();
   let goals = 0, games = 0, best = 0, from = null;
   const byLeague = new Map();
   const bySeasonGoals = [];
@@ -81,8 +89,9 @@ function summarise(rec, dupes) {
 
   for (const s of seasons) {
     const k = `${s.sid || ''}|${s.clubId || ''}`;
-    if (seen.has(k)) { dupes.push(`${rec.uuid} ${k}`); continue; }
+    if (seen.has(k)) dupes.push(`${rec.uuid} ${k}`);   // counted, NOT skipped
     seen.add(k);
+    if (s.sid) sids.add(s.sid);
     const g = Number(s.goals) || 0, gp = Number(s.gp) || 0, b = Number(s.best) || 0;
     goals += g; games += gp; best += b;
     const y = String(s.year || '');
@@ -111,7 +120,7 @@ function summarise(rec, dupes) {
     uuid: rec.uuid, name: rec.name || null,
     club: newest.club || null, league: newest.league || null,
     goals, games, best, from,
-    seasonsCount: seen.size, leaguesCount: leagues.size,
+    seasonsCount: sids.size, leaguesCount: leagues.size,
     seasonGoals: bestSeason.g, seasonGoalsYear: bestSeason.year, seasonGoalsLeague: bestSeason.league,
     records: rec.records || {}, sidLeague, byLeague,
   };
@@ -222,7 +231,8 @@ function main() {
   log(`files ${files}, ranked ${players.length}, no career yet or a stamped negative ${noCareer}` +
       (unreadable ? `, UNREADABLE ${unreadable}` : ''));
   if (dupes.length) {
-    log(`⚠️ ${dupes.length} duplicate (season, club) row(s) — counted once. First few:`);
+    log(`${dupes.length} player(s) hold two rows for one (season, club) — both counted, ` +
+        `which matches PlayHQ's own career total. First few:`);
     for (const d of dupes.slice(0, 5)) log('    ' + d);
   }
   if (!players.length) {

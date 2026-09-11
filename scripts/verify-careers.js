@@ -26,7 +26,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-careers v5 2026-09-10 samples-in-summary';
+const VERSION = 'verify-careers v6 2026-09-11 held-needs-compname';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'fetch-career-stats.js');
@@ -79,8 +79,14 @@ module.exports = { gqlPost,
 // ── Fixture ──────────────────────────────────────────────────────────────────
 const HELD = '2dcbf383';       // in the manifest
 const OUT = 'mpjfl2023';       // not in the manifest
+// ⚠️ THE MANIFEST CARRIES SEASONS WE DO NOT STORE. discover-seasons records every
+// organisation, tracked and watched, so a watched league's season has a seasonId
+// and NO compName. Marking it held made it bright and clickable on the career
+// table — a row for a league never fetched. OUT is exactly that shape here.
 fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify({
-  manifest: [{ seasonId: HELD, compName: 'EFNL 2026' }, { seasonId: 'other', compName: 'WFNL 2026' }],
+  manifest: [{ seasonId: HELD, compName: 'EFNL 2026' },
+             { seasonId: 'other', compName: 'WFNL 2026' },
+             { seasonId: OUT, org: 'watched-org' }],
 }));
 
 const st = (o) => Object.entries(o).map(([value, count]) => ({ count, details: { value } }));
@@ -185,7 +191,7 @@ function ok(name, cond, detail) {
 // ── 1. Due selection ─────────────────────────────────────────────────────────
 console.log('\n1  Which players a run picks up');
 let r = run([], { CAREER_BATCH: '10' });
-ok('version line', /fetch-career-stats v5 /.test(r.out));
+ok('version line', /fetch-career-stats v6 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('never-checked, stale and flagged are fetched', ['00a-rich', '00b-priv', '00c-gone', '00e-stale', '00f-flag']
   .every(u => r.fetched.includes(u)), r.fetched.join(','));
@@ -202,6 +208,8 @@ ok('career comes from careerStatistics, not a sum', p.career.gp === 187 && p.car
 ok('career.from is the earliest season year', p.career.from === '2023', String(p.career.from));
 ok('held flag true for a manifest season', held && held.held === true);
 ok('held flag false for a season we do not hold', out && out.held === false);
+ok('a manifest entry with a seasonId but NO compName does NOT count as held',
+  out && out.sid === OUT && out.held === false, out && `${out.sid} held=${out.held}`);
 ok('league from season.competition, NOT the club bracket', held && held.league === 'Eastern Football Netball League',
   held && `${held.league} (club is ${held.club})`);
 ok('outside league is captured too', out && out.league === 'Mornington Peninsula JFL', out && String(out.league));

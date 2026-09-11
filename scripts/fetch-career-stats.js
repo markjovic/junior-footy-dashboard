@@ -43,7 +43,7 @@ const path = require('path');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'fetch-career-stats v5 2026-09-10 samples-in-summary';
+const VERSION = 'fetch-career-stats v6 2026-09-11 held-needs-compname';
 const FILE_VERSION = 1;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -269,7 +269,15 @@ async function main() {
   let heldIds = new Set();
   try {
     const core = JSON.parse(fs.readFileSync(CORE_PATH, 'utf8'));
-    heldIds = new Set((core.manifest || []).filter(m => m.seasonId).map(m => m.seasonId));
+    // ⚠️ A MANIFEST ENTRY IS NOT A SEASON WE STORE.
+    // discover-seasons records seasons for all 17 organisations, tracked and
+    // watched, so the manifest holds 65 season ids while only 18 have data on
+    // disk. Filtering on seasonId alone marked a VAFA or Frankston season `held`,
+    // which made it bright and CLICKABLE on the career table — opening a season
+    // this dashboard has never fetched. build-player-index.js already filters on
+    // both fields for the same reason. Measured 2026-09-11: 18 competitions came
+    // back as held instead of 5.
+    heldIds = new Set((core.manifest || []).filter(m => m.seasonId && m.compName).map(m => m.seasonId));
   } catch (e) {
     log(`⚠️ could not read data/core.json (${e.message}) — every season will read as NOT held`);
   }
