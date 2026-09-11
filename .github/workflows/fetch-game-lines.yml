@@ -1,0 +1,135 @@
+# .github/workflows/fetch-game-lines.yml
+#
+# Per-game player lines — the box score. per_game_stats_design.md.
+#
+# ⚠️ RUN IT DRY FIRST. Leave `apply` at false and read the log. The dry run makes
+# every call and writes nothing, and it reports the figures the design is still
+# missing: coverage per league per season, the statistic vocabulary, whether
+# periodStatistics is populated and whether it is per-quarter, roster sizes, lines
+# with no uuid, and records with no gameId.
+#
+# ⚠️ ONE DISPATCH DOES THE WHOLE JOB. The script stops on a time budget, commits,
+# and this workflow starts a fresh run. Nothing needs watching.
+
+name: Fetch game lines
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'apply — write the lines files. Leave false for a dry run that only measures.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      comp:
+        description: 'comp — one competition, e.g. "EFNL 2026". Blank = all.'
+        required: false
+        default: ''
+        type: string
+      year:
+        description: 'year — one season year, e.g. 2026. Blank = every season.'
+        required: false
+        default: ''
+        type: string
+      max_games:
+        description: 'max_games — stop after this many. 0 = no cap. Use a small number for the first dry run.'
+        required: false
+        default: '0'
+        type: string
+      budget_min:
+        description: 'budget_min — stop and hand over after this many minutes. Default 300 (GitHub kills a job at 360).'
+        required: false
+        default: '300'
+        type: string
+      chain:
+        description: 'chain — automatically start the next run when this one hits its budget. Default true.'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
+  actions: write        # needed to re-dispatch itself
+
+# ⚠️ Shares the lock even though this script never calls store.save and writes
+# only its own files. enrich-games.yml commits with `git add -A data/`, so a run
+# overlapping this one would stage a lines file mid-write.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  lines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      # ⚠️ `ref:` IS REQUIRED. Without it actions/checkout leaves a DETACHED HEAD:
+      # commits succeed, `git pull --rebase` fails with "You are not currently on a
+      # branch", and the push never happens. A three-hour run on 2026-09-05 was
+      # discarded that way.
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      # Identity must exist BEFORE the fetch — the script commits at every
+      # checkpoint rather than leaving it all to the end.
+      - name: Configure git
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
+      # NOTE: no actions/setup-node. The runner ships Node and this repo's rule is
+      # never to add it to anything new.
+      - name: Fetch lines
+        id: run
+        env:
+          FGL_APPLY: ${{ inputs.apply }}
+          FGL_COMP: ${{ inputs.comp }}
+          FGL_YEAR: ${{ inputs.year }}
+          FGL_MAX_GAMES: ${{ inputs.max_games }}
+          FGL_BUDGET_MIN: ${{ inputs.budget_min }}
+        run: |
+          set +e
+          node --version
+          node scripts/fetch-game-lines.js
+          CODE=$?
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          # 75 means "budget reached, more to do" and 2 means "nothing to do".
+          # Neither is a failure.
+          if [ "$CODE" = "75" ] || [ "$CODE" = "2" ]; then exit 0; fi
+          exit $CODE
+
+      # Anything the script had not yet pushed. always() so a crash or a
+      # cancellation still commits what reached the disk.
+      - name: Commit the tail
+        if: ${{ always() && inputs.apply == 'true' }}
+        run: |
+          git add -A data/
+          if git diff --staged --quiet; then
+            echo "Nothing left to commit"
+            exit 0
+          fi
+          git commit -m "Game lines: tail"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
+
+      # Hands over to a fresh runner so the whole scope completes from one dispatch.
+      - name: Continue in a new run
+        if: ${{ steps.run.outputs.code == '75' && inputs.chain == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Budget reached — starting the next run."
+          gh workflow run fetch-game-lines.yml \
+            --ref "${{ github.ref_name }}" \
+            -f apply='${{ inputs.apply }}' \
+            -f comp='${{ inputs.comp }}' \
+            -f year='${{ inputs.year }}' \
+            -f max_games='${{ inputs.max_games }}' \
+            -f budget_min='${{ inputs.budget_min }}' \
+            -f chain='true'
