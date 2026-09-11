@@ -10,6 +10,13 @@
 #
 # This script writes data/clubs.json and data/core.json only — it never touches a
 # season file — so `git add -A data/` covers it.
+#
+# ⚠️ CONCURRENCY ADDED 2026-09-11. It writes core.json through store.save, and
+# store.save writes WHOLE FILES — so two writers with overlapping checkouts
+# silently revert each other, whichever keys they touch. That is what two jobs did
+# to each other on 2026-08-31. Every other writer of core.json holds this group:
+# fetch-results, discover-seasons, enrich-games, walk-registrations and the career
+# workflows. This one did not, and being dispatch-only is luck rather than safety.
 
 name: Build club index
 
@@ -28,11 +35,24 @@ on:
         type: choice
         options: ['false', 'true']
 
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # ref, so a commit cannot land on a detached HEAD. Harmless where the event
+      # already resolves to a branch; the failure it prevents is silent.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      # ⚠️ actions/setup-node WITH a job that calls api.playhq.com. discover-seasons.yml
+      # says this produces 403 CLOUDFRONT-BLOCK and sports-players-stats measured
+      # that on their account; on THIS account it works here and in all three
+      # fetch-results jobs. Unsettled — OUTSTANDING_TASKS A4. Left as it is,
+      # because the rule is never to strip it from a workflow that works.
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
