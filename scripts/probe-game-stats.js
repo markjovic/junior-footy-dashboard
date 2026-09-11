@@ -5,60 +5,51 @@
 // session: the spectator endpoint takes no cookie on the afl tenant. Twelve
 // calls at the defaults.
 //
-// v5 (2026-09-11) — THE LAST UNKNOWN: IS THE ATTRIBUTION COMPLETE?
+// v6 (2026-09-11) — THIS ONE DISCOVERS NAMES INSTEAD OF ASSERTING THEM.
 //
-// WHAT v4 FOUND, and what it cost to find it. The per-player figures are in
-// players[].statistics after all. They are NOT under the names the profile route
-// uses:
+// ⚠️ THE SAME MISTAKE FOUR TIMES. Every probe since v3 has asked for a statistic
+// by a name carried over from somewhere else, got null or zero, and reported
+// that as a fact about PlayHQ:
 //
-//     6_POINT_SCORE   goals            1_POINT_SCORE   BEHINDS
-//     TOTAL_GOALS     goals again      TOTAL_BEHINDS   behinds again
-//     GOAL_COUNT      0 for every player in every game
-//     APPEARANCE      0                BEST_PLAYER     0
+//   v3  summed players[].statistics GOAL_COUNT          -> 0.  Wrong name: the
+//       spectator route calls a goal 6_POINT_SCORE.
+//   v4  summed the same name again                      -> 0.
+//   v4  called periodStatistics "per-quarter player goals" on the strength of
+//       the rows existing                               -> every statistics
+//       array empty in 528 rows. Accepted is not populated.
+//   v5  read result.<side>.statistics 6_POINT_SCORE     -> null. v4 had already
+//       MEASURED three populated entries per side, so the figures are there
+//       under names nobody looked at.
 //
-// ⚠️ THE STATISTIC NAMES ARE PER-ROUTE, NOT PER-TENANT. The reference records
-// that only APPEARANCE, GOAL_COUNT and BEST_PLAYER exist, measured across 954
-// game lines. That is true OF THE PROFILE ROUTE. The spectator route uses a
-// different vocabulary on the same tenant, and v3 and v4 both summed GOAL_COUNT
-// against it and reported 0-0 for games that plainly had goals. Twice.
+// Four times the correct move was to print the keys rather than assert them, and
+// four times a run was spent. So v6 asserts NOTHING. It collects every distinct
+// `type.value` present at every location, prints the raw blocks for the first
+// games, and reconciles using whichever goal-like key it actually FINDS —
+// naming, in the output, which key it used. If PlayHQ's vocabulary differs again
+// at some third location, this run says so instead of printing a zero.
 //
-// ⚠️ BEHINDS EXIST. `per_game_stats_design.md` §5 lists behinds as optional and
-// the career design concluded there is no behinds figure anywhere. On THIS route
-// there is one, per player, per game. That is a genuine correction to
-// docs/playhq_api_reference.md and not a detail of this probe.
+// WHAT IS MEASURED AND SETTLED — none of it re-asked:
+//   coverage: 12 of 58 sampled games electronically scored. Senior 5/5, U18 2/2,
+//     roughly 1 in 20 across U8-U16, SER 0 of 12. (v3, 2026-09-11)
+//   the box score is `query game($id: ID!)` on spectator.playhq.com — one call
+//     per game, no cookie. `game(id:)` does NOT exist on api.playhq.com.
+//   `periods(scope:)` is spectator-only; the main API has no PeriodScore type,
+//     so the reference's "real field that is always empty" STANDS there.
+//   per-player: 6_POINT_SCORE = goals, 1_POINT_SCORE = BEHINDS, plus
+//     TOTAL_GOALS and TOTAL_BEHINDS. GOAL_COUNT, APPEARANCE and BEST_PLAYER are
+//     zero for all 528 players in all 12 games.
+//   ⚠️ BEHINDS EXIST on this route. The career work's "no behinds figure
+//     anywhere" is true of the PROFILE route only.
+//   82 of 528 player rows carry a score; 8 of 12 games have any player figure.
 //
-// WHAT IS STILL UNKNOWN, AND IS ALL THIS RUN ASKS
+// THE ONE REMAINING QUESTION is whether the attribution is COMPLETE: does the
+// sum of a side's player scores equal what that side actually kicked? A card
+// naming four of ten goalkickers is worse than no card, because nothing tells
+// the reader which six are missing.
 //
-// Whether the attribution is COMPLETE. Of twelve electronically scored games,
-// only EIGHT carried any player figure at all, and the count of non-zero entries
-// looked low against the final scores. A box score that names four of a team's
-// ten goalkickers is worse than no box score, because nothing on the page tells
-// a reader which six are missing.
-//
-// So: sum every player's 6_POINT_SCORE and 1_POINT_SCORE per side and compare
-// them with the team's own totals from the SAME response. That is a real
-// reconciliation rather than a restatement — the team figures come from
-// result.<side>.statistics and statisticsV2, which are populated independently
-// of the player rows, as game 7ce5b38c proves by having team totals and no
-// player figures whatsoever.
-//
-// ⚠️ AND CHECK THE ARITHMETIC. 6 x goals + behinds must equal TOTAL_SCORE. If
-// the team's own three figures do not agree with each other then the player rows
-// are being compared against a number that is itself wrong.
-//
-// ALREADY SETTLED — not re-asked:
-//   coverage: 12 of 58 sampled games e-scored; Senior 5/5, U18 2/2, and roughly
-//     1 in 20 for U8-U16; SER 0 of 12 (measured 2026-09-11, v3)
-//   `game(id:)` does not exist on api.playhq.com — rejected, no suggestion
-//   `periods(scope:)` is spectator-only; the main API has no PeriodScore type
-//     and GameTeamResult.periods takes no argument, so the reference's
-//     "real field that is always empty" STANDS
-//   players[].periodStatistics is a four-row QUARTERS skeleton whose statistics
-//     array is EMPTY in all 12 games and all 528 players — accepted, structured,
-//     and carrying nothing. There are no per-quarter player goals.
-//
-// Env: PROBE_GAME_IDS (csv; defaults to the twelve v3 found e-scored),
-//      PROBE_RATE (100), PROBE_WINDOW_MS (80000), PROBE_MAX_GAMES (12).
+// Env: PROBE_GAME_IDS (csv; defaults to the twelve known e-scored),
+//      PROBE_RATE (100), PROBE_WINDOW_MS (80000), PROBE_MAX_GAMES (12),
+//      PROBE_DUMP_GAMES (2) — how many games to print raw blocks for.
 //
 // Exit codes: 0 = it ran. 1 = the document was rejected, or nothing answered.
 
@@ -67,7 +58,7 @@
 const playhq = require('./lib/playhq');
 const { specPost, sleep } = playhq;
 
-const VERSION = 'probe-game-stats v5 2026-09-11 attribution-completeness';
+const VERSION = 'probe-game-stats v6 2026-09-11 discover-then-reconcile';
 
 const DEFAULT_IDS = [
   '2c9b42bc', '7ce5b38c', '44e86e26', '8e5f6184', '345110a0',  // EFNL Senior
@@ -81,14 +72,14 @@ const DEFAULT_IDS = [
 const RATE = Math.max(1, Number(process.env.PROBE_RATE || 100));
 const WINDOW_MS = Math.max(1, Number(process.env.PROBE_WINDOW_MS || 80000));
 const MAX_GAMES = Math.max(1, Number(process.env.PROBE_MAX_GAMES || 12));
+const DUMP_GAMES = Math.max(0, Number(process.env.PROBE_DUMP_GAMES || 2));
 const IDS = String(process.env.PROBE_GAME_IDS || '')
   .split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
 
 const log = (...a) => console.log(...a);
 
-// Trimmed to what a reconciliation needs. Every field was in the page's own
-// request; periodStatistics is gone because v4 measured it empty in all 528
-// player rows, and asking for it again would only reprint that.
+// statisticsV2 carries `type { type value }` — two fields, both selected,
+// because which of them holds the name is itself something I have not verified.
 const Q_BOX = `query game($id: ID!, $scope: PeriodScore) {
   game(id: $id) {
     id
@@ -113,28 +104,49 @@ async function pace() {
 }
 
 const NOT_SCORED = /not electronically scored|could not be found/i;
-const val = (stats, type) => {
-  const s = (stats || []).find(x => x && x.type && x.type.value === type);
-  return s && s.count !== null && s.count !== undefined ? Number(s.count) : null;
-};
-const sumOver = (players, type) =>
-  (players || []).reduce((n, p) => n + (val(p.statistics, type) || 0), 0);
+
+// ── Discovery, not assertion ─────────────────────────────────────────────────
+// A statistics array becomes a plain map of name -> count, and the NAMES are
+// collected as evidence in their own right. Nothing below asks for a key it has
+// not first seen in the response.
+function toMap(stats) {
+  const m = new Map();
+  for (const s of (stats || [])) {
+    const k = (s && s.type && (s.type.value !== undefined && s.type.value !== null ? s.type.value : s.type.type));
+    if (k === undefined || k === null || k === '') continue;
+    m.set(String(k), Number(s.count));
+  }
+  return m;
+}
+// Candidates in preference order. The FIRST one actually present wins, and the
+// caller reports which — so a silent fallback can never be mistaken for a match
+// on the preferred name.
+const GOAL_KEYS = ['6_POINT_SCORE', 'TOTAL_GOALS', 'GOALS', 'GOAL_COUNT'];
+const BEHIND_KEYS = ['1_POINT_SCORE', 'TOTAL_BEHINDS', 'BEHINDS', 'BEHIND_COUNT'];
+const SCORE_KEYS = ['TOTAL_SCORE', 'SCORE', 'POINTS'];
+function pick(map, keys) {
+  for (const k of keys) if (map.has(k)) return { key: k, value: map.get(k) };
+  return { key: null, value: null };
+}
+const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+const tally = (m, indent) => [...m.entries()].sort((a, b) => b[1] - a[1])
+  .map(([k, n]) => `${indent}${String(k).padEnd(28)} ${n}`).join('\n');
+const showMap = (m) => m.size ? [...m.entries()].map(([k, v]) => `${k}=${v}`).join(' ') : '(empty)';
 
 async function main() {
   const ids = (IDS.length ? IDS : DEFAULT_IDS).slice(0, MAX_GAMES);
   log(`=== ${VERSION} ===`);
   log(`${ids.length} game(s), spectator endpoint only — no session, no main-API call.`);
   log('READ-ONLY: this run writes no file and commits nothing.\n');
-  log('Per side: player sums from players[].statistics, team figures from');
-  log('result.<side>.statistics. The two are populated independently — game');
-  log('7ce5b38c has team totals and no player rows at all — so this is a real');
-  log('check and not a restatement.\n');
+  log('⚠️ This run ASSERTS NO FIELD NAME. It prints the keys it finds at each location,');
+  log('   then reconciles with whichever it found, naming the key it used.\n');
 
-  let answered = 0, notScored = 0, rejected = 0;
-  let sidesTotal = 0, sidesExact = 0, sidesPartial = 0, sidesEmpty = 0, sidesOver = 0;
-  let teamArithOk = 0, teamArithBad = 0;
-  const goalShortfall = [];
-  let namedScorers = 0, playersSeen = 0;
+  let answered = 0, notScored = 0, rejected = 0, dumped = 0;
+  const keysResult = new Map(), keysV2 = new Map(), keysPlayer = new Map(), keysPeriod = new Map();
+  let sides = 0, exact = 0, partial = 0, empty = 0, over = 0, noRef = 0, noRows = 0;
+  let arithOk = 0, arithBad = 0, arithUnknown = 0;
+  let unattributedGoals = 0, partialSides = 0;
+  const goalKeyUsed = new Map(), refSourceUsed = new Map();
 
   for (const id of ids) {
     await pace();
@@ -160,68 +172,101 @@ async function main() {
     answered++;
 
     for (const sd of ['home', 'away']) {
-      const players = ((g.statistics && g.statistics[sd]) || {}).players || [];
-      const team = ((g.result && g.result[sd]) || {}).statistics || [];
-      playersSeen += players.length;
+      const sblock = ((g.statistics && g.statistics[sd]) || {});
+      const rblock = ((g.result && g.result[sd]) || {});
+      const players = sblock.players || [];
 
-      const pg = sumOver(players, '6_POINT_SCORE');
-      const pb = sumOver(players, '1_POINT_SCORE');
-      const pgAlt = sumOver(players, 'TOTAL_GOALS');
-      const pbAlt = sumOver(players, 'TOTAL_BEHINDS');
-      const scorers = players.filter(p =>
-        (val(p.statistics, '6_POINT_SCORE') || 0) + (val(p.statistics, '1_POINT_SCORE') || 0) > 0).length;
-      namedScorers += scorers;
+      const mResult = toMap(rblock.statistics);
+      const mV2 = toMap(sblock.statisticsV2);
+      for (const k of mResult.keys()) bump(keysResult, k);
+      for (const k of mV2.keys()) bump(keysV2, k);
+      for (const p of players) for (const k of toMap(p.statistics).keys()) bump(keysPlayer, k);
+      for (const per of (rblock.periods || [])) for (const k of toMap(per.statistics).keys()) bump(keysPeriod, k);
 
-      const tg = val(team, '6_POINT_SCORE');
-      const tb = val(team, '1_POINT_SCORE');
-      const ts = val(team, 'TOTAL_SCORE');
-
-      // ⚠️ CHECK THE REFERENCE FIGURE BEFORE TRUSTING IT. If the team's own three
-      // numbers do not agree, the player rows are being compared with something
-      // already wrong, and a "match" would mean nothing.
-      const arithOk = (tg !== null && tb !== null && ts !== null) ? (tg * 6 + tb === ts) : null;
-      if (arithOk === true) teamArithOk++; else if (arithOk === false) teamArithBad++;
-
-      sidesTotal++;
-      let verdict;
-      if (tg === null) verdict = 'no team figure to compare against';
-      else if (!players.length) verdict = 'NO PLAYER ROWS AT ALL';
-      else if (pg === 0 && pb === 0) { sidesEmpty++; verdict = `EMPTY — team kicked ${tg}.${tb}, not one player figure`; }
-      else if (pg === tg && pb === tb) { sidesExact++; verdict = `EXACT — ${scorers} player(s) account for all ${tg}.${tb}`; }
-      else if (pg > tg || pb > tb) { sidesOver++; verdict = `⚠️ OVER — players ${pg}.${pb} EXCEED the team's ${tg}.${tb}`; }
-      else {
-        sidesPartial++;
-        goalShortfall.push(tg - pg);
-        verdict = `PARTIAL — players ${pg}.${pb} against the team's ${tg}.${tb}, ` +
-          `${tg - pg} goal(s) and ${tb - pb} behind(s) unattributed`;
+      // ⚠️ SHOW THE RAW BLOCKS. Four runs were spent on names asserted rather
+      // than read; the cheapest insurance against a fifth is printing them.
+      if (dumped < DUMP_GAMES) {
+        log(`\n  ── raw keys, ${id} ${sd} ──`);
+        log(`     result.${sd}.statistics : ${showMap(mResult)}`);
+        log(`     statisticsV2           : ${showMap(mV2)}`);
+        const scorer = players.find(p => [...toMap(p.statistics).values()].some(v => v > 0));
+        log(`     a player WITH figures  : ${scorer ? `${scorer.name} -> ${showMap(toMap(scorer.statistics))}` : '(none on this side)'}`);
+        const per0 = (rblock.periods || [])[0];
+        log(`     result.periods[0]      : ${per0 ? `${per0.period && per0.period.value} -> ${showMap(toMap(per0.statistics))}` : '(none)'}`);
       }
 
-      const altNote = (pg !== pgAlt || pb !== pbAlt)
-        ? `  ⚠️ TOTAL_GOALS/TOTAL_BEHINDS disagree with 6_/1_POINT_SCORE: ${pgAlt}.${pbAlt}` : '';
-      log(`  ${id} ${sd.padEnd(4)} ${players.length.toString().padStart(2)} players  ` +
-        `${arithOk === false ? '⚠️ team arithmetic wrong: ' : ''}${verdict}${altNote}`);
+      // The reference figure: result.<side>.statistics first, statisticsV2 as a
+      // fallback, and the source is REPORTED so a fallback cannot pass as the
+      // primary.
+      let ref = mResult, refName = `result.${sd}.statistics`;
+      if (pick(mResult, GOAL_KEYS).key === null && pick(mV2, GOAL_KEYS).key !== null) {
+        ref = mV2; refName = 'statisticsV2';
+      }
+      const tg = pick(ref, GOAL_KEYS), tb = pick(ref, BEHIND_KEYS), ts = pick(ref, SCORE_KEYS);
+
+      const pgKey = GOAL_KEYS.find(k => players.some(p => toMap(p.statistics).has(k))) || null;
+      const pbKey = BEHIND_KEYS.find(k => players.some(p => toMap(p.statistics).has(k))) || null;
+      const pg = pgKey ? players.reduce((n, p) => n + (toMap(p.statistics).get(pgKey) || 0), 0) : null;
+      const pb = pbKey ? players.reduce((n, p) => n + (toMap(p.statistics).get(pbKey) || 0), 0) : null;
+      const scorers = players.filter(p => [...toMap(p.statistics).values()].some(v => v > 0)).length;
+
+      sides++;
+      if (tg.key) bump(refSourceUsed, `${refName}.${tg.key}`);
+      if (pgKey) bump(goalKeyUsed, `players.${pgKey}`);
+
+      // ⚠️ CHECK THE REFERENCE BEFORE TRUSTING IT: 6 x goals + behinds must be
+      // the total, or the player rows are being compared with a figure that
+      // disagrees with itself.
+      if (tg.value !== null && tb.value !== null && ts.value !== null) {
+        if (tg.value * 6 + tb.value === ts.value) arithOk++; else arithBad++;
+      } else arithUnknown++;
+
+      let verdict;
+      if (tg.key === null) { noRef++; verdict = `NO GOAL-LIKE KEY in either team block — keys were: ${showMap(ref)}`; }
+      else if (!players.length) { noRows++; verdict = 'NO PLAYER ROWS AT ALL'; }
+      else if (pgKey === null) { empty++; verdict = `team kicked ${tg.value}.${tb.value}, NO goal-like key on any player row`; }
+      else if (pg === 0 && (pb || 0) === 0) { empty++; verdict = `EMPTY — team kicked ${tg.value}.${tb.value}, every player figure zero`; }
+      else if (pg === tg.value && (tb.value === null || pb === tb.value)) { exact++; verdict = `EXACT — ${scorers} player(s) account for all ${tg.value}.${tb.value}`; }
+      else if (pg > tg.value || (tb.value !== null && pb > tb.value)) { over++; verdict = `⚠️ OVER — players ${pg}.${pb} EXCEED the team's ${tg.value}.${tb.value}`; }
+      else {
+        partial++; partialSides++; unattributedGoals += (tg.value - pg);
+        verdict = `PARTIAL — players ${pg}.${pb} against ${tg.value}.${tb.value}, ` +
+          `${tg.value - pg} goal(s) unattributed`;
+      }
+      log(`  ${id} ${sd.padEnd(4)} ${String(players.length).padStart(2)} players  ${verdict}` +
+        `${tg.key ? `   [ref ${refName}.${tg.key}${pgKey ? `, players.${pgKey}` : ''}]` : ''}`);
     }
+    if (dumped < DUMP_GAMES) dumped++;
   }
+
+  log('\n═══ KEYS ACTUALLY PRESENT ═══');
+  log('  result.<side>.statistics:'); log(tally(keysResult, '    ') || '    (none)');
+  log('  statisticsV2:');             log(tally(keysV2, '    ') || '    (none)');
+  log('  players[].statistics:');     log(tally(keysPlayer, '    ') || '    (none)');
+  log('  result.<side>.periods[].statistics:'); log(tally(keysPeriod, '    ') || '    (none)');
 
   log('\n═══ IS THE ATTRIBUTION COMPLETE? ═══');
   log(`games answered ${answered}; not e-scored ${notScored}; rejected ${rejected}`);
-  log(`team sides examined: ${sidesTotal} (${playersSeen} player rows, ${namedScorers} carrying a score)`);
-  log(`\n  EXACT — every goal and behind attributed:   ${sidesExact} of ${sidesTotal}`);
-  log(`  PARTIAL — some of the score unattributed:   ${sidesPartial}`);
-  log(`  EMPTY — team scored, no player figures:     ${sidesEmpty}`);
-  log(`  OVER — players exceed the team total:       ${sidesOver}`);
-  if (goalShortfall.length) {
-    const tot = goalShortfall.reduce((a, b) => a + b, 0);
-    log(`  goals unattributed on partial sides: ${tot} across ${goalShortfall.length} side(s)` +
-      ` (mean ${(tot / goalShortfall.length).toFixed(1)})`);
+  log(`team sides examined: ${sides}`);
+  log(`\n  EXACT — every goal and behind attributed:   ${exact} of ${sides}`);
+  log(`  PARTIAL — some of the score unattributed:   ${partial}`);
+  log(`  EMPTY — team scored, no player figures:     ${empty}`);
+  log(`  OVER — players exceed the team total:       ${over}`);
+  log(`  no goal-like key in the team block:         ${noRef}`);
+  log(`  no player rows at all:                      ${noRows}`);
+  if (partialSides) {
+    log(`  goals unattributed on partial sides: ${unattributedGoals} across ${partialSides} side(s)` +
+      ` (mean ${(unattributedGoals / partialSides).toFixed(1)})`);
   }
-  log(`\n  team's own arithmetic (6 x goals + behinds = TOTAL_SCORE): ${teamArithOk} right, ${teamArithBad} wrong`);
-  log('  ⚠️ If that right-hand number is not zero the comparison above is unsafe, because');
-  log('     the player rows were measured against a team figure that disagrees with itself.');
+  log(`\n  team arithmetic (6 x goals + behinds = total): ${arithOk} right, ${arithBad} wrong, ${arithUnknown} not checkable`);
+  log('  ⚠️ A non-zero "wrong" makes every verdict above unsafe: the player rows would');
+  log('     have been measured against a reference that disagrees with itself.');
+  log('\n  keys the reconciliation actually used:');
+  log(tally(refSourceUsed, '    ') || '    (none)');
+  log(tally(goalKeyUsed, '    ') || '    (none)');
 
-  log('\n  What this decides: a box score that names four of ten goalkickers is worse than');
-  log('  no box score, because nothing on the card tells a reader which six are missing.');
-  log('  EXACT sides can be published. PARTIAL ones cannot, unless the page marks them.');
+  log('\n  What this decides: EXACT sides can be published. PARTIAL ones cannot, unless');
+  log('  the card says so — naming four of ten goalkickers is worse than naming none.');
 
   log(`\n── summary ──`);
   log(`calls: 0 on api.playhq.com, ${answered + notScored + rejected} on spectator.playhq.com`);
