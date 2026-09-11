@@ -68,7 +68,7 @@ const path = require('path');
 const playhq = require('./lib/playhq');
 const { gqlPost, sleep, refreshSession } = playhq;
 
-const VERSION = 'probe-game-stats v1 2026-09-11 route-discovery';
+const VERSION = 'probe-game-stats v2 2026-09-11 three-live-candidates';
 
 const ROOT = path.resolve(__dirname, '..');
 const CORE_PATH = path.join(ROOT, 'data', 'core.json');
@@ -81,6 +81,7 @@ const TRIAL_MAX_REJECT = Math.max(1, Number(process.env.PROBE_TRIAL_MAX_REJECT |
 const TRIAL_START = Math.max(0, Number(process.env.PROBE_TRIAL_START || 0));
 const MAX_GRADES = Math.max(1, Number(process.env.PROBE_MAX_GRADES || 3));
 const MAX_ROUNDS = Math.max(1, Number(process.env.PROBE_MAX_ROUNDS || 3));
+const BASE_LIMIT = 5;
 
 const log = (...a) => console.log(...a);
 const flat = (s) => String(s).replace(/\s+/g, ' ').trim();
@@ -274,6 +275,36 @@ async function findTarget(seasons, grades) {
 // on one of them. Everything after them is a second or third guess on a type
 // the first three have already described.
 
+// ⚠️ FIVE CANDIDATES WERE DELETED WITHOUT A CALL. Run 1's two suggestion lists
+// rule them out on their own, and re-probing them would spend the rejection
+// budget on questions already answered:
+//
+//   Apollo Server's suggestion list is graphql-js's `suggestionList`, which
+//   offers every name within a Damerau-Levenshtein distance of
+//   floor(input.length * 0.4) + 1 and caps the list at FIVE. Run 1 got ONE
+//   suggestion each time, so neither list was truncated and each is exhaustive
+//   within its threshold.
+//
+//   "gamePlayerStatistics" on Query, threshold 9, suggested only
+//   "gradePlayerStatistics" (d=2). So "gameStatistics" (d=6),
+//   "publicGameStatistics" (d=9), "gamePlayerStats" (d=5) and "gamePlayers"
+//   (d=9) DO NOT EXIST on Query. Route 2 is dead by arithmetic.
+//
+//   "playerStatistics" on DiscoverGame, threshold 7, suggested only
+//   "statistics" (d=6). So "gameStatistics" (d=4), "teamStatistics" (d=5),
+//   "playerStats" (d=5) and "profileStatistics" (d=6) do not exist there
+//   either. "players", "lineup" and "roster" are all beyond 7 and survive.
+//
+//   "gameID" on GradePlayerStatisticsFilter, threshold 3, suggested NOTHING.
+//   So "gameId", "game" and "gameIDs" are not filter fields. "roundID" (d=5)
+//   and "round" survive.
+//
+// ⚠️ I AM INFERRING, from PlayHQ naming Apollo Server in its own introspection
+// error, that it uses graphql-js's standard threshold. If they have tuned it or
+// truncate the list, these exclusions are wrong and the names come back. The
+// arithmetic is in the message that delivered this file, so it can be checked.
+//
+// That leaves exactly three live candidates, which is exactly the rejection cap.
 function trials(t, baselineTotal) {
   const filterBase = { sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }], pagination: { page: 1, limit: 5 } };
   // ⚠️ ACCEPTED IS NOT POPULATED, and for a FILTER, accepted is not APPLIED. Each
@@ -298,72 +329,12 @@ function trials(t, baselineTotal) {
   };
   return [
     {
-      id: 'G1  Query.gamePlayerStatistics(gameID:)',
-      route: '2 — a statistics field keyed on a game',
-      why: 'The whole question in one call if it exists. If it does not, the rejection ' +
-           'names the Query type and its "Did you mean" is a slice of the real root ' +
-           'field list — which is what introspection would have given us and cannot. ' +
-           'The name is deliberately one letter from gradePlayerStatistics, which IS ' +
-           'real, so a suggestion is likely.',
-      query: `query GamePlayerStatistics($gameID: ID!) {
-  gamePlayerStatistics(gameID: $gameID) { __typename }
-}`,
-      vars: { gameID: t.gameId },
-      check: objCheck(d => d && d.gamePlayerStatistics),
-    },
-    {
-      id: 'G2  DiscoverGame.playerStatistics',
-      route: '3 — a selection on the game we already fetch',
-      why: 'discoverGame is already fetched for quarters, so if the players hang off ' +
-           'it the weekend cost is zero new calls. __typename is legal on any object ' +
-           'type, so this cannot fail for a wrong selection set — an ACCEPT means the ' +
-           'field is real and names its type, a rejection describes DiscoverGame.',
-      query: `query DiscoverGame($gameID: ID!) {
-  discoverGame(gameID: $gameID) { id playerStatistics { __typename } }
-}`,
-      vars: { gameID: t.gameId },
-      check: objCheck(d => d && d.discoverGame && d.discoverGame.playerStatistics),
-    },
-    {
-      id: 'G3  GradePlayerStatisticsFilter.gameID',
-      route: '1 — the filter on a query we already run',
-      why: 'fetch-stats.js already calls gradePlayerStatistics with a season-wide ' +
-           'filter. If the filter takes a game the box score costs one call per game ' +
-           'and needs no new operation at all. An unknown INPUT field is rejected the ' +
-           'same way and suggests the same way, so this describes the filter type.',
-      query: Q_GRADE_STATS,
-      vars: { gradeID: t.grade.id, filter: Object.assign({ gameID: t.gameId }, filterBase) },
-      check: filterCheck,
-    },
-    {
-      id: 'G4  GradePlayerStatisticsFilter.roundID',
-      route: '1 — one call per grade-round',
-      why: 'The cheaper half of route 1 and the one §4 costed at ~400 calls a weekend. ' +
-           'A round id is a real id here, taken from the fixture walk above.',
-      query: Q_GRADE_STATS,
-      vars: { gradeID: t.grade.id, filter: Object.assign({ roundID: t.round.id }, filterBase) },
-      check: filterCheck,
-      needsRound: true,
-    },
-    {
-      id: 'G5  Query.gameStatistics(gameID:)',
-      route: '2 — the name the nested field already uses',
-      why: 'gameStatistics is a real field name on the profile route, four levels down ' +
-           'and taking no arguments. Whether the same name exists at the root taking a ' +
-           'game has never been asked.',
-      query: `query GameStatistics($gameID: ID!) {
-  gameStatistics(gameID: $gameID) { __typename }
-}`,
-      vars: { gameID: t.gameId },
-      check: objCheck(d => d && d.gameStatistics),
-    },
-    {
-      id: 'G6  DiscoverGame.statistics.home.players',
+      id: 'H1  DiscoverGame.statistics.home.players',
       route: '3 — one level below the quarters',
-      why: 'statistics.home is where the period table lives, so the type is real and ' +
-           'already selected every backfill run. Whether it also carries the side\'s ' +
-           'players has never been asked. A rejection names that type, which nothing ' +
-           'in the reference does yet.',
+      why: 'The biggest prize left: discoverGame is already fetched for quarters, so ' +
+           'players hanging off statistics.home cost NOTHING extra per weekend. Run 1 ' +
+           'described DiscoverGame itself but nothing has ever described the SIDE type ' +
+           'under statistics, so a rejection here is a field list we do not have.',
       query: `query DiscoverGame($gameID: ID!) {
   discoverGame(gameID: $gameID) { id statistics { home { players { __typename } } } }
 }`,
@@ -372,22 +343,23 @@ function trials(t, baselineTotal) {
         d.discoverGame.statistics.home && d.discoverGame.statistics.home.players),
     },
     {
-      id: 'G7  Query.publicGameStatistics(gameID:)',
-      route: '2 — the public* prefix the profile routes use',
-      why: 'publicProfileStatistics, publicProfileTeams and publicGradeStatistics are ' +
-           'all real. A game-level sibling would follow the same naming.',
-      query: `query PublicGameStatistics($gameID: ID!) {
-  publicGameStatistics(gameID: $gameID) { __typename }
-}`,
-      vars: { gameID: t.gameId },
-      check: objCheck(d => d && d.publicGameStatistics),
+      id: 'H2  GradePlayerStatisticsFilter.roundID',
+      route: '1 — one call per grade-round',
+      why: 'The only survivor of run 1\'s filter trial: "roundID" is distance 5 from ' +
+           '"gameID" and that rejection suggested nothing within 3, so it was never ' +
+           'ruled out. If it works, a weekend is ~249 calls and needs no new operation. ' +
+           'The round id below is real — it came from the fixture walk.',
+      query: Q_GRADE_STATS,
+      vars: { gradeID: t.grade.id, filter: Object.assign({ roundID: t.round.id }, filterBase) },
+      check: filterCheck,
+      needsRound: true,
     },
     {
-      id: 'G8  DiscoverGame.lineup',
+      id: 'H3  DiscoverGame.lineup',
       route: '3 — the team sheet rather than the statistics',
-      why: 'A lineup would give who played even without goals, which is most of a box ' +
-           'score. Last of the DiscoverGame guesses because G2 and G6 will already ' +
-           'have described that type if they were rejected.',
+      why: 'Last guess, and a different word family from "playerStatistics" — distance ' +
+           '14, so run 1 could not have ruled it out. A lineup gives who played even ' +
+           'without goals, which is most of a box score.',
       query: `query DiscoverGame($gameID: ID!) {
   discoverGame(gameID: $gameID) { id lineup { __typename } }
 }`,
@@ -511,7 +483,7 @@ async function main() {
 
   const bGrade = await ask(Q_GRADE_STATS, {
     gradeID: target.grade.id,
-    filter: { sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }], pagination: { page: 1, limit: 5 } },
+    filter: { sort: [{ column: 'GOAL_COUNT', direction: 'DESC' }], pagination: { page: 1, limit: BASE_LIMIT } },
   });
   const gps = bGrade.ok && bGrade.json.data ? bGrade.json.data.gradePlayerStatistics : null;
   if (!bGrade.ok || !gps) {
@@ -522,8 +494,11 @@ async function main() {
     process.exit(1);
   }
   const first = (gps.results || [])[0];
+  // ⚠️ totalPages IS COMPUTED ON THE LIMIT THIS CALL SENT, not on 50. v1 printed
+  // "83 page(s) at 50" for 411 records, which is arithmetic nobody can reproduce
+  // and exactly the kind of figure that gets quoted back as a measurement.
   log(`  gradePlayerStatistics: ACCEPTED — ${gps.meta.totalRecords} player record(s) in this grade, ` +
-    `${gps.meta.totalPages} page(s) at 50`);
+    `${gps.meta.totalPages} page(s) at the limit ${BASE_LIMIT} this call sent`);
   log(`    first row: ${first ? JSON.stringify({ team: first.team && first.team.name,
     stats: (first.statistics || []).map(s => `${s.details && s.details.value}=${s.count}`) }) : '(none)'}`);
   log('  ⚠️ These are SEASON totals for the grade. They are the thing a box score is not.');
