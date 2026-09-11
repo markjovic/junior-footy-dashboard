@@ -30,18 +30,20 @@
 // A fill-in or anonymous player has a name and NO uuid: their table entry is
 // [null, name].
 //
-// ⚠️ A DEFINITIVE NEGATIVE IS STAMPED. A grade with `hideScores`, or a game with
-// no player block: both ANSWERS. Stored as `{ n: <reason>, at: <date> }` against
+// ⚠️ A DEFINITIVE NEGATIVE IS STAMPED. A game with no player block is an ANSWER. Stored as `{ n: <reason>, at: <date> }` against
 // the game id. Left unstamped they are due again on every run for ever and a pass
 // never completes — which is what private profiles did to the career sweep.
 //
-// ⚠️ BUT NOT EVERY NEGATIVE IS PERMANENT. `hideScores` is a grade setting and
-// never changes for a played game, so it is stamped for good. "No player block"
-// is a scorer who has not entered the side yet — filling it in on the Monday after
-// the game is the NORMAL case, so it expires after FGL_NO_DAYS for a season that
-// is still live and never for a retired one. That is the rule enrich-games.js
-// arrived at for `qNo`, and it is here for the same reason: a permanent stamp on a
-// temporary absence loses the data for good.
+// ⚠️ EVERY NEGATIVE EXPIRES. "No player block" is a scorer who has not entered the
+// side yet — filling it in on the Monday after the game is the NORMAL case — so it
+// stands for FGL_NO_DAYS in a live season and for good in a retired one, the rule
+// enrich-games.js arrived at for `qNo`.
+//
+// ⚠️ `hideScores` IS NOT A NEGATIVE. v4 stamped it, reasoning that a grade keeping
+// no scores has nothing to show. It is a DISPLAY setting, and those games often
+// carry full player lines — hidden on one endpoint, not on another. The lines are
+// stored with an `hs` flag and the dashboard decides. The call is spent either way,
+// so discarding the answer bought nothing and could not be undone.
 //
 // ⚠️ GZIP DOES NOT DELTA-COMPRESS. A rewritten .gz adds its whole size to git
 // history every time, so the file is written only when its CONTENT changed,
@@ -65,7 +67,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v4 2026-09-11 token-bucket';
+const VERSION = 'fetch-game-lines v5 2026-09-11 hidescores-is-display-only';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -97,7 +99,11 @@ const WINDOW_MS = Math.max(1, Number(process.env.FGL_WINDOW_MS || 80000));
 // How long "no player block" stands for a LIVE season before it is worth asking
 // again. Retired seasons are never re-asked — nobody enters a 2022 team sheet.
 const NO_DAYS = Math.max(0, Number(process.env.FGL_NO_DAYS || 1));
-const PERMANENT = new Set(['hideScores']);
+// ⚠️ NOTHING IS PERMANENT ANY MORE. `hideScores` used to be here, on the reasoning
+// that a grade setting never changes. It does not — but it never meant "no data",
+// which is what a stamp here asserts. Every remaining negative is a scorer who has
+// not filled the side in, and every one of them expires.
+const PERMANENT = new Set();
 
 // At most RATE calls in any rolling WINDOW_MS, across every worker.
 const callTimes = [];
@@ -310,7 +316,7 @@ async function main() {
   }
   if (MAX_GAMES) todo = todo.slice(0, MAX_GAMES);
   log(`\n${withId.length} joinable record(s); ${todo.length} to fetch.`);
-  if (negStanding) log(`  ${negStanding} carry a standing negative (hideScores, or no player block within ${NO_DAYS} day(s)) — not re-asked.`);
+  if (negStanding) log(`  ${negStanding} carry a standing negative (no player block within ${NO_DAYS} day(s)) — not re-asked.`);
   if (negStale) log(`  ${negStale} had "no player block" recorded ${NO_DAYS}+ day(s) ago in a live season — asked again.`);
   if (!todo.length) { log('Nothing to do.'); process.exit(2); }
 
@@ -319,14 +325,14 @@ async function main() {
   let pending = 0, committed = 0, pushFailures = 0, lastPush = Date.now(), stopped = false;
   const statKeys = new Map(), periodKeys = new Map(), gradeSeen = new Map();
   const covByComp = new Map();      // compName -> {games, withLines, sides, exact, partial, empty, hidden}
-  let rosterTotal = 0, rosterGames = 0, noUuid = 0, lineTotal = 0;
+  let rosterTotal = 0, rosterGames = 0, noUuid = 0, lineTotal = 0, hiddenWithLines = 0;
 let votesOffered = 0, votesStored = 0;
   let periodPopulated = 0, periodEmpty = 0, periodNoRows = 0, cumulativeHint = 0, perQuarterHint = 0;
   let configTried = 0, configOk = 0;
   const configSamples = [];
   const bump = (map, k) => map.set(k, (map.get(k) || 0) + 1);
   const cov = (c) => {
-    if (!covByComp.has(c)) covByComp.set(c, { games: 0, withLines: 0, sides: 0, exact: 0, partial: 0, empty: 0, hidden: 0 });
+    if (!covByComp.has(c)) covByComp.set(c, { games: 0, withLines: 0, sides: 0, exact: 0, partial: 0, empty: 0, hidden: 0, hiddenLines: 0 });
     return covByComp.get(c);
   };
 
@@ -415,15 +421,20 @@ let votesOffered = 0, votesStored = 0;
       gradeSeen.set(grade.id, { name: grade.name, hideScores: grade.hideScores === true,
         bestMax: grade.bestPlayers ? grade.bestPlayers.max : null, comp: m.compName });
     }
-    // A grade that hides scores is an ANSWER. Publishing a box score for it would
-    // be worse than any gap.
-    if (grade.hideScores === true) {
-      s.file.games[m.gameId] = { n: 'hideScores', at: today, v: LV }; stamped++; hidden++; c.hidden++; return;
-    }
+    // ⚠️ `hideScores` IS A DISPLAY SETTING, NOT AN ABSENCE OF DATA. v4 treated it as
+    // a definitive negative and returned here — throwing away a response it had
+    // ALREADY PAID FOR, and permanently, because that stamp never expired. A game in
+    // a hidden grade can still carry full player lines: the grade is hidden on one
+    // endpoint and not on another. So the lines are stored, the flag rides with them
+    // as `hs`, and the DASHBOARD decides what to show. Storing is reversible;
+    // discarding is not.
+    const hiddenGrade = grade.hideScores === true;
+    if (hiddenGrade) { hidden++; c.hidden++; }
 
     const sides = { h: (g.statistics || {}).home, a: (g.statistics || {}).away };
     const res = { h: ((g.result || {}).home || {}), a: ((g.result || {}).away || {}) };
     const out = { v: LV };
+    if (hiddenGrade) out.hs = 1;
     let any = false;
 
     for (const key of ['h', 'a']) {
@@ -485,6 +496,7 @@ let votesOffered = 0, votesStored = 0;
     }
 
     if (!any) { s.file.games[m.gameId] = { n: 'noplayers', at: today, v: LV }; stamped++; noBlock++; return; }
+    if (hiddenGrade) { hiddenWithLines++; c.hiddenLines++; }
     rosterGames++;
     c.withLines++;
     s.file.games[m.gameId] = out;
@@ -547,14 +559,19 @@ let votesOffered = 0, votesStored = 0;
   // ── Report ─────────────────────────────────────────────────────────────────
   log('\n═══ WHAT THIS RUN MEASURED ═══');
   log(`calls ${calls}; games with lines ${done}; stamped negatives ${stamped} ` +
-    `(${hidden} hideScores, ${noBlock} no player block); failures left due ${failed}`);
+    `(all "no player block"); failures left due ${failed}`);
+  log(`games in a hideScores grade: ${hidden}, of which ${hiddenWithLines} RETURNED LINES ANYWAY` +
+    (hidden ? ` (${(hiddenWithLines / hidden * 100).toFixed(0)}%)` : ''));
+  log('  ⚠️ hideScores is a DISPLAY setting, stored with an `hs` flag rather than');
+  log('     stamped. v4 discarded these, and discarding cannot be undone.');
 
   log('\ncoverage — PER LEAGUE PER SEASON (⚠️ per-game lines have a per-LEAGUE adoption');
   log('date, so a single average blends two different worlds):');
   for (const [c, e] of [...covByComp].sort()) {
     log(`  ${String(c).padEnd(14)} ${String(e.withLines).padStart(5)} of ${String(e.games).padStart(5)} game(s) have lines` +
       `  ${e.games ? (e.withLines / e.games * 100).toFixed(0) + '%' : '—'}` +
-      `   sides: ${e.exact} exact, ${e.partial} partial, ${e.empty} empty; ${e.hidden} hideScores`);
+      `   sides: ${e.exact} exact, ${e.partial} partial, ${e.empty} empty` +
+      `; ${e.hidden} in a hideScores grade, ${e.hiddenLines} of those WITH lines`);
   }
 
   log('\nstatistic keys actually present on a player line:');
@@ -593,7 +610,7 @@ let votesOffered = 0, votesStored = 0;
   log(`\ngrade settings seen (${gradeSeen.size} grade(s)):`);
   const hs = [...gradeSeen.values()].filter(x => x.hideScores).length;
   const nb = [...gradeSeen.values()].filter(x => !x.bestMax).length;
-  log(`  ${hs} with hideScores — a configured silence, not missing data`);
+  log(`  ${hs} with hideScores — hidden on the PlayHQ page, which is not the same as unscored`);
   log(`  ${nb} with bestPlayers.max of 0 or null — explains an absent vote column`);
 
   log(`\ngameStatisticsConfiguration: ${configOk} of ${configTried} grade call(s) answered`);
