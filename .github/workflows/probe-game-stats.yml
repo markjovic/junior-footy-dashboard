@@ -1,42 +1,37 @@
 # .github/workflows/probe-game-stats.yml
 name: Probe game stats
 
-# READ-ONLY probe for per_game_stats_design.md §3. Makes about a dozen PlayHQ
-# calls, writes nothing and commits nothing. Dispatch only — there is no
-# schedule and there should never be one; when the routes are settled this
-# workflow and its script are retired.
+# READ-ONLY probe for per_game_stats_design.md §3. Writes nothing and commits
+# nothing. Dispatch only — there is no schedule and there should never be one.
 #
-# Paste the whole log back. The trials are under `═══ TRIALS ═══` and the
-# one-line-per-candidate summary under `═══ VERDICT ═══`.
+# v3 measures COVERAGE. The box-score route was found by capturing the
+# game-centre page's own request on 2026-09-11: it is `query game($id: ID!)` on
+# the SPECTATOR endpoint, which lib/playhq.js already calls. What is unknown is
+# how many games are electronically scored, because the spectator endpoint knows
+# no others — and that number is the whole of whether P1 is worth building.
 #
-# ⚠️ IT STOPS AFTER THREE REJECTIONS. That is deliberate: a burst of rejected
-# field names on one run is the most likely reason the WAF refused every session
-# attempt on the next. The VERDICT block prints the exact `trial_start` to
-# resume from — re-dispatch with it LATER IN THE DAY, not immediately.
+# At the defaults it makes about 40 calls on api.playhq.com to draw a stratified
+# sample and about 60 on spectator.playhq.com to measure it.
+#
+# Paste the whole log back. The coverage tables are under `═══ ANSWERS ═══`.
 
 on:
   workflow_dispatch:
     inputs:
-      trial_start:
-        description: 'Skip trials before this index — the VERDICT block of the previous run prints the number to use'
+      grades_per_comp:
+        description: 'Grades sampled per competition. Spread across the grade list, not the first N'
         required: false
-        default: '0'
-      max_rejections:
-        description: 'Stop after this many rejected trials. Three is the measured safe figure; raise it only with a reason'
+        default: '4'
+      games_per_grade:
+        description: 'Completed games sampled per grade'
         required: false
         default: '3'
-      grade_id:
-        description: 'Optional: a specific grade id. Leave blank and the script finds one from the manifest'
+      skip_trials:
+        description: 'Skip the two main-API trials and measure coverage only'
         required: false
-        default: ''
-      game_id:
-        description: 'Optional: a specific COMPLETED game id. Must be supplied together with grade_id'
-        required: false
-        default: ''
-      round_id:
-        description: 'Optional: a round id for the round-filter trial. Only used when grade_id and game_id are supplied'
-        required: false
-        default: ''
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 # Nothing is written, so read access is all this needs. A probe that cannot
 # commit cannot damage anything it is measuring.
@@ -47,13 +42,16 @@ permissions:
 # probe-career-stats.yml does: the WAF budget is shared across every PlayHQ run
 # on this account, and a probe firing beside a scheduled walk would hand both of
 # them blocks. ⚠️ A dispatch arriving during the walk QUEUES rather than starting.
+# ⚠️ Most of this run's calls go to the SPECTATOR host, whose limits have never
+# been measured here. The group is kept anyway — it costs nothing and the two
+# hosts may well share a budget.
 concurrency:
   group: playhq-data-write
   cancel-in-progress: false
 
 jobs:
   probe:
-    name: Find a game-side statistics route
+    name: Measure spectator box-score coverage
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -66,11 +64,9 @@ jobs:
 
       - name: Probe
         env:
-          PROBE_TRIAL_START: ${{ github.event.inputs.trial_start }}
-          PROBE_TRIAL_MAX_REJECT: ${{ github.event.inputs.max_rejections }}
-          PROBE_GRADE_ID: ${{ github.event.inputs.grade_id }}
-          PROBE_GAME_ID: ${{ github.event.inputs.game_id }}
-          PROBE_ROUND_ID: ${{ github.event.inputs.round_id }}
+          PROBE_GRADES_PER_COMP: ${{ github.event.inputs.grades_per_comp }}
+          PROBE_GAMES_PER_GRADE: ${{ github.event.inputs.games_per_grade }}
+          PROBE_SKIP_TRIALS: ${{ github.event.inputs.skip_trials }}
         run: |
           node --version
           node scripts/probe-game-stats.js
