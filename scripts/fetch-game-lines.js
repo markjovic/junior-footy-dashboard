@@ -64,7 +64,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v2 2026-09-11 expiring-negatives';
+const VERSION = 'fetch-game-lines v3 2026-09-11 interleaved-sample';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -259,17 +259,28 @@ async function main() {
 
   const files = new Map();
   let todo = [];
+  const perSeason = [];
   let negStanding = 0, negStale = 0;
   for (const [sid, s] of bySeason) {
     const f = APPLY || fs.existsSync(linesPath(sid)) ? loadLines(sid) : { meta: { version: LV, seasonId: sid }, players: [], games: {} };
     files.set(sid, { file: f, before: canon(f), entry: s.entry, index: new Map(f.players.map((p, i) => [String(p[0]), i])) });
+    const mine = [];
     for (const m of s.games) {
       const g = f.games[m.gameId];
       if (g && g.v === LV && !g.n) continue;         // stored by this extraction
       if (negativeStands(g, sid)) { negStanding++; continue; }
       if (g && g.n) negStale++;                      // expired — ask again
-      todo.push({ m, sid });
+      mine.push({ m, sid });
     }
+    perSeason.push(mine);
+  }
+  // ⚠️ INTERLEAVE THE SEASONS. v2 pushed them season by season, so a run capped
+  // at 200 games spent all 200 on the FIRST season and reported one row in a
+  // table headed "per league per season". A cap must sample the population it
+  // claims to describe, not the front of it. Full runs are unaffected — the same
+  // games in a different order.
+  for (let i = 0; perSeason.some(a => i < a.length); i++) {
+    for (const a of perSeason) if (i < a.length) todo.push(a[i]);
   }
   if (MAX_GAMES) todo = todo.slice(0, MAX_GAMES);
   log(`\n${withId.length} joinable record(s); ${todo.length} to fetch.`);
@@ -283,7 +294,8 @@ async function main() {
   const statKeys = new Map(), periodKeys = new Map(), gradeSeen = new Map();
   const covByComp = new Map();      // compName -> {games, withLines, sides, exact, partial, empty, hidden}
   let rosterTotal = 0, rosterGames = 0, noUuid = 0, lineTotal = 0;
-  let periodPopulated = 0, periodEmpty = 0, cumulativeHint = 0, perQuarterHint = 0;
+let votesOffered = 0, votesStored = 0;
+  let periodPopulated = 0, periodEmpty = 0, periodNoRows = 0, cumulativeHint = 0, perQuarterHint = 0;
   let configTried = 0, configOk = 0;
   const configSamples = [];
   const bump = (map, k) => map.set(k, (map.get(k) || 0) + 1);
@@ -396,6 +408,7 @@ async function main() {
 
       // best-player votes, joined back onto the line by profile id
       const votes = new Map();
+      votesOffered += (block.bestPlayers || []).length;
       for (const b of (block.bestPlayers || [])) {
         const pid = b && b.participant && b.participant.profile && b.participant.profile.id;
         if (pid) votes.set(String(pid), Number(b.ranking) || 1);
@@ -412,9 +425,12 @@ async function main() {
         const sm = statMap(p.statistics);
         for (const k of sm.keys()) bump(statKeys, k);
         const gl = pick(sm, GOAL_KEYS), bh = pick(sm, BEHIND_KEYS);
-        rows.push([indexOf(s, uuid, name), gl.v || 0, bh.v || 0, uuid ? (votes.get(String(uuid)) || 0) : 0]);
+        const vote = uuid ? (votes.get(String(uuid)) || 0) : 0;
+        if (vote) votesStored++;
+        rows.push([indexOf(s, uuid, name), gl.v || 0, bh.v || 0, vote]);
         lineTotal++;
 
+        if (!(p.periodStatistics || []).length) periodNoRows++;
         for (const ps of (p.periodStatistics || [])) {
           const pm = statMap(ps.statistics);
           if (pm.size) { periodPopulated++; for (const k of pm.keys()) bump(periodKeys, k); }
@@ -520,8 +536,14 @@ async function main() {
   log(`  goal key used: ${GOAL_KEYS.find(k => statKeys.has(k)) || '(none found)'}` +
     `; behind key used: ${BEHIND_KEYS.find(k => statKeys.has(k)) || '(none found)'}`);
 
-  log(`\nperiodStatistics: ${periodPopulated} populated row(s), ${periodEmpty} empty`);
-  if (periodPopulated) {
+  log(`\nperiodStatistics: ${periodPopulated} populated row(s), ${periodEmpty} empty, ` +
+    `${periodNoRows} player(s) with NO period rows at all`);
+  if (!periodPopulated && !periodEmpty && periodNoRows) {
+    log('  ⚠️ The array is EMPTY on every player — not a skeleton carrying nothing, but');
+    log('     no rows at all. There are no per-quarter player figures on this route.');
+    log('     That is a different answer from the spectator route, which returns four');
+    log('     QUARTERS rows with empty statistics, and both mean the same thing here.');
+  } else if (periodPopulated) {
     log('  keys: ' + [...periodKeys.keys()].join(', '));
     log(`  shape: ${perQuarterHint} player series FELL between periods (per-quarter), ` +
       `${cumulativeHint} only rose (cumulative or single-scorer)`);
@@ -534,6 +556,10 @@ async function main() {
 
   log(`\nrosters: ${rosterGames} game(s), ${rosterTotal} player row(s)` +
     (rosterGames ? `, mean ${(rosterTotal / rosterGames).toFixed(1)} per game` : ''));
+  log(`best-player votes: ${votesOffered} offered, ${votesStored} joined onto a line` +
+    (votesOffered && votesStored < votesOffered
+      ? `  ⚠️ ${votesOffered - votesStored} did not join — an anonymous best player has a name and no profile id`
+      : ''));
   log(`lines with NO uuid (fill-in or anonymous): ${noUuid} of ${lineTotal}` +
     (lineTotal ? ` (${(noUuid / lineTotal * 100).toFixed(1)}%)` : ''));
   log(`records with no gameId: ${noId.length} of ${eligible.length}`);
@@ -546,6 +572,14 @@ async function main() {
 
   log(`\ngameStatisticsConfiguration: ${configOk} of ${configTried} grade call(s) answered`);
   for (const l of configSamples) log('  ' + l);
+  const cfgNames = new Set(configSamples.join(' ').match(/[A-Z_]{4,}/g) || []);
+  const lineNames = new Set(statKeys.keys());
+  const onlyCfg = [...cfgNames].filter(x => !lineNames.has(x));
+  if (configOk && onlyCfg.length) {
+    log(`  ⚠️ THE CONFIG NAMES ARE NOT THE LINE NAMES. Present in the configuration and`);
+    log(`     never on a player line: ${onlyCfg.join(', ')}. So the configuration describes`);
+    log('     the grade\'s scoring events, not the keys a stored line uses. Read the line.');
+  }
   if (!configOk && configTried) {
     log('  ⚠️ classification "TOTAL" may not be the right enum here. It is what the');
     log('     page sends. Probe the enum separately — a wrong VALUE returns a readable');
