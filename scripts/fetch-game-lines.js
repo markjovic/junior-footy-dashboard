@@ -53,7 +53,8 @@
 //
 // Env: FGL_APPLY, FGL_COMP, FGL_YEAR, FGL_BUDGET_MIN (300), FGL_CONC (6),
 //      FGL_CHECKPOINT (200), FGL_PUSH_MIN (20), FGL_DELAY_MS (120),
-//      FGL_MAX_GAMES (0 = no cap), FGL_NO_DAYS (1), FGL_COMMIT.
+//      FGL_MAX_GAMES (0 = no cap), FGL_NO_DAYS (1), FGL_COMMIT,
+//      FGL_RATE (100) / FGL_WINDOW_MS (80000) — the token bucket.
 
 'use strict';
 
@@ -64,7 +65,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v3 2026-09-11 interleaved-sample';
+const VERSION = 'fetch-game-lines v4 2026-09-11 token-bucket';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -81,10 +82,34 @@ const DELAY = Math.max(0, Number(process.env.FGL_DELAY_MS || 120));
 const MAX_GAMES = Math.max(0, Number(process.env.FGL_MAX_GAMES || 0));
 const COMMIT = APPLY && process.env.FGL_COMMIT !== 'false';
 const RECOVER_MIN = 2, CEIL_RECOVER_MIN = 8;
+// ⚠️ A TOKEN BUCKET, NOT JUST CONCURRENCY. v3 had adaptive concurrency and a
+// 120 ms delay between batches and nothing capping the RATE: measured on the
+// first real run, 156 calls in 0.6 min = 260 req/min, against a documented
+// ~120-130 for this operation. It blocked sixteen times in a row, each costing
+// 80 s, and stepping concurrency down does not fix it — the limit is a RATE over
+// about a minute and six workers simply reach it faster.
+//
+// 100 per 80 s is 75/min, 40% under the lowest reading, and is the shape
+// walk-registrations.js has sustained 5,715 calls a night on without one block.
+// Concurrency now only hides latency; the bucket sets the pace.
+const RATE = Math.max(1, Number(process.env.FGL_RATE || 100));
+const WINDOW_MS = Math.max(1, Number(process.env.FGL_WINDOW_MS || 80000));
 // How long "no player block" stands for a LIVE season before it is worth asking
 // again. Retired seasons are never re-asked — nobody enters a 2022 team sheet.
 const NO_DAYS = Math.max(0, Number(process.env.FGL_NO_DAYS || 1));
 const PERMANENT = new Set(['hideScores']);
+
+// At most RATE calls in any rolling WINDOW_MS, across every worker.
+const callTimes = [];
+async function pace() {
+  const now = Date.now();
+  while (callTimes.length && now - callTimes[0] >= WINDOW_MS) callTimes.shift();
+  if (callTimes.length >= RATE) {
+    await sleep(WINDOW_MS - (now - callTimes[0]) + 5);
+    return pace();
+  }
+  callTimes.push(Date.now());
+}
 
 const started = Date.now();
 const overBudget = () => (Date.now() - started) / 60000 >= BUDGET_MIN;
@@ -197,7 +222,8 @@ async function main() {
   log(`=== ${VERSION} (store ${store.STORE_VERSION}) ===`);
   log(`Mode: ${APPLY ? 'APPLY' : 'DRY RUN — nothing will be written'}`);
   log(`Scope: ${COMP || 'all competitions'}${YEAR ? `, ${YEAR}` : ', every season'}`);
-  log(`Budget ${BUDGET_MIN} min, concurrency ${CONC}, checkpoint ${CHECKPOINT}\n`);
+  log(`Budget ${BUDGET_MIN} min, concurrency ${CONC}, checkpoint ${CHECKPOINT}`);
+  log(`Pace: ${RATE} calls / ${WINDOW_MS / 1000}s = ${(RATE / (WINDOW_MS / 60000)).toFixed(0)} req/min\n`);
 
   const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
   const manifest = core.manifest || [];
@@ -371,7 +397,7 @@ let votesOffered = 0, votesStored = 0;
     const s = files.get(sid);
     const c = cov(m.compName);
     let json;
-    try { json = await gqlPost(Q_GAME, { gameId: m.gameId }, 'gameView'); calls++; }
+    try { await pace(); json = await gqlPost(Q_GAME, { gameId: m.gameId }, 'gameView'); calls++; }
     catch (e) { failed++; return; }                     // transport: left due, retried next run
     if (json.errors && json.errors.length) {
       // ⚠️ A REJECTED DOCUMENT IS NOT A GAME WITHOUT DATA. It is reported and the
@@ -473,7 +499,7 @@ let votesOffered = 0, votesStored = 0;
     if (!gid || gradeConfigDone.has(gid) || configTried >= 8) return;
     gradeConfigDone.add(gid); configTried++;
     let json;
-    try { json = await gqlPost(Q_GAME_CONFIG, { gameId: m.gameId, gameStatisticsFilter: { classification: 'TOTAL' } }, 'gameView'); calls++; }
+    try { await pace(); json = await gqlPost(Q_GAME_CONFIG, { gameId: m.gameId, gameStatisticsFilter: { classification: 'TOTAL' } }, 'gameView'); calls++; }
     catch (e) { return; }
     if (json.errors && json.errors.length) {
       if (configSamples.length < 2) configSamples.push(`REJECTED — ${String(json.errors[0].message).slice(0, 200)}`);
@@ -586,7 +612,14 @@ let votesOffered = 0, votesStored = 0;
     log('     error naming the valid ones, unlike a wrong FIELD.');
   }
 
-  log(`\nelapsed ${mins()} min; concurrency ended at ${conc} (ceiling ${ceiling}); blocks ${summary().blocked}`);
+  const rate = calls / Math.max(0.01, (Date.now() - started) / 60000);
+  log(`\nelapsed ${mins()} min; ACHIEVED ${rate.toFixed(0)} req/min over ${calls} call(s); ` +
+    `concurrency ended at ${conc} (ceiling ${ceiling}); blocks ${summary().blocked}`);
+  if (summary().blocked) {
+    log('  ⚠️ Blocks cost 80 s each and lib/playhq.js absorbs them, so they never throw.');
+    log('     If the achieved rate is near the cap, lower FGL_RATE — stepping concurrency');
+    log('     down does not help, because the limit is a RATE and not a concurrency.');
+  }
   if (!APPLY) log('\nDRY RUN — nothing was written. Re-dispatch with apply=true to store.');
   if (typeof logSummary === 'function') logSummary('fetch-game-lines');
 
