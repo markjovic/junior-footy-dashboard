@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-career-tops v5 2026-09-11 named-games';
+const VERSION = 'verify-career-tops v7 2026-09-11 team-records';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'build-career-tops.js');
@@ -44,9 +44,24 @@ fs.mkdirSync(path.join(TMP, 'data'), { recursive: true });
 // nine rows in ten had nothing but a year — this is where the round and the two
 // teams have to come from.
 fs.mkdirSync(path.join(TMP, 'data', 'seasons'), { recursive: true });
+// ⚠️ THE FIXTURE MUST DISTINGUISH EVERY QUARTER EXCLUSION, or the rules copied
+// from top-stats.js are untested decoration:
+//   g-wfnl   a clean game with quarters that add up — the honest record
+//   g-onequarter  the whole game in one quarter [0,0,0,205] — a data-entry habit
+//   g-overscore   a quarter LARGER than the final score
+//   g-partial     a partial breakdown with nulls, which must be KEPT
 fs.writeFileSync(path.join(TMP, 'data', 'seasons', 'w26-core.json'), JSON.stringify({ matches: [
   { gameId: 'g-wfnl', round: 15, isFinals: false, home: 'Western Rams Seniors',
-    away: 'West Footscray Seniors', hScore: 143, aScore: 55 },
+    away: 'West Footscray Seniors', hScore: 143, aScore: 55,
+    hQ: [40, 30, 43, 30], aQ: [10, 15, 20, 10],
+    hQGB: [[6, 4], [4, 6], [7, 1], [5, 0]], aQGB: [[1, 4], [2, 3], [3, 2], [1, 4]] },
+  { gameId: 'g-onequarter', round: 1, home: 'Padding FC', away: 'Other FC',
+    hScore: 205, aScore: 10, hQ: [0, 0, 0, 205], aQ: [0, 0, 0, 10],
+    hQGB: [[0, 0], [0, 0], [0, 0], [34, 1]] },
+  { gameId: 'g-overscore', round: 2, home: 'Impossible FC', away: 'Other FC',
+    hScore: 90, aScore: 10, hQ: [null, null, null, 205] },
+  { gameId: 'g-partial', round: 3, home: 'Partial FC', away: 'Other FC',
+    hScore: 60, aScore: 12, hQ: [null, null, 35, 25], hQGB: [null, null, [5, 5], [4, 1]] },
   { gameId: 'g-bye', isBye: true, home: 'X', away: 'Y' } ] }));
 fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify({ manifest: [
   { seasonId: 'w26', compName: 'WFNL 2026' }, { seasonId: 'w25', compName: 'WFNL 2025' },
@@ -111,7 +126,7 @@ const names = (b) => (b || []).map(e => `${e.name}:${e.v}`).join(', ');
 
 console.log('\n1  It runs and writes');
 let r = run();
-ok('version line', /build-career-tops v5 /.test(r.out));
+ok('version line', /build-career-tops v7 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('all-time board written', !!r.all);
 ok('one file per competition on a held season', !!r.comp('wfnl') && !!r.comp('efnl'), '');
@@ -183,8 +198,20 @@ ok('a game we HOLD is named at build time, not left to the browser',
 ok('… with its score', wComp && wComp.score === '143–55', wComp && String(wComp.score));
 ok('a game we do NOT hold carries no round or teams to invent',
   wAll && !wAll.round && !wAll.home, wAll && JSON.stringify({ round: wAll.round, home: wAll.home }));
-ok('the season file was read', /stored matches: 1 across 1 season file/.test(r.out),
+ok('the season file was read', /stored matches: 4 across 1 season file/.test(r.out),
   (r.out.match(/stored matches:.*/) || [''])[0]);
+// ⚠️ Lewis's NEWEST club is Wyndhamvale; his 14-goal game was for Darwin in the
+// NTFL. A row labelled with the club he plays for now, beside the league he set
+// the record in, reads as a mistake.
+ok('a single-game row names the club of the RECORD, not the club today',
+  wAll && wAll.club === 'Darwin', wAll && String(wAll.club));
+ok('the competition record names its own club', wComp && wComp.club === 'Wyndhamvale', wComp && String(wComp.club));
+{
+  const sg = (r.all.boards.seasonGoals || []).find(e => e.uuid === '00-lewis');
+  ok('best season names the club and league of THAT season',
+    sg && sg.club === 'Darwin' && sg.league === 'NTFL SENIORS' && sg.year === '2023',
+    sg && JSON.stringify({ club: sg.club, league: sg.league, year: sg.year }));
+}
 
 console.log('\n6  What must not be ranked');
 const inAny = (uuid) => Object.values(r.all.boards).some(b => (b || []).some(e => e.uuid === uuid));
@@ -218,6 +245,38 @@ console.log('\n8b  A run that changes nothing rewrites nothing');
     `mtime ${before} -> ${after}`);
   ok('… and the log says so rather than claiming a write', /Every board is unchanged/.test(r8.out),
     (r8.out.match(/Wrote.*|Every board.*/) || [''])[0]);
+}
+
+console.log('\n8c  Team and quarter records');
+{
+  const tb = r.all.teamBoards || {};
+  ok('the all-time board carries team records', !!tb.margin && !!tb.quarterPoints && !!tb.quarterGoals,
+    Object.keys(tb).join(','));
+  ok('biggest margin names the winner and the loser',
+    tb.margin[0] && tb.margin[0].v === 195 && tb.margin[0].name === 'Padding FC',
+    tb.margin[0] && JSON.stringify({ v: tb.margin[0].v, name: tb.margin[0].name }));
+  ok('… and carries the score and the round', tb.margin[0] && tb.margin[0].score === '205\u201310' && tb.margin[0].round === 'R1',
+    tb.margin[0] && `${tb.margin[0].score} ${tb.margin[0].round}`);
+  // ⚠️ Without the exclusions the top quarter would be 205, from a team whose
+  // whole game was entered in the last quarter.
+  ok('a whole game entered in ONE quarter is not a quarter record',
+    tb.quarterPoints[0] && tb.quarterPoints[0].v !== 205, tb.quarterPoints[0] && String(tb.quarterPoints[0].v));
+  ok('a quarter larger than the final score is not either',
+    !tb.quarterPoints.some(x => x.v === 205));
+  ok('the honest record wins', tb.quarterPoints[0] && tb.quarterPoints[0].v === 43
+     && tb.quarterPoints[0].name === 'Western Rams Seniors',
+     tb.quarterPoints[0] && `${tb.quarterPoints[0].name} ${tb.quarterPoints[0].v} ${tb.quarterPoints[0].quarter}`);
+  ok('a PARTIAL breakdown is kept, not discarded',
+    tb.quarterPoints.some(x => x.name === 'Partial FC' && x.v === 35),
+    tb.quarterPoints.map(x => `${x.name}:${x.v}`).join(', '));
+  ok('goals in a quarter ranks on goals, not points',
+    tb.quarterGoals[0] && tb.quarterGoals[0].v === 7, tb.quarterGoals[0] && String(tb.quarterGoals[0].v));
+  ok('the exclusions are counted, not silently dropped', /team-quarter set\(s\) set aside/.test(r.out),
+    (r.out.match(/team records:.*/) || [''])[0]);
+  ok('a bye is not a game', !tb.margin.some(x => x.name === 'X'));
+  ok('the competition board has its own team records', !!r.comp('wfnl').teamBoards.margin.length);
+  ok('a team row carries no uuid — there is no player to open',
+    tb.margin[0] && tb.margin[0].uuid === undefined);
 }
 
 console.log('\n9  A competition that disappears leaves no stale board');

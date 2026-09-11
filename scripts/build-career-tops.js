@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'build-career-tops v5 2026-09-11 named-games';
+const VERSION = 'build-career-tops v7 2026-09-11 team-records';
 
 const ROOT = path.resolve(__dirname, '..');
 const PLAYERS = path.join(ROOT, 'players');
@@ -51,6 +51,15 @@ const log = (...a) => console.log(...a);
 // `dir` is the sort direction: 'desc' everywhere except the earliest season,
 // where the smallest year wins. A category with no `dir` would silently rank
 // 2005 last, which is the one result a reader would notice and not believe.
+// Team and quarter records, from the stored match records rather than the career
+// store. They answer questions nothing else does — top-stats.js sections 1 to 3,
+// which is why that report is NOT superseded, only its section 6.
+const TEAM_CATEGORIES = [
+  { key: 'margin',        label: 'Biggest winning margin' },
+  { key: 'quarterPoints', label: 'Most points in a quarter' },
+  { key: 'quarterGoals',  label: 'Most goals in a quarter' },
+];
+
 const CATEGORIES = [
   { key: 'goals',        label: 'Most career goals',        dir: 'desc' },
   { key: 'games',        label: 'Most career games',        dir: 'desc' },
@@ -100,7 +109,12 @@ function summarise(rec, dupes) {
     seen.add(k);
     if (s.sid) {
       sids.add(s.sid);
-      if (!sidMeta.has(s.sid)) sidMeta.set(s.sid, { year: String(s.year || ''), league: s.league || null });
+      // ⚠️ THE CLUB OF THE RECORD, NOT THE CLUB TODAY. A single-game or
+      // single-season row labelled with the player's NEWEST club said
+      // "Subiaco (WAFL) · South East Juniors" for a 2022 SEJ game — his club now
+      // beside the league he set the record in. The season row is the only thing
+      // that knows who he played for at the time.
+      if (!sidMeta.has(s.sid)) sidMeta.set(s.sid, { year: String(s.year || ''), league: s.league || null, club: s.club || null });
     }
     const g = Number(s.goals) || 0, gp = Number(s.gp) || 0, b = Number(s.best) || 0;
     goals += g; games += gp; best += b;
@@ -118,7 +132,7 @@ function summarise(rec, dupes) {
       if (!cur.name && s.league) cur.name = s.league;
       byLeague.set(s.leagueId, cur);
     }
-    bySeasonGoals.push({ g, year: y, league: s.league || null });
+    bySeasonGoals.push({ g, year: y, league: s.league || null, club: s.club || null });
   }
 
   // The newest row supplies the club and league a row is labelled with — a
@@ -132,6 +146,7 @@ function summarise(rec, dupes) {
     goals, games, best, from,
     seasonsCount: sids.size, leaguesCount: leagues.size,
     seasonGoals: bestSeason.g, seasonGoalsYear: bestSeason.year, seasonGoalsLeague: bestSeason.league,
+    seasonGoalsClub: bestSeason.club,
     records: rec.records || {}, sidLeague, sidMeta, byLeague,
   };
 }
@@ -154,7 +169,11 @@ function loadGames(manifest) {
     for (const x of (data.matches || [])) {
       if (!x.gameId || x.isBye || x.scheduled) continue;
       byId.set(x.gameId, { round: x.round, isFinals: !!x.isFinals,
-                           home: x.home, away: x.away, hScore: x.hScore, aScore: x.aScore });
+                           home: x.home, away: x.away, hScore: x.hScore, aScore: x.aScore,
+                           hG: x.hG, hB: x.hB, aG: x.aG, aB: x.aB,
+                           hQ: x.hQ, aQ: x.aQ, hQGB: x.hQGB, aQGB: x.aQGB,
+                           sid: m.seasonId, comp: m.compName, age: x.age, date: x.date,
+                           gameId: x.gameId });
     }
   }
   return { byId, seasons };
@@ -217,7 +236,11 @@ function entryFor(cat, p, v, scope) {
       const meta = p.sidMeta.get(r.sid);
       // The league of the GAME, not of the player's newest season — on an
       // all-time board the two are usually different.
-      if (meta) { e.year = meta.year || null; if (meta.league) e.league = meta.league; }
+      if (meta) {
+        e.year = meta.year || null;
+        if (meta.league) e.league = meta.league;
+        if (meta.club) e.club = meta.club;
+      }
       const g = GAMES.get(r.gameId);
       if (g) {
         e.round = g.isFinals ? 'Finals' : (g.round != null ? `R${g.round}` : null);
@@ -226,7 +249,11 @@ function entryFor(cat, p, v, scope) {
       }
     }
   }
-  if (cat.key === 'seasonGoals') { e.year = p.seasonGoalsYear || null; e.league = p.seasonGoalsLeague || e.league; }
+  if (cat.key === 'seasonGoals') {
+    e.year = p.seasonGoalsYear || null;
+    e.league = p.seasonGoalsLeague || e.league;
+    e.club = p.seasonGoalsClub || e.club;
+  }
   if (cat.key === 'earliest') e.from = scope ? scope.agg.from : p.from;
   return e;
 }
@@ -248,6 +275,67 @@ function buildBoards(players, scope) {
     boards[cat.key] = rows.slice(0, N);
   }
   return boards;
+}
+
+// ── Team and quarter records ─────────────────────────────────────────────────
+//
+// ⚠️ THE EXCLUSION RULES ARE COPIED FROM top-stats.js AND WERE MEASURED, NOT
+// GUESSED. A team whose whole game was entered in one quarter — [0,0,0,205] —
+// is a data-entry habit, not a record, and 261 such team-quarter arrays were
+// found in EFNL 2026 alone. A quarter larger than the final score, or four
+// quarters that do not add up to it, cannot be true either. Both are set aside
+// and COUNTED rather than ranked, so the size of the exclusion stays visible.
+const WHOLE_GAME_MIN = 40;
+
+function teamBoards(games, leagueOfSid, scopeLeagueId, n) {
+  const margins = [], quarters = [];
+  let setAside = 0, withQ = 0, total = 0;
+
+  for (const x of games) {
+    if (x.hScore == null || x.aScore == null) continue;
+    if (scopeLeagueId && leagueOfSid.get(x.sid) !== scopeLeagueId) continue;
+    total++;
+    const year = String(x.comp || '').match(/\b(\d{4})\b/);
+    const where = { year: year ? year[1] : null, comp: x.comp || null,
+                    round: x.isFinals ? 'Finals' : (x.round != null ? `R${x.round}` : null),
+                    gameId: x.gameId, age: x.age || null };
+
+    const diff = x.hScore - x.aScore;
+    const win = diff >= 0 ? x.home : x.away, lose = diff >= 0 ? x.away : x.home;
+    margins.push(Object.assign({ v: Math.abs(diff), name: win, opp: lose,
+      score: `${Math.max(x.hScore, x.aScore)}\u2013${Math.min(x.hScore, x.aScore)}` }, where));
+
+    let hasQ = false;
+    for (const side of ['h', 'a']) {
+      const q = x[`${side}Q`];
+      if (!Array.isArray(q)) continue;
+      hasQ = true;
+      const t = x[`${side}Score`];
+      const nonZero = q.filter(v => v != null && v !== 0);
+      const wholeGameInOne = t >= WHOLE_GAME_MIN && nonZero.length === 1 && nonZero[0] === t;
+      const known = q.filter(v => v != null);
+      const inconsistent = known.some(v => v > t) ||
+        (known.length === q.length && known.reduce((a, b) => a + b, 0) !== t);
+      if (wholeGameInOne || inconsistent) { setAside++; continue; }
+      const gb = x[`${side}QGB`];
+      for (let i = 0; i < q.length; i++) {
+        if (q[i] == null) continue;              // a partial breakdown is kept, never zeroed
+        const g = Array.isArray(gb) && Array.isArray(gb[i]) ? gb[i][0] : null;
+        quarters.push(Object.assign({ pts: q[i], g, qn: i + 1,
+          name: side === 'h' ? x.home : x.away,
+          opp: side === 'h' ? x.away : x.home }, where));
+      }
+    }
+    if (hasQ) withQ++;
+  }
+
+  const cut = (arr, key) => arr.slice().sort((a, b) => b[key] - a[key] ||
+      String(a.name || '').localeCompare(String(b.name || ''))).slice(0, n);
+  const qp = cut(quarters, 'pts').map(r => Object.assign({}, r, { v: r.pts, quarter: `Q${r.qn}` }));
+  const qg = cut(quarters.filter(r => r.g != null), 'g').map(r =>
+    Object.assign({}, r, { v: r.g, quarter: `Q${r.qn}`, score: `${r.pts} pts` }));
+  return { boards: { margin: cut(margins, 'v'), quarterPoints: qp, quarterGoals: qg },
+           stats: { games: total, withQuarters: withQ, setAside } };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -337,6 +425,22 @@ function main() {
     log(`⚠️ EXPECTED 5. More or fewer means a season is held whose competition is new — not fatal, but look.`);
   }
 
+  // sid -> leagueId, from the held rows the players themselves carry. The season
+  // files know their compName but not PlayHQ's competition id, and the boards are
+  // keyed by id.
+  const leagueOfSid = new Map();
+  for (const p of players) {
+    for (const [sid, lid] of p.sidLeague) if (!leagueOfSid.has(sid)) leagueOfSid.set(sid, lid);
+  }
+  const gameList = [...GAMES.values()];
+  const allTeams = teamBoards(gameList, leagueOfSid, null, N);
+  log(`\nteam records: ${allTeams.stats.games} game(s), ${allTeams.stats.withQuarters} with a quarter breakdown, ` +
+      `${allTeams.stats.setAside} team-quarter set(s) set aside`);
+  for (const c of TEAM_CATEGORIES) {
+    const top = (allTeams.boards[c.key] || [])[0];
+    log(`  ${String(c.key).padEnd(13)} ${top ? `${top.name} ${top.v}` : '(none)'}`);
+  }
+
   const allTime = buildBoards(players, null);
   log(`\n── all-time ──`);
   for (const cat of CATEGORIES) {
@@ -350,18 +454,25 @@ function main() {
     meta: { version: VERSION, builtAt: new Date().toISOString(), players: players.length,
             n: N, minGp: MIN_GP,
             categories: CATEGORIES.map(c => ({ key: c.key, label: c.label, dir: c.dir })),
+            categoriesTeam: TEAM_CATEGORIES,
+            teamGames: allTeams.stats.games, teamSetAside: allTeams.stats.setAside,
             comps: compList.map(c => ({ id: c.leagueId, name: c.name, short: c.short || c.name, players: c.players })) },
     boards: allTime,
+    teamBoards: allTeams.boards,
   };
 
   const compPayloads = new Map();
   for (const c of compList) {
     const boards = buildBoards(players, { leagueId: c.leagueId, name: c.name });
+    const tb = teamBoards(gameList, leagueOfSid, c.leagueId, N);
     compPayloads.set(c.leagueId, {
       meta: { version: VERSION, builtAt: payload.meta.builtAt, leagueId: c.leagueId, name: c.name, short: c.short || c.name,
               players: c.players, n: N, minGp: MIN_GP,
-              categories: CATEGORIES.filter(x => !x.allTimeOnly).map(x => ({ key: x.key, label: x.label, dir: x.dir })) },
+              categories: CATEGORIES.filter(x => !x.allTimeOnly).map(x => ({ key: x.key, label: x.label, dir: x.dir })),
+              categoriesTeam: TEAM_CATEGORIES,
+              teamGames: tb.stats.games, teamSetAside: tb.stats.setAside },
       boards,
+      teamBoards: tb.boards,
     });
     const g = (boards.goals || [])[0];
     log(`  ${String(c.name).padEnd(38)} leader on goals: ${g ? `${g.name} ${g.v}` : '(none)'}`);
