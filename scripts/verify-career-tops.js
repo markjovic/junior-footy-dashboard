@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-career-tops v4 2026-09-11 game-year';
+const VERSION = 'verify-career-tops v5 2026-09-11 named-games';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'build-career-tops.js');
@@ -39,6 +39,15 @@ fs.mkdirSync(path.join(TMP, 'scripts'), { recursive: true });
 fs.copyFileSync(REAL, path.join(TMP, 'scripts', 'build-career-tops.js'));
 // The manifest supplies the short names; "EFNL 2026" -> "EFNL".
 fs.mkdirSync(path.join(TMP, 'data'), { recursive: true });
+// A stored season file, so a game we HOLD can be named at build time. The page
+// can only join a gameId inside the season it has loaded, so on an all-time board
+// nine rows in ten had nothing but a year — this is where the round and the two
+// teams have to come from.
+fs.mkdirSync(path.join(TMP, 'data', 'seasons'), { recursive: true });
+fs.writeFileSync(path.join(TMP, 'data', 'seasons', 'w26-core.json'), JSON.stringify({ matches: [
+  { gameId: 'g-wfnl', round: 15, isFinals: false, home: 'Western Rams Seniors',
+    away: 'West Footscray Seniors', hScore: 143, aScore: 55 },
+  { gameId: 'g-bye', isBye: true, home: 'X', away: 'Y' } ] }));
 fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify({ manifest: [
   { seasonId: 'w26', compName: 'WFNL 2026' }, { seasonId: 'w25', compName: 'WFNL 2025' },
   { seasonId: 'e26', compName: 'EFNL 2026' },
@@ -102,7 +111,7 @@ const names = (b) => (b || []).map(e => `${e.name}:${e.v}`).join(', ');
 
 console.log('\n1  It runs and writes');
 let r = run();
-ok('version line', /build-career-tops v4 /.test(r.out));
+ok('version line', /build-career-tops v5 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('all-time board written', !!r.all);
 ok('one file per competition on a held season', !!r.comp('wfnl') && !!r.comp('efnl'), '');
@@ -167,6 +176,15 @@ ok('the all-time record carries the YEAR of the game', wAll && wAll.year === '20
 ok('… and the league of the GAME, not the player\'s newest season',
   wAll && wAll.league === 'NTFL SENIORS', wAll && String(wAll.league));
 ok('the competition record carries its own year', wComp && wComp.year === '2026', wComp && String(wComp.year));
+ok('a game we HOLD is named at build time, not left to the browser',
+  wComp && wComp.round === 'R15' && wComp.home === 'Western Rams Seniors'
+        && wComp.away === 'West Footscray Seniors',
+  wComp && JSON.stringify({ round: wComp.round, home: wComp.home, away: wComp.away }));
+ok('… with its score', wComp && wComp.score === '143–55', wComp && String(wComp.score));
+ok('a game we do NOT hold carries no round or teams to invent',
+  wAll && !wAll.round && !wAll.home, wAll && JSON.stringify({ round: wAll.round, home: wAll.home }));
+ok('the season file was read', /stored matches: 1 across 1 season file/.test(r.out),
+  (r.out.match(/stored matches:.*/) || [''])[0]);
 
 console.log('\n6  What must not be ranked');
 const inAny = (uuid) => Object.values(r.all.boards).some(b => (b || []).some(e => e.uuid === uuid));

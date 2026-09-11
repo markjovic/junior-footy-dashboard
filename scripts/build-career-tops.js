@@ -32,13 +32,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'build-career-tops v4 2026-09-11 game-year';
+const VERSION = 'build-career-tops v5 2026-09-11 named-games';
 
 const ROOT = path.resolve(__dirname, '..');
 const PLAYERS = path.join(ROOT, 'players');
 const OUT_DIR = path.join(ROOT, 'data', 'leaderboard');
 const OUT_COMP = path.join(OUT_DIR, 'comp');
 const CORE = path.join(ROOT, 'data', 'core.json');
+const SEASONS = path.join(ROOT, 'data', 'seasons');
 
 const N = Math.max(1, Number(process.env.TOPS_N || 15));
 const MIN_GP = Math.max(1, Number(process.env.TOPS_MIN_GP || 20));
@@ -135,6 +136,30 @@ function summarise(rec, dupes) {
   };
 }
 
+// ⚠️ NAME THE GAME AT BUILD TIME, NOT IN THE BROWSER.
+// The page can only join a gameId to a match in the season it has LOADED, so on
+// an all-time board nine rows in ten fell back to a year and a league. The stored
+// match records are right here, so the round and the two teams are denormalised
+// onto the entry — the same principle the rest of the file already follows.
+function loadGames(manifest) {
+  const byId = new Map();
+  let seasons = 0;
+  for (const m of manifest) {
+    if (!m.seasonId || !m.compName) continue;
+    const f = path.join(SEASONS, `${m.seasonId}-core.json`);
+    if (!fs.existsSync(f)) continue;
+    let data;
+    try { data = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { continue; }
+    seasons++;
+    for (const x of (data.matches || [])) {
+      if (!x.gameId || x.isBye || x.scheduled) continue;
+      byId.set(x.gameId, { round: x.round, isFinals: !!x.isFinals,
+                           home: x.home, away: x.away, hScore: x.hScore, aScore: x.aScore });
+    }
+  }
+  return { byId, seasons };
+}
+
 // ── Ranking ──────────────────────────────────────────────────────────────────
 function valueFor(cat, p, scope) {
   // scope === null for all-time; otherwise a leagueId and its aggregate.
@@ -177,6 +202,8 @@ function gameRecFor(p, scope) {
   return inScope.sort((a, b) => b.v - a.v)[0];
 }
 
+let GAMES = new Map();   // gameId -> stored match, filled in main()
+
 function entryFor(cat, p, v, scope) {
   const e = { uuid: p.uuid, name: p.name, v,
               club: p.club, league: scope ? scope.name : p.league,
@@ -191,6 +218,12 @@ function entryFor(cat, p, v, scope) {
       // The league of the GAME, not of the player's newest season — on an
       // all-time board the two are usually different.
       if (meta) { e.year = meta.year || null; if (meta.league) e.league = meta.league; }
+      const g = GAMES.get(r.gameId);
+      if (g) {
+        e.round = g.isFinals ? 'Finals' : (g.round != null ? `R${g.round}` : null);
+        e.home = g.home; e.away = g.away;
+        if (g.hScore != null && g.aScore != null) e.score = `${g.hScore}–${g.aScore}`;
+      }
     }
   }
   if (cat.key === 'seasonGoals') { e.year = p.seasonGoalsYear || null; e.league = p.seasonGoalsLeague || e.league; }
@@ -265,12 +298,22 @@ function main() {
   // three; the manifest's compName is "EFNL 2026", so its first word is the
   // answer, and it matches the season chips rather than inventing a second
   // vocabulary. A held season id is the join.
+  // ⚠️ THE MANIFEST IS READ ONCE, BEFORE ANYTHING USES IT. An earlier arrangement
+  // built shortOf above this line, which is a temporal dead zone on a `let` and
+  // throws at runtime — `node --check` cannot see it.
+  let manifest = [];
+  try { manifest = JSON.parse(fs.readFileSync(CORE, 'utf8')).manifest || []; }
+  catch (e) { log(`⚠️ could not read data/core.json (${e.message})`); }
+
+  const g = loadGames(manifest);
+  GAMES = g.byId;
+  log(`stored matches: ${GAMES.size} across ${g.seasons} season file(s) — used to name single-game records`);
+
   const shortOf = new Map();
-  try {
-    for (const m of (JSON.parse(fs.readFileSync(CORE, 'utf8')).manifest || [])) {
-      if (m.seasonId && m.compName) shortOf.set(m.seasonId, String(m.compName).split(/\s+/)[0]);
-    }
-  } catch (e) { log(`⚠️ could not read data/core.json (${e.message}) — boards will carry full names only`); }
+  for (const m of manifest) {
+    if (m.seasonId && m.compName) shortOf.set(m.seasonId, String(m.compName).split(/\s+/)[0]);
+  }
+  if (!shortOf.size) log('⚠️ no manifest entry has both a seasonId and a compName — boards will carry full names only');
 
   const comps = new Map();
   for (const p of players) {
