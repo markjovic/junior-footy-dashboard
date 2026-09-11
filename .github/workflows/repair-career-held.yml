@@ -1,0 +1,71 @@
+# .github/workflows/repair-career-held.yml
+name: Repair career held flags
+
+# Rewrites the `held` flag on every stored career file from data/core.json.
+# LOCAL ONLY — no PlayHQ calls, no session, nothing fetched.
+#
+# WHY. fetch-career-stats.js up to v5 set `held` from every manifest entry with a
+# seasonId, but discover-seasons records seasons for all 17 organisations — the
+# five tracked and the twelve watched — so 65 season ids were treated as stored
+# when only 18 are. Measured 2026-09-11: 18 competitions came back held instead
+# of five, and a VAFA or Frankston season rendered bright and clickable on the
+# career table.
+#
+# ⚠️ A --force sweep would cost 70,000 PlayHQ calls to recompute a boolean that
+# core.json already answers. This is a one-off; delete the workflow afterwards or
+# add it to repo-tidy.js.
+#
+# It takes playhq-data-write because it rewrites files under players/ and must
+# queue behind anything else writing the tree.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Report what would change and write nothing'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Recompute held from the manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Full checkout: it rewrites files across all 256 directories, and a sparse
+      # set would silently drop everything outside it from `git add`.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Repair
+        env:
+          REPAIR_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          node --version
+          node scripts/repair-career-held.js
+
+      - name: Commit
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- players/
+          if git diff --staged --quiet; then
+            echo "No held flags needed changing."
+            exit 0
+          fi
+          git diff --staged --shortstat
+          git commit -m "career: repair held flags (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push

@@ -65,6 +65,7 @@ jobs:
                    scripts/build-career-stubs.js \
                    scripts/verify-careers.js \
                    scripts/build-career-tops.js \
+                   scripts/repair-career-held.js \
                    scripts/verify-career-tops.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
