@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'build-career-tops v3 2026-09-11 short-names';
+const VERSION = 'build-career-tops v4 2026-09-11 game-year';
 
 const ROOT = path.resolve(__dirname, '..');
 const PLAYERS = path.join(ROOT, 'players');
@@ -87,12 +87,20 @@ function summarise(rec, dupes) {
   const bySeasonGoals = [];
   const leagues = new Set();
   const sidLeague = new Map();
+  // ⚠️ A SINGLE-GAME RECORD NEEDS ITS YEAR. Without it a row for a game we hold
+  // read "R11 · Heathmont v Bayswater" with no idea when, and a row for a game we
+  // do NOT hold rendered with no subtitle at all — a blank line where the context
+  // should be. The season row is the only thing that knows.
+  const sidMeta = new Map();
 
   for (const s of seasons) {
     const k = `${s.sid || ''}|${s.clubId || ''}`;
     if (seen.has(k)) dupes.push(`${rec.uuid} ${k}`);   // counted, NOT skipped
     seen.add(k);
-    if (s.sid) sids.add(s.sid);
+    if (s.sid) {
+      sids.add(s.sid);
+      if (!sidMeta.has(s.sid)) sidMeta.set(s.sid, { year: String(s.year || ''), league: s.league || null });
+    }
     const g = Number(s.goals) || 0, gp = Number(s.gp) || 0, b = Number(s.best) || 0;
     goals += g; games += gp; best += b;
     const y = String(s.year || '');
@@ -123,7 +131,7 @@ function summarise(rec, dupes) {
     goals, games, best, from,
     seasonsCount: sids.size, leaguesCount: leagues.size,
     seasonGoals: bestSeason.g, seasonGoalsYear: bestSeason.year, seasonGoalsLeague: bestSeason.league,
-    records: rec.records || {}, sidLeague, byLeague,
+    records: rec.records || {}, sidLeague, sidMeta, byLeague,
   };
 }
 
@@ -176,7 +184,14 @@ function entryFor(cat, p, v, scope) {
               seasons: scope ? scope.agg.seasons : p.seasonsCount };
   if (cat.key === 'gameGoals') {
     const r = gameRecFor(p, scope);
-    if (r) { e.gameId = r.gameId || null; e.sid = r.sid || null; }
+    if (r) {
+      e.gameId = r.gameId || null;
+      e.sid = r.sid || null;
+      const meta = p.sidMeta.get(r.sid);
+      // The league of the GAME, not of the player's newest season — on an
+      // all-time board the two are usually different.
+      if (meta) { e.year = meta.year || null; if (meta.league) e.league = meta.league; }
+    }
   }
   if (cat.key === 'seasonGoals') { e.year = p.seasonGoalsYear || null; e.league = p.seasonGoalsLeague || e.league; }
   if (cat.key === 'earliest') e.from = scope ? scope.agg.from : p.from;

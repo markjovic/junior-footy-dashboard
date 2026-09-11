@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-career-tops v3 2026-09-11 short-names';
+const VERSION = 'verify-career-tops v4 2026-09-11 game-year';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'build-career-tops.js');
@@ -102,7 +102,7 @@ const names = (b) => (b || []).map(e => `${e.name}:${e.v}`).join(', ');
 
 console.log('\n1  It runs and writes');
 let r = run();
-ok('version line', /build-career-tops v3 /.test(r.out));
+ok('version line', /build-career-tops v4 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('all-time board written', !!r.all);
 ok('one file per competition on a held season', !!r.comp('wfnl') && !!r.comp('efnl'), '');
@@ -161,6 +161,12 @@ ok('the WFNL board takes the WFNL game (11), not the NTFL one', wComp && wComp.v
   wComp ? `${wComp.v}/${wComp.sid}` : 'absent');
 ok('… and carries its gameId so a row can open the game', wComp && wComp.gameId === 'g-wfnl',
   wComp && String(wComp.gameId));
+// Without a year a row for a game we hold says "R11 · A v B" with no when, and a
+// row for a game we do NOT hold renders with no subtitle at all.
+ok('the all-time record carries the YEAR of the game', wAll && wAll.year === '2023', wAll && String(wAll.year));
+ok('… and the league of the GAME, not the player\'s newest season',
+  wAll && wAll.league === 'NTFL SENIORS', wAll && String(wAll.league));
+ok('the competition record carries its own year', wComp && wComp.year === '2026', wComp && String(wComp.year));
 
 console.log('\n6  What must not be ranked');
 const inAny = (uuid) => Object.values(r.all.boards).some(b => (b || []).some(e => e.uuid === uuid));
