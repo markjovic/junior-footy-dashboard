@@ -39,7 +39,7 @@
 
 'use strict';
 
-const VERSION = 'enrich-games v19 2026-09-05 paced-not-adaptive';
+const VERSION = 'enrich-games v19 2026-09-11 cursor-tdz-fix';
 // Extraction version stamped on every record this script writes. Bump it when the
 // EXTRACTION changes in a way that makes older records worth re-fetching.
 //   1  points only (fetch-quarter-scores v5-v8)
@@ -75,10 +75,11 @@ const DELAY      = Math.max(0, Number(process.env.EG_DELAY_MS || 120));
 const CONC = Math.max(1, Math.min(12, Number(process.env.EG_CONC || 6)));
 // Minutes of clear running before concurrency steps back up. Time, not batches:
 // a batch is only `conc` requests and passes in seconds.
-// Measured 2026-09-05: PlayHQ blocks after 108-150 discoverGame calls and clears
-// after 76-77 seconds. Pace below that and it never blocks.
-const BUDGET   = Math.max(10, Number(process.env.EG_BUDGET || 100));
-const WINDOW_S = Math.max(10, Number(process.env.EG_WINDOW_S || 80));
+const RECOVER_MIN = Math.max(0.25, Number(process.env.EG_RECOVER_MIN || 2));
+// Minutes of clear running AT THE CEILING before the ceiling itself is lifted. The
+// blocks come in bursts rather than as a standing limit, so a cap earned during a
+// bad patch must not survive the whole run.
+const CEIL_RECOVER_MIN = Math.max(1, Number(process.env.EG_CEIL_RECOVER_MIN || 8));
 // ⚠️ PUSHING IS NOT FREE — EVERY PUSH REBUILDS AND REDEPLOYS GITHUB PAGES.
 //
 // v1 pushed at every checkpoint, roughly every 90 seconds, which over a 17-hour
@@ -345,6 +346,22 @@ async function main() {
     if (c && Array.isArray(c.grades)) walked = new Set(c.grades);
   } catch (e) { /* no cursor yet */ }
 
+  // Written at every checkpoint, so an interrupted run does not lose its place.
+  //
+  // ⚠️ NOT via store.saveCore — that copies only keys in CORE_KEYS and drops
+  // anything it does not recognise, silently. Adding the cursor to CORE_KEYS
+  // would put a scratch value in the file every reader loads. Read, patch, write.
+  const writeCursor = (value) => {
+    if (!APPLY) return;
+    try {
+      const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
+      if (value === null) delete core[cursorKey]; else core[cursorKey] = value;
+      fs.writeFileSync(store.CORE_PATH, JSON.stringify(core, null, 2), 'utf8');
+    } catch (e) { console.error(`    ⚠️ cursor write failed: ${e.message}`); }
+  };
+  const saveCursor = () =>
+    writeCursor({ grades: [...walked], at: new Date().toISOString(), version: VERSION });
+
   // Seeding happens before anything else, so the count printed below is honest.
   if (SKIP_FIRST && !walked.size) {
     const seed = grades.slice(0, SKIP_FIRST);
@@ -379,22 +396,6 @@ async function main() {
     console.log(`${grades.length} grade(s) to walk.`);
   }
   console.log('');
-
-  // Written at every checkpoint, so an interrupted run does not lose its place.
-  //
-  // ⚠️ NOT via store.saveCore — that copies only keys in CORE_KEYS and drops
-  // anything it does not recognise, silently. Adding the cursor to CORE_KEYS
-  // would put a scratch value in the file every reader loads. Read, patch, write.
-  const writeCursor = (value) => {
-    if (!APPLY) return;
-    try {
-      const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
-      if (value === null) delete core[cursorKey]; else core[cursorKey] = value;
-      fs.writeFileSync(store.CORE_PATH, JSON.stringify(core, null, 2), 'utf8');
-    } catch (e) { console.error(`    ⚠️ cursor write failed: ${e.message}`); }
-  };
-  const saveCursor = () =>
-    writeCursor({ grades: [...walked], at: new Date().toISOString(), version: VERSION });
 
   let calls = 0, found = 0, empty = 0, flagged = 0, refused = 0;
   let stamped = 0, noGrade = 0, resolved = 0, committed = 0, partialCount = 0;
@@ -489,35 +490,15 @@ async function main() {
     pending++;
   };
 
-  // Fixed. The limit is a call budget, not a concurrency limit, so tuning this
-  // achieves nothing — the pacer above is what keeps the run inside it.
-  // ── Rate limiter ──────────────────────────────────────────────────────────
-  // A token bucket of BUDGET calls per WINDOW_S seconds, set below the measured
-  // limit — 108-150 discoverGame calls before a block, clearing after 76-77
-  // seconds, three consistent rounds on 2026-09-05.
+  // Current concurrency, tuned as the run proceeds.
   //
-  // Waiting BEFORE a batch rather than reacting after a block is the point: an
-  // 80-second sleep costs the same whether one request or six triggered it, so
-  // avoiding the block entirely is worth more than responding well to it.
-  let bucket = BUDGET;
-  let lastRefill = Date.now();
-  const pace = async (n) => {
-    for (;;) {
-      const now = Date.now();
-      const refill = ((now - lastRefill) / 1000) * (BUDGET / WINDOW_S);
-      if (refill >= 1) {
-        bucket = Math.min(BUDGET, bucket + refill);
-        lastRefill = now;
-      }
-      if (bucket >= n) { bucket -= n; return; }
-      const need = (n - bucket) / (BUDGET / WINDOW_S);
-      await sleep(Math.max(200, Math.ceil(need * 1000)));
-    }
-  };
-
-  // Fixed. The limit is a call budget, not a concurrency limit, so tuning this
-  // achieves nothing — the pacer above is what keeps the run inside it.
-  const conc = CONC;
+  // `ceiling` is LEARNED: whenever a level gets blocked, the ceiling drops below
+  // it permanently for this run, so the walk converges on a rate PlayHQ tolerates
+  // instead of oscillating around the one that fails.
+  let conc = CONC;
+  let ceiling = CONC;
+  let lastBlockAt = 0;
+  let lastCeilingLift = Date.now();
   let gi = 0, stopped = false;
   for (const gradeId of grades) {
     if (overBudget()) { stopped = true; break; }
@@ -664,34 +645,57 @@ async function main() {
     const queue = recs.filter(m => m.gameId);
     for (let i = 0; i < queue.length; i += conc) {
       if (overBudget()) { stopped = true; break; }
+      const before = summary().blocked;
       const batch = queue.slice(i, i + conc);
       await Promise.all(batch.map(m => handleGame(m)));
+      const blockedNow = summary().blocked - before;
 
-      // ⚠️ THE LIMIT IS A CALL BUDGET, NOT A CONCURRENCY LIMIT.
+      // ⚠️ A BLOCK COSTS 80 SECONDS WHATEVER THE CONCURRENCY.
       //
-      // Measured 2026-09-05, three consistent rounds: blocked after 108-150 calls,
-      // cleared after 76-77 seconds. That is roughly 1.5 requests per second, and
-      // it is the ceiling WHATEVER the concurrency — which is why dropping from 6
-      // to 1 did not avoid the blocks, it just reached the same budget more slowly
-      // while doing less work in between.
+      // Every in-flight request waits the CloudFront window out IN PARALLEL, so
+      // the penalty per block event is the same at 1 as at 6 — but at 6 the run
+      // does six times as much work between blocks. Measured 2026-09-05 on this
+      // very walk: 17 grades in 0.5 min at concurrency 6, then 12 grades in 7 min
+      // at concurrency 1. Backing off hard made the run SLOWER, not safer.
       //
-      // So the adaptive step-up/step-down this replaced could not have helped. The
-      // pacing below stays just under the budget instead, which delivers the same
-      // throughput without the 122 blocks, the 122 eighty-second sleeps, or a log
-      // that is mostly warnings.
-      //
-      // No claim that this is FASTER — the measurement says throughput is capped
-      // either way. It is predictable, which the burst-and-block cycle was not.
-      await pace(batch.length);
+      // So the response is gentle: step down by one, not halve. And the ceiling
+      // RECOVERS — v16 ratcheted it down permanently, so one bad patch capped the
+      // rest of a five-hour walk at 1.
+      if (blockedNow > 0) {
+        const was = conc;
+        if (conc > 1) conc--;
+        ceiling = Math.max(2, Math.min(ceiling, was));
+        lastBlockAt = Date.now();
+        lastCeilingLift = Date.now();
+        if (conc !== was) {
+          console.log(`    ↓ concurrency ${was} → ${conc} (rate limited, ceiling ${ceiling})`);
+        }
+      } else {
+        const clearMin = (Date.now() - lastBlockAt) / 60000;
+        if (conc < ceiling && clearMin >= RECOVER_MIN) {
+          conc++;
+          lastBlockAt = Date.now();
+          console.log(`    ↑ concurrency → ${conc} (${RECOVER_MIN} min clear)`);
+        } else if (conc >= ceiling && ceiling < CONC &&
+                   (Date.now() - lastCeilingLift) / 60000 >= CEIL_RECOVER_MIN) {
+          // Sustained clear running at the ceiling means the earlier block was a
+          // burst, not a standing limit. Lift the cap and try again.
+          ceiling++;
+          lastCeilingLift = Date.now();
+          console.log(`    ⇧ ceiling → ${ceiling} (${CEIL_RECOVER_MIN} min clear at the cap)`);
+        }
+      }
+
       if (pending >= CHECKPOINT) { saveCursor(); flush(`${gi}/${grades.length}`); }
       if (DELAY) await sleep(DELAY);
     }
     if (stopped) break;
+    // Walked to completion — recorded so a later run skips it. The `break` above
+    // has already returned when the budget stopped us mid-grade, so reaching here
+    // means the grade finished. v18 added it twice, guarded the second with
+    // `if (!stopped)` and left the first bare; both were unreachable when stopped,
+    // so the guard read as protection that was not doing anything.
     walked.add(gradeId);
-    // Walked to completion — recorded so a later run skips it. NOT recorded if
-    // the budget stopped us mid-grade, or the rest of that grade would be lost.
-    if (!stopped) walked.add(gradeId);
-    if (stopped) break;
   }
 
   saveCursor();
@@ -771,10 +775,8 @@ async function main() {
   console.log(`  grade records no quarters      ${noGrade}`);
   console.log(`  refused (ambiguous or wrong)   ${refused}`);
   console.log(`  elapsed                        ${mins()} min`);
-  console.log(`  concurrency                    ${conc} (fixed)`);
-  console.log(`  paced at                       ${BUDGET} calls / ${WINDOW_S}s`);
-  console.log(`  rate-limit blocks              ${summary().blocked}` +
-    (summary().blocked ? '  ⚠️ pacing is still too fast — lower EG_BUDGET' : '  (pacing held)'));
+  console.log(`  concurrency ended at           ${conc} (learned ceiling ${ceiling}, started ${CONC})`);
+  console.log(`  rate-limit blocks              ${summary().blocked}`);
   console.log('─'.repeat(70));
   if (emptyWhy.size) {
     console.log('\n  Why nothing was returned:');
