@@ -1,0 +1,76 @@
+# .github/workflows/probe-game-stats.yml
+name: Probe game stats
+
+# READ-ONLY probe for per_game_stats_design.md §3. Makes about a dozen PlayHQ
+# calls, writes nothing and commits nothing. Dispatch only — there is no
+# schedule and there should never be one; when the routes are settled this
+# workflow and its script are retired.
+#
+# Paste the whole log back. The trials are under `═══ TRIALS ═══` and the
+# one-line-per-candidate summary under `═══ VERDICT ═══`.
+#
+# ⚠️ IT STOPS AFTER THREE REJECTIONS. That is deliberate: a burst of rejected
+# field names on one run is the most likely reason the WAF refused every session
+# attempt on the next. The VERDICT block prints the exact `trial_start` to
+# resume from — re-dispatch with it LATER IN THE DAY, not immediately.
+
+on:
+  workflow_dispatch:
+    inputs:
+      trial_start:
+        description: 'Skip trials before this index — the VERDICT block of the previous run prints the number to use'
+        required: false
+        default: '0'
+      max_rejections:
+        description: 'Stop after this many rejected trials. Three is the measured safe figure; raise it only with a reason'
+        required: false
+        default: '3'
+      grade_id:
+        description: 'Optional: a specific grade id. Leave blank and the script finds one from the manifest'
+        required: false
+        default: ''
+      game_id:
+        description: 'Optional: a specific COMPLETED game id. Must be supplied together with grade_id'
+        required: false
+        default: ''
+      round_id:
+        description: 'Optional: a round id for the round-filter trial. Only used when grade_id and game_id are supplied'
+        required: false
+        default: ''
+
+# Nothing is written, so read access is all this needs. A probe that cannot
+# commit cannot damage anything it is measuring.
+permissions:
+  contents: read
+
+# It writes no file at all, but it takes the data-write group for the reason
+# probe-career-stats.yml does: the WAF budget is shared across every PlayHQ run
+# on this account, and a probe firing beside a scheduled walk would hand both of
+# them blocks. ⚠️ A dispatch arriving during the walk QUEUES rather than starting.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Find a game-side statistics route
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # This job commits nothing, so the detached-HEAD trap does not apply
+          # to it. Kept so every workflow in the repo reads the same way.
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          PROBE_TRIAL_START: ${{ github.event.inputs.trial_start }}
+          PROBE_TRIAL_MAX_REJECT: ${{ github.event.inputs.max_rejections }}
+          PROBE_GRADE_ID: ${{ github.event.inputs.grade_id }}
+          PROBE_GAME_ID: ${{ github.event.inputs.game_id }}
+          PROBE_ROUND_ID: ${{ github.event.inputs.round_id }}
+        run: |
+          node --version
+          node scripts/probe-game-stats.js
