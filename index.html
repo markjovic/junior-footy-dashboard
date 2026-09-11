@@ -597,12 +597,13 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.224</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.225</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
     <button id="vsw-dash"   class="on" onclick="switchView('dash')">DASHBOARD</button>
     <button id="vsw-finals"           onclick="switchView('finals')">FINALS</button>
+    <button id="vsw-leaders"          onclick="switchView('leaders')">LEADERS</button>
   </span>
   <button class="hdr-btn" id="share-btn" onclick="shareLink()"
     title="Copy a link to exactly this view">🔗 Share</button>
@@ -682,6 +683,7 @@ body{overflow-x:hidden}
     <div class="mob-view-tabs" id="mob-view-tabs">
       <button class="mob-tab on" id="mvt-dash"   onclick="switchView('dash')">Dashboard</button>
       <button class="mob-tab"    id="mvt-finals" onclick="switchView('finals')">Finals</button>
+      <button class="mob-tab"    id="mvt-leaders" onclick="switchView('leaders')">Leaders</button>
     </div>
     <div id="no-data" class="no-data-screen">
       <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.9">
@@ -774,6 +776,19 @@ body{overflow-x:hidden}
         </div>
 
       </div>
+    </div>
+
+    <!-- Career leaderboards — career_leaderboards_design.md. A top-level view for
+         the reason the finals view gives: the dashboard is scoped to one
+         S.selectedAge and this spans every age, grade and year. -->
+    <div id="leaders-view" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <select id="lb-scope" onchange="setLeaderScope(this.value)"
+                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                       padding:6px 10px;font-family:'DM Mono',monospace;font-size:12px"></select>
+        <span class="fv-switch" id="lb-cats"></span>
+      </div>
+      <div id="lb-body"></div>
     </div>
 
     <div id="finals-view" style="display:none">
@@ -953,7 +968,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.224</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.225</span>
         </div>
 
 
@@ -2261,10 +2276,13 @@ function allTeamsForAge(age) {
 function render() {
   const hasData = S.matches.length > 0;
   const finals  = S.view === 'finals';
+  const leaders = S.view === 'leaders';
   document.getElementById('no-data').style.display = hasData ? 'none' : 'block';
-  document.getElementById('dash').style.display = (hasData && !finals) ? 'block' : 'none';
+  document.getElementById('dash').style.display = (hasData && !finals && !leaders) ? 'block' : 'none';
   const fv = document.getElementById('finals-view');
   if (fv) fv.style.display = (hasData && finals) ? 'block' : 'none';
+  const lv = document.getElementById('leaders-view');
+  if (lv) lv.style.display = (hasData && leaders) ? 'block' : 'none';
   const vs = document.getElementById('view-switch');
   if (vs) vs.style.display = hasData ? 'inline-flex' : 'none';
   // The mobile row is the same control in a place the header cannot clip it.
@@ -2284,6 +2302,15 @@ function render() {
   // came up empty, and only a switch to the dashboard filled them in. Found on
   // screen 2026-08-12.
   renderAgeTabs();
+
+  if (leaders) {
+    // Like the finals view, this spans every age and grade, so it returns before
+    // the single-age guard. renderLeaders is async and is deliberately not
+    // awaited — render() must not become async for one branch.
+    if (hasData) renderLeaders();
+    renderStats();
+    return;
+  }
 
   if (finals) {
     // The finals view spans every age and grade, so it does not depend on
@@ -2777,10 +2804,12 @@ function syncViewTabs() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('on', yes);
   };
-  on('vsw-dash', S.view !== 'finals');
+  on('vsw-dash', S.view !== 'finals' && S.view !== 'leaders');
   on('vsw-finals', S.view === 'finals');
-  on('mvt-dash', S.view !== 'finals');
+  on('vsw-leaders', S.view === 'leaders');
+  on('mvt-dash', S.view !== 'finals' && S.view !== 'leaders');
   on('mvt-finals', S.view === 'finals');
+  on('mvt-leaders', S.view === 'leaders');
 }
 
 // Club-mode orderings. Every numeric sort is descending and falls through the
@@ -2855,9 +2884,12 @@ function setFinalsMode(m) {
 // becomes a club filter.
 function applyViewChrome() {
   const finals = S.view === 'finals';
-  ['vsw-dash','vsw-finals'].forEach(id => {
+  ['vsw-dash','vsw-finals','vsw-leaders'].forEach(id => {
     const b = document.getElementById(id);
-    if (b) b.classList.toggle('on', (id === 'vsw-finals') === finals);
+    if (b) b.classList.toggle('on',
+      id === 'vsw-finals' ? finals
+      : id === 'vsw-leaders' ? S.view === 'leaders'
+      : (!finals && S.view !== 'leaders'));
   });
   [['fvm-age','age'],['fvm-club','club'],['fvm-venue','venue'],['fvm-winners','winners']].forEach(([id,v]) => {
     const b = document.getElementById(id);
@@ -5776,6 +5808,119 @@ function renderCareerSection(rec, uuid, recs) {
   };
 }
 
+
+// ── CAREER LEADERBOARDS ─────────────────────────────────────────────────────
+// data/leaderboard/all-time.json and data/leaderboard/comp/<leagueId>.json,
+// written by build-career-tops.js. Ranked at build time because a browser cannot
+// open 70,922 player files; the page reads one ~25 KB file per scope.
+const _lbCache = new Map();
+
+async function loadBoard(scope) {
+  if (_lbCache.has(scope)) return _lbCache.get(scope);
+  const url = scope === 'all' ? 'data/leaderboard/all-time.json'
+                              : `data/leaderboard/comp/${scope}.json`;
+  let data = null;
+  try {
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (res.ok) data = await res.json();
+  } catch (e) { /* the view says so below */ }
+  _lbCache.set(scope, data);
+  return data;
+}
+
+function setLeaderScope(v) { S.lbScope = v; saveFilters(); renderLeaders(); }
+function setLeaderCat(v)   { S.lbCat = v;   saveFilters(); renderLeaders(); }
+
+// One row. `gameId` joins to a stored match exactly as the panel's record card
+// does, so a game we hold is named rather than numbered.
+function lbRow(e, i, cat) {
+  const sub = [e.club, e.league].filter(Boolean).join(' · ');
+  let extra = '';
+  if (cat === 'gameGoals' && e.gameId) {
+    const m = (S.matches || []).find(x => x.gameId === e.gameId);
+    if (m) extra = `${m.isFinals ? 'Finals' : 'R' + m.round} · ${m.home} v ${m.away}`;
+    else if (e.year) extra = `${e.year}`;
+  } else if (cat === 'seasonGoals' && e.year) extra = e.year;
+  else if (cat === 'earliest') extra = `${e.seasons} season${e.seasons === 1 ? '' : 's'}`;
+  else if (e.gp) extra = `${e.gp} game${e.gp === 1 ? '' : 's'}`;
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  return `<div class="lb-row" data-uuid="${esc(e.uuid)}" style="display:grid;
+      grid-template-columns:32px 1fr auto;gap:10px;align-items:center;padding:9px 12px;
+      border-bottom:1px solid var(--b1);cursor:pointer">
+    <div style="font-family:'DM Mono',monospace;font-size:12px;color:${i < 3 ? 'var(--gold)' : 'var(--tx3)'}">${i + 1}</div>
+    <div style="min-width:0">
+      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name || '—')}</div>
+      <div style="font-size:10px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sub)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--gold)">${esc(e.v)}</div>
+      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${esc(extra)}</div>
+    </div>
+  </div>`;
+}
+
+async function renderLeaders() {
+  const body = document.getElementById('lb-body');
+  const sel = document.getElementById('lb-scope');
+  const cats = document.getElementById('lb-cats');
+  if (!body || !sel || !cats) return;
+  if (!S.lbScope) S.lbScope = 'all';
+  if (!S.lbCat) S.lbCat = 'goals';
+
+  // The picker is built from the ALL-TIME meta, so it lists the same five
+  // competitions however the view was entered — including straight from a link.
+  const all = await loadBoard('all');
+  if (!all) {
+    body.innerHTML = `<div style="padding:20px;color:var(--tx3);font-size:12px">
+      The leaderboards have not been built yet. Dispatch “Build career leaderboards”.</div>`;
+    return;
+  }
+  const comps = all.meta.comps || [];
+  if (S.lbScope !== 'all' && !comps.some(c => c.id === S.lbScope)) S.lbScope = 'all';
+  sel.innerHTML = `<option value="all">All-time</option>` +
+    comps.map(c => `<option value="${c.id}"${c.id === S.lbScope ? ' selected' : ''}
+      title="${String(c.name || '').replace(/"/g, '&quot;')}">${c.short || c.name}</option>`).join('');
+  sel.value = S.lbScope;
+
+  const data = await loadBoard(S.lbScope);
+  if (!data) { body.innerHTML = `<div style="padding:20px;color:var(--tx3);font-size:12px">
+      That competition's board is missing. Rebuild the leaderboards.</div>`; return; }
+
+  // The category list comes from the FILE, not from a copy here — the all-time
+  // board carries one category the competition boards do not, and two lists
+  // would drift.
+  const cl = data.meta.categories || [];
+  if (!cl.some(c => c.key === S.lbCat)) S.lbCat = (cl[0] || {}).key || 'goals';
+  cats.innerHTML = cl.map(c =>
+    `<button id="lbc-${c.key}"${c.key === S.lbCat ? ' class="on"' : ''}
+      onclick="setLeaderCat('${c.key}')">${c.label.toUpperCase()}</button>`).join('');
+
+  const rows = (data.boards || {})[S.lbCat] || [];
+  const cat = cl.find(c => c.key === S.lbCat) || {};
+  // ⚠️ SAY WHAT THE NUMBERS CANNOT SEE. Per-game lines only exist from each
+  // league's own adoption date, so this board is not all-time however it is
+  // labelled; the cohort is people who have played in our five competitions, not
+  // everyone on PlayHQ; and PlayHQ's totals include forfeits.
+  const notes = [];
+  if (S.lbCat === 'gameGoals') notes.push('Single-game records only exist from each league\u2019s own adoption date \u2014 EFNL from 2024, others from 2022.');
+  if (S.lbCat === 'goalsPerGame') notes.push(`At least ${data.meta.minGp} career games.`);
+  notes.push(`From the ${Number(data.meta.players || 0).toLocaleString('en-AU')} players who have appeared in these competitions. Totals are PlayHQ\u2019s and include forfeits.`);
+
+  body.innerHTML = !rows.length
+    ? `<div style="padding:20px;color:var(--tx3);font-size:12px">Nothing qualifies for this board.</div>`
+    : `<div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden">
+        ${rows.slice(0, 10).map((e, i) => lbRow(e, i, S.lbCat)).join('')}
+       </div>
+       <div style="font-size:10px;color:var(--tx3);margin-top:10px;line-height:1.5">${notes.join(' ')}</div>`;
+
+  // Delegated, so it survives every repaint and can be fired in a test.
+  body.onclick = (ev) => {
+    const row = ev.target && ev.target.closest ? ev.target.closest('.lb-row[data-uuid]') : null;
+    if (row) openPlayerFromSearch(row.getAttribute('data-uuid'));
+  };
+}
+
 function closePlayerModal() {
   // Cleared so a late index fetch does not repaint a closed panel.
   _panelUuid = null;
@@ -6987,7 +7132,7 @@ async function init() {
         // else: round gone (new season?) — fall back to all rounds
       }
 
-      if (f.view === 'finals' || f.view === 'dash') S.view = f.view;
+      if (f.view === 'finals' || f.view === 'dash' || f.view === 'leaders') S.view = f.view;
       if (['age','club','venue','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
       if (['date','venue'].includes(f.venueGroup)) S.venueGroup = f.venueGroup;
       if (typeof f.clubSummaryOpen === 'boolean') S.clubSummaryOpen = f.clubSummaryOpen;
@@ -7046,7 +7191,7 @@ async function init() {
       if (ids.length) S.selGrades = new Set(ids);
       else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
     }
-    if (_url.v === 'finals' || _url.v === 'dash') S.view = _url.v;
+    if (_url.v === 'finals' || _url.v === 'dash' || _url.v === 'leaders') S.view = _url.v;
     if (QTR_MODES.includes(_url.q)) S.qtrMode = _url.q;
     if (S.view === 'finals') {
       if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
@@ -7110,7 +7255,7 @@ async function init() {
       }
       if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
       if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
-      if (u.v === 'finals' || u.v === 'dash') S.view = u.v;
+      if (u.v === 'finals' || u.v === 'dash' || u.v === 'leaders') S.view = u.v;
       S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'off';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
