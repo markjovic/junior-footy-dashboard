@@ -597,7 +597,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.226</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.227</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -968,7 +968,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.226</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.227</span>
         </div>
 
 
@@ -5837,13 +5837,14 @@ function lbRow(e, i, cat) {
   const sub = [e.club, e.league].filter(Boolean).join(' · ');
   let extra = '';
   if (cat === 'gameGoals') {
-    // ⚠️ ALWAYS LEAD WITH THE YEAR. Without it a game we hold read "R11 ·
-    // Heathmont v Bayswater" with no idea when, and a game we do NOT hold left
-    // the line blank altogether.
-    const m = e.gameId ? (S.matches || []).find(x => x.gameId === e.gameId) : null;
+    // ⚠️ THE GAME IS NAMED BY THE BUILDER, NOT LOOKED UP HERE. S.matches holds
+    // only the season the page has LOADED, so on an all-time board nine rows in
+    // ten fell back to a year and a league. build-career-tops.js reads the stored
+    // season files and denormalises the round and both teams onto the entry, so
+    // every row we hold a game for reads the same however the board was reached.
     const when = e.year ? String(e.year) : '';
-    const what = m ? `${m.isFinals ? 'Finals' : 'R' + m.round} · ${m.home} v ${m.away}`
-                   : (e.league || '');
+    const what = (e.round && e.home && e.away) ? `${e.round} · ${e.home} v ${e.away}`
+                                               : (e.league || '');
     extra = [when, what].filter(Boolean).join(' · ');
   } else if (cat === 'seasonGoals' && e.year) extra = e.year;
   else if (cat === 'earliest') extra = `${e.seasons} season${e.seasons === 1 ? '' : 's'}`;
