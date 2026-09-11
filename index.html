@@ -597,7 +597,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.227</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.229</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -786,6 +786,15 @@ body{overflow-x:hidden}
         <select id="lb-scope" onchange="setLeaderScope(this.value)"
                 style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
                        padding:6px 10px;font-family:'DM Mono',monospace;font-size:12px"></select>
+        <!-- Three controls for three dimensions: scope in the select, SUBJECT
+             here, category in the chips. Team records in the select would have
+             collapsed scope and subject into one, and as chips they would have
+             made a twelve-chip row where clickability changed silently halfway
+             along it. -->
+        <span class="fv-switch">
+          <button id="lbs-players" class="on" onclick="setLeaderSubject('players')">PLAYERS</button>
+          <button id="lbs-teams"             onclick="setLeaderSubject('teams')">TEAMS</button>
+        </span>
         <span class="fv-switch" id="lb-cats"></span>
       </div>
       <div id="lb-body"></div>
@@ -968,7 +977,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.227</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.229</span>
         </div>
 
 
@@ -5830,11 +5839,50 @@ async function loadBoard(scope) {
 
 function setLeaderScope(v) { S.lbScope = v; saveFilters(); renderLeaders(); }
 function setLeaderCat(v)   { S.lbCat = v;   saveFilters(); renderLeaders(); }
+// The category belongs to the subject, so switching subject clears it rather than
+// carrying a player category into a team board and rendering nothing.
+function setLeaderSubject(v) { S.lbSubject = v; S.lbCat = null; saveFilters(); renderLeaders(); }
+
+// A team record has no uuid — there is no player to open, and none of the career
+// fields apply. It is a different row, not the player row with gaps in it.
+function lbTeamRow(e, i) {
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const when = [e.year, e.round].filter(Boolean).join(' · ');
+  const extra = [when, e.score].filter(Boolean).join(' · ');
+  return `<div style="display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;
+      padding:9px 12px;border-bottom:1px solid var(--b1)">
+    <div style="font-family:'DM Mono',monospace;font-size:12px;color:${i < 3 ? 'var(--gold)' : 'var(--tx3)'}">${i + 1}</div>
+    <div style="min-width:0">
+      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.name || '—')}${
+        e.quarter ? ` <span style="color:var(--tx3);font-size:11px">${esc(e.quarter)}</span>` : ''}</div>
+      <div style="font-size:10px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">v ${esc(e.opp || '—')}${
+        e.comp ? ' · ' + esc(e.comp) : ''}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:var(--gold)">${esc(e.v)}</div>
+      <div style="font-size:10px;color:var(--tx3);white-space:nowrap">${esc(extra)}</div>
+    </div>
+  </div>`;
+}
 
 // One row. `gameId` joins to a stored match exactly as the panel's record card
 // does, so a game we hold is named rather than numbered.
 function lbRow(e, i, cat) {
-  const sub = [e.club, e.league].filter(Boolean).join(' · ');
+  // ⚠️ SOME VALUES IN PLAYHQ'S CLUB FIELD ARE LEAGUES. Measured on the career
+  // probe: "Eastern Football League" and "EDFL Under 15 - Inactive" arrive as club
+  // names, which rendered as "Eastern Football Netball League (AFL Vic Metro Rep
+  // Games) · Eastern Football Netball League" — the same words twice. Drop either
+  // part when one already contains the other.
+  const norm = (t) => String(t || '').toLowerCase().replace(/\s*\(.*$/, '').trim();
+  const parts = [];
+  for (const t of [e.club, e.league]) {
+    if (!t) continue;
+    const n = norm(t);
+    if (!n || parts.some(x => norm(x) === n || norm(x).includes(n) || n.includes(norm(x)))) continue;
+    parts.push(t);
+  }
+  const sub = parts.join(' · ');
   let extra = '';
   if (cat === 'gameGoals') {
     // ⚠️ THE GAME IS NAMED BY THE BUILDER, NOT LOOKED UP HERE. S.matches holds
@@ -5872,7 +5920,13 @@ async function renderLeaders() {
   const cats = document.getElementById('lb-cats');
   if (!body || !sel || !cats) return;
   if (!S.lbScope) S.lbScope = 'all';
-  if (!S.lbCat) S.lbCat = 'goals';
+  if (S.lbSubject !== 'teams') S.lbSubject = 'players';
+  const teams = S.lbSubject === 'teams';
+  if (!S.lbCat) S.lbCat = teams ? 'margin' : 'goals';
+  ['lbs-players', 'lbs-teams'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', (id === 'lbs-teams') === teams);
+  });
 
   // The picker is built from the ALL-TIME meta, so it lists the same five
   // competitions however the view was entered — including straight from a link.
@@ -5896,22 +5950,30 @@ async function renderLeaders() {
   // The category list comes from the FILE, not from a copy here — the all-time
   // board carries one category the competition boards do not, and two lists
   // would drift.
-  const cl = data.meta.categories || [];
+  const cl = (teams ? data.meta.categoriesTeam : data.meta.categories) || [];
   if (!cl.some(c => c.key === S.lbCat)) S.lbCat = (cl[0] || {}).key || 'goals';
   cats.innerHTML = cl.map(c =>
     `<button id="lbc-${c.key}"${c.key === S.lbCat ? ' class="on"' : ''}
       onclick="setLeaderCat('${c.key}')">${c.label.toUpperCase()}</button>`).join('');
 
-  const rows = (data.boards || {})[S.lbCat] || [];
+  const rows = ((teams ? data.teamBoards : data.boards) || {})[S.lbCat] || [];
   const cat = cl.find(c => c.key === S.lbCat) || {};
   // ⚠️ SAY WHAT THE NUMBERS CANNOT SEE. Per-game lines only exist from each
   // league's own adoption date, so this board is not all-time however it is
   // labelled; the cohort is people who have played in our five competitions, not
   // everyone on PlayHQ; and PlayHQ's totals include forfeits.
   const notes = [];
-  if (S.lbCat === 'gameGoals') notes.push('Single-game records only exist from each league\u2019s own adoption date \u2014 EFNL from 2024, others from 2022.');
-  if (S.lbCat === 'goalsPerGame') notes.push(`At least ${data.meta.minGp} career games.`);
-  notes.push(`From the ${Number(data.meta.players || 0).toLocaleString('en-AU')} players who have appeared in these competitions. Totals are PlayHQ\u2019s and include forfeits.`);
+  if (teams) {
+    notes.push(`From the ${Number(data.meta.teamGames || 0).toLocaleString('en-AU')} stored games with a result.`);
+    if (S.lbCat !== 'margin') {
+      // ⚠️ The exclusions are stated because the number they remove is large.
+      notes.push(`${Number(data.meta.teamSetAside || 0).toLocaleString('en-AU')} team-quarter set(s) set aside \u2014 a whole game entered in one quarter, a quarter above the final score, or four that do not add up. Roughly a third of games carry no breakdown at all.`);
+    }
+  } else {
+    if (S.lbCat === 'gameGoals') notes.push('Single-game records only exist from each league\u2019s own adoption date \u2014 EFNL from 2024, others from 2022.');
+    if (S.lbCat === 'goalsPerGame') notes.push(`At least ${data.meta.minGp} career games.`);
+    notes.push(`From the ${Number(data.meta.players || 0).toLocaleString('en-AU')} players who have appeared in these competitions. Totals are PlayHQ\u2019s and include forfeits.`);
+  }
   // ⚠️ THE BOARDS ARE A SNAPSHOT. They are rebuilt when a career sweep ends, so
   // from about April they understate anyone still playing by up to a season's
   // goals. The panel does not have this problem — it sums live figures for
@@ -5928,7 +5990,7 @@ async function renderLeaders() {
   body.innerHTML = !rows.length
     ? `<div style="padding:20px;color:var(--tx3);font-size:12px">Nothing qualifies for this board.</div>`
     : `<div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden">
-        ${rows.slice(0, 10).map((e, i) => lbRow(e, i, S.lbCat)).join('')}
+        ${rows.slice(0, 10).map((e, i) => teams ? lbTeamRow(e, i) : lbRow(e, i, S.lbCat)).join('')}
        </div>
        <div style="font-size:10px;color:var(--tx3);margin-top:10px;line-height:1.5">${notes.join(' ')}</div>`;
 
