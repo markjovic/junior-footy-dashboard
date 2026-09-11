@@ -25,7 +25,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const VERSION = 'verify-career-tops v2 2026-09-11 no-dedupe';
+const VERSION = 'verify-career-tops v3 2026-09-11 short-names';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'build-career-tops.js');
@@ -37,6 +37,12 @@ if (!fs.existsSync(REAL)) {
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tops-verify-'));
 fs.mkdirSync(path.join(TMP, 'scripts'), { recursive: true });
 fs.copyFileSync(REAL, path.join(TMP, 'scripts', 'build-career-tops.js'));
+// The manifest supplies the short names; "EFNL 2026" -> "EFNL".
+fs.mkdirSync(path.join(TMP, 'data'), { recursive: true });
+fs.writeFileSync(path.join(TMP, 'data', 'core.json'), JSON.stringify({ manifest: [
+  { seasonId: 'w26', compName: 'WFNL 2026' }, { seasonId: 'w25', compName: 'WFNL 2025' },
+  { seasonId: 'e26', compName: 'EFNL 2026' },
+  { seasonId: 'n23' }, { seasonId: 'o05' }, { seasonId: 'x24' } ] }));
 
 const S = (year, sid, leagueId, league, club, gp, goals, best, held) =>
   ({ year, sid, leagueId, league, club, clubId: club, grade: 'G', gp, goals, best, held, lines: held ? gp : 0 });
@@ -96,11 +102,20 @@ const names = (b) => (b || []).map(e => `${e.name}:${e.v}`).join(', ');
 
 console.log('\n1  It runs and writes');
 let r = run();
-ok('version line', /build-career-tops v2 /.test(r.out));
+ok('version line', /build-career-tops v3 /.test(r.out));
 ok('exit 0', r.code === 0, `exit ${r.code}`);
 ok('all-time board written', !!r.all);
 ok('one file per competition on a held season', !!r.comp('wfnl') && !!r.comp('efnl'), '');
 ok('a league we only see on UNHELD seasons gets no board', !r.comp('gv') && !r.comp('ntfl'));
+
+console.log('\n1b  Competitions carry the short name the dashboard already uses');
+ok('all-time meta lists the competitions with a short name',
+  (r.all.meta.comps || []).some(c => c.id === 'efnl' && c.short === 'EFNL'),
+  JSON.stringify(r.all.meta.comps));
+ok('the competition board carries it too', r.comp('wfnl').meta.short === 'WFNL', r.comp('wfnl').meta.short);
+ok('… taken from the manifest compName, not parsed out of the league name',
+  r.comp('efnl').meta.short === 'EFNL' && !/\(/.test(r.comp('efnl').meta.name),
+  `${r.comp('efnl').meta.short} / ${r.comp('efnl').meta.name}`);
 
 console.log('\n2  Two rows for one (season, club) are BOTH counted');
 // 11,829 players carry a pair, and fetch-career-stats.js reports their summed

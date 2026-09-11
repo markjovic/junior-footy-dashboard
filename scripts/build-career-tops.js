@@ -32,12 +32,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = 'build-career-tops v2 2026-09-11 no-dedupe';
+const VERSION = 'build-career-tops v3 2026-09-11 short-names';
 
 const ROOT = path.resolve(__dirname, '..');
 const PLAYERS = path.join(ROOT, 'players');
 const OUT_DIR = path.join(ROOT, 'data', 'leaderboard');
 const OUT_COMP = path.join(OUT_DIR, 'comp');
+const CORE = path.join(ROOT, 'data', 'core.json');
 
 const N = Math.max(1, Number(process.env.TOPS_N || 15));
 const MIN_GP = Math.max(1, Number(process.env.TOPS_MIN_GP || 20));
@@ -244,19 +245,36 @@ function main() {
   // A season row's `held` flag was set by the walker against the manifest, so the
   // set of leagueIds appearing on held rows IS this project's competitions — and
   // it needs no manifest field this script has never read.
+  // The short name the rest of the dashboard already uses. Parsing it out of the
+  // full name would work for "(WFNL)" and "(YJFL)" and give nothing for the other
+  // three; the manifest's compName is "EFNL 2026", so its first word is the
+  // answer, and it matches the season chips rather than inventing a second
+  // vocabulary. A held season id is the join.
+  const shortOf = new Map();
+  try {
+    for (const m of (JSON.parse(fs.readFileSync(CORE, 'utf8')).manifest || [])) {
+      if (m.seasonId && m.compName) shortOf.set(m.seasonId, String(m.compName).split(/\s+/)[0]);
+    }
+  } catch (e) { log(`⚠️ could not read data/core.json (${e.message}) — boards will carry full names only`); }
+
   const comps = new Map();
   for (const p of players) {
     for (const [id, agg] of p.byLeague) {
       if (!agg.held) continue;
-      const cur = comps.get(id) || { leagueId: id, name: agg.name, players: 0 };
+      const cur = comps.get(id) || { leagueId: id, name: agg.name, short: null, players: 0 };
       cur.players++;
       if (!cur.name && agg.name) cur.name = agg.name;
+      if (!cur.short) {
+        for (const [sid, sh] of p.sidLeague) { if (sh === id && shortOf.has(sid)) { cur.short = shortOf.get(sid); break; } }
+      }
       comps.set(id, cur);
     }
   }
   const compList = [...comps.values()].sort((a, b) => b.players - a.players);
   log(`\ncompetitions found on held seasons: ${compList.length}`);
-  for (const c of compList) log(`  ${c.leagueId}  ${String(c.players).padStart(6)} player(s)  ${c.name}`);
+  for (const c of compList) log(`  ${c.leagueId}  ${String(c.players).padStart(6)} player(s)  ${(c.short || '??').padEnd(5)} ${c.name}`);
+  const noShort = compList.filter(c => !c.short);
+  if (noShort.length) log(`⚠️ ${noShort.length} competition(s) have no short name — the picker will fall back to the full one`);
   if (compList.length !== 5) {
     log(`⚠️ EXPECTED 5. More or fewer means a season is held whose competition is new — not fatal, but look.`);
   }
@@ -274,7 +292,7 @@ function main() {
     meta: { version: VERSION, builtAt: new Date().toISOString(), players: players.length,
             n: N, minGp: MIN_GP,
             categories: CATEGORIES.map(c => ({ key: c.key, label: c.label, dir: c.dir })),
-            comps: compList.map(c => ({ id: c.leagueId, name: c.name, players: c.players })) },
+            comps: compList.map(c => ({ id: c.leagueId, name: c.name, short: c.short || c.name, players: c.players })) },
     boards: allTime,
   };
 
@@ -282,7 +300,7 @@ function main() {
   for (const c of compList) {
     const boards = buildBoards(players, { leagueId: c.leagueId, name: c.name });
     compPayloads.set(c.leagueId, {
-      meta: { version: VERSION, builtAt: payload.meta.builtAt, leagueId: c.leagueId, name: c.name,
+      meta: { version: VERSION, builtAt: payload.meta.builtAt, leagueId: c.leagueId, name: c.name, short: c.short || c.name,
               players: c.players, n: N, minGp: MIN_GP,
               categories: CATEGORIES.filter(x => !x.allTimeOnly).map(x => ({ key: x.key, label: x.label, dir: x.dir })) },
       boards,
