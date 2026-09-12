@@ -1,0 +1,83 @@
+# .github/workflows/build-player-lines.yml
+#
+# Derives per-player totals from the committed lines files and writes
+# data/player-lines/{xx}/{uuid}.json — one small file per player, the same shard
+# split data/players/ uses.
+#
+# ⚠️ MAKES NO PlayHQ CALL. Every figure is arithmetic over data already on disk,
+# so it shares no rate budget and cannot be blocked. A couple of minutes.
+#
+# ⚠️ RUN IT AFTER fetch-game-lines, not before. It reads what that writer stored,
+# so a lines run that has not finished produces totals that are simply out of
+# date — not wrong, but a season short.
+#
+# Leave `apply` at false the first time and read the log.
+
+name: Build player line totals
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'apply — write the player files. Leave false for a dry run that only counts.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      limit:
+        description: 'limit — stop after this many players. 0 = all. Use a small number to see the shape first.'
+        required: false
+        default: '0'
+        type: string
+
+permissions:
+  contents: write
+
+# ⚠️ It writes files and commits, so it takes the lock — but NOT because of
+# PlayHQ. data/player-lines/ is its own tree and no other writer touches it; the
+# group is here so its commit cannot interleave with fetch-game-lines.yml's
+# `git add -A data/`, which would otherwise stage a half-written tree.
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # ⚠️ Required on anything that commits, or the push lands on a detached HEAD.
+          ref: ${{ github.ref_name }}
+
+      - name: Configure git
+        if: ${{ inputs.apply == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
+      # NOTE: no actions/setup-node. The runner ships Node.
+      - name: Build
+        env:
+          BPL_APPLY: ${{ inputs.apply }}
+          BPL_LIMIT: ${{ inputs.limit }}
+        run: |
+          node --version
+          node scripts/build-player-lines.js
+
+      # Anything the script had not pushed — a crash mid-write still commits what
+      # reached the disk.
+      - name: Commit the tail
+        if: ${{ always() && inputs.apply == 'true' }}
+        run: |
+          git add -A data/player-lines/
+          if git diff --staged --quiet; then
+            echo "Nothing left to commit"
+            exit 0
+          fi
+          git commit -m "Player line totals: tail"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
