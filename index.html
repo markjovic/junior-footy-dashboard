@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.240</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.242</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.240</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.242</span>
         </div>
 
 
@@ -5608,8 +5608,10 @@ function renderPlayerGames(data, p) {
 // figure is what the scorer bothered to attribute. Hence `2.1` only where there is
 // something to show, and a bare `2` left alone otherwise — never `2.0`, which
 // would claim none were kicked.
-// The career table's B REC column, and the career figure on the meta line. Both
-// come from the one derived file, so neither costs a lines fetch.
+// The behinds shown after the point in the career table's G column — 5.1 — and the
+// career figure on the meta line. Both come from the one derived file, so neither
+// costs a lines fetch. A separate column was tried and read as two: at that size
+// the gap inside "B REC" was wider than the gap between it and the column before.
 function fillCareerBehinds(uuid, rows) {
   // Clear first, unconditionally. The file may 404, or the player may have none;
   // in both cases the previous player's figure must not still be sitting there.
@@ -5622,12 +5624,15 @@ function fillCareerBehinds(uuid, rows) {
       const sid = r.sid;
       if (!sid) continue;
       const s = pl.seasons && pl.seasons[sid];
-      const el = document.getElementById(`cb-${sid}`);
-      // ⚠️ A SEASON WITH NO LINES STAYS A DASH. Writing 0 there would claim the
-      // player was credited no behinds, when we simply have not walked it.
-      if (!el || !s) continue;
-      el.textContent = s.bRec || '–';
-      if (s.bRec) el.style.color = 'var(--tx)';
+      const el = document.getElementById(`cg-${sid}`);
+      // ⚠️ ONLY APPEND WHERE THERE IS SOMETHING. `5.0` asserts the player kicked no
+      // behinds; a bare `5` says nothing either way, which is the truth when only
+      // about a quarter of a team's behinds are credited to anyone. A season we
+      // have not walked never reaches here, so it keeps its bare figure too.
+      if (!el || !s || !s.bRec) continue;
+      // The goal count stays PlayHQ's own — it is the authority and can exceed the
+      // goals in our stored lines. Only the behinds come from the lines.
+      el.textContent = `${r.goals || 0}.${s.bRec}`;
     }
     const total = (pl.total && pl.total.bRec) || 0;
     const meta = document.getElementById('pm-meta');
@@ -5967,12 +5972,11 @@ function renderCareerSection(rec, uuid, recs) {
         <th style="font-weight:400;padding:0 0 6px">LEAGUE</th>
         <th style="font-weight:400;padding:0 0 6px;width:84px">GRADE</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">GP</th>
-        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">G</th>
-        <!-- Behinds RECORDED, not behinds kicked. Filled from data/player-lines/
-             after the table renders; a season we hold no lines for stays blank,
-             which is different from a zero. -->
-        <th style="font-weight:400;padding:0 0 6px;width:36px;text-align:right"
-            title="Behinds recorded against this player in the games we hold. Scorers credit about a quarter of a team's behinds to a player, so this is a floor.">B REC</th>
+        <!-- Goals, and behinds after the point where any were credited — 5.1
+             rather than a separate column. A bare 5 means none were recorded,
+             never 5.0, which would assert none were kicked. -->
+        <th style="font-weight:400;padding:0 0 6px;width:44px;text-align:right"
+            title="Goals, and behinds where a scorer credited them to this player. About a quarter of a team's behinds reach a named player, so a bare number is not a claim that none were kicked.">G</th>
         <!-- ⚠️ THIS COLUMN IS BEST PLAYER. It read "B", which in football is
              behinds, and it is filled from r.best. Every other table in this file
              already calls it BP. Renamed 2026-09-12; nothing about the data
@@ -5999,8 +6003,8 @@ function renderCareerSection(rec, uuid, recs) {
         <td style="${cell};overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${esc(r.grade || '')}">${esc(r.grade || '')}</td>
         <td style="${cell};text-align:right">${r.gp || '–'}</td>
-        <td style="${cell};text-align:right;color:${r.goals && r.held ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
-        <td style="${cell};text-align:right" id="cb-${esc(r.sid || ('x' + r.year))}">–</td>
+        <td style="${cell};text-align:right;color:${r.goals && r.held ? 'var(--gold)' : 'var(--tx3)'}"
+            id="cg-${esc(r.sid || ('x' + r.year))}">${r.goals || '–'}</td>
         <td style="${cell};text-align:right">${r.best || '–'}</td>
       </tr>`;
       }).join('')}
