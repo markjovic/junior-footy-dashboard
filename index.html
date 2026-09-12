@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.238</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.239</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.238</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.239</span>
         </div>
 
 
@@ -5608,6 +5608,37 @@ function renderPlayerGames(data, p) {
 // figure is what the scorer bothered to attribute. Hence `2.1` only where there is
 // something to show, and a bare `2` left alone otherwise — never `2.0`, which
 // would claim none were kicked.
+// The career table's B REC column, and the career figure on the meta line. Both
+// come from the one derived file, so neither costs a lines fetch.
+function fillCareerBehinds(uuid, rows) {
+  if (!uuid) return;
+  loadPlayerLines(uuid).then(pl => {
+    if (!pl || _panelUuid !== uuid) return;       // panel moved on, or no file
+    for (const r of rows) {
+      const sid = r.sid;
+      if (!sid) continue;
+      const s = pl.seasons && pl.seasons[sid];
+      const el = document.getElementById(`cb-${sid}`);
+      // ⚠️ A SEASON WITH NO LINES STAYS A DASH. Writing 0 there would claim the
+      // player was credited no behinds, when we simply have not walked it.
+      if (!el || !s) continue;
+      el.textContent = s.bRec || '–';
+      if (s.bRec) el.style.color = 'var(--tx)';
+    }
+    const total = (pl.total && pl.total.bRec) || 0;
+    const meta = document.getElementById('pm-meta');
+    // ⚠️ ONLY WHEN THERE IS SOMETHING. Two players in three have none recorded —
+    // measured, 16,474 of 48,687 — and "0 behinds recorded" on the rest would read
+    // as "kicked none" rather than "none were attributed".
+    if (total && meta && meta.dataset.bhd !== 'career') {
+      meta.dataset.bhd = 'career';
+      meta.innerHTML += ` <span style="font-size:10px;color:var(--tx3)" ` +
+        `title="Behinds credited to this player across the ${pl.total.gp} game(s) we hold lines for. Scorers attribute about a quarter of a team's behinds, so this is a floor, not a total.">` +
+        `· ${total} behind${total === 1 ? '' : 's'} recorded</span>`;
+    }
+  });
+}
+
 function fillPanelBehinds(rows, uuid) {
   if (!uuid || !rows || !rows.length) return;
   const bySid = new Map();
@@ -5639,13 +5670,10 @@ function fillPanelBehinds(rows, uuid) {
     if (_panelUuid !== uuid || !any) return;
     const t = document.getElementById('pg-g-total');
     if (t) t.textContent = `${rows.reduce((n, r) => n + r.goals, 0)}.${total}`;
-    const meta = document.getElementById('pm-meta');
-    if (meta && !meta.dataset.bhd) {
-      meta.dataset.bhd = '1';
-      meta.innerHTML += ` <span style="font-size:10px;color:var(--tx3)" ` +
-        `title="Behinds credited to this player in the games we hold. Scorers attribute about a quarter of a team's behinds, so this is a floor, not a total.">` +
-        `· ${total} behind${total === 1 ? '' : 's'} recorded</span>`;
-    }
+    // ⚠️ NO META LINE FROM HERE. fillCareerBehinds writes it from the derived
+    // file, which spans every season we hold rather than the one on screen. Two
+    // writers appending to the same element raced: whichever finished second
+    // appended a second, different figure beside the first.
   });
 }
 
@@ -5922,6 +5950,11 @@ function renderCareerSection(rec, uuid, recs) {
         <th style="font-weight:400;padding:0 0 6px;width:84px">GRADE</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">GP</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">G</th>
+        <!-- Behinds RECORDED, not behinds kicked. Filled from data/player-lines/
+             after the table renders; a season we hold no lines for stays blank,
+             which is different from a zero. -->
+        <th style="font-weight:400;padding:0 0 6px;width:36px;text-align:right"
+            title="Behinds recorded against this player in the games we hold. Scorers credit about a quarter of a team's behinds to a player, so this is a floor.">B REC</th>
         <!-- ⚠️ THIS COLUMN IS BEST PLAYER. It read "B", which in football is
              behinds, and it is filled from r.best. Every other table in this file
              already calls it BP. Renamed 2026-09-12; nothing about the data
@@ -5949,6 +5982,7 @@ function renderCareerSection(rec, uuid, recs) {
             title="${esc(r.grade || '')}">${esc(r.grade || '')}</td>
         <td style="${cell};text-align:right">${r.gp || '–'}</td>
         <td style="${cell};text-align:right;color:${r.goals && r.held ? 'var(--gold)' : 'var(--tx3)'}">${r.goals || '–'}</td>
+        <td style="${cell};text-align:right" id="cb-${esc(r.sid || ('x' + r.year))}">–</td>
         <td style="${cell};text-align:right">${r.best || '–'}</td>
       </tr>`;
       }).join('')}
@@ -5957,6 +5991,10 @@ function renderCareerSection(rec, uuid, recs) {
       ${outside} of ${c.rows.length} season${c.rows.length === 1 ? '' : 's'} are not held in this dashboard —
       shown in grey, and not openable</div>` : ''}
   </div>`;
+
+  // One ~200 byte request, after the table is drawn. A player with no stored
+  // lines has no file and the column simply stays as dashes.
+  fillCareerBehinds(uuid, c.rows);
 
   // One listener on the container, re-bound with the markup it serves.
   box.onclick = (ev) => {
@@ -6536,6 +6574,31 @@ function behindsFor(file, gameId, uuid) {
     if (row) return row[2] || 0;
   }
   return null;
+}
+
+// data/player-lines/{xx}/{uuid}.json — derived by scripts/build-player-lines.js
+// from the lines files. ~200 bytes, one request, sharded the same way
+// data/players/ is. A separate tree because data/players/ is written whole by
+// fetch-career-stats.js and a derived field there would be erased on its next
+// sweep.
+//
+// ⚠️ `bRec` IS BEHINDS *RECORDED*. About 27% of the behinds a team kicks reach a
+// named player, so it is a floor and every label for it says "recorded".
+const plCache = new Map();
+function loadPlayerLines(uuid) {
+  if (!uuid) return Promise.resolve(null);
+  if (plCache.has(uuid)) return Promise.resolve(plCache.get(uuid));
+  const p = fetch(`data/player-lines/${uuid.slice(0, 2)}/${uuid}.json`)
+    .then(r => r.ok ? r.json() : null)
+    .catch(() => null)
+    .then(v => {
+      // A player with no stored lines has no file — a 404 is an ANSWER, cached so
+      // the panel does not ask again every time it opens.
+      plCache.set(uuid, v || null);
+      return v || null;
+    });
+  plCache.set(uuid, p);              // in-flight, so two opens share one request
+  return p.then(v => { plCache.set(uuid, v); return v; });
 }
 
 const linesLoading = {};
