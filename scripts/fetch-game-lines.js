@@ -67,7 +67,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v5 2026-09-11 hidescores-is-display-only';
+const VERSION = 'fetch-game-lines v6 2026-09-12 config-names-from-the-config';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -330,6 +330,7 @@ let votesOffered = 0, votesStored = 0;
   let periodPopulated = 0, periodEmpty = 0, periodNoRows = 0, cumulativeHint = 0, perQuarterHint = 0;
   let configTried = 0, configOk = 0;
   const configSamples = [];
+  const configValues = new Set();   // every `value` the configuration returned
   const bump = (map, k) => map.set(k, (map.get(k) || 0) + 1);
   const cov = (c) => {
     if (!covByComp.has(c)) covByComp.set(c, { games: 0, withLines: 0, sides: 0, exact: 0, partial: 0, empty: 0, hidden: 0, hiddenLines: 0 });
@@ -520,6 +521,7 @@ let votesOffered = 0, votesStored = 0;
     const cfg = (((json.data || {}).discoverGame || {}).round || {}).grade;
     const list = ((cfg || {}).gameStatisticsConfiguration || {}).gameStatistics || [];
     configOk++;
+    for (const x of list) if (x && x.value) configValues.add(String(x.value));
     if (configSamples.length < 2) {
       configSamples.push(`${m.compName} ${m.age || ''}: ` + list.map(x => `${x.value}(${x.pointValue})`).join(' '));
     }
@@ -615,7 +617,12 @@ let votesOffered = 0, votesStored = 0;
 
   log(`\ngameStatisticsConfiguration: ${configOk} of ${configTried} grade call(s) answered`);
   for (const l of configSamples) log('  ' + l);
-  const cfgNames = new Set(configSamples.join(' ').match(/[A-Z_]{4,}/g) || []);
+  // ⚠️ TAKE THE NAMES FROM THE DATA, NOT FROM THE PRINTED LINE. v5 scraped
+  // /[A-Z_]{4,}/ out of the formatted sample, which also contains the competition
+  // — so a 2026-09-12 run reported "WFNL" as a statistic present in the
+  // configuration and never on a player line. A false name in a log people read
+  // is worse than no line at all, and the values were collected already.
+  const cfgNames = new Set(configValues);
   const lineNames = new Set(statKeys.keys());
   const onlyCfg = [...cfgNames].filter(x => !lineNames.has(x));
   if (configOk && onlyCfg.length) {
