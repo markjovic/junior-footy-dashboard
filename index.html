@@ -618,7 +618,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.231</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.232</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -998,7 +998,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.231</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.232</span>
         </div>
 
 
@@ -6431,7 +6431,7 @@ function boxHTML(file, gameId, m) {
   if (g.n) return `<div class="bs-empty">PlayHQ has no player list for this game` +
     `${g.n === 'noplayers' ? ' — the scorer did not enter the sides' : ''}.</div>`;
 
-  const side = (key, teamName, teamGoals, otherRows) => {
+  const side = (key, teamName, teamGoals, teamBehinds, otherRows) => {
     const rows = g[key];
     if (!rows || !rows.length) {
       // ⚠️ SAY SO. One side entered and the other not is 1,230 sides in 2026,
@@ -6449,18 +6449,29 @@ function boxHTML(file, gameId, m) {
     const rest = rows.filter(r => !(r[1] > 0 || r[2] > 0));
     const kicked = rows.reduce((n, r) => n + (r[1] || 0), 0);
     const short = (typeof teamGoals === 'number' && teamGoals > kicked) ? teamGoals - kicked : 0;
+    // ⚠️ `3.0` IS A CLAIM THAT THE PLAYER KICKED NO BEHINDS, AND IT IS USUALLY FALSE.
+    // Measured across 30,942 sides: only 27% of the behinds a team kicked were
+    // credited to a named player, and the best grade managed 44%. So when a side
+    // has NO attributed behinds at all, the figure is goals only — `3`, not `3.0`.
+    // A side that does record them keeps the `G.B` form, because there the zero is
+    // a real zero. Showing a fabricated `.0` beside a real one would make the two
+    // indistinguishable, which is worse than showing neither.
+    const anyBehinds = rows.some(r => (r[2] || 0) > 0);
+    const fig = (r) => anyBehinds ? `${r[1]}.${r[2]}` : `${r[1]}`;
     const vote = (r) => r[3] > 0 ? ` <span class="bs-vote" title="Best player ${r[3]}">★</span>` : '';
     return `<div class="bs-side">
       <div class="bs-team">${teamName}</div>
       ${scorers.map(r => `<div class="bs-scorer"><b>${name(r[0])}${vote(r)}</b>` +
-        `<span class="bs-fig">${r[1]}.${r[2]}</span></div>`).join('')}
+        `<span class="bs-fig">${fig(r)}</span></div>`).join('')}
       ${rest.length ? `<div class="bs-rest">${rest.map(r => `${name(r[0])}${r[3] > 0
         ? ' <span class="bs-vote">★</span>' : ''}`).join(', ')}</div>` : ''}
       ${short ? `<div class="bs-note">${short} goal${short === 1 ? '' : 's'} not attributed to a player.</div>` : ''}
+      ${!anyBehinds && typeof teamBehinds === 'number' && teamBehinds > 0
+        ? `<div class="bs-note">Behinds were credited to the team, not to players.</div>` : ''}
     </div>`;
   };
 
-  return side('h', m.home || 'Home', m.hG, g.a) + side('a', m.away || 'Away', m.aG, g.h);
+  return side('h', m.home || 'Home', m.hG, m.hB, g.a) + side('a', m.away || 'Away', m.aG, m.aB, g.h);
 }
 
 // ── Player search ──────────────────────────────────────────────────
