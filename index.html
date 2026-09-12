@@ -530,6 +530,12 @@ body{overflow-x:hidden}
 #bx-body .mr-box{display:grid;grid-template-columns:1fr 1fr;gap:18px;border-top:none;margin:0;padding:0}
 @media(max-width:640px){#bx-body .mr-box{grid-template-columns:1fr;gap:12px}}
 .bx-open{cursor:pointer}
+.bx-row{cursor:pointer}
+.bx-row:hover{background:var(--s2)}
+/* quarterLine renders a .mr-qtr sized for the results grid; in the modal it has
+   no grid to sit in, so it is given one. */
+.bx-qtr{display:grid;grid-template-columns:1fr;margin-bottom:12px}
+.bx-qtr .mr-qtr{grid-column:1;justify-self:center}
 .bx-open:hover{color:var(--gold)}
 .bs-toggle{font-size:9px;letter-spacing:.5px;color:var(--tx3);background:none;border:none;
   cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit}
@@ -625,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.233</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.235</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -897,6 +903,8 @@ body{overflow-x:hidden}
         <div id="bx-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
       </div>
       <div id="bx-score" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700"></div>
+      <a id="bx-phq" href="#" target="_blank" rel="noopener" title="Open this game on PlayHQ"
+         style="font-size:10px;color:var(--tx3);text-decoration:none;border-bottom:1px dotted var(--tx3)">PlayHQ &#8599;</a>
       <button class="btn-g" onclick="closeBoxModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
     <div class="team-modal-scroll">
@@ -1027,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.233</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.235</span>
         </div>
 
 
@@ -2816,7 +2824,14 @@ function renderResults(age) {
       // but "this game does not count towards a ladder because the teams are in
       // different grades" and "this game is being played right now" are different
       // things, and dimming the second reads as an error rather than as news.
-      return `<div class="match-row" style="${(valid || m.live) ? '' : 'opacity:.5'}">
+      // ⚠️ THE WHOLE ROW IS THE TARGET. A chip labelled BOX SCORE was a second
+      // thing to find and to explain; a row that opens when you click it needs
+      // neither. Quarter scores moved inside with it — they were a permanent
+      // second line on every row for a detail most readers open a game to see.
+      const bxSid = m.gameId ? seasonIdOfComp(m.compName) : '';
+      return `<div class="match-row${bxSid ? ' bx-row' : ''}" ${bxSid
+        ? `data-sid="${bxSid}" data-gid="${bxEsc(m.gameId)}" onclick="openBoxModal(this.dataset)"` : ''
+        } style="${(valid || m.live) ? '' : 'opacity:.5'}">
         <div class="mr-grade">
           <span class="gtag gtag-neutral ${gc}">${abbrevGrade(gLabel(g))}</span>
           ${isGotw?`<svg title="GOTW" width="10" height="10" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="gr-rg" cx="36%" cy="30%" r="65%"><stop offset="0%" stop-color="#ff5252"/><stop offset="48%" stop-color="#cc1010"/><stop offset="100%" stop-color="#780000"/></radialGradient><clipPath id="gr-bc"><ellipse cx="80" cy="80" rx="28" ry="46" transform="rotate(45 80 80)"/></clipPath></defs><ellipse cx="80" cy="80" rx="28" ry="46" fill="url(#gr-rg)" transform="rotate(45 80 80)"/><g clip-path="url(#gr-bc)"><g stroke="white" stroke-width="4.5" stroke-linecap="round"><line x1="83.0" y1="69.0" x2="91.0" y2="77.0"/><line x1="79.6" y1="72.5" x2="87.6" y2="80.5"/><line x1="76.1" y1="76.1" x2="84.1" y2="84.1"/><line x1="72.5" y1="79.6" x2="80.5" y2="87.6"/><line x1="69.0" y1="83.0" x2="77.0" y2="91.0"/><line x1="65.5" y1="86.5" x2="73.5" y2="94.5"/></g><line x1="89" y1="71" x2="68" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"/></g></svg>`:''}
@@ -2839,8 +2854,6 @@ function renderResults(age) {
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
         <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
-        ${quarterLine(m)}
-        ${boxBtn(m)}
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">${roundLabel(rms[0])}</div>${rows}`;
@@ -5537,7 +5550,12 @@ function renderPlayerGames(data, p) {
     // have not walked yet answer honestly inside the modal.
     const bxSid = r.gameId ? seasonIdOfComp(r.compName) : '';
 
-    return `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
+    // ⚠️ THE WHOLE ROW, not the score cell. A clickable cell inside an otherwise
+    // inert row is a target nobody finds: the first version made only the score
+    // open, and it read as a dead row.
+    return `<div class="${bxSid?'bx-row':''}" ${bxSid
+      ? `data-sid="${bxSid}" data-gid="${bxEsc(r.gameId)}" data-home="${bxEsc(homeDisplay)}" data-away="${bxEsc(awayDisplay)}" data-score="${rr?bxEsc(rr.score):''}" data-meta="${bxEsc([r.compName, r.ageName, r.gradeName, r.round].filter(Boolean).join(' · '))}" onclick="openBoxModal(this.dataset)" title="Box score"` : ''
+      } style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
       <div>
         <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3)">${r.round}</div>
         <div style="font-size:9px;color:var(--tx3)">${r.date ? new Date(r.date).toLocaleDateString('en-AU',{day:'numeric',month:'short'}) : ''}</div>
@@ -5555,9 +5573,7 @@ function renderPlayerGames(data, p) {
         : ''}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
-      <div class="${bxSid?'bx-open':''}" ${bxSid
-        ? `data-sid="${bxSid}" data-gid="${bxEsc(r.gameId)}" data-home="${bxEsc(homeDisplay)}" data-away="${bxEsc(awayDisplay)}" data-score="${rr?bxEsc(rr.score):''}" data-meta="${bxEsc([r.compName, r.ageName, r.gradeName, r.round].filter(Boolean).join(' · '))}" onclick="openBoxModal(this.dataset)" title="Box score"`
-        : ''} style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
+      <div style=""font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
@@ -5705,11 +5721,16 @@ function valueCard(c) {
   const e = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const gid = c.gameId;
+  // ⚠️ CAPTURE BEFORE THE REASSIGNMENT. The next line replaces `c` with a
+  // three-field escaped copy, so anything read off `c` afterwards is undefined —
+  // which is why `gid` is taken here and why `sid` has to be too. Reading c.sid
+  // below silently produced a PlayHQ link instead of a box score.
+  const sid = c.sid;
   c = { v: e(c.v), label: e(c.label), detail: e(c.detail) };
   // ⚠️ LINK ONLY WHAT WE CAN NAME. A game we do not hold has no round or teams,
   // so the detail is "2023 · NTFL SENIORS" — a link on that would promise a game
   // page for a season this dashboard knows nothing about beyond its id.
-  if (gid) c.detail = gameLink(gid, c.detail);
+  if (gid) c.detail = gameLink(gid, c.detail, sid, c.detail);
   return `<div style="flex:1;background:var(--s3);border-radius:var(--r);padding:9px 11px;min-width:0">
     <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);letter-spacing:1px;margin-bottom:3px">${c.label}</div>
     <div style="font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.v}
@@ -5897,11 +5918,22 @@ function renderCareerSection(rec, uuid, recs) {
 // link without anything else being looked up. Note this is NOT the shape the
 // profile links use — those carry the tenant as a query parameter.
 const gameUrl = (gameId) => `https://www.playhq.com/afl/org/a/a/a/game-centre/${gameId}`;
-const gameLink = (gameId, text) => gameId
-  ? `<a href="${gameUrl(gameId)}" target="_blank" rel="noopener"
+// ⚠️ PREFER OUR OWN BOX SCORE. When the season id is known we hold — or can hold —
+// player lines for that game, so the click opens the modal and stays on the site;
+// the PlayHQ link lives in the modal header instead. Without a season id (a game
+// in a competition this dashboard does not track) it falls back to leaving the
+// site, because there is nothing here to open.
+const gameLink = (gameId, text, sid, meta) => {
+  if (!gameId) return text;
+  if (sid) {
+    return `<span class="bx-open" data-sid="${bxEsc(sid)}" data-gid="${bxEsc(gameId)}"` +
+      `${meta ? ` data-meta="${bxEsc(meta)}"` : ''} onclick="openBoxModal(this.dataset)"` +
+      ` style="border-bottom:1px dotted var(--tx3)" title="Box score">${text}</span>`;
+  }
+  return `<a href="${gameUrl(gameId)}" target="_blank" rel="noopener"
        style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--tx3)"
-       title="Open this game on PlayHQ">${text} \u2197</a>`
-  : text;
+       title="Open this game on PlayHQ">${text} \u2197</a>`;
+};
 
 // ── CAREER LEADERBOARDS ─────────────────────────────────────────────────────
 // data/leaderboard/all-time.json and data/leaderboard/comp/<leagueId>.json,
@@ -5935,7 +5967,7 @@ function lbTeamRow(e, i) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const when = [e.year, e.round].filter(Boolean).map(esc).join(' · ');
   const extra0 = [when, esc(e.score)].filter(Boolean).join(' · ');
-  const extra = e.gameId ? gameLink(esc(e.gameId), extra0) : extra0;
+  const extra = e.gameId ? gameLink(esc(e.gameId), extra0, e.sid, extra0) : extra0;
   return `<div style="display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;
       padding:9px 12px;border-bottom:1px solid var(--b1)">
     <div style="font-family:'DM Mono',monospace;font-size:12px;color:${i < 3 ? 'var(--gold)' : 'var(--tx3)'}">${i + 1}</div>
@@ -5989,7 +6021,7 @@ function lbRow(e, i, cat) {
     // Link only what we can name. A game we do not hold has no round or teams, so
     // its line is a year and a league — a link there promises a page we cannot
     // vouch for.
-    if (named) extra = gameLink(esc(e.gameId), extra);
+    if (named) extra = gameLink(esc(e.gameId), extra, e.sid, extra);
   } else if (cat === 'seasonGoals' && e.year) extra = esc(e.year);
   else if (cat === 'earliest') extra = `${esc(e.seasons)} season${e.seasons === 1 ? '' : 's'}`;
   else if (e.gp) extra = `${esc(e.gp)} game${e.gp === 1 ? '' : 's'}`;
@@ -6290,8 +6322,12 @@ const cumulate = (arr) => {
   return out;
 };
 
-function quarterLine(m) {
-  if (S.qtrMode === 'off') return '';
+// `mode` overrides S.qtrMode. The box score passes one so the quarters are always
+// there when a game is opened: inside the modal 'off' would leave the person who
+// clicked a row looking at the thing they clicked away from.
+function quarterLine(m, mode) {
+  const QM = mode || S.qtrMode;
+  if (QM === 'off') return '';
   const hq = m.hQ, aq = m.aQ;
   if (!Array.isArray(hq) || !Array.isArray(aq) || !hq.length || hq.length !== aq.length) return '';
   // ⚠️ A NULL QUARTER IS A GAP, NOT A ZERO.
@@ -6315,8 +6351,8 @@ function quarterLine(m) {
   };
   const anyNull = hq.some(v => v === null || v === undefined) ||
                   aq.some(v => v === null || v === undefined);
-  const h = S.qtrMode === 'cum' ? (anyNull ? cumulatePartial(hq) : cumulate(hq)) : hq;
-  const a = S.qtrMode === 'cum' ? (anyNull ? cumulatePartial(aq) : cumulate(aq)) : aq;
+  const h = QM === 'cum' ? (anyNull ? cumulatePartial(hq) : cumulate(hq)) : hq;
+  const a = QM === 'cum' ? (anyNull ? cumulatePartial(aq) : cumulate(aq)) : aq;
   // GOALS AND BEHINDS UNDER THE POINTS, when PlayHQ reported them — "1.4" says
   // more than "10", separating accurate kicking from near misses, and it is what
   // PlayHQ prints under each column. Points-only where the breakdown is absent.
@@ -6339,8 +6375,8 @@ function quarterLine(m) {
       return [g, b];
     });
   };
-  const hG = hgb ? (S.qtrMode === 'cum' ? cumGB(hgb) : hgb) : null;
-  const aG = agb ? (S.qtrMode === 'cum' ? cumGB(agb) : agb) : null;
+  const hG = hgb ? (QM === 'cum' ? cumGB(hgb) : hgb) : null;
+  const aG = agb ? (QM === 'cum' ? cumGB(agb) : agb) : null;
 
   // A quarter CALCULATED from the total rather than reported. It always
   // reconciles by construction, so without a mark it looks more certain than the
@@ -6448,16 +6484,6 @@ function loadLines(sid) {
 // because whether that season has a lines file yet is not knowable from core.json
 // — the answer arrives with the fetch, and a chip that explains itself once is
 // better than no chip on a season that does have data.
-function boxBtn(m) {
-  if (!m || !m.gameId) return '';
-  const sid = seasonIdOfComp(m.compName);
-  if (!sid) return '';
-  // ⚠️ DETAILS RIDE ON data-* ATTRIBUTES, NOT IN THE onclick STRING. A team name
-  // with an apostrophe — Sacred Heart O'Connor, and there are several — would
-  // close the handler's quote early and break the row silently.
-  return `<div class="mr-boxbtn"><button class="bs-toggle" data-sid="${sid}" data-gid="${m.gameId}"` +
-    ` onclick="openBoxModal(this.dataset)">BOX SCORE</button></div>`;
-}
 
 // Opens the modal over whatever is already on screen. `d` is a dataset or a plain
 // object: { sid, gid } at minimum, plus home/away/score/meta when the caller knows
@@ -6481,6 +6507,7 @@ async function openBoxModal(d) {
   document.getElementById('bx-meta').textContent =
     d.meta || [m.compName, m.age, m.rawGrade, m.round ? `Round ${m.round}` : ''].filter(Boolean).join(' · ');
   document.getElementById('bx-score').textContent = score;
+  document.getElementById('bx-phq').href = gameUrl(gid);
   body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:24px;gap:10px;color:var(--tx3)">
     <div class="spinner"></div><span style="font-size:12px">Loading box score…</span></div>`;
   modal.style.display = 'flex';
@@ -6488,7 +6515,10 @@ async function openBoxModal(d) {
   // The person may have closed it while the file was downloading; repainting a
   // shut modal is harmless but repainting it OPEN would not be.
   if (modal.style.display === 'none') return;
-  body.innerHTML = `<div class="mr-box">${boxHTML(file, gid, { ...m, home, away })}</div>`;
+  // Quarters first — the shape of the game — then who did what in it.
+  const q = m.hQ ? quarterLine(m, S.qtrMode === 'off' ? 'per' : S.qtrMode) : '';
+  body.innerHTML = (q ? `<div class="bx-qtr">${q}</div>` : '') +
+    `<div class="mr-box">${boxHTML(file, gid, { ...m, home, away })}</div>`;
 }
 
 function closeBoxModal() {
