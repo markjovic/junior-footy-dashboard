@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.236</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.237</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -779,8 +779,6 @@ body{overflow-x:hidden}
             <div class="card-hdr" style="cursor:pointer;user-select:none" onclick="toggleResultsCard()">
               <span class="card-title">Results</span>
               <span class="card-meta" id="results-meta"></span>
-              <button class="qtr-btn" id="qtr-btn" onclick="event.stopPropagation();cycleQuarters()"
-                title="Quarter-by-quarter scores">Qtrs: off</button>
               <span id="results-toggle" style="font-size:10px;color:var(--tx3);margin-left:8px">▼</span>
             </div>
             <div id="results-body"></div>
@@ -902,6 +900,8 @@ body{overflow-x:hidden}
         <div class="team-modal-title" id="bx-title">Box score</div>
         <div id="bx-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
       </div>
+      <button class="qtr-btn" id="bx-qtr-btn" onclick="cycleQuarters()"
+              title="Quarter scores: running total or per quarter">Total</button>
       <div id="bx-score" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700"></div>
       <a id="bx-phq" href="#" target="_blank" rel="noopener" title="Open this game on PlayHQ"
          style="font-size:10px;color:var(--tx3);text-decoration:none;border-bottom:1px dotted var(--tx3)">PlayHQ &#8599;</a>
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.236</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.237</span>
         </div>
 
 
@@ -1189,7 +1189,7 @@ function buildHash() {
   }
   // The quarter view travels in a shared link — "look at this game" is exactly
   // when someone wants the breakdown they were looking at.
-  if (S.qtrMode && S.qtrMode !== 'off') p.push(['q', S.qtrMode]);
+  if (qtrMode() !== 'cum') p.push(['q', qtrMode()]);
   if (S.selRound) p.push(['r', S.selRound]);
   if (S.selTeam) p.push(['t', S.selTeam]);
   return p.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
@@ -1255,7 +1255,7 @@ function saveFilters() {
       selectedAge: S.selectedAge,
       selGrades: [...S.selGrades],
       selRound:  S.selRound,
-      qtrMode:   S.qtrMode,
+      qtrMode:   qtrMode(),
       selLdrGrade: S.selLdrGrade,
       selTeam:   S.selTeam,
       view:       S.view,
@@ -1324,7 +1324,7 @@ let S = {
   //                       where a game turned; cumulative hides a big third.
   // Stored per quarter because that is the primitive the API returns; the
   // cumulative view is derived, never the other way round.
-  qtrMode: 'off',
+  qtrMode: 'cum',
   roster: {},    // { "TeamName": { grade:"B", age:"U12" } }
   // { "EFNL 2026|U12|3": "matchId", "EFNL 2026|U12|F:GF": "matchId" }
   // compName|age|roundKey -> matchId. The compName carries the season, so
@@ -6302,21 +6302,31 @@ function compNameOfSeason(seasonId) {
 // one gets NO LINE — not a placeholder, not a row of dashes. A gap that looks
 // like a rendering fault invites someone to go looking for a bug that is not
 // there.
-const QTR_MODES = ['off', 'cum', 'q'];
-const QTR_LABEL = { off: 'Qtrs: off', cum: 'Qtrs: total', q: 'Qtrs: each' };
+// ⚠️ 'off' IS GONE, AND ANYTHING CARRYING IT MIGRATES TO 'cum'. Quarters moved out
+// of the results view and into the box score, where a game is opened BECAUSE
+// someone wants its detail — so a state that shows nothing controls nothing. Two
+// modes now, cumulative first, because a running total is how a scoreboard reads.
+// A saved filter and a shared URL can both still say 'off'; both are read through
+// qtrMode(), never raw, so an old link lands on cumulative rather than on a state
+// that no longer exists.
+const QTR_MODES = ['cum', 'q'];
+const QTR_LABEL = { cum: 'Total', q: 'Per quarter' };
+const qtrMode = () => (S.qtrMode === 'q' ? 'q' : 'cum');
 
+// Called from the box score header. The modal repaints itself rather than the
+// page: `render()` would rebuild the results list underneath and leave the open
+// game untouched, which reads as a dead button.
 function cycleQuarters() {
-  const i = QTR_MODES.indexOf(S.qtrMode);
-  S.qtrMode = QTR_MODES[(i + 1) % QTR_MODES.length];
+  S.qtrMode = qtrMode() === 'cum' ? 'q' : 'cum';
   syncQtrBtn();
   saveFilters();
-  render();
+  if (_bxLast) openBoxModal(_bxLast);
 }
 function syncQtrBtn() {
-  const b = document.getElementById('qtr-btn');
+  const b = document.getElementById('bx-qtr-btn');
   if (!b) return;
-  b.textContent = QTR_LABEL[S.qtrMode] || QTR_LABEL.off;
-  b.classList.toggle('on', S.qtrMode !== 'off');
+  b.textContent = QTR_LABEL[qtrMode()];
+  b.classList.toggle('on', qtrMode() === 'q');
 }
 
 // A running total from the stored per-quarter values. The last entry equals the
@@ -6331,8 +6341,7 @@ const cumulate = (arr) => {
 // there when a game is opened: inside the modal 'off' would leave the person who
 // clicked a row looking at the thing they clicked away from.
 function quarterLine(m, mode) {
-  const QM = mode || S.qtrMode;
-  if (QM === 'off') return '';
+  const QM = mode || qtrMode();
   const hq = m.hQ, aq = m.aQ;
   if (!Array.isArray(hq) || !Array.isArray(aq) || !hq.length || hq.length !== aq.length) return '';
   // ⚠️ A NULL QUARTER IS A GAP, NOT A ZERO.
@@ -6447,6 +6456,10 @@ function quarterLine(m, mode) {
 const bxEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, ch =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
+// The dataset the modal was last opened with, so the quarter toggle can repaint
+// the SAME game. Without it the button would have to guess what is on screen.
+let _bxLast = null;
+
 const linesLoading = {};
 const seasonIdOfComp = (c) => ((S.manifest || []).find(m => m.compName === c) || {}).seasonId || '';
 
@@ -6497,6 +6510,9 @@ function loadLines(sid) {
 async function openBoxModal(d) {
   const gid = d.gid;
   if (!gid) return;
+  // A DOMStringMap is live on the element; copied so a repaint after the row is
+  // re-rendered cannot read a detached node's attributes.
+  _bxLast = { sid: d.sid, gid: d.gid, home: d.home, away: d.away, score: d.score, meta: d.meta };
   // The caller may not know the season — an all-time leaderboard row does not.
   // Try the loaded season's records; if that fails the modal still opens, still
   // names the game from what the caller passed, and still offers PlayHQ.
@@ -6518,6 +6534,7 @@ async function openBoxModal(d) {
     d.meta || [m.compName, m.age, m.rawGrade, m.round ? `Round ${m.round}` : ''].filter(Boolean).join(' · ');
   document.getElementById('bx-score').textContent = score;
   document.getElementById('bx-phq').href = gameUrl(gid);
+  syncQtrBtn();
   body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:24px;gap:10px;color:var(--tx3)">
     <div class="spinner"></div><span style="font-size:12px">Loading box score…</span></div>`;
   modal.style.display = 'flex';
@@ -6526,12 +6543,13 @@ async function openBoxModal(d) {
   // shut modal is harmless but repainting it OPEN would not be.
   if (modal.style.display === 'none') return;
   // Quarters first — the shape of the game — then who did what in it.
-  const q = m.hQ ? quarterLine(m, S.qtrMode === 'off' ? 'per' : S.qtrMode) : '';
+  const q = m.hQ ? quarterLine(m, qtrMode()) : '';
   body.innerHTML = (q ? `<div class="bx-qtr">${q}</div>` : '') +
     `<div class="mr-box">${boxHTML(file, gid, { ...m, home, away })}</div>`;
 }
 
 function closeBoxModal() {
+  _bxLast = null;
   const modal = document.getElementById('box-modal');
   modal.style.display = 'none';
   document.getElementById('bx-body').innerHTML = '';
@@ -7530,6 +7548,7 @@ async function init() {
       if (['all','M','F'].includes(f.finalsGender)) S.finalsGender = f.finalsGender;
       if (['all','junior','senior'].includes(f.finalsLevel)) S.finalsLevel = f.finalsLevel;
       if (typeof f.selClub === 'string') S.selClub = f.selClub;
+      // 'off' from an older saved filter falls through to the default.
       if (QTR_MODES.includes(f.qtrMode)) S.qtrMode = f.qtrMode;
 
       // Restore the ladder tab — validate it is still a grade in this age. It is
@@ -7641,7 +7660,7 @@ async function init() {
       if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
       if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
       if (u.v === 'finals' || u.v === 'dash' || u.v === 'leaders') S.view = u.v;
-      S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'off';
+      S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'cum';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
       // one that does nothing.
