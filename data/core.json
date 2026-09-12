@@ -999,7 +999,7 @@
         "results": true,
         "players": true,
         "matches": 2098,
-        "players_n": 6767
+        "players_n": 6766
       },
       "state": "complete",
       "stateAt": "2026-09-07T01:00:36.140Z"
@@ -1431,7 +1431,7 @@
         "results": true,
         "players": true,
         "matches": 5498,
-        "players_n": 18184
+        "players_n": 18188
       },
       "state": "active",
       "stateAt": "2026-09-07T01:00:36.140Z"
@@ -1551,7 +1551,7 @@
         "results": true,
         "players": true,
         "matches": 2272,
-        "players_n": 8852
+        "players_n": 8850
       },
       "state": "active",
       "stateAt": "2026-09-07T01:00:36.140Z"
@@ -1614,7 +1614,7 @@
         "results": true,
         "players": true,
         "matches": 3109,
-        "players_n": 9157
+        "players_n": 9155
       },
       "state": "complete",
       "stateAt": "2026-09-08T02:03:13.634Z"
@@ -20454,7 +20454,7 @@
   },
   "lastUpdated": "2026-09-12T13:28:55.643Z",
   "lastResultsFetch": "2026-09-12T13:28:55.643Z",
-  "lastStatsFetch": "2026-09-07T03:08:48.082Z",
+  "lastStatsFetch": "2026-09-12T14:13:19.963Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
@@ -20466,7 +20466,7 @@
       "file": "data/seasons/2170ac5a-players.json",
       "seasonId": "2170ac5a",
       "kind": "players",
-      "bytes": 4024823
+      "bytes": 4024066
     },
     {
       "file": "data/seasons/263ca13b-core.json",
@@ -20478,7 +20478,7 @@
       "file": "data/seasons/263ca13b-players.json",
       "seasonId": "263ca13b",
       "kind": "players",
-      "bytes": 3784624
+      "bytes": 3784107
     },
     {
       "file": "data/seasons/2dcbf383-core.json",
@@ -20490,7 +20490,7 @@
       "file": "data/seasons/2dcbf383-players.json",
       "seasonId": "2dcbf383",
       "kind": "players",
-      "bytes": 8123198
+      "bytes": 8124914
     },
     {
       "file": "data/seasons/3733598c-core.json",
@@ -20622,7 +20622,7 @@
       "file": "data/seasons/cda2f0ec-players.json",
       "seasonId": "cda2f0ec",
       "kind": "players",
-      "bytes": 4731860
+      "bytes": 4730946
     },
     {
       "file": "data/seasons/d6ed597a-core.json",
