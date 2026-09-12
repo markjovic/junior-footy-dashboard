@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.237</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.238</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.237</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.238</span>
         </div>
 
 
@@ -5573,8 +5573,9 @@ function renderPlayerGames(data, p) {
         : ''}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
-      <div style=""font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
-      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right"
+           ${r.gameId ? `id="pg-g-${bxEsc(r.gameId)}"` : ''}>${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
   }).join('') +
@@ -5587,9 +5588,65 @@ function renderPlayerGames(data, p) {
                return t.length ? `${t.filter(x=>x.res==='W').length}-${t.filter(x=>x.res==='L').length}-${t.filter(x=>x.res==='D').length}` : '–'; })()
     }</div>
     <div></div>
-    <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);text-align:right">${rows.reduce((s,r)=>s+r.goals,0)||'–'}</div>
+    <div id="pg-g-total" style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);text-align:right">${rows.reduce((s,r)=>s+r.goals,0)||'–'}</div>
     <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${rows.reduce((s,r)=>s+r.bp,0)||'–'}</div>
   </div>`;
+
+  // ⚠️ AFTER the list is on screen, never before. The lines file is ~1 MB and the
+  // games list owes it nothing — the rows render from data already here and the
+  // behinds arrive when they arrive. Blocking on it would make every panel open
+  // wait for a file most people will not look at.
+  fillPanelBehinds(rows, _panelUuid);
+}
+
+// PlayHQ publishes no per-player behinds total anywhere, so this is the one place
+// the figure exists: `1_POINT_SCORE`, per player per game, from the lines files.
+//
+// ⚠️ IT IS AN UNDERCOUNT AND THE WORDING MUST NOT PRETEND OTHERWISE. Measured over
+// 30,942 sides: 27% of the behinds a team kicked were credited to a named player,
+// and the best age group managed 44%. A goal figure is near-complete; a behind
+// figure is what the scorer bothered to attribute. Hence `2.1` only where there is
+// something to show, and a bare `2` left alone otherwise — never `2.0`, which
+// would claim none were kicked.
+function fillPanelBehinds(rows, uuid) {
+  if (!uuid || !rows || !rows.length) return;
+  const bySid = new Map();
+  for (const r of rows) {
+    if (!r.gameId) continue;
+    const sid = seasonIdOfComp(r.compName);
+    if (!sid) continue;                       // a competition we do not hold
+    if (!bySid.has(sid)) bySid.set(sid, []);
+    bySid.get(sid).push(r);
+  }
+  if (!bySid.size) return;
+  let total = 0, any = false;
+  const waits = [];
+  for (const [sid, list] of bySid) {
+    waits.push(loadLines(sid).then(file => {
+      // ⚠️ The panel may have moved to another player or year while this
+      // downloaded. Painting then would put one player's behinds on another's row.
+      if (_panelUuid !== uuid) return;
+      for (const r of list) {
+        const b = behindsFor(file, r.gameId, uuid);
+        if (!b) continue;                     // null (no line) and 0 both render as-is
+        any = true; total += b;
+        const el = document.getElementById(`pg-g-${r.gameId}`);
+        if (el) { el.textContent = `${r.goals || 0}.${b}`; el.style.color = 'var(--gold)'; }
+      }
+    }));
+  }
+  Promise.all(waits).then(() => {
+    if (_panelUuid !== uuid || !any) return;
+    const t = document.getElementById('pg-g-total');
+    if (t) t.textContent = `${rows.reduce((n, r) => n + r.goals, 0)}.${total}`;
+    const meta = document.getElementById('pm-meta');
+    if (meta && !meta.dataset.bhd) {
+      meta.dataset.bhd = '1';
+      meta.innerHTML += ` <span style="font-size:10px;color:var(--tx3)" ` +
+        `title="Behinds credited to this player in the games we hold. Scorers attribute about a quarter of a team's behinds, so this is a floor, not a total.">` +
+        `· ${total} behind${total === 1 ? '' : 's'} recorded</span>`;
+    }
+  });
 }
 
 
@@ -6459,6 +6516,27 @@ const bxEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, ch =>
 // The dataset the modal was last opened with, so the quarter toggle can repaint
 // the SAME game. Without it the button would have to guess what is on screen.
 let _bxLast = null;
+
+// A player's behinds in one game, from the season's lines file. null means the
+// file has no line for them — a game outside what we hold, or a side the scorer
+// never entered — which is NOT zero and must not render as one.
+function behindsFor(file, gameId, uuid) {
+  if (!file || !gameId || !uuid) return null;
+  const g = file.games && file.games[gameId];
+  if (!g || g.n) return null;
+  if (!file._ix) {
+    // uuid -> dictionary index, built once per file and cached on it.
+    file._ix = new Map();
+    (file.players || []).forEach((p, i) => { if (p && p[0]) file._ix.set(String(p[0]), i); });
+  }
+  const i = file._ix.get(String(uuid));
+  if (i === undefined) return null;
+  for (const side of ['h', 'a']) {
+    const row = (g[side] || []).find(r => r[0] === i);
+    if (row) return row[2] || 0;
+  }
+  return null;
+}
 
 const linesLoading = {};
 const seasonIdOfComp = (c) => ((S.manifest || []).find(m => m.compName === c) || {}).seasonId || '';
