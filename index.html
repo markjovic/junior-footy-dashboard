@@ -524,6 +524,13 @@ body{overflow-x:hidden}
    Spans the whole row, unlike .mr-qtr which is centred over columns 2-4: a list
    of names needs the width, and a centred column of them reads as a poem. */
 .mr-boxbtn{grid-column:1/-1;justify-self:center;margin-top:3px}
+.bx-overlay{z-index:500}
+/* In the modal the two sides always sit side by side above 640px; the inline
+   variant had to share a match row, this owns the width. */
+#bx-body .mr-box{display:grid;grid-template-columns:1fr 1fr;gap:18px;border-top:none;margin:0;padding:0}
+@media(max-width:640px){#bx-body .mr-box{grid-template-columns:1fr;gap:12px}}
+.bx-open{cursor:pointer}
+.bx-open:hover{color:var(--gold)}
 .bs-toggle{font-size:9px;letter-spacing:.5px;color:var(--tx3);background:none;border:none;
   cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit}
 .bs-toggle:hover{color:var(--tx2);background:var(--s3)}
@@ -618,7 +625,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.232</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.233</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -876,6 +883,28 @@ body{overflow-x:hidden}
   </main>
 </div>
 
+<!-- ── BOX SCORE MODAL ──
+     z-index 500 against the player panel's 400, so it opens ON TOP of a player's
+     history and closing it simply reveals the panel again — no state to restore,
+     because the panel was never hidden. Reached from a match row and from a row
+     in a player's game history. -->
+<div class="team-modal-overlay bx-overlay" id="box-modal" style="display:none"
+     onclick="if(event.target===this)closeBoxModal()">
+  <div class="team-modal" style="width:760px">
+    <div class="team-modal-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="team-modal-title" id="bx-title">Box score</div>
+        <div id="bx-meta" style="font-size:10px;color:var(--tx3);margin-top:1px"></div>
+      </div>
+      <div id="bx-score" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700"></div>
+      <button class="btn-g" onclick="closeBoxModal()" style="padding:5px 10px;font-size:12px">✕</button>
+    </div>
+    <div class="team-modal-scroll">
+      <div class="team-modal-body" id="bx-body" style="padding:14px 18px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── PLAYER PANEL MODAL ── -->
 <div class="team-modal-overlay" id="player-modal" style="display:none" onclick="if(event.target===this)closePlayerModal()">
   <div class="team-modal">
@@ -998,7 +1027,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.232</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.233</span>
         </div>
 
 
@@ -5425,6 +5454,10 @@ function renderPlayerGames(data, p) {
           const ageShort = rowAge || (mm && mm.age ? mm.age : '');
 
           rows.push({
+            // PlayHQ's own game id, the exact key the lines files use. Present on
+            // every gameStatistics row; kept so the score cell can open a box score
+            // without re-deriving anything.
+            gameId: g.id || '',
             round: g.round?.name || '',
             date: g.date || '',
             home, away, teamName, clubName,
@@ -5497,6 +5530,12 @@ function renderPlayerGames(data, p) {
     const oppStyle = 'color:var(--tx2)';
     const dimmed = !r.isCurrentClub;
     const rr = r.res ? { res: r.res, score: r.score } : null;
+    // ⚠️ ONLY OFFER THE CLICK WHERE A BOX SCORE COULD EXIST. This panel reaches a
+    // player's WHOLE career — leagues we do not track, seasons before this site
+    // existed — so a competition with no manifest entry has no lines file and the
+    // cell stays inert rather than opening an empty modal. Seasons we track but
+    // have not walked yet answer honestly inside the modal.
+    const bxSid = r.gameId ? seasonIdOfComp(r.compName) : '';
 
     return `<div style="display:grid;grid-template-columns:${COLS};align-items:center;padding:6px 16px;border-top:1px solid var(--b1);gap:6px;font-size:11px;opacity:${dimmed?0.5:1}">
       <div>
@@ -5516,7 +5555,9 @@ function renderPlayerGames(data, p) {
         : ''}</div>
       <div style="display:flex;align-items:center;justify-content:center">${compLogoHtml(r.compName)}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;text-align:center;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.res:'–'}</div>
-      <div style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
+      <div class="${bxSid?'bx-open':''}" ${bxSid
+        ? `data-sid="${bxSid}" data-gid="${bxEsc(r.gameId)}" data-home="${bxEsc(homeDisplay)}" data-away="${bxEsc(awayDisplay)}" data-score="${rr?bxEsc(rr.score):''}" data-meta="${bxEsc([r.compName, r.ageName, r.gradeName, r.round].filter(Boolean).join(' · '))}" onclick="openBoxModal(this.dataset)" title="Box score"`
+        : ''} style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;white-space:nowrap;color:${rr?(rr.res==='W'?'var(--green)':rr.res==='L'?'var(--red)':'var(--orange)'):'var(--tx3)'}">${rr?rr.score:'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:${r.goals?'var(--gold)':'var(--tx3)'};text-align:right">${r.goals||'–'}</div>
       <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);text-align:right">${r.bp?'★':'–'}</div>
     </div>`;
@@ -6359,6 +6400,12 @@ function quarterLine(m) {
 // "Show young age groups (U8–U10)" switch, which drops the match rows entirely —
 // so a hidden age group has no card to expand and this code never runs for it.
 
+// Attribute-safe escaper at module scope. ⚠️ There are two other `esc` helpers in
+// this file and both are local `const`s inside other functions, so neither is
+// reachable from here — calling one would throw only when a panel row rendered.
+const bxEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
 const linesLoading = {};
 const seasonIdOfComp = (c) => ((S.manifest || []).find(m => m.compName === c) || {}).seasonId || '';
 
@@ -6405,21 +6452,51 @@ function boxBtn(m) {
   if (!m || !m.gameId) return '';
   const sid = seasonIdOfComp(m.compName);
   if (!sid) return '';
-  return `<div class="mr-boxbtn"><button class="bs-toggle" ` +
-    `onclick="toggleBox(this,'${sid}','${m.gameId}','${String(m.id).replace(/'/g, "\\'")}')">BOX SCORE</button></div>` +
-    `<div class="mr-box" id="box-${m.id}" style="display:none"></div>`;
+  // ⚠️ DETAILS RIDE ON data-* ATTRIBUTES, NOT IN THE onclick STRING. A team name
+  // with an apostrophe — Sacred Heart O'Connor, and there are several — would
+  // close the handler's quote early and break the row silently.
+  return `<div class="mr-boxbtn"><button class="bs-toggle" data-sid="${sid}" data-gid="${m.gameId}"` +
+    ` onclick="openBoxModal(this.dataset)">BOX SCORE</button></div>`;
 }
 
-async function toggleBox(btn, sid, gameId, matchId) {
-  const el = document.getElementById(`box-${matchId}`);
-  if (!el) return;
-  if (el.style.display !== 'none') { el.style.display = 'none'; btn.textContent = 'BOX SCORE'; return; }
-  btn.textContent = 'LOADING…';
+// Opens the modal over whatever is already on screen. `d` is a dataset or a plain
+// object: { sid, gid } at minimum, plus home/away/score/meta when the caller knows
+// them — a player's history row does, because it holds the fixture it is showing,
+// and a match row does because it IS the fixture.
+async function openBoxModal(d) {
+  const sid = d.sid, gid = d.gid;
+  if (!sid || !gid) return;
+  const modal = document.getElementById('box-modal');
+  const body = document.getElementById('bx-body');
+  // ⚠️ Look the record up by PlayHQ's gameId, but do NOT require it. S.matches
+  // holds the SELECTED season only, and a player's history spans every season
+  // they played — so a 2025 row opened while viewing 2026 finds nothing here and
+  // must still render. The caller's own values carry it.
+  const m = (S.matches || []).find(x => x.gameId === gid) || {};
+  const home = m.home || d.home || 'Home';
+  const away = m.away || d.away || 'Away';
+  const score = (m.hScore !== undefined && m.hScore !== null && m.aScore !== undefined && m.aScore !== null)
+    ? `${m.hScore} – ${m.aScore}` : (d.score || '');
+  document.getElementById('bx-title').textContent = `${home} v ${away}`;
+  document.getElementById('bx-meta').textContent =
+    d.meta || [m.compName, m.age, m.rawGrade, m.round ? `Round ${m.round}` : ''].filter(Boolean).join(' · ');
+  document.getElementById('bx-score').textContent = score;
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:24px;gap:10px;color:var(--tx3)">
+    <div class="spinner"></div><span style="font-size:12px">Loading box score…</span></div>`;
+  modal.style.display = 'flex';
   const file = await loadLines(sid);
-  btn.textContent = 'HIDE BOX SCORE';
-  el.style.display = '';
-  const m = (S.matches || []).find(x => String(x.id) === String(matchId)) || {};
-  el.innerHTML = boxHTML(file, gameId, m);
+  // The person may have closed it while the file was downloading; repainting a
+  // shut modal is harmless but repainting it OPEN would not be.
+  if (modal.style.display === 'none') return;
+  body.innerHTML = `<div class="mr-box">${boxHTML(file, gid, { ...m, home, away })}</div>`;
+}
+
+function closeBoxModal() {
+  const modal = document.getElementById('box-modal');
+  modal.style.display = 'none';
+  document.getElementById('bx-body').innerHTML = '';
+  // Nothing to restore: the player panel underneath was never hidden, which is
+  // the whole reason this sits at a higher z-index instead of swapping panels.
 }
 
 // Pure — takes the file, the game id and the match record, returns HTML. Kept
