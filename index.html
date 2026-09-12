@@ -520,6 +520,27 @@ body{overflow-x:hidden}
 .mr-qtr .qv-der{color:var(--tx3);border-bottom:1px dotted var(--b2);cursor:help}
 .mr-qtr .qv-gap{color:var(--b2)}
 .qtr-off{color:#f0a020;cursor:help;font-size:10px;padding-left:4px;align-self:center}
+/* ── Box score (per_game_stats_design.md) ────────────────────────────────────
+   Spans the whole row, unlike .mr-qtr which is centred over columns 2-4: a list
+   of names needs the width, and a centred column of them reads as a poem. */
+.mr-boxbtn{grid-column:1/-1;justify-self:center;margin-top:3px}
+.bs-toggle{font-size:9px;letter-spacing:.5px;color:var(--tx3);background:none;border:none;
+  cursor:pointer;padding:2px 6px;border-radius:4px;font-family:inherit}
+.bs-toggle:hover{color:var(--tx2);background:var(--s3)}
+.mr-box{grid-column:1/-1;margin:4px 0 2px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);
+  display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.mr-box{grid-template-columns:1fr;gap:10px}}
+.bs-side{min-width:0}
+.bs-team{font-size:9px;color:var(--tx3);letter-spacing:.5px;margin-bottom:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-scorer{font-size:10px;color:var(--tx2);line-height:1.5;display:flex;gap:6px}
+.bs-scorer b{color:var(--tx);font-weight:500;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-fig{font-family:'DM Mono',monospace;color:var(--tx);flex-shrink:0}
+.bs-rest{font-size:9px;color:var(--tx3);line-height:1.5;margin-top:3px}
+.bs-vote{color:var(--gold)}
+.bs-note{font-size:9px;color:#f0a020;margin-top:3px;line-height:1.4}
+.bs-empty{font-size:9px;color:var(--tx3);font-style:italic}
 @media(max-width:768px){
   .mr-qtr{grid-column:1/-1;justify-self:center;
     grid-template-columns:26px repeat(4,34px)}
@@ -597,7 +618,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.230</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.231</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -977,7 +998,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.230</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.231</span>
         </div>
 
 
@@ -1252,6 +1273,12 @@ let S = {
   // Next-season registrations — data/registrations.json.gz, written daily by
   // scripts/walk-registrations.js. Fetched on the first player panel open, then
   // held for the session. registrations_design.md.
+  // Per-game player lines — data/seasons/<sid>-lines.json.gz, written by
+  // scripts/fetch-game-lines.js. One file per season, fetched on the FIRST box
+  // score opened for that season and then held. Never on page load: the 2026
+  // files are ~1 MB each and most visits open none. per_game_stats_design.md.
+  lines: {},               // { seasonId: { meta, players:[[uuid,name]], games:{} } }
+  linesState: {},          // { seasonId: '' | 'loading' | 'ready' | 'failed' }
   registrations: null,     // { meta, players: { uuid: { at, from, tracked, other } } }
   registrationsState: '',  // '' | 'loading' | 'ready' | 'failed'
   // Quarter-by-quarter display: 'off' | 'cum' | 'q'.
@@ -2784,6 +2811,7 @@ function renderResults(age) {
         </div>
         <div class="mr-venue">${venueLink(m.venue, m.venueUrl)}</div>
         ${quarterLine(m)}
+        ${boxBtn(m)}
       </div>`;
     }).join('');
     return `<div class="rnd-hdr">${roundLabel(rms[0])}</div>${rows}`;
@@ -6315,6 +6343,124 @@ function quarterLine(m) {
     row(m.away, a, aG, m.aQDer) +
     note +
     `</div>`;
+}
+
+// ═══════════════════════════════════════
+// BOX SCORE  (per_game_stats_design.md)
+// ═══════════════════════════════════════
+// One file per season, dictionary-encoded: `players` is [[uuid, name], …] and a
+// line is [playerIndex, goals, behinds, votes]. A fill-in or anonymous player has
+// a name and a null uuid — 1.2% of lines — so NEVER assume the uuid is there.
+//
+// ⚠️ hideScores is NOT a display gate here. It is a PlayHQ page setting; our team
+// scores come from the results engine and are already on the card, so hiding the
+// box score would conceal nothing that is not already shown. The `hs` flag is
+// stored for the record. What DOES gate these games is the existing
+// "Show young age groups (U8–U10)" switch, which drops the match rows entirely —
+// so a hidden age group has no card to expand and this code never runs for it.
+
+const linesLoading = {};
+const seasonIdOfComp = (c) => ((S.manifest || []).find(m => m.compName === c) || {}).seasonId || '';
+
+function loadLines(sid) {
+  if (!sid) return Promise.resolve(null);
+  if (S.linesState[sid] === 'ready') return Promise.resolve(S.lines[sid]);
+  if (linesLoading[sid]) return linesLoading[sid];
+  S.linesState[sid] = 'loading';
+  linesLoading[sid] = (async () => {
+    try {
+      const r = await fetch(`data/seasons/${sid}-lines.json.gz`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // Same magic-byte check as loadRegistrations: if the server sent
+      // Content-Encoding: gzip the browser has already inflated it, and
+      // inflating again fails.
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let text;
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        if (typeof DecompressionStream !== 'function') throw new Error('no DecompressionStream');
+        text = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      } else {
+        text = new TextDecoder().decode(buf);
+      }
+      const f = JSON.parse(text);
+      if (!f || !f.games || !Array.isArray(f.players)) throw new Error('unexpected shape');
+      S.lines[sid] = f;
+      S.linesState[sid] = 'ready';
+    } catch (e) {
+      S.linesState[sid] = 'failed';
+      console.warn(`lines unavailable for ${sid}:`, e.message);
+    }
+    linesLoading[sid] = null;
+    return S.lines[sid] || null;
+  })();
+  return linesLoading[sid];
+}
+
+// The chip under a completed row. Rendered whenever the game has a PlayHQ id,
+// because whether that season has a lines file yet is not knowable from core.json
+// — the answer arrives with the fetch, and a chip that explains itself once is
+// better than no chip on a season that does have data.
+function boxBtn(m) {
+  if (!m || !m.gameId) return '';
+  const sid = seasonIdOfComp(m.compName);
+  if (!sid) return '';
+  return `<div class="mr-boxbtn"><button class="bs-toggle" ` +
+    `onclick="toggleBox(this,'${sid}','${m.gameId}','${String(m.id).replace(/'/g, "\\'")}')">BOX SCORE</button></div>` +
+    `<div class="mr-box" id="box-${m.id}" style="display:none"></div>`;
+}
+
+async function toggleBox(btn, sid, gameId, matchId) {
+  const el = document.getElementById(`box-${matchId}`);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; btn.textContent = 'BOX SCORE'; return; }
+  btn.textContent = 'LOADING…';
+  const file = await loadLines(sid);
+  btn.textContent = 'HIDE BOX SCORE';
+  el.style.display = '';
+  const m = (S.matches || []).find(x => String(x.id) === String(matchId)) || {};
+  el.innerHTML = boxHTML(file, gameId, m);
+}
+
+// Pure — takes the file, the game id and the match record, returns HTML. Kept
+// separate from the DOM so it can be called directly in a test.
+function boxHTML(file, gameId, m) {
+  if (!file) return `<div class="bs-empty">No box score stored for this season yet.</div>`;
+  const g = file.games && file.games[gameId];
+  if (!g) return `<div class="bs-empty">This game has no player lines.</div>`;
+  if (g.n) return `<div class="bs-empty">PlayHQ has no player list for this game` +
+    `${g.n === 'noplayers' ? ' — the scorer did not enter the sides' : ''}.</div>`;
+
+  const side = (key, teamName, teamGoals, otherRows) => {
+    const rows = g[key];
+    if (!rows || !rows.length) {
+      // ⚠️ SAY SO. One side entered and the other not is 1,230 sides in 2026,
+      // mostly YJFL. Rendering nothing reads as "nobody played".
+      return `<div class="bs-side"><div class="bs-team">${teamName}</div>` +
+        `<div class="bs-empty">${otherRows && otherRows.length
+          ? 'No players recorded for this side.' : 'No players recorded.'}</div></div>`;
+    }
+    const name = (i) => {
+      const p = file.players[i];
+      return (p && p[1]) || 'Unknown';
+    };
+    const scorers = rows.filter(r => r[1] > 0 || r[2] > 0)
+      .sort((x, y) => (y[1] - x[1]) || (y[2] - x[2]));
+    const rest = rows.filter(r => !(r[1] > 0 || r[2] > 0));
+    const kicked = rows.reduce((n, r) => n + (r[1] || 0), 0);
+    const short = (typeof teamGoals === 'number' && teamGoals > kicked) ? teamGoals - kicked : 0;
+    const vote = (r) => r[3] > 0 ? ` <span class="bs-vote" title="Best player ${r[3]}">★</span>` : '';
+    return `<div class="bs-side">
+      <div class="bs-team">${teamName}</div>
+      ${scorers.map(r => `<div class="bs-scorer"><b>${name(r[0])}${vote(r)}</b>` +
+        `<span class="bs-fig">${r[1]}.${r[2]}</span></div>`).join('')}
+      ${rest.length ? `<div class="bs-rest">${rest.map(r => `${name(r[0])}${r[3] > 0
+        ? ' <span class="bs-vote">★</span>' : ''}`).join(', ')}</div>` : ''}
+      ${short ? `<div class="bs-note">${short} goal${short === 1 ? '' : 's'} not attributed to a player.</div>` : ''}
+    </div>`;
+  };
+
+  return side('h', m.home || 'Home', m.hG, g.a) + side('a', m.away || 'Away', m.aG, g.h);
 }
 
 // ── Player search ──────────────────────────────────────────────────
