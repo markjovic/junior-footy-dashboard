@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.235</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.236</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.235</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.236</span>
         </div>
 
 
@@ -5865,7 +5865,11 @@ function renderCareerSection(rec, uuid, recs) {
         <th style="font-weight:400;padding:0 0 6px;width:84px">GRADE</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">GP</th>
         <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">G</th>
-        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">B</th>
+        <!-- ⚠️ THIS COLUMN IS BEST PLAYER. It read "B", which in football is
+             behinds, and it is filled from r.best. Every other table in this file
+             already calls it BP. Renamed 2026-09-12; nothing about the data
+             changed, only the label that had been wrong about it. -->
+        <th style="font-weight:400;padding:0 0 6px;width:32px;text-align:right">BP</th>
       </tr>
       ${c.rows.map(r => {
         // A row for a season we HOLD switches the panel to it — the same call the
@@ -5923,16 +5927,17 @@ const gameUrl = (gameId) => `https://www.playhq.com/afl/org/a/a/a/game-centre/${
 // the PlayHQ link lives in the modal header instead. Without a season id (a game
 // in a competition this dashboard does not track) it falls back to leaving the
 // site, because there is nothing here to open.
+// ⚠️ ALWAYS OPEN OUR OWN VIEW FIRST. An earlier cut only did so when the caller
+// knew the season id, which the leaderboards do not always carry — so a leaders
+// row still left the site. The modal resolves the season itself where it can, and
+// says plainly when it cannot; either way its header carries the PlayHQ link, so
+// leaving is one click rather than the only option.
 const gameLink = (gameId, text, sid, meta) => {
   if (!gameId) return text;
-  if (sid) {
-    return `<span class="bx-open" data-sid="${bxEsc(sid)}" data-gid="${bxEsc(gameId)}"` +
-      `${meta ? ` data-meta="${bxEsc(meta)}"` : ''} onclick="openBoxModal(this.dataset)"` +
-      ` style="border-bottom:1px dotted var(--tx3)" title="Box score">${text}</span>`;
-  }
-  return `<a href="${gameUrl(gameId)}" target="_blank" rel="noopener"
-       style="color:inherit;text-decoration:none;border-bottom:1px dotted var(--tx3)"
-       title="Open this game on PlayHQ">${text} \u2197</a>`;
+  return `<span class="bx-open" data-gid="${bxEsc(gameId)}"` +
+    `${sid ? ` data-sid="${bxEsc(sid)}"` : ''}${meta ? ` data-meta="${bxEsc(meta)}"` : ''}` +
+    ` onclick="openBoxModal(this.dataset)"` +
+    ` style="border-bottom:1px dotted var(--tx3)" title="Box score">${text}</span>`;
 };
 
 // ── CAREER LEADERBOARDS ─────────────────────────────────────────────────────
@@ -6490,15 +6495,20 @@ function loadLines(sid) {
 // them — a player's history row does, because it holds the fixture it is showing,
 // and a match row does because it IS the fixture.
 async function openBoxModal(d) {
-  const sid = d.sid, gid = d.gid;
-  if (!sid || !gid) return;
+  const gid = d.gid;
+  if (!gid) return;
+  // The caller may not know the season — an all-time leaderboard row does not.
+  // Try the loaded season's records; if that fails the modal still opens, still
+  // names the game from what the caller passed, and still offers PlayHQ.
+  const known = (S.matches || []).find(x => x.gameId === gid) || null;
+  const sid = d.sid || (known ? seasonIdOfComp(known.compName) : '');
   const modal = document.getElementById('box-modal');
   const body = document.getElementById('bx-body');
   // ⚠️ Look the record up by PlayHQ's gameId, but do NOT require it. S.matches
   // holds the SELECTED season only, and a player's history spans every season
   // they played — so a 2025 row opened while viewing 2026 finds nothing here and
   // must still render. The caller's own values carry it.
-  const m = (S.matches || []).find(x => x.gameId === gid) || {};
+  const m = known || {};
   const home = m.home || d.home || 'Home';
   const away = m.away || d.away || 'Away';
   const score = (m.hScore !== undefined && m.hScore !== null && m.aScore !== undefined && m.aScore !== null)
@@ -6511,7 +6521,7 @@ async function openBoxModal(d) {
   body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:24px;gap:10px;color:var(--tx3)">
     <div class="spinner"></div><span style="font-size:12px">Loading box score…</span></div>`;
   modal.style.display = 'flex';
-  const file = await loadLines(sid);
+  const file = sid ? await loadLines(sid) : null;
   // The person may have closed it while the file was downloading; repainting a
   // shut modal is harmless but repainting it OPEN would not be.
   if (modal.style.display === 'none') return;
@@ -6532,7 +6542,9 @@ function closeBoxModal() {
 // Pure — takes the file, the game id and the match record, returns HTML. Kept
 // separate from the DOM so it can be called directly in a test.
 function boxHTML(file, gameId, m) {
-  if (!file) return `<div class="bs-empty">No box score stored for this season yet.</div>`;
+  if (!file) return `<div class="bs-empty">No box score stored for this game — it is ` +
+    `outside the seasons this dashboard holds, or that season has not been walked yet. ` +
+    `PlayHQ has it.</div>`;
   const g = file.games && file.games[gameId];
   if (!g) return `<div class="bs-empty">This game has no player lines.</div>`;
   if (g.n) return `<div class="bs-empty">PlayHQ has no player list for this game` +
