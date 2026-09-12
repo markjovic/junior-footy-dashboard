@@ -407,3 +407,124 @@ jobs:
           git diff --staged --quiet || git commit -m "fixtures: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
+
+  # ── Per-game player lines (the box score) ───────────────────────────────────
+  # per_game_stats_design.md. One discoverGame call per completed game, ~1,000 a
+  # weekend, paced at 100 per 80 s. Added here rather than on its own schedule so
+  # it inherits what this workflow already has: the Worker's dispatch times, the
+  # season gate, and the playhq-data-write lock.
+  #
+  # ⚠️ ONLY ON THE ALL-COMPETITION RUNS. The Worker dispatches VIP-only runs
+  # through the afternoon and All runs at Sat 11pm, Sun 11pm, Mon 3am and Mon
+  # 12pm AEST. Lines run on the All ones — four passes, and the later ones cost
+  # almost nothing because a game already stored is never asked again.
+  #
+  # ⚠️ THIS IS WHY THE MONDAY RUNS MATTER. A scoresheet entered on Sunday or
+  # Monday is the normal case, not the exception. A game with no player block is
+  # stamped with the date and re-asked once the stamp is a day old, so Saturday's
+  # empties are picked up by Monday without anything being scheduled for it.
+  #
+  # ⚠️ LAST, AFTER FIXTURES. Not for the whole-file reason the other three are
+  # serialised — this job writes only <seasonId>-lines.json.gz, which nothing else
+  # touches — but because fetch-results.js and this share a PlayHQ budget, and
+  # because `git add -A data/` in the jobs above would otherwise stage a lines
+  # file mid-write.
+  fetch-lines:
+    runs-on: ubuntu-latest
+    needs: [fetch-results, fetch-stats, fetch-fixtures]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      # ⚠️ setup-node IS PRESENT ON PURPOSE, and it is the one thing here worth a
+      # second opinion. The repo rule is never to add it to anything new; this
+      # workflow's own history says a job left on a different Node version from
+      # its siblings is "a difference nobody remembers choosing and everybody has
+      # to rule out". All three jobs above pin 20, so this one does too. Say the
+      # word and it comes out.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_season_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const RECONCILE_DAYS = 7;
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            // Not retired: a retired season is never walked, whatever its state. Every
+            // stateAt was stamped the day state was introduced, so without this the
+            // 2022–2025 seasons read as "complete for a day" and held the gate open.
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId && !m.retired);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}  stateAt=${m.stateAt || "-"}`);
+            const now = Date.now();
+            const dayMs = 86400000;
+            // stateAt is an ISO timestamp; take the date part, never new Date(string).
+            const daysSince = (iso) => { const [y, mo, d] = String(iso || "").slice(0, 10).split("-").map(Number); return (y && mo && d) ? (now - Date.UTC(y, mo - 1, d)) / dayMs : Infinity; };
+            const stated = tracked.filter(m => m.state !== undefined);
+            const live = tracked.filter(m => m.state === "active" || m.state === "upcoming");
+            const reconciling = tracked.filter(m => m.state === "complete" && daysSince(m.stateAt) < RECONCILE_DAYS);
+            let inSeason = true;
+            if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!tracked.length) { inSeason = false; console.log("OFF SEASON — no tracked season in the manifest that is not retired; nothing to fetch"); }
+            else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
+            else if (live.length || reconciling.length) {
+              if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
+              if (reconciling.length) console.log(`RECONCILING (complete < ${RECONCILE_DAYS} days): ${reconciling.map(m => `${m.compName} since ${m.stateAt.slice(0, 10)}`).join(", ")}`);
+            }
+            else { inSeason = false; console.log("OFF SEASON — every tracked season is complete for " + RECONCILE_DAYS + "+ days; skipping the fetch"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
+          '
+
+      - name: Determine lines mode
+        id: mode
+        run: |
+          # Results-bearing dispatches only, and only the All-competition ones.
+          INPUT="${{ github.event.inputs.fetch }}"
+          VIP="${{ github.event.inputs.vip_only }}"
+          if [ "$INPUT" = "stats" ] || [ "$INPUT" = "fixtures" ]; then
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "  → skipped: this dispatch is $INPUT only"
+          elif [ "$VIP" = "true" ]; then
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "  → skipped: VIP-only run. Lines wait for the next All run."
+          else
+            echo "run=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch lines
+        id: lines
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true'
+        env:
+          FGL_APPLY: 'true'
+          # ⚠️ NO CHAIN HERE. A weekend is ~1,000 games, about 15 minutes. If it
+          # ever does hit the budget it stops and commits, and the next All run
+          # carries on from the stamps — which is the same outcome a chain would
+          # reach, without a workflow re-dispatching itself inside another one.
+          FGL_BUDGET_MIN: '60'
+          FGL_PUSH_MIN: '0'
+        run: |
+          set +e
+          node scripts/fetch-game-lines.js
+          CODE=$?
+          echo "exit_code=$CODE" >> $GITHUB_OUTPUT
+          # 75 = stopped on budget, 2 = nothing to do. Neither is a failure.
+          if [ "$CODE" = "75" ] || [ "$CODE" = "2" ]; then exit 0; fi
+          exit $CODE
+
+      - name: Commit lines
+        if: ${{ always() && steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/seasons/
+          git diff --staged --quiet && exit 0
+          git commit -m "lines: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          # ⚠️ NOT `-X theirs`. The comment on fetch-fixtures records that it drops
+          # the local commit on a conflict without failing. Nothing else writes
+          # these files, so an honest rebase is safe and a conflict is a signal.
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
