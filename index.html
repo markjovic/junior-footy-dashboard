@@ -631,7 +631,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.239</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.240</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1035,7 +1035,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.239</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.240</span>
         </div>
 
 
@@ -5611,6 +5611,10 @@ function renderPlayerGames(data, p) {
 // The career table's B REC column, and the career figure on the meta line. Both
 // come from the one derived file, so neither costs a lines fetch.
 function fillCareerBehinds(uuid, rows) {
+  // Clear first, unconditionally. The file may 404, or the player may have none;
+  // in both cases the previous player's figure must not still be sitting there.
+  const prev = document.getElementById('pm-bhd');
+  if (prev) { prev.textContent = ''; prev.title = ''; }
   if (!uuid) return;
   loadPlayerLines(uuid).then(pl => {
     if (!pl || _panelUuid !== uuid) return;       // panel moved on, or no file
@@ -5627,15 +5631,29 @@ function fillCareerBehinds(uuid, rows) {
     }
     const total = (pl.total && pl.total.bRec) || 0;
     const meta = document.getElementById('pm-meta');
+    if (!meta) return;
+    // ⚠️ NEVER FLAG A PERSISTENT ELEMENT. Both earlier cuts set a dataset key on
+    // #pm-meta to avoid appending twice. That element is reused for every player
+    // the panel ever shows, so the flag survived the close and every player after
+    // the first was skipped — the figure appeared once and then never again until
+    // the page was reloaded. A dedicated span, found or created, is idempotent
+    // without remembering anything.
+    let span = document.getElementById('pm-bhd');
+    if (!span) {
+      span = document.createElement('span');
+      span.id = 'pm-bhd';
+      span.style.fontSize = '10px';
+      span.style.color = 'var(--tx3)';
+      meta.appendChild(span);
+    }
     // ⚠️ ONLY WHEN THERE IS SOMETHING. Two players in three have none recorded —
     // measured, 16,474 of 48,687 — and "0 behinds recorded" on the rest would read
-    // as "kicked none" rather than "none were attributed".
-    if (total && meta && meta.dataset.bhd !== 'career') {
-      meta.dataset.bhd = 'career';
-      meta.innerHTML += ` <span style="font-size:10px;color:var(--tx3)" ` +
-        `title="Behinds credited to this player across the ${pl.total.gp} game(s) we hold lines for. Scorers attribute about a quarter of a team's behinds, so this is a floor, not a total.">` +
-        `· ${total} behind${total === 1 ? '' : 's'} recorded</span>`;
-    }
+    // as "kicked none" rather than "none were attributed". An empty string also
+    // clears the PREVIOUS player's figure, which is why it is set either way.
+    span.textContent = total ? ` · ${total} behind${total === 1 ? '' : 's'} recorded` : '';
+    span.title = total
+      ? `Behinds credited to this player across the ${pl.total.gp} game(s) we hold lines for. ` +
+        `Scorers attribute about a quarter of a team's behinds, so this is a floor, not a total.` : '';
   });
 }
 
@@ -5670,10 +5688,10 @@ function fillPanelBehinds(rows, uuid) {
     if (_panelUuid !== uuid || !any) return;
     const t = document.getElementById('pg-g-total');
     if (t) t.textContent = `${rows.reduce((n, r) => n + r.goals, 0)}.${total}`;
-    // ⚠️ NO META LINE FROM HERE. fillCareerBehinds writes it from the derived
-    // file, which spans every season we hold rather than the one on screen. Two
-    // writers appending to the same element raced: whichever finished second
-    // appended a second, different figure beside the first.
+    // ⚠️ NO META LINE FROM HERE. fillCareerBehinds owns #pm-bhd and writes it from
+    // the derived file, which spans every season we hold rather than the one on
+    // screen. Two writers appending to one element raced, and the loser's figure
+    // sat beside the winner's.
   });
 }
 
