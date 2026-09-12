@@ -479,6 +479,19 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
           '
 
+      # ⚠️ IDENTITY BEFORE THE FETCH, NOT ONLY IN THE COMMIT STEP. This script
+      # commits and pushes at every checkpoint so a long run is never discarded —
+      # and on 2026-09-13 every one of those pushes failed with "Author identity
+      # unknown", because the identity was set further down, in a step that had not
+      # run yet. Three failed pushes and the script stops by design rather than
+      # keep walking with nothing landing. enrich-games.yml has always done this
+      # first, for exactly this reason.
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
       - name: Determine lines mode
         id: mode
         run: |
@@ -504,6 +517,13 @@ jobs:
           # ever does hit the budget it stops and commits, and the next All run
           # carries on from the stamps — which is the same outcome a chain would
           # reach, without a workflow re-dispatching itself inside another one.
+          #
+          # ⚠️ THE ARCHIVE IS BEING WALKED BY THIS JOB TOO. Until B3 is done there
+          # are ~28,000 unfetched games from 2022–2024, so each weekend run spends
+          # its whole 60 minutes and stops. That is working as intended — it just
+          # means a weekend's own games are not necessarily first in the queue.
+          # Dispatching Fetch game lines directly with a 300-minute budget clears
+          # the backlog far faster.
           FGL_BUDGET_MIN: '60'
           FGL_PUSH_MIN: '0'
         run: |
