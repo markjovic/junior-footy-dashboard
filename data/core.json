@@ -20452,8 +20452,8 @@
     "YJFL 2026|Heidelberg Girls|U11 Girls": "62025c6b",
     "YJFL 2026|Richmond Boys 1|U16": "f3dc4036"
   },
-  "lastUpdated": "2026-09-06T07:28:16.719Z",
-  "lastResultsFetch": "2026-09-06T07:28:16.719Z",
+  "lastUpdated": "2026-09-12T05:53:17.062Z",
+  "lastResultsFetch": "2026-09-12T05:53:17.062Z",
   "lastStatsFetch": "2026-09-07T03:08:48.082Z",
   "seasonFiles": [
     {
@@ -20484,7 +20484,7 @@
       "file": "data/seasons/2dcbf383-core.json",
       "seasonId": "2dcbf383",
       "kind": "core",
-      "bytes": 2898591
+      "bytes": 2897084
     },
     {
       "file": "data/seasons/2dcbf383-players.json",
