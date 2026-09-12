@@ -1,0 +1,58 @@
+# .github/workflows/report-behind-attribution.yml
+#
+# READ-ONLY. Makes NO PlayHQ call, writes nothing, commits nothing. It reads the
+# committed lines files and match records and reports what share of each team's
+# behinds were credited to a named player, broken down by age group.
+#
+# It exists to decide one thing before anything is built: whether a derived
+# behinds figure on a player card would be reliable, unreliable, or reliable only
+# in the older grades. Runs in well under a minute.
+#
+# Paste the whole log back. The BY AGE GROUP table is the answer.
+
+name: Report behind attribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      comp:
+        description: 'comp — one competition, e.g. "EFNL 2026". Blank = all with a lines file.'
+        required: false
+        default: ''
+        type: string
+      year:
+        description: 'year — one season year, e.g. 2026. Blank = every season with a lines file.'
+        required: false
+        default: ''
+        type: string
+
+# Reads only. A report that cannot commit cannot damage what it is measuring.
+permissions:
+  contents: read
+
+# NOTE: no concurrency group. It makes no PlayHQ call, so it shares no rate
+# budget, and it writes nothing, so it cannot collide with a writer. Taking
+# `playhq-data-write` here would make a one-minute report queue behind a
+# three-hour backfill for no reason.
+
+jobs:
+  report:
+    name: Behind attribution by age group
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # Commits nothing, so the detached-HEAD trap does not apply. Kept so
+          # every workflow in the repo reads the same way.
+          ref: ${{ github.ref_name }}
+
+      # NOTE: no actions/setup-node. The runner ships Node.
+      - name: Report
+        env:
+          RBA_COMP: ${{ github.event.inputs.comp }}
+          RBA_YEAR: ${{ github.event.inputs.year }}
+        run: |
+          node --version
+          node scripts/report-behind-attribution.js
