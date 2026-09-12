@@ -54,7 +54,7 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'build-player-lines v1 2026-09-12';
+const VERSION = 'build-player-lines v2 2026-09-12 enobufs';
 const FV = 1;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -162,13 +162,21 @@ function main() {
 
   if (APPLY && COMMIT && written) {
     try {
-      execFileSync('git', ['add', '-A', 'data/player-lines/'], { stdio: 'pipe' });
-      const staged = execFileSync('git', ['diff', '--staged', '--name-only'], { encoding: 'utf8' }).trim();
+      // ⚠️ NEVER READ A FILE LIST FROM GIT HERE. v1 asked for
+      // `diff --staged --name-only` and parsed it: 48,687 paths is about 3 MB,
+      // execFileSync buffers at 1 MB by default, and the whole run died with
+      // ENOBUFS *after* writing every file. Ask for the EXIT CODE instead — it is
+      // the same question and it returns nothing.
+      execFileSync('git', ['add', '-A', 'data/player-lines/'], { stdio: 'ignore' });
+      let staged = false;
+      try { execFileSync('git', ['diff', '--staged', '--quiet'], { stdio: 'ignore' }); }
+      catch (e) { staged = true; }          // non-zero exit means there IS something
       if (staged) {
-        execFileSync('git', ['commit', '-m', `Player line totals: ${written} file(s)`], { stdio: 'pipe' });
+        // -q as well: a commit creating 48,687 files prints a line for each.
+        execFileSync('git', ['commit', '-q', '-m', `Player line totals: ${written} file(s)`], { stdio: 'ignore' });
         const branch = process.env.GITHUB_REF_NAME || 'main';
-        execFileSync('git', ['pull', '--rebase', 'origin', branch], { stdio: 'pipe' });
-        execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'pipe' });
+        execFileSync('git', ['pull', '--rebase', 'origin', branch], { stdio: 'ignore' });
+        execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'ignore' });
         log('pushed.');
       } else log('nothing staged.');
     } catch (e) {
