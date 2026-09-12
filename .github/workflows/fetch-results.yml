@@ -528,3 +528,111 @@ jobs:
           # these files, so an honest rebase is safe and a conflict is a signal.
           git pull --rebase origin "${{ github.ref_name }}"
           git push origin HEAD:"${{ github.ref_name }}"
+
+  # ── Career line totals ──────────────────────────────────────────────────────
+  # scripts/build-player-lines.js. Derives data/player-lines/{xx}/{uuid}.json from
+  # the lines files. NO PlayHQ call — pure arithmetic over what fetch-lines just
+  # stored, a couple of minutes.
+  #
+  # ⚠️ ONCE A WEEK, ON THE MONDAY RUN ONLY. A weekend of games touches up to
+  # 30,000 of the 48,687 player files, and a .json commits whole — so rebuilding on
+  # all four All-competition dispatches would put four copies of the same ~6 MB in
+  # git history for one week of football. Monday 12pm AEST is 02:00 UTC on a
+  # Monday, and it is the LAST dispatch of the weekend, so it sees every late
+  # scoresheet the earlier passes picked up.
+  #
+  # ⚠️ WHAT THIS FEEDS IS A CAREER TOTAL, which is the one figure here that does
+  # not need to be fresh. Per-game and season behinds come straight from the lines
+  # files and are current the moment fetch-lines finishes; only the career column
+  # waits for this. A career number a few days behind is not misleading in the way
+  # a stale score would be, and that is the whole reason it can run weekly.
+  build-player-lines:
+    runs-on: ubuntu-latest
+    needs: [fetch-lines]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Season gate
+        id: gate
+        env:
+          IGNORE: ${{ github.event.inputs.ignore_season_gate }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const RECONCILE_DAYS = 7;
+            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
+            // Not retired: a retired season is never walked, whatever its state. Every
+            // stateAt was stamped the day state was introduced, so without this the
+            // 2022–2025 seasons read as "complete for a day" and held the gate open.
+            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId && !m.retired);
+            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}  status=${m.status}  stateAt=${m.stateAt || "-"}`);
+            const now = Date.now();
+            const dayMs = 86400000;
+            // stateAt is an ISO timestamp; take the date part, never new Date(string).
+            const daysSince = (iso) => { const [y, mo, d] = String(iso || "").slice(0, 10).split("-").map(Number); return (y && mo && d) ? (now - Date.UTC(y, mo - 1, d)) / dayMs : Infinity; };
+            const stated = tracked.filter(m => m.state !== undefined);
+            const live = tracked.filter(m => m.state === "active" || m.state === "upcoming");
+            const reconciling = tracked.filter(m => m.state === "complete" && daysSince(m.stateAt) < RECONCILE_DAYS);
+            let inSeason = true;
+            if (process.env.IGNORE === "true") console.log("ignore_season_gate=true — running regardless");
+            else if (!tracked.length) { inSeason = false; console.log("OFF SEASON — no tracked season in the manifest that is not retired; nothing to fetch"); }
+            else if (!stated.length) console.log("no manifest entry carries state (pre-v4 manifest) — treating as IN SEASON");
+            else if (live.length || reconciling.length) {
+              if (live.length) console.log(`IN SEASON: ${live.map(m => m.compName).join(", ")}`);
+              if (reconciling.length) console.log(`RECONCILING (complete < ${RECONCILE_DAYS} days): ${reconciling.map(m => `${m.compName} since ${m.stateAt.slice(0, 10)}`).join(", ")}`);
+            }
+            else { inSeason = false; console.log("OFF SEASON — every tracked season is complete for " + RECONCILE_DAYS + "+ days; skipping the fetch"); }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `in_season=${inSeason}\n`);
+          '
+
+      - name: Determine build mode
+        id: mode
+        run: |
+          INPUT="${{ github.event.inputs.fetch }}"
+          VIP="${{ github.event.inputs.vip_only }}"
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          echo "UTC DOW=$DOW HOUR=$HOUR (AEST $(TZ='Australia/Melbourne' date '+%a %H:%M'))"
+          if [ "$INPUT" = "stats" ] || [ "$INPUT" = "fixtures" ]; then
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "  -> skipped: this dispatch is $INPUT only"
+          elif [ "$VIP" = "true" ]; then
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "  -> skipped: VIP-only run"
+          elif [ "$DOW" != "1" ]; then
+            # Monday 12pm AEST is Monday 02:00 UTC. Every other All run of the
+            # weekend is Saturday or Sunday in UTC, so one test covers it.
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "  -> skipped: career totals rebuild on the Monday run only"
+          else
+            echo "run=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build career line totals
+        if: steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true'
+        env:
+          BPL_APPLY: 'true'
+          # The script commits and pushes itself; the tail step below catches
+          # anything it had written but not pushed.
+          BPL_COMMIT: 'false'
+        run: |
+          node --version
+          node scripts/build-player-lines.js
+
+      - name: Commit career line totals
+        if: ${{ always() && steps.mode.outputs.run == 'true' && steps.gate.outputs.in_season == 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A data/player-lines/
+          git diff --staged --quiet && exit 0
+          git commit -m "player line totals: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          # ⚠️ NOT `-X theirs` — see the note on fetch-fixtures. Nothing else writes
+          # this tree, so a conflict is a signal rather than something to smooth over.
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
