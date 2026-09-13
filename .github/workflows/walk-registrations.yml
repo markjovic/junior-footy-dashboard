@@ -2,8 +2,10 @@
 name: Walk registrations
 
 # Daily slice of the registrations walk — registrations_design.md v2. Writes
-# data/registrations.json.gz and nothing else (gzip only, decided 2026-09-07). About a seventh of the cohort per
-# run at 100 calls per 80 s: 5–6k calls, roughly 75 minutes.
+# data/registrations.json.gz (gzip only, decided 2026-09-07) and, from 2026-09-13,
+# a `refetch` flag on career files under players/ — see C2 in OUTSTANDING_TASKS.md.
+# About a seventh of the cohort per run at 100 calls per 80 s: 5–6k calls, roughly
+# 75 minutes.
 #
 # Runs in the OFF-SEASON only: the season gate inverted. When every tracked season
 # is active there is nothing to learn about next season, and the run skips.
@@ -92,9 +94,20 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # -A so the one-off removal of the plain registrations.json is staged
-          # too. Nothing else under data/ changes in this checkout.
-          git add -A data/registrations.json.gz data/registrations.json 2>/dev/null || git add -A data/
+          # -A so the one-off removal of the plain registrations.json is staged too.
+          #
+          # ⚠️ `players/` IS STAGED FROM 2026-09-13. The walk now sets `refetch` on
+          # a career file when it sees a season of ours that file has never had
+          # (C2). Those writes land OUTSIDE data/, so staging only the
+          # registrations paths would have written every flag and committed none of
+          # them — a silent no-op, and the worst possible outcome for a change
+          # whose whole job is to leave a marker for another script.
+          git add -A data/registrations.json.gz data/registrations.json players/ 2>/dev/null || git add -A data/ players/
           git diff --staged --quiet || git commit -m "registrations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          # ⚠️ `-X theirs` DISCARDS THIS RUN'S COMMIT ON A CONFLICT, without
+          # failing. It was safe while this job owned the only file it wrote;
+          # players/ is shared with fetch-career-stats.js, which holds the same
+          # concurrency group, so an overlap should not happen — but if flags ever
+          # go missing after a clean run, this line is where to look first.
           git pull --rebase -X theirs
           git push
