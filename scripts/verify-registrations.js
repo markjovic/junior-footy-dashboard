@@ -19,7 +19,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const zlib = require('zlib');
 
-const VERSION = 'verify-registrations v5 2026-09-13 version-shape-not-string';
+const VERSION = 'verify-registrations v6 2026-09-13 career-refetch-flag';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'walk-registrations.js');
@@ -282,6 +282,72 @@ ok('plain file removed and logged', !fs.existsSync(LEGACY) && /removed legacy/.t
 ok('contents carried over', Object.keys(read().players).length === Object.keys(legacy.players).length);
 ok('exit 0 even with nothing else changed (the conversion is the change)', r.code === 0, `exit ${r.code}`);
 ok('gzipped output is a real gzip (magic bytes)', fs.readFileSync(OUT)[0] === 0x1f && fs.readFileSync(OUT)[1] === 0x8b);
+
+// ── 10. C2: the career refetch flag ───────────────────────────────────────────
+// ⚠️ THIS IS A FLAG WRITTEN INTO ANOTHER SCRIPT'S TREE. If it stopped being
+// written, or were written and not committed, NOTHING would look wrong: the walk
+// would still be green, the registrations file still correct, and players would
+// simply wait out the 150-day timer. Invisible failure is the bar for an
+// assertion, and this clears it.
+console.log('\n10 C2 — flagging a career file the sweep has never updated');
+
+const PLAYERS = path.join(TMP, 'players');
+const careerPath = (u) => path.join(PLAYERS, String(u).slice(0, 2), `${u}.json`);
+function writeCareer(u, sids) {
+  const f = careerPath(u);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ uuid: u, name: 'Player ' + u,
+    statsChecked: '2026-09-01T00:00:00.000Z',
+    career: { gp: 30, goals: 9 }, records: { goalsHeld: { v: 4 } },
+    seasons: sids.map((sid, i) => ({ year: 2026 - i, sid, gp: 10 })) }));
+}
+const career = (u) => JSON.parse(fs.readFileSync(careerPath(u), 'utf8'));
+
+// Everyone starts unwalked so the whole cohort is due, and the budget is lifted
+// so every player is reached in one run.
+const reset = () => { const f = read(); for (const k of Object.keys(f.players)) {
+  f.players[k].at = null; f.players[k].nextCheck = null; delete f.players[k].rfSeen; } write(f); };
+
+const A = wUuids[0], B = wUuids[1], C = wUuids[2];
+writeCareer(A, [S25]);           // has 2025 only — MISSING their 2026 season
+writeCareer(B, [S26, S25]);      // already has both
+fs.rmSync(careerPath(C), { force: true });   // no career file at all
+reset();
+r = run({ WALK_DAILY_FRACTION: '1' });
+
+ok('flags a career file missing one of our seasons', career(A).refetch === true);
+ok('leaves a career file that already has it', career(B).refetch === undefined,
+   JSON.stringify(career(B).refetch));
+// ⚠️ A NON-ZERO COUNT, not merely the words. `/with no career file/` matched a
+// line reading "0 with no career file" while the flagging was disabled, so the
+// assertion passed on broken code — which is decoration, not a test.
+ok('no career file is counted, not an error', /[1-9]\d* with no career file/.test(r.out) && r.code === 0,
+   (r.out.match(/career refetch flags: .*/) || [''])[0]);
+ok('the career file SURVIVES the write', career(A).name === 'Player ' + A
+   && career(A).career.gp === 30 && career(A).seasons.length === 1
+   && career(A).records.goalsHeld.v === 4);
+ok('a summary line is printed', /career refetch flags: \d+ set/.test(r.out));
+
+// ⚠️ THE LOOP THIS PREVENTS. The sweep clears the flag by rebuilding the record
+// without it, and writes no season row for a registration with no statistics —
+// so without rfSeen the same gap is seen and flagged on every single walk, for
+// ever. Simulate exactly that: clear the flag as the sweep would, leave the
+// career file otherwise untouched, and walk again.
+const sids1 = rec(A).rfSeen;
+const cleared = career(A); delete cleared.refetch;
+fs.writeFileSync(careerPath(A), JSON.stringify(cleared));
+// ⚠️ MAKE A DUE AGAIN, OR THIS TESTS NOTHING. The first cut of this section left
+// the recheck timer alone, so the second walk never looked at A — and "does NOT
+// re-flag" passed even with rfSeen deleted from the script, which is the
+// definition of decoration. Clearing at/nextCheck (and NOT rfSeen) is what puts
+// the guard under test.
+setRec(A, { at: null, nextCheck: null });
+r = run({ WALK_DAILY_FRACTION: '1' });
+ok('A was actually re-walked', r.profiles.includes(A), `walked: ${r.profiles.join(',')}`);
+ok('rfSeen remembers what was already asked', Array.isArray(sids1) && sids1.includes(S26),
+   JSON.stringify(sids1));
+ok('does NOT re-flag after the sweep cleared it', career(A).refetch === undefined,
+   JSON.stringify(career(A).refetch));
 
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${VERSION}: ${pass} passed, ${fail} failed`);
