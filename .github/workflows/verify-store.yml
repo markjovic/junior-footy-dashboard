@@ -10,6 +10,17 @@
 # Touches nothing. Each verification builds its own fixture in a temp directory
 # and stubs the network, so no PlayHQ call is made and data/ and config.json are
 # never opened. index.html is read, never written.
+#
+# ⚠️ THE SYNTAX LIST IS A DEPENDENCY, not a courtesy. repo-tidy.js REFUSED to
+# remove repair-career-held.js on 2026-09-13 because this file named it — which
+# is the guard working. A script listed here cannot be deleted until it is
+# removed from the list, so keep it current in both directions: add a new writer
+# when it lands, take one out when it retires.
+#
+# ⚠️ node --check PROVES SYNTAX ONLY. It runs nothing, so a missing function or a
+# temporal dead zone passes it — enrich-games v18 called writeCursor thirteen
+# lines before its `const` and parsed clean. The SUITES below are the real check;
+# this step only catches a file that cannot load at all.
 
 name: Verify storage layer
 
@@ -65,8 +76,10 @@ jobs:
                    scripts/build-career-stubs.js \
                    scripts/verify-careers.js \
                    scripts/build-career-tops.js \
-                   scripts/repair-career-held.js \
-                   scripts/verify-career-tops.js; do
+                   scripts/verify-career-tops.js \
+                   scripts/enrich-games.js \
+                   scripts/fetch-game-lines.js \
+                   scripts/build-player-lines.js; do
             node --check "$f" || exit 1
             echo "  parsed $f"
           done
