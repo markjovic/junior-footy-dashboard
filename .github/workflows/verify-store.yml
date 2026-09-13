@@ -11,11 +11,16 @@
 # and stubs the network, so no PlayHQ call is made and data/ and config.json are
 # never opened. index.html is read, never written.
 #
-# ⚠️ THE SYNTAX LIST IS A DEPENDENCY, not a courtesy. repo-tidy.js REFUSED to
-# remove repair-career-held.js on 2026-09-13 because this file named it — which
-# is the guard working. A script listed here cannot be deleted until it is
-# removed from the list, so keep it current in both directions: add a new writer
-# when it lands, take one out when it retires.
+# ⚠️ THE SYNTAX LIST IS A DEPENDENCY, not a courtesy. repo-tidy.js scans every
+# text file and REFUSES to delete anything this list names — which on 2026-09-13
+# is exactly what stopped a retiring script being removed while it was still
+# named here. Keep the list current in BOTH directions: add a new writer when it
+# lands, take one out when it retires.
+#
+# ⚠️ AND DO NOT NAME A RETIRED SCRIPT IN THESE COMMENTS EITHER. The first draft
+# of this note explained the point by naming the very file being retired, which
+# put it straight back into repo-tidy's reference scan and would have left this
+# workflow describing a file that no longer exists.
 #
 # ⚠️ node --check PROVES SYNTAX ONLY. It runs nothing, so a missing function or a
 # temporal dead zone passes it — enrich-games v18 called writeCursor thirteen
