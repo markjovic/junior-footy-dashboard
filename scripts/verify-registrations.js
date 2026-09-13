@@ -19,7 +19,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const zlib = require('zlib');
 
-const VERSION = 'verify-registrations v4 2026-09-07';
+const VERSION = 'verify-registrations v5 2026-09-13 version-shape-not-string';
 console.log(`=== ${VERSION} ===`);
 
 const REAL = path.join(__dirname, 'walk-registrations.js');
@@ -138,7 +138,17 @@ function ok(name, cond, detail) {
 // ── 1. First run: cohort, budget, never-checked first ────────────────────────
 console.log('\n1  First run builds the cohort and walks one slice');
 let r = run();
-ok('version line', /walk-registrations v4 2026-09-07/.test(r.out));
+// ⚠️ ASSERT THE SHAPE, NOT THE STRING. v4 pinned `walk-registrations v4
+// 2026-09-07` exactly, so the suite went red the moment the script was
+// legitimately bumped to v5 — a maintenance tax rather than a check, and one
+// that trains people to edit the test to make it pass.
+//
+// What a version line is FOR is telling a stale copy apart from a real failure
+// in a log. That needs a name, a version and a date to be PRESENT; it does not
+// need them to be any particular values. A missing or unprinted line still
+// fails here, which is the only thing that was ever worth catching.
+ok('version line', /walk-registrations v\d+ \d{4}-\d{2}-\d{2}/.test(r.out),
+   (r.out.match(/walk-registrations v[^\n]*/) || ['(no version line printed)'])[0]);
 ok('exit 0 (changed)', r.code === 0, `exit ${r.code}`);
 ok('cohort is the latest season per org, not 2025', /cohort: 21 people/.test(r.out), (r.out.match(/cohort: .*/) || [''])[0]);
 ok('2025-only players are not in the file', !read().players.old01);

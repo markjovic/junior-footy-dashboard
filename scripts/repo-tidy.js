@@ -14,6 +14,7 @@
 //   oneoffs     Scripts superseded by shipped features, with their workflows.
 //   placeholders  1-byte a.txt files used to create empty directories in git.
 //   legacy      Superseded documentation.
+//   enrich2026  Superseded by enrich-games.js and the September 2026 career work.
 //   probes      Diagnostics whose question is answered. probe-finals-rounds is
 //               deliberately NOT included — it is a reusable round-structure
 //               tool, not a one-off.
@@ -44,7 +45,7 @@ const path = require('path');
 // Printed on every run. working_practice.md: a script whose output is read from a
 // log must print a version, or a stale cached copy and a real failure look the
 // same and cost a wasted run. This one had none.
-const VERSION = 'repo-tidy v3 2026-08-20 new-tools-listed';
+const VERSION = 'repo-tidy v4 2026-09-13 enrich-and-career-retirees';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -99,9 +100,34 @@ const GROUPS = {
        'Superseded by README.md.'],
     ],
   },
+  enrich2026: {
+    label: 'Superseded by enrich-games.js and the career work of September 2026',
+    paths: [
+      ['scripts/backfill-game-ids.js',
+       'Stamped PlayHQ gameIds onto records that lacked one, by a FUZZY match on round plus team names — the same join that once put U9 scores on a U11 player\'s card. enrich-games.js fetches the id from the grade\'s own fixture instead, so nothing has to be guessed. 51,907 of 52,686 completed records now carry an id and the rest are waiting on enrich-games, not on this.'],
+      ['.github/workflows/backfill-game-ids.yml',
+       'Workflow for the above.'],
+      ['scripts/fetch-quarter-scores.js',
+       'Added hQ/aQ to stored records. enrich-games.js does the same walk and the same write, alongside the game ids, from one dispatch that chains itself. ⚠️ Its workflow header also states the setup-node/CLOUDFRONT-BLOCK claim as fact; working_practice.md records that as unverified and contradicted by two live counter-examples, so removing the file removes a repeated assertion as well as a script.'],
+      ['.github/workflows/fetch-quarter-scores.yml',
+       'Workflow for the above.'],
+      ['scripts/repair-career-held.js',
+       'One-off. Rewrote the `held` flag on every career file after fetch-career-stats v5 set it from all 65 manifest seasons rather than the 18 we store. Ran 2026-09-11; v6 computes it correctly, so this cannot be needed again. Its own header says to delete it or add it here.'],
+      ['.github/workflows/repair-career-held.yml',
+       'Workflow for the above.'],
+    ],
+  },
   probes: {
     label: 'Diagnostics whose question is answered',
     paths: [
+      ['scripts/probe-career-stats.js',
+       'Measured publicProfileStatistics — the shape of a career, the per-session JWT quota, and that introspection is disabled. Every answer is in career_stats_design.md revision 5 and playhq_api_reference.md §13. Its own workflow header says to retire it here when the measurements are in. ⚠️ Its PACING SHAPE is worth keeping in mind even after the file goes: 20 seconds between rejected-field trials, stop after three.'],
+      ['.github/workflows/probe-career-stats.yml',
+       'Workflow for the above.'],
+      ['scripts/probe-game-stats.js',
+       'Six versions, four of which measured the SPECTATOR endpoint before the route turned out to be gameView on discoverGame. Answered, and the answers — including the ones that were wrong and why — are in per_game_stats_design.md revision 2 §2.1 and playhq_api_reference.md §11a-e. ⚠️ Nothing here should be re-run: its v1-v2 trials guessed field names on api.playhq.com and its v3-v6 coverage figures are VOID.'],
+      ['.github/workflows/probe-game-stats.yml',
+       'Workflow for the above.'],
       ['scripts/probe-team-club.js',
        'Asked for club{id name} on DiscoverTeam and concluded no club exists. The field is named organisation — the conclusion is WRONG and re-running this would re-teach the error. Findings are recorded correctly in playhq_api_reference.md.'],
       ['.github/workflows/probe-team-club.yml',
