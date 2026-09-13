@@ -40,12 +40,12 @@ workers/
     verify-store.yml        ← ALL verify suites — runs automatically on every push
     backfill.yml            ← Manual — retired seasons, has comp and dry_run inputs
     build-club-index.yml    ← Manual — rebuilds the club index
-    discover-seasons.yml    ← Manual — run before a backfill when a season appears
+    discover-seasons.yml    ← DAILY 04:30 AEST — writes the manifest incl. per-season
+                              state; also run by hand when a season appears
     audit-data.yml          ← Manual, read-only — data audit
     repair-scheduled-results.yml ← Manual, offline, no PlayHQ calls
     cleanup-rename-duplicates.yml ← Manual, offline; dry run by default
     repair-duplicate-names.yml ← Manual, online; dry run by default
-    probe-refetch-round.yml ← Manual, read-only diagnostic
     build-player-index.yml  ← SCHEDULED weekly (Mon 03:15 UTC) — the only workflow
                               with its own cron; everything else is Worker-driven
     enrich-games.yml        ← Self-chaining archive walk. Shares the
@@ -64,6 +64,7 @@ scripts/
   backfill.js               ← Results and player stats for retired seasons
   build-club-index.js       ← Resolves teams to PlayHQ clubs
   discover-seasons.js       ← Discovers seasons per organisation; writes the manifest
+                              with per-season state (upcoming|active|complete). Daily.
   discover-orgs.js          ← Discovers organisation ids from PlayHQ search
   migrate-grade-ids.js      ← One-off (idempotent): rewrites match ids to carry grade ids
   rebuild-grade-meta.js     ← Offline: regenerates gradeMeta for every stored season
@@ -72,8 +73,6 @@ scripts/
                               where one of the pair carries PlayHQ's gameId
   repair-duplicate-names.js ← Online: the same, where NEITHER does — asks PlayHQ
                               which name it still serves
-  probe-refetch-round.js    ← Read-only: does discoverFixtureByRound re-serve a
-                              completed round? (it does, settled 2026-08-19)
   build-player-index.js     ← Builds the cross-season search index; runs weekly
   enrich-games.js           ← Backfills game ids AND quarter scores across every
                               season, from one dispatch. Self-chaining: commits as
@@ -83,6 +82,9 @@ scripts/
                               (76-77s, measured; the 80s sleep is correct)
   probe-round-periods.js    ← Read-only: can the fixture query carry quarters?
                               (it can — engine v25 uses it)
+  walk-registrations.js     ← DAILY off-season: where is each player registered for
+                              next season? Writes data/registrations.json.gz
+  probe-registration-budget.js ← Read-only: publicProfileTeams budget; pre-season records
   probe-preseason-roster.js ← Read-only: can next season's registrations be seen
                               before a fixture exists? (yes, 100% on afl)
   split-by-season.js        ← One-off migration: data/orgs → data/seasons
@@ -101,6 +103,7 @@ scripts/
   verify-dashboard-grades.js  ← index.html silent failures
   verify-rebuild-grade-meta.js
   verify-audit.js           ← audit-data.js
+  verify-registrations.js   ← walk-registrations.js
 assets/
   icons/
     icon-192.png            ← PWA home screen icon (192×192)
@@ -167,7 +170,6 @@ https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repo-tidy.
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/cleanup-rename-duplicates.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-duplicate-names.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/repair-scheduled-results.js
-https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/probe-refetch-round.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/build-player-index.js
 https://github.com/markjovic/junior-footy-dashboard/blob/main/docs/cross_season_search_design.md
 https://github.com/markjovic/junior-footy-dashboard/blob/main/scripts/lib/store.js
@@ -284,6 +286,32 @@ keys present in `data`. Retired keys are deleted explicitly, on both write paths
 
 Three fetch scripts plus a club indexer. All can be triggered from the Admin panel.
 
+**Off-season mode (2026-09-07).** Each manifest entry carries `state` —
+`upcoming`, `active` or `complete` — written daily by `discover-seasons.js` from
+PlayHQ's own season status, with a local backstop (no scheduled fixture and no new
+result for 14 days) for the window before PlayHQ flips the flag. Every job in
+`fetch-results.yml` starts with a season gate: when no tracked season is active or
+upcoming, the fetch is skipped. The dashboard shows SEASON COMPLETE beside the
+season selector. `state` is per SEASON, and is separate from `retired` (no longer
+walked). Design: `docs/offseason_mode_design.md`.
+
+**Season rollover (2026-09-08).** `config.json` holds no season ids — one entry
+per organisation (`code`, short `name`, `tracked`, `vip`, `excludeGrades`). What
+the scheduled fetch walks comes from the manifest: tracked organisations' seasons
+that are active or upcoming, or complete for under a week. A 2027 season is
+fetched the morning discovery records it, with nobody editing anything.
+Discovery refuses to write if a config change would alter any stored competition
+name. Design: `docs/season_rollover_design.md`.
+
+**Player registrations (2026-09-07).** In the off-season `walk-registrations.js`
+asks PlayHQ, one call per person, where each of last season's players is
+registered now — about a seventh of the 40,000-person cohort a day, re-checking
+unsigned players weekly and signed ones monthly, and re-checking a whole club the
+day it starts assigning teams. The player panel shows one line for the season
+after the player's latest: registered with which club (and team, once assigned),
+no registration yet, or gone to another league. Stored gzipped in
+`data/registrations.json.gz`. Design: `docs/registrations_design.md`.
+
 `fetch-results.js` and `backfill.js` both call **`scripts/lib/results-engine.js`**,
 so there is one copy of the match processing rather than two that drift. The engine
 is versioned in its own header — v19 at the time of writing — and every script that
@@ -345,6 +373,7 @@ check the Actions tab.
 | `verify-backfill.js` | `backfill.js`, `fetch-results.js`, `results-engine.js` |
 | `verify-dashboard-grades.js` | `index.html` silent failures |
 | `verify-audit.js` | `audit-data.js` |
+| `verify-registrations.js` | `walk-registrations.js` |
 | `verify-discover-seasons.js` | `discover-seasons.js` |
 | `verify-migrate-grade-ids.js` | `migrate-grade-ids.js` |
 | `verify-rebuild-grade-meta.js` | `rebuild-grade-meta.js` |
@@ -370,7 +399,11 @@ scans **source files only**, so a stored field can still be referenced by a
 
 ## Scheduling
 
-Scheduling is handled by a **Cloudflare Worker** (`footy-cron.insanoflash.workers.dev`) which dispatches the GitHub Actions workflow at the correct AEST times. GitHub Actions scheduled crons are not used (unreliable on free plans).
+Scheduling is handled by a **Cloudflare Worker** (`footy-cron.insanoflash.workers.dev`) which dispatches the GitHub Actions workflow at the correct AEST times. GitHub Actions scheduled crons are not used for results (unreliable on free plans).
+
+One exception: `discover-seasons.yml` runs on a GitHub `schedule` at 18:30 UTC
+(04:30 AEST) daily. It is ~30 calls and nothing depends on the exact minute, so a
+late or dropped cron costs nothing.
 
 ### Cloudflare cron triggers (UTC)
 
