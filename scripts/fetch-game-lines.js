@@ -67,7 +67,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v6 2026-09-12 config-names-from-the-config';
+const VERSION = 'fetch-game-lines v7 2026-09-13 stamp-resolver-crashes';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -104,6 +104,15 @@ const NO_DAYS = Math.max(0, Number(process.env.FGL_NO_DAYS || 1));
 // which is what a stamp here asserts. Every remaining negative is a scorer who has
 // not filled the side in, and every one of them expires.
 const PERMANENT = new Set();
+
+// ⚠️ A VALIDATION ERROR AND A RESOLVER CRASH ARE DIFFERENT ANSWERS. The first
+// means OUR document is wrong and every game would fail the same way — stamping
+// it would make a probe defect permanent. The second means PlayHQ fell over on
+// that particular game, which is an answer ABOUT THE GAME and must be stamped or
+// it is due again on every run for ever. Measured 2026-09-13: 14 games answered
+// `Cannot read properties of undefined (reading 'id')`, which is PlayHQ's own
+// JavaScript, not a GraphQL complaint about our query.
+const VALIDATION = /Cannot query field|Unknown argument|Unknown type|is not defined by type|Variable .* got invalid value|Expected type/i;
 
 // At most RATE calls in any rolling WINDOW_MS, across every worker.
 const callTimes = [];
@@ -316,12 +325,12 @@ async function main() {
   }
   if (MAX_GAMES) todo = todo.slice(0, MAX_GAMES);
   log(`\n${withId.length} joinable record(s); ${todo.length} to fetch.`);
-  if (negStanding) log(`  ${negStanding} carry a standing negative (no player block within ${NO_DAYS} day(s)) — not re-asked.`);
-  if (negStale) log(`  ${negStale} had "no player block" recorded ${NO_DAYS}+ day(s) ago in a live season — asked again.`);
+  if (negStanding) log(`  ${negStanding} carry a standing negative recorded within ${NO_DAYS} day(s) — not re-asked.`);
+  if (negStale) log(`  ${negStale} carry a negative recorded ${NO_DAYS}+ day(s) ago in a live season — asked again.`);
   if (!todo.length) { log('Nothing to do.'); process.exit(2); }
 
   // ── Counters ───────────────────────────────────────────────────────────────
-  let calls = 0, done = 0, stamped = 0, hidden = 0, noBlock = 0, failed = 0;
+  let calls = 0, done = 0, stamped = 0, hidden = 0, noBlock = 0, failed = 0, crashed = 0;
   let pending = 0, committed = 0, pushFailures = 0, lastPush = Date.now(), stopped = false;
   const statKeys = new Map(), periodKeys = new Map(), gradeSeen = new Map();
   const covByComp = new Map();      // compName -> {games, withLines, sides, exact, partial, empty, hidden}
@@ -407,10 +416,22 @@ let votesOffered = 0, votesStored = 0;
     try { await pace(); json = await gqlPost(Q_GAME, { gameId: m.gameId }, 'gameView'); calls++; }
     catch (e) { failed++; return; }                     // transport: left due, retried next run
     if (json.errors && json.errors.length) {
-      // ⚠️ A REJECTED DOCUMENT IS NOT A GAME WITHOUT DATA. It is reported and the
-      // game is left due, because stamping it would make a probe defect permanent.
-      failed++;
-      if (failed <= 3) console.error(`    ⚠️ ${m.gameId}: ${String(json.errors[0].message).slice(0, 200)}`);
+      const msg = String(json.errors[0].message);
+      if (VALIDATION.test(msg)) {
+        // ⚠️ OUR DOCUMENT IS WRONG. Left due — stamping would make a probe defect
+        // permanent, and every game in the run will say the same thing anyway.
+        failed++;
+        if (failed <= 3) console.error(`    ⚠️ ${m.gameId}: ${msg.slice(0, 200)}`);
+        return;
+      }
+      // PlayHQ's own resolver fell over on this game. An ANSWER about the game.
+      // Stamped with the date so it is re-asked once the stamp expires rather
+      // than on every run, and never stamped for good — PlayHQ may fix it.
+      crashed++;
+      if (crashed <= 3) console.error(`    ⚠️ ${m.gameId}: PlayHQ resolver error, stamped — ${msg.slice(0, 140)}`);
+      s.file.games[m.gameId] = { n: 'phqerror', at: today, v: LV };
+      stamped++;
+      pending++;
       return;
     }
     const g = json.data && json.data.discoverGame;
@@ -561,7 +582,13 @@ let votesOffered = 0, votesStored = 0;
   // ── Report ─────────────────────────────────────────────────────────────────
   log('\n═══ WHAT THIS RUN MEASURED ═══');
   log(`calls ${calls}; games with lines ${done}; stamped negatives ${stamped} ` +
-    `(all "no player block"); failures left due ${failed}`);
+    `(${noBlock} no player block, ${crashed} PlayHQ resolver error); failures left due ${failed}`);
+  if (failed) {
+    log('  ⚠️ Those failures are VALIDATION errors or transport faults, not answers about');
+    log('     the games. They stay due and are asked again next run. If the count equals');
+    log('     the run size, the document is wrong and nothing else in this log is a');
+    log('     measurement.');
+  }
   log(`games in a hideScores grade: ${hidden}, of which ${hiddenWithLines} RETURNED LINES ANYWAY` +
     (hidden ? ` (${(hiddenWithLines / hidden * 100).toFixed(0)}%)` : ''));
   log('  ⚠️ hideScores is a DISPLAY setting, stored with an `hs` flag rather than');
