@@ -67,7 +67,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary, summary } = require('./lib/playhq');
 
-const VERSION = 'fetch-game-lines v7 2026-09-13 stamp-resolver-crashes';
+const VERSION = 'fetch-game-lines v8 2026-09-13 enobufs-and-empty-log';
 // Stamped on every game this extraction writes. Bump when the EXTRACTION changes
 // in a way that makes an older record worth fetching again.
 const LV = 1;
@@ -349,15 +349,22 @@ let votesOffered = 0, votesStored = 0;
   const gitCommit = (label) => {
     if (!COMMIT) return;
     try {
-      execFileSync('git', ['add', '-A', 'data/'], { stdio: 'pipe' });
-      const staged = execFileSync('git', ['diff', '--staged', '--name-only'], { encoding: 'utf8' }).trim();
+      // ⚠️ NEVER READ A FILE LIST FROM GIT. This stages at most 25 season files so
+      // it cannot overflow today, but the identical line in build-player-lines.js
+      // asked for 48,687 paths — about 3 MB against execFileSync's 1 MB default —
+      // and died with ENOBUFS *after* writing every one of them. Ask for the EXIT
+      // CODE: same question, no output.
+      execFileSync('git', ['add', '-A', 'data/'], { stdio: 'ignore' });
+      let staged = false;
+      try { execFileSync('git', ['diff', '--staged', '--quiet'], { stdio: 'ignore' }); }
+      catch (e) { staged = true; }          // non-zero exit means there IS something
       if (!staged) return;
-      execFileSync('git', ['commit', '-m', `Game lines: ${label}`], { stdio: 'pipe' });
+      execFileSync('git', ['commit', '-q', '-m', `Game lines: ${label}`], { stdio: 'ignore' });
       // ⚠️ NAME THE BRANCH. A bare pull --rebase fails on a detached HEAD, which
       // is what actions/checkout leaves without a `ref:`.
       const branch = process.env.GITHUB_REF_NAME || 'main';
-      execFileSync('git', ['pull', '--rebase', 'origin', branch], { stdio: 'pipe' });
-      execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'pipe' });
+      execFileSync('git', ['pull', '--rebase', 'origin', branch], { stdio: 'ignore' });
+      execFileSync('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'ignore' });
       pushFailures = 0;
       log(`    …pushed (${label})`);
     } catch (e) {
@@ -610,7 +617,12 @@ let votesOffered = 0, votesStored = 0;
 
   log(`\nperiodStatistics: ${periodPopulated} populated row(s), ${periodEmpty} empty, ` +
     `${periodNoRows} player(s) with NO period rows at all`);
-  if (!periodPopulated && !periodEmpty && periodNoRows) {
+  if (!periodPopulated && !periodEmpty && !periodNoRows) {
+    // ⚠️ NOTHING WAS LOOKED AT. A run that fetched no player rows has measured
+    // nothing about periodStatistics, and v7 printed the "structure present,
+    // nothing in it" verdict anyway — a claim about data that did not exist.
+    log('  (no player rows in this run — nothing measured)');
+  } else if (!periodPopulated && !periodEmpty && periodNoRows) {
     log('  ⚠️ The array is EMPTY on every player — not a skeleton carrying nothing, but');
     log('     no rows at all. There are no per-quarter player figures on this route.');
     log('     That is a different answer from the spectator route, which returns four');
