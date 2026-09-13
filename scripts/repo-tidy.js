@@ -45,7 +45,7 @@ const path = require('path');
 // Printed on every run. working_practice.md: a script whose output is read from a
 // log must print a version, or a stale cached copy and a real failure look the
 // same and cost a wasted run. This one had none.
-const VERSION = 'repo-tidy v4 2026-09-13 enrich-and-career-retirees';
+const VERSION = 'repo-tidy v5 2026-09-13 repair-tools-are-not-probes';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -119,6 +119,16 @@ const GROUPS = {
   },
   probes: {
     label: 'Diagnostics whose question is answered',
+  // ⚠️ `cleanup-rename-duplicates` and `repair-duplicate-names` WERE LISTED HERE
+  // and were removed from the list on 2026-09-13. They are not probes: they are
+  // the only tools that repair a duplicate left by a mid-season team rename, and
+  // dashboard_context.md records why the normal fetch path cannot reach those
+  // rounds — `knownRounds` is built from stored records and `fetchGrade` skips
+  // anything at or below it. Engine v16 prevents NEW duplicates by stamping
+  // every record with PlayHQ's gameId, and the backlog was cleared on
+  // 2026-08-19, so they have nothing to do today. But prevention is not the same
+  // as impossibility, and a repair tool for an unreachable round is worth more
+  // kept than the 36K it costs.
     paths: [
       ['scripts/probe-career-stats.js',
        'Measured publicProfileStatistics — the shape of a career, the per-session JWT quota, and that introspection is disabled. Every answer is in career_stats_design.md revision 5 and playhq_api_reference.md §13. Its own workflow header says to retire it here when the measurements are in. ⚠️ Its PACING SHAPE is worth keeping in mind even after the file goes: 20 seconds between rejected-field trials, stop after three.'],
@@ -170,14 +180,6 @@ const GROUPS = {
       ['scripts/probe-refetch-round.js',
        'Settled whether discoverFixtureByRound re-serves a completed round — it does, in full (2026-08-19, 279 calls). Recorded in playhq_api_reference.md. KEEP for now: the previous answer to this question stood wrong for a week because nobody could cheaply re-check it.'],
       ['.github/workflows/probe-refetch-round.yml',
-       'Workflow for the above.'],
-      ['scripts/cleanup-rename-duplicates.js',
-       'Removed 3 duplicate records left by a team rename where one side carried a gameId, 2026-08-19. KEEP: idempotent, dry-run by default, and it also REPORTS the gameId-less pairs that repair-duplicate-names.js exists to fix.'],
-      ['.github/workflows/cleanup-rename-duplicates.yml',
-       'Workflow for the above.'],
-      ['scripts/repair-duplicate-names.js',
-       'Removed 21 duplicate records where NEITHER side carried a gameId, 2026-08-19, by asking PlayHQ which name it still serves. KEEP: the rounds it repairs are unreachable by fetch-results and backfill, so nothing else can reach them.'],
-      ['.github/workflows/repair-duplicate-names.yml',
        'Workflow for the above.'],
     ],
   },
