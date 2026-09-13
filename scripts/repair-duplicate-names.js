@@ -20,8 +20,10 @@
 //                                           "Mt Eliza JFC U17 Boys Red", SER 2026)
 //
 // THE REPAIR — ask, do not infer.
-// discoverFixtureByRound re-serves completed rounds IN FULL, settled 2026-08-19 by
-// probe-refetch-round.js. So for each affected round this fetches the round and
+// discoverFixtureByRound re-serves completed rounds IN FULL — settled 2026-08-19
+// and recorded in docs/playhq_api_reference.md. (The probe that settled it was
+// retired on 2026-09-13; cite the reference, not a script that may not exist.)
+// So for each affected round this fetches the round and
 // reads the team names PlayHQ serves TODAY. The stored record whose names match is
 // current; the other is stale and is removed. Neither the newer-looking name nor
 // the longer one is assumed to win — the API is asked.
@@ -44,7 +46,7 @@
 
 'use strict';
 
-const VERSION = 'repair-duplicate-names v3 2026-08-20 carnival-guards';
+const VERSION = 'repair-duplicate-names v4 2026-09-13 cite-the-doc-not-the-probe';
 
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
