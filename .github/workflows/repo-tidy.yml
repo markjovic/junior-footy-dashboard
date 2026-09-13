@@ -70,17 +70,59 @@ jobs:
           echo "exit_code=$?" >> $GITHUB_OUTPUT
           set -e
 
-      - name: Commit removals
+      # ⚠️ COMMITTED IN TWO PARTS, AND THE SECOND IS ALLOWED TO FAIL.
+      # GitHub refuses a default-token push that touches .github/workflows/ —
+      # "refusing to allow a GitHub App to create or update workflow ... without
+      # `workflows` permission" — and `permissions:` cannot grant what the token
+      # does not have. A single commit covering both would be rejected whole and
+      # land NOTHING, including the script removals that are perfectly allowed.
+      - name: Commit removals outside .github/workflows
         if: steps.tidy.outputs.exit_code == '0'
         run: |
           set -euo pipefail
-          if git diff --quiet; then
-            echo "Working tree unchanged — dry run, or nothing was deleted."
-            exit 0
-          fi
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -u
-          git diff --staged --quiet || git commit -m "tidy: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          # -u stages deletions of tracked files. The pathspec holds back the
+          # workflow directory for the step below.
+          git add -u -- . ':(exclude).github/workflows'
+          if git diff --staged --quiet; then
+            echo "Nothing outside .github/workflows changed — dry run, or nothing deleted."
+            exit 0
+          fi
+          git diff --staged --name-status
+          git commit -m "tidy: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
+
+      - name: Commit workflow removals, if GitHub allows it
+        id: wf
+        continue-on-error: true
+        if: steps.tidy.outputs.exit_code == '0'
+        run: |
+          set -euo pipefail
+          git add -u -- .github/workflows
+          if git diff --staged --quiet; then
+            echo "No workflow files to remove."
+            exit 0
+          fi
+          git diff --staged --name-status
+          git commit -m "tidy: workflows (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
+
+      # A failure above is EXPECTED, not a fault. Everything else is already
+      # committed; these are the files to remove by hand.
+      - name: If the workflow push was refused
+        if: ${{ always() && steps.wf.outcome == 'failure' }}
+        run: |
+          echo "=============================================================="
+          echo "Workflow-file removals were NOT pushed. This is expected:"
+          echo "the default token cannot push a change under .github/workflows/."
+          echo ""
+          echo "The scripts are already removed and committed. Delete these by"
+          echo "hand in the GitHub web UI — two clicks each:"
+          echo ""
+          git status --porcelain -- .github/workflows | sed 's/^/    /'
+          echo ""
+          echo "A deleted workflow leaves the Actions list on its own."
+          echo "=============================================================="
