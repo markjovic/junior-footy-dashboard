@@ -364,7 +364,7 @@
           "competitionName": "Bendigo Junior Football League (BJFL)",
           "startDate": "2026-04-24",
           "endDate": "2026-09-13",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -521,7 +521,7 @@
           "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
           "startDate": "2026-04-01",
           "endDate": "2026-09-13",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -1327,7 +1327,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "e2a39961",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-24",
       "endDate": "2026-09-13",
       "retired": false,
@@ -1336,8 +1336,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-14T21:57:38.975Z"
     },
     {
       "org": "3686b395",
@@ -1710,7 +1710,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "3bcc10ae",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-13",
       "retired": false,
@@ -1719,8 +1719,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-14T21:57:38.975Z"
     },
     {
       "org": "5b77d8cc",
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-08T02:10:32.984Z",
+  "lastSeasonDiscovery": "2026-09-14T21:58:03.662Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
