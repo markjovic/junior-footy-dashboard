@@ -534,6 +534,30 @@ body{overflow-x:hidden}
 .bx-overlay{z-index:500}
 /* Above the box score and the player panel: help is openable from inside both. */
 .help-overlay{z-index:600}
+/* ── Share sheet ───────────────────────────────────────────────────────────── */
+.sh-fab{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));
+  z-index:60;width:44px;height:44px;border-radius:50%;border:1px solid var(--b2);
+  background:var(--s3);color:var(--gold);font-size:17px;line-height:1;display:none;
+  align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+/* Narrow screens only — the header button covers the desktop and two controls for
+   one action side by side is clutter. */
+@media(max-width:768px){.sh-fab{display:flex}}
+.sh-wrap{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.72);
+  align-items:center;justify-content:center;padding:18px}
+.sh-card{background:var(--s1);border:1px solid var(--b2);border-radius:14px;
+  padding:18px;max-width:340px;width:100%;text-align:center}
+.sh-ttl{font-weight:700;font-size:13px;margin-bottom:12px}
+/* ⚠️ WHITE, WITH PADDING. A QR on a dark card does not scan reliably, and the
+   quiet zone is part of the spec rather than decoration. */
+.sh-qr{background:#fff;padding:10px;border-radius:10px;display:inline-block;line-height:0}
+.sh-note{font-size:10px;color:var(--tx3);margin-top:6px}
+.sh-note b{color:var(--tx2)}
+.sh-url{margin:12px 0 10px;font-size:10px;color:var(--tx2);word-break:break-all;
+  background:var(--s3);border-radius:8px;padding:8px;font-family:'DM Mono',monospace}
+.sh-row{display:flex;gap:8px}
+.sh-row button{flex:1;padding:9px;border-radius:8px;border:1px solid var(--b2);
+  background:var(--s3);color:var(--tx);font-size:12px;cursor:pointer;font-family:inherit}
+.sh-row button.pri{background:var(--gold);color:#2a2000;border-color:var(--gold);font-weight:700}
 .help-sec{margin-top:16px}
 .help-sec-h{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);
   padding-bottom:5px;border-bottom:1px solid var(--b1);margin-bottom:8px}
@@ -660,7 +684,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.246</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.247</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1091,7 +1115,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.246</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.247</span>
         </div>
 
 
@@ -1288,17 +1312,64 @@ function syncURL() {
 // do not race the read and overwrite the link being opened.
 let _urlApplying = false;
 
-function shareLink() {
-  const url = `${location.origin}${location.pathname}${buildHash() ? '#' + buildHash() : ''}`;
-  const done = () => toast('Link copied — it opens this exact view', 'ok');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(done).catch(() => toast(url));
-  } else {
-    // No clipboard API on http:// or an old browser. Showing the URL is more use
-    // than an error.
-    toast(url);
-  }
+// ⚠️ ALWAYS ABSOLUTE, AND ALWAYS NAMING index.html. GitHub Pages serves the
+// directory form too, but a bare directory link is the one that breaks when pasted
+// into an app that appends to the path.
+function shareBase() {
+  let path = location.pathname;
+  if (path.endsWith('/')) path += 'index.html';
+  return location.origin + path;
 }
+
+// ⚠️ FROM buildHash(), NOT location.hash. syncURL() writes the hash on a
+// replaceState and the two are equivalent in practice — but buildHash() is the
+// authority, and reading it directly means the link cannot depend on a write
+// having already happened.
+function shareURL() {
+  const h = buildHash();
+  return shareBase() + (h ? '#' + h : '');
+}
+
+function openShare() {
+  const url = shareURL();
+  const u = document.getElementById('sh-url');
+  if (u) u.textContent = url;
+  const w = document.getElementById('sh-wrap');
+  if (w) w.style.display = 'flex';
+  // ⚠️ COPY INSIDE THE CLICK. Opening the sheet IS the share action and the button
+  // below is a retry, not the first step. Moving this behind an await or a timeout
+  // takes it outside the user gesture and the browser refuses the clipboard write.
+  copyShare();
+}
+function closeShare() {
+  const w = document.getElementById('sh-wrap');
+  if (w) w.style.display = 'none';
+}
+function copyShare() {
+  const url = shareURL(), btn = document.getElementById('sh-copy');
+  const ok = () => {
+    if (!btn) return;
+    btn.textContent = '✓ Link copied';
+    setTimeout(() => { btn.textContent = 'Copy link again'; }, 2200);
+  };
+  // No clipboard API on http:// or an older browser — select the text instead, so
+  // there is still something to do rather than a dead button.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(ok).catch(selectShare);
+  } else selectShare();
+}
+function selectShare() {
+  const n = document.getElementById('sh-url');
+  if (!n || !window.getSelection) return;
+  const r = document.createRange();
+  r.selectNodeContents(n);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
+// The header button and the floating one are the same action.
+function shareLink() { openShare(); }
 
 function saveFilters() {
   // The URL rides on saveFilters rather than being wired into sixteen call sites
@@ -8190,5 +8261,38 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<!-- ── SHARE SHEET ──
+     The header button and this floating one both call openShare(). The floating
+     one shows on narrow screens only: the header is crowded there and a share
+     affordance that only exists in a collapsed header is not an affordance. -->
+<button class="sh-fab" id="sh-fab" onclick="openShare()" title="Share this view">🔗</button>
+<div class="sh-wrap" id="sh-wrap" style="display:none" onclick="if(event.target===this)closeShare()">
+  <div class="sh-card">
+    <div class="sh-ttl">Share this view</div>
+    <div class="sh-qr" id="sh-qr">
+      <!-- ⚠️ A STATIC IMAGE, DELIBERATELY. A byte-mode QR encoder was written for
+           the sibling project, passed every check available without a phone —
+           finder and timing placement, format bits, Reed-Solomon syndromes, the
+           payload round-tripping back out — AND STILL WOULD NOT SCAN. None of
+           those test what a real decoder rejects. Do not replace this with a
+           generated QR that has not been scanned with an actual phone.
+           An image service is the other option and is refused: every shared URL
+           names a child and their club, and that is not going to a third party. -->
+      <img src="assets/qr-code.png" alt="QR code to open the dashboard"
+           width="200" height="200" style="display:block;width:200px;height:200px"
+           onerror="this.style.display='none';var n=document.getElementById('sh-qr-missing');if(n)n.style.display='block'">
+    </div>
+    <div id="sh-qr-missing" style="display:none;font-size:11px;color:var(--orange);padding:10px 0">
+      QR image not found at <code>assets/qr-code.png</code>
+    </div>
+    <div class="sh-note">Scan to open the dashboard &middot; the link below opens <b>this</b> view</div>
+    <div class="sh-url" id="sh-url"></div>
+    <div class="sh-row">
+      <button class="pri" id="sh-copy" onclick="copyShare()">Copy link</button>
+      <button onclick="closeShare()">Close</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
