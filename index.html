@@ -547,6 +547,12 @@ body{overflow-x:hidden}
 /* ⚠️ A TIP IS A TAP TARGET, NOT JUST A TITLE. Hover does not exist on a phone, so
    anything explained only in a `title` is invisible to half the readers. */
 [data-help]{cursor:help;border-bottom:1px dotted var(--tx3)}
+/* The same affordance in every panel: header, player, box score, finals. Three
+   different-looking help buttons read as three unrelated things. */
+.help-dot{width:22px;height:22px;flex-shrink:0;border-radius:50%;background:none;
+  border:1px solid var(--b2);color:var(--tx3);font-family:'DM Mono',monospace;
+  font-size:11px;line-height:1;cursor:pointer;padding:0}
+.help-dot:hover{border-color:var(--gold);color:var(--gold);background:rgba(240,192,64,.08)}
 [data-help]:hover{color:var(--gold);border-bottom-color:var(--gold)}
 /* In the modal the two sides always sit side by side above 640px; the inline
    variant had to share a match row, this owns the width. */
@@ -654,7 +660,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.245</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.246</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -666,6 +672,10 @@ body{overflow-x:hidden}
     title="Copy a link to exactly this view">🔗 Share</button>
   <button class="hdr-btn" id="help-btn" onclick="openHelp()"
     title="What the numbers mean, and why some are missing">? Help</button>
+  <!-- ⚠️ SHOWN WITH THE FINALS VIEW ONLY. `switchView` toggles it, so it cannot
+       sit on a dashboard that has no finals on screen. -->
+  <button class="help-dot" id="finals-help" style="display:none" onclick="openHelp('finals')"
+    title="How to read the finals view">?</button>
   <div style="flex:1"></div>
   <button class="hdr-btn" id="share-btn" onclick="shareApp()" style="display:none" title="Share">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -946,10 +956,10 @@ body{overflow-x:hidden}
       </div>
       <button class="qtr-btn" id="bx-qtr-btn" onclick="cycleQuarters()"
               title="Quarter scores: running total or per quarter">Total</button>
-      <span ${helpAttr('qtr')} style="font-size:11px;color:var(--tx3);padding:0 2px">?</span>
       <div id="bx-score" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700"></div>
       <a id="bx-phq" href="#" target="_blank" rel="noopener" title="Open this game on PlayHQ"
          style="font-size:10px;color:var(--tx3);text-decoration:none;border-bottom:1px dotted var(--tx3)">PlayHQ &#8599;</a>
+      <button class="help-dot" onclick="openHelp('box')" title="How to read a box score">?</button>
       <button class="btn-g" onclick="closeBoxModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
     <div class="team-modal-scroll">
@@ -969,6 +979,7 @@ body{overflow-x:hidden}
         <div id="pm-next" style="font-size:10px;color:var(--tx2);margin-top:2px;display:none"></div>
       </div>
       <div id="pm-seasons" class="pm-season-strip"></div>
+      <button class="help-dot" onclick="openHelp('player-panel')" title="What this page shows">?</button>
       <button class="btn-g" onclick="closePlayerModal()" style="padding:5px 10px;font-size:12px">✕</button>
     </div>
     <div class="team-stat-strip" id="pm-stats" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -1080,7 +1091,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.245</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.246</span>
         </div>
 
 
@@ -2967,6 +2978,11 @@ function syncViewTabs() {
   on('mvt-dash', S.view !== 'finals' && S.view !== 'leaders');
   on('mvt-finals', S.view === 'finals');
   on('mvt-leaders', S.view === 'leaders');
+  // ⚠️ SET FROM S.view, LIKE EVERY OTHER CONTROL HERE — not toggled where the
+  // click happened. The view is also restored from saved filters and from a
+  // shared link, neither of which goes through a click.
+  const fh = document.getElementById('finals-help');
+  if (fh) fh.style.display = S.view === 'finals' ? '' : 'none';
 }
 
 // Club-mode orderings. Every numeric sort is descending and falls through the
