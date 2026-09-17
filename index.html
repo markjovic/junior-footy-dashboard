@@ -539,9 +539,11 @@ body{overflow-x:hidden}
   z-index:60;width:44px;height:44px;border-radius:50%;border:1px solid var(--b2);
   background:var(--s3);color:var(--gold);font-size:17px;line-height:1;display:none;
   align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.5)}
-/* Narrow screens only — the header button covers the desktop and two controls for
-   one action side by side is clutter. */
-@media(max-width:768px){.sh-fab{display:flex}}
+/* ⚠️ ALWAYS SHOWN. It was briefly narrow-screens-only, with a header button
+   covering the desktop — but both called openShare(), so that was one action with
+   two entry points and a media query deciding which. One affordance, one place to
+   look, the same on every device. The header button is gone. */
+.sh-fab{display:flex}
 .sh-wrap{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.72);
   align-items:center;justify-content:center;padding:18px}
 .sh-card{background:var(--s1);border:1px solid var(--b2);border-radius:14px;
@@ -684,7 +686,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.247</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.248</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -692,8 +694,6 @@ body{overflow-x:hidden}
     <button id="vsw-finals"           onclick="switchView('finals')">FINALS</button>
     <button id="vsw-leaders"          onclick="switchView('leaders')">LEADERS</button>
   </span>
-  <button class="hdr-btn" id="share-btn" onclick="shareLink()"
-    title="Copy a link to exactly this view">🔗 Share</button>
   <button class="hdr-btn" id="help-btn" onclick="openHelp()"
     title="What the numbers mean, and why some are missing">? Help</button>
   <!-- ⚠️ SHOWN WITH THE FINALS VIEW ONLY. `switchView` toggles it, so it cannot
@@ -701,9 +701,6 @@ body{overflow-x:hidden}
   <button class="help-dot" id="finals-help" style="display:none" onclick="openHelp('finals')"
     title="How to read the finals view">?</button>
   <div style="flex:1"></div>
-  <button class="hdr-btn" id="share-btn" onclick="shareApp()" style="display:none" title="Share">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-  </button>
   <button class="hdr-btn" id="admin-btn" onclick="openAdmin()">⚙</button>
 </header>
 
@@ -1115,7 +1112,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.247</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.248</span>
         </div>
 
 
@@ -1334,6 +1331,8 @@ function openShare() {
   const url = shareURL();
   const u = document.getElementById('sh-url');
   if (u) u.textContent = url;
+  const nat = document.getElementById('sh-native');
+  if (nat) nat.style.display = (navigator.share ? '' : 'none');
   const w = document.getElementById('sh-wrap');
   if (w) w.style.display = 'flex';
   // ⚠️ COPY INSIDE THE CLICK. Opening the sheet IS the share action and the button
@@ -4804,19 +4803,23 @@ function toggleSidebar() {
   if (btn) btn.textContent = open ? '✕ Close' : '⊟ Filters';
 }
 
+// ⚠️ THIS HAS NEVER RUN. Two elements carried id="share-btn" — the header's link
+// button and this one — so getElementById returned the FIRST, the reveal set
+// `display:''` on a button that was already visible, and the native-share button
+// stayed hidden on every device forever. A duplicate id fails exactly this
+// quietly: no error, no warning, just a feature that is never there.
+//
+// It now lives INSIDE the share sheet rather than the header, so there is still
+// one entry point. And it shares shareURL(), not location.href — the latter is the
+// bare directory form, which is the link that breaks when pasted into an app that
+// appends to the path.
 function shareApp() {
   if (!navigator.share) return;
   navigator.share({
     title: 'Local Footy Dashboard',
     text: 'Live ladder, results and stats for local footy',
-    url: window.location.href,
+    url: shareURL(),
   }).catch(() => {}); // user cancelled — ignore
-}
-
-// Show share button only if Web Share API is supported
-if (navigator.share) {
-  const sb = document.getElementById('share-btn');
-  if (sb) sb.style.display = '';
 }
 
 function openSidebarIfMobile() {
@@ -8289,6 +8292,8 @@ if ('serviceWorker' in navigator) {
     <div class="sh-url" id="sh-url"></div>
     <div class="sh-row">
       <button class="pri" id="sh-copy" onclick="copyShare()">Copy link</button>
+      <!-- Revealed by openShare() only where the Web Share API exists. -->
+      <button id="sh-native" style="display:none" onclick="shareApp()">Share…</button>
       <button onclick="closeShare()">Close</button>
     </div>
   </div>
