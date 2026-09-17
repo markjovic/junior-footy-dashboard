@@ -532,6 +532,22 @@ body{overflow-x:hidden}
    of names needs the width, and a centred column of them reads as a poem. */
 .mr-boxbtn{grid-column:1/-1;justify-self:center;margin-top:3px}
 .bx-overlay{z-index:500}
+/* Above the box score and the player panel: help is openable from inside both. */
+.help-overlay{z-index:600}
+.help-sec{margin-top:16px}
+.help-sec-h{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);
+  padding-bottom:5px;border-bottom:1px solid var(--b1);margin-bottom:8px}
+.help-item{padding:8px 10px;margin:0 -10px;border-radius:6px}
+.help-term{font-size:12px;font-weight:600;color:var(--tx);margin-bottom:3px}
+.help-body{font-size:12px;line-height:1.65;color:var(--tx2)}
+.help-body b{color:var(--tx);font-weight:600}
+/* The entry the reader tapped a tip for, so they are not dropped into a wall of
+   text to hunt for it. */
+.help-hit{background:rgba(240,192,64,0.08);box-shadow:inset 2px 0 0 var(--gold)}
+/* ⚠️ A TIP IS A TAP TARGET, NOT JUST A TITLE. Hover does not exist on a phone, so
+   anything explained only in a `title` is invisible to half the readers. */
+[data-help]{cursor:help;border-bottom:1px dotted var(--tx3)}
+[data-help]:hover{color:var(--gold);border-bottom-color:var(--gold)}
 /* In the modal the two sides always sit side by side above 640px; the inline
    variant had to share a match row, this owns the width. */
 #bx-body .mr-box{display:grid;grid-template-columns:1fr 1fr;gap:18px;border-top:none;margin:0;padding:0}
@@ -638,7 +654,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.244</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.245</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -648,6 +664,8 @@ body{overflow-x:hidden}
   </span>
   <button class="hdr-btn" id="share-btn" onclick="shareLink()"
     title="Copy a link to exactly this view">🔗 Share</button>
+  <button class="hdr-btn" id="help-btn" onclick="openHelp()"
+    title="What the numbers mean, and why some are missing">? Help</button>
   <div style="flex:1"></div>
   <button class="hdr-btn" id="share-btn" onclick="shareApp()" style="display:none" title="Share">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -894,6 +912,25 @@ body{overflow-x:hidden}
   </main>
 </div>
 
+<!-- ── HELP PANEL ──
+     z-index 600, above the box score (500) and the player panel (400), so it can
+     be opened from inside either and closing it returns to what was underneath. -->
+<div class="team-modal-overlay help-overlay" id="help-modal" style="display:none"
+     onclick="if(event.target===this)closeHelp()">
+  <div class="team-modal" style="width:720px">
+    <div class="team-modal-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="team-modal-title">Help &amp; guide</div>
+        <div style="font-size:10px;color:var(--tx3);margin-top:1px">What the numbers mean, and why some are missing</div>
+      </div>
+      <button class="btn-g" onclick="closeHelp()" style="padding:5px 10px;font-size:12px">✕</button>
+    </div>
+    <div class="team-modal-scroll">
+      <div class="team-modal-body" id="help-body" style="padding:4px 18px 18px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── BOX SCORE MODAL ──
      z-index 500 against the player panel's 400, so it opens ON TOP of a player's
      history and closing it simply reveals the panel again — no state to restore,
@@ -909,6 +946,7 @@ body{overflow-x:hidden}
       </div>
       <button class="qtr-btn" id="bx-qtr-btn" onclick="cycleQuarters()"
               title="Quarter scores: running total or per quarter">Total</button>
+      <span ${helpAttr('qtr')} style="font-size:11px;color:var(--tx3);padding:0 2px">?</span>
       <div id="bx-score" style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700"></div>
       <a id="bx-phq" href="#" target="_blank" rel="noopener" title="Open this game on PlayHQ"
          style="font-size:10px;color:var(--tx3);text-decoration:none;border-bottom:1px dotted var(--tx3)">PlayHQ &#8599;</a>
@@ -1042,7 +1080,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.244</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.245</span>
         </div>
 
 
@@ -2562,8 +2600,8 @@ function renderLadder(age) {
         <th title="Wins">W</th><th title="Draws">D</th><th title="Losses">L</th>
         <th title="Home W-L">H</th><th title="Away W-L">A</th>
         <th title="Points for">For</th><th title="Points against">Agst</th>
-        <th title="Percentage (for/against × 100)">%</th>
-        <th title="Match ratio (wins ÷ games played)" style="color:var(--gold)">MR%</th>
+        <th ${helpAttr('ladder-pct')}>%</th>
+        <th ${helpAttr('ladder-mr')} style="color:var(--gold)">MR%</th>
         <th title="Last 5">Form</th>
       </tr></thead><tbody>
       ${ladder.map((t,i)=>{
@@ -3333,7 +3371,7 @@ function liveBadge(m) {
   if (!m || !m.live) return '';
   const age = liveAgeText(m);
   return `<span class="live-badge" title="Being scored on the PlayHQ app — ` +
-    `does not count towards ladders until confirmed"><span class="live-dot"></span>LIVE</span>` +
+    `does not count towards ladders until confirmed" data-help="live"><span class="live-dot"></span>LIVE</span>` +
     (age ? `<span class="live-at">${age}</span>` : '');
 }
 
@@ -5687,6 +5725,7 @@ function fillCareerBehinds(uuid, rows) {
     if (!span) {
       span = document.createElement('span');
       span.id = 'pm-bhd';
+      span.setAttribute('data-help', 'behinds');
       span.style.fontSize = '10px';
       span.style.color = 'var(--tx3)';
       meta.appendChild(span);
@@ -6763,12 +6802,12 @@ function closeBoxModal() {
 // Pure — takes the file, the game id and the match record, returns HTML. Kept
 // separate from the DOM so it can be called directly in a test.
 function boxHTML(file, gameId, m) {
-  if (!file) return `<div class="bs-empty">No box score stored for this game — it is ` +
+  if (!file) return `<div class="bs-empty" ${helpAttr('no-box')}>No box score stored for this game — it is ` +
     `outside the seasons this dashboard holds, or that season has not been walked yet. ` +
     `PlayHQ has it.</div>`;
   const g = file.games && file.games[gameId];
   if (!g) return `<div class="bs-empty">This game has no player lines.</div>`;
-  if (g.n) return `<div class="bs-empty">PlayHQ has no player list for this game` +
+  if (g.n) return `<div class="bs-empty" ${helpAttr('no-box')}>PlayHQ has no player list for this game` +
     `${g.n === 'noplayers' ? ' — the scorer did not enter the sides' : ''}.</div>`;
 
   const side = (key, teamName, teamGoals, teamBehinds, otherRows) => {
@@ -6777,7 +6816,7 @@ function boxHTML(file, gameId, m) {
       // ⚠️ SAY SO. One side entered and the other not is 1,230 sides in 2026,
       // mostly YJFL. Rendering nothing reads as "nobody played".
       return `<div class="bs-side"><div class="bs-team">${teamName}</div>` +
-        `<div class="bs-empty">${otherRows && otherRows.length
+        `<div class="bs-empty" ${helpAttr('box-empty-side')}>${otherRows && otherRows.length
           ? 'No players recorded for this side.' : 'No players recorded.'}</div></div>`;
     }
     const name = (i) => {
@@ -6805,14 +6844,233 @@ function boxHTML(file, gameId, m) {
         `<span class="bs-fig">${fig(r)}</span></div>`).join('')}
       ${rest.length ? `<div class="bs-rest">${rest.map(r => `${name(r[0])}${r[3] > 0
         ? ' <span class="bs-vote">★</span>' : ''}`).join(', ')}</div>` : ''}
-      ${short ? `<div class="bs-note">${short} goal${short === 1 ? '' : 's'} not attributed to a player.</div>` : ''}
+      ${short ? `<div class="bs-note" ${helpAttr('box-unattributed')}>${short} goal${short === 1 ? '' : 's'} not attributed to a player.</div>` : ''}
       ${!anyBehinds && typeof teamBehinds === 'number' && teamBehinds > 0
-        ? `<div class="bs-note">Behinds were credited to the team, not to players.</div>` : ''}
+        ? `<div class="bs-note" ${helpAttr('behinds')}>Behinds were credited to the team, not to players.</div>` : ''}
     </div>`;
   };
 
   return side('h', m.home || 'Home', m.hG, m.hB, g.a) + side('a', m.away || 'Away', m.aG, m.aB, g.h);
 }
+
+// ═══════════════════════════════════════
+// HELP — one source for the panel AND the tooltips
+// ═══════════════════════════════════════
+// ⚠️ ONE ARRAY, TWO SURFACES. `tip` is the hover text and `body` is the panel
+// entry. They live together so a term cannot end up explained one way on hover
+// and another way in the guide — which is how a glossary starts disagreeing with
+// the thing it documents.
+//
+// ⚠️ HOVER DOES NOT EXIST ON A PHONE. Anything explained only in a `title`
+// attribute is invisible to at least half the readers, so every tip is also a TAP
+// target: `data-help="<id>"` on any element opens the panel at that entry. The
+// title is the convenience; the panel is the actual explanation.
+const HELP = [
+  { id: 'ladder-mr', sec: 'Ladders', term: 'MR%',
+    tip: 'Match ratio — wins plus half the draws, as a percentage of games played.',
+    body: `Match ratio: wins plus half the draws, divided by games played. It ranks
+      teams that have played different numbers of games more fairly than a raw win
+      count. <b>Home-and-away games only</b> — finals are excluded, because a ladder
+      is a home-and-away table and including them would make the figure disagree
+      with the ladder on the same screen.` },
+  { id: 'ladder-pct', sec: 'Ladders', term: 'Pct',
+    tip: 'Percentage — points for divided by points against. The AFL tiebreaker.',
+    body: `Points scored divided by points conceded, times 100. Above 100 means a
+      team has scored more than it has let in. This is the standard AFL tiebreaker
+      between teams level on points. <b>Home-and-away only</b>, for the same reason
+      as MR%.` },
+  { id: 'ladder-grading', sec: 'Ladders', term: 'Grading grades',
+    tip: 'Early-season grading rounds get their own tab and their own ladder.',
+    body: `Before divisions are settled, leagues run grading rounds. Those games
+      count towards a grading ladder of their own, not towards the division a team
+      is later placed in — so a grading grade gets its own tab. Its ladder counts
+      <b>every</b> game played in those rounds, whatever division the two teams
+      ended up in.<br><br>Grading grades have no Scorers list: a player has one
+      record per season, in the grade they finished in.` },
+  { id: 'ladder-promoted', sec: 'Ladders', term: 'A team that changed grade',
+    tip: 'A promoted team counts on one ladder only — the grade it is in now.',
+    body: `Teams are sometimes moved between divisions mid-season. Such a team
+      appears on one ladder only: the grade its current registration says it is in.
+      Its earlier results are still <b>listed</b> under the grade they were played
+      in — where a result is listed and what it counts towards are two different
+      questions.` },
+  { id: 'live', sec: 'Results', term: 'The LIVE badge',
+    tip: 'A score being updated from the ground right now. It counts towards nothing.',
+    body: `A game being scored in the PlayHQ app carries a running score. It is shown
+      with a pulsing LIVE badge and the age of the reading — "14m ago" — because a
+      score fetched at 2pm and read at 8pm is stale.<br><br><b>A live game counts
+      towards nothing.</b> Not the ladder, not percentages, not a player's totals.
+      It is a snapshot, not a result.` },
+  { id: 'qtr', sec: 'Results', term: 'Quarter scores',
+    tip: 'Open a game to see them. Total is cumulative; Per quarter is what was kicked in each.',
+    body: `Click any completed game. <b>Total</b> shows the running score at each
+      break, the way a scoreboard reads. <b>Per quarter</b> shows what was kicked in
+      that quarter alone, which is where you see a game turn.<br><br>About a third
+      of games have no breakdown at all — nobody entered one — and those simply show
+      no quarter block rather than a row of dashes.` },
+  { id: 'qtr-ne', sec: 'Results', term: 'The amber ≠',
+    tip: 'The quarters do not add up to the final score. Both were entered by hand.',
+    body: `About one game in a hundred has quarter figures that do not sum to the
+      final score, almost always out by a single behind on one side. The quarters
+      and the total are entered separately by the scorer, so either can be the one
+      that is wrong — we show both and mark the disagreement rather than silently
+      picking one.` },
+  { id: 'qtr-derived', sec: 'Results', term: 'An underlined quarter',
+    tip: 'Calculated from the total because exactly one quarter was missing.',
+    body: `Where three quarters were recorded and the fourth was not, the missing one
+      is calculated from the final score. It is underlined because a derived figure
+      reconciles by construction and would otherwise look more certain than the
+      reported figures beside it.` },
+  { id: 'box', sec: 'Box scores', term: 'Opening a game',
+    tip: 'Click any completed row for the quarter scores and both sides\\u2019 players.',
+    body: `Click a match row, a game in a player\\u2019s history, or a record on the
+      LEADERS page. You get the quarter scores and both teams: goalkickers first,
+      then the rest of the side. A gold star marks a best-player vote.<br><br>The
+      PlayHQ link in the header opens the same game on PlayHQ.` },
+  { id: 'box-unattributed', sec: 'Box scores', term: '"N goals not attributed"',
+    tip: 'The team kicked more goals than the scorer credited to named players.',
+    body: `The scorer records the team score and the individual goalkickers
+      separately, and they do not always agree. Where the named players account for
+      fewer goals than the team kicked, we say so rather than showing a list that
+      looks complete and is not.<br><br>Across every game we hold, about
+      <b>86%</b> of goals are credited to a named player. It varies by league:
+      96–98% in most, about 67% in YJFL.` },
+  { id: 'box-empty-side', sec: 'Box scores', term: '"No players recorded for this side"',
+    tip: 'One team\\u2019s sheet was entered and the other\\u2019s was not.',
+    body: `Each club enters its own team sheet. Where one did and the other did not,
+      we say so — rendering nothing would read as "nobody played".` },
+  { id: 'behinds', sec: 'Box scores', term: 'Behinds, and "behinds recorded"',
+    tip: 'Only about a quarter of behinds are credited to a player, so this is a floor.',
+    body: `A score like <b>2.1</b> means two goals and one behind. A bare <b>2</b>
+      means two goals and no behinds were credited to that player — <i>not</i> that
+      they kicked none.<br><br>Scorers attribute behinds to the team rather than to
+      a player far more often than they do goals: measured across every game we
+      hold, only <b>27%</b> of a team\\u2019s behinds reach a named player, and there
+      is no age group where that improves. That is why a career figure is labelled
+      "behinds recorded" — it is a floor, not a total. PlayHQ publishes no
+      per-player behinds figure at all.` },
+  { id: 'votes', sec: 'Box scores', term: 'Missing best-player votes',
+    tip: 'Many grades do not record them at all.',
+    body: `A gold star marks a best-player vote. Many leagues do not collect them:
+      of 257 grades we hold, <b>112</b> record none. An absent star means the grade
+      does not do votes, not that nobody played well.` },
+  { id: 'no-box', sec: 'Box scores', term: 'A game with no box score',
+    tip: 'Either nobody entered the team sheets, or that season has not been walked.',
+    body: `Two reasons. The scorer never entered the sides — common in the youngest
+      age groups, and the sheet is often filled in on the Monday after, so check
+      again. Or the game is in a season or competition this dashboard does not
+      hold.<br><br>The panel says which.` },
+  { id: 'player-panel', sec: 'Players', term: 'A player\\u2019s page',
+    tip: 'Every game they played that season, plus their whole career on PlayHQ.',
+    body: `Click any player name. The top strip totals their season; below it is
+      every game, and below that their whole career as PlayHQ holds it — including
+      competitions this dashboard does not store, such as representative football,
+      which is why some rows show a dash.<br><br>The year buttons switch season.
+      Clicking a game opens its box score.` },
+  { id: 'player-two-teams', sec: 'Players', term: 'A player in two teams',
+    tip: 'Totals sum every team they played for that season.',
+    body: `A child who turns out for two age groups has a record for each. The
+      totals at the top add them together, and a note under the name says how many
+      other teams are included. The list below shows every game with its age group,
+      so two rows in the same round are not duplicates.` },
+  { id: 'search', sec: 'Players', term: 'Searching for a player',
+    tip: 'Searches every season, not just the one on screen.',
+    body: `Type any part of a name in any order — "toby jo", "jovic to" and "to jov"
+      all find Toby Jovic. One result per person however many seasons they have
+      played, named by their most recent season with team, age and grade so two
+      people with the same name can be told apart.<br><br>If the search index
+      cannot be loaded it falls back to the loaded season and says so.` },
+  { id: 'ages', sec: 'What is shown', term: 'Missing young age groups',
+    tip: 'U8 to U10 are hidden by default. Turn them on in Manage.',
+    body: `Under-8, under-9 and under-10 are hidden by default — many of those
+      grades do not keep score at all. The <b>Show young age groups</b> switch in
+      the Manage tab turns them on.` },
+  { id: 'finals', sec: 'What is shown', term: 'The FINALS view',
+    tip: 'Four ways to read a finals series: by age, club, venue or winners.',
+    body: `<b>By club</b> shows each club\\u2019s teams and how far each went, grand
+      final in the last column. <b>By venue</b> answers "where do I need to be, and
+      when" — every finals game grouped by date and ground, or by ground and date.
+      <b>By winners</b> lists the premiers.<br><br>Finals rounds restart numbering
+      at 1, so rows carry their abbreviation (QF, PF, GF) rather than a round
+      number.` },
+  { id: 'dates', sec: 'What is shown', term: 'Dates on a round',
+    tip: 'A round is not one day — the heading shows the span it covers.',
+    body: `Rounds spread out. A home-and-away round routinely runs Saturday and
+      Sunday, and can run a fortnight when games are rescheduled — one EFNL round
+      ran 8 to 22 August. The heading shows the range, and every row carries its own
+      date.` },
+  { id: 'share', sec: 'What is shown', term: 'The Share button',
+    tip: 'Copies a link to exactly this view — season, grade, round, everything.',
+    body: `The link carries the season, competition, age group, grade, ladder tab,
+      round and team, so whoever opens it sees what you were looking at rather than
+      the default view.` },
+  { id: 'data', sec: 'About the data', term: 'Where this comes from',
+    tip: 'PlayHQ, fetched several times each weekend.',
+    body: `Everything is fetched from PlayHQ and stored. Results are collected
+      repeatedly from Saturday afternoon through Monday midday, so a score entered
+      late is picked up without anyone asking.<br><br>Nothing here is typed in by
+      hand, and nothing is corrected by hand — if a figure is wrong on PlayHQ, it is
+      wrong here.` },
+  { id: 'stale', sec: 'About the data', term: 'A result that looks wrong or missing',
+    tip: 'Check PlayHQ. If it is right there and wrong here, it will correct itself.',
+    body: `Compare with PlayHQ first. If PlayHQ has it and this does not, the next
+      collection will pick it up — scores entered on a Sunday or Monday are normal.
+      If PlayHQ is wrong too, only the club can fix it.` },
+];
+const HELP_BY_ID = new Map(HELP.map(h => [h.id, h]));
+
+// A title attribute plus a tap target, from one entry. Use in any template:
+//   <span ${helpAttr('ladder-mr')}>MR%</span>
+function helpAttr(id) {
+  const h = HELP_BY_ID.get(id);
+  if (!h) return '';
+  return `data-help="${id}" title="${String(h.tip).replace(/"/g, '&quot;')}"`;
+}
+
+function openHelp(id) {
+  const modal = document.getElementById('help-modal');
+  const body = document.getElementById('help-body');
+  if (!modal || !body) return;
+  const secs = [];
+  for (const h of HELP) {
+    if (!secs.length || secs[secs.length - 1].name !== h.sec) secs.push({ name: h.sec, items: [] });
+    secs[secs.length - 1].items.push(h);
+  }
+  body.innerHTML = secs.map(sec => `<div class="help-sec">
+      <div class="help-sec-h">${sec.name}</div>
+      ${sec.items.map(h => `<div class="help-item" id="help-${h.id}">
+        <div class="help-term">${h.term}</div>
+        <div class="help-body">${h.body}</div>
+      </div>`).join('')}
+    </div>`).join('');
+  modal.style.display = 'flex';
+  // Opened from a tip: put that entry at the top and mark it, so the reader is
+  // not dropped into a wall of text to hunt for the thing they tapped.
+  const target = id && document.getElementById(`help-${id}`);
+  if (target) {
+    target.classList.add('help-hit');
+    target.scrollIntoView({ block: 'start' });
+  } else {
+    body.scrollTop = 0;
+  }
+}
+function closeHelp() {
+  const m = document.getElementById('help-modal');
+  if (m) m.style.display = 'none';
+}
+
+// ⚠️ ONE DELEGATED LISTENER, NOT ONE PER ELEMENT. Rows are rebuilt by innerHTML
+// on every render, so anything bound directly would be lost the first time a
+// filter changed — and rebinding after every render is how a listener gets
+// attached twice.
+document.addEventListener('click', (e) => {
+  const el = e.target && e.target.closest && e.target.closest('[data-help]');
+  if (!el) return;
+  // A help marker inside something else clickable must not trigger both.
+  e.preventDefault();
+  e.stopPropagation();
+  openHelp(el.getAttribute('data-help'));
+});
 
 // ── Player search ──────────────────────────────────────────────────
 function onPlayerSearch(val) {
