@@ -176,8 +176,10 @@ body{overflow-x:hidden}
 .rnd-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
 /* The date sits BEFORE the ::after rule so the hairline still fills the row. */
 .rnd-date{color:var(--tx3);letter-spacing:1px;font-size:9px;order:0}
-/* Finals only: games in one finals round are routinely days or weeks apart, so
-   the round heading's range is not enough to place a single game. */
+/* ⚠️ EVERY ROW, NOT JUST FINALS. The first cut showed this on finals only, on the
+   reasoning that a home-and-away round is a weekend and the heading's range says
+   enough. It is not: EFNL Round 18 ran 8 – 22 Aug, a fortnight, and a reader
+   looking at one row cannot tell which end of that it sits at. */
 .mr-date{font-family:'DM Mono',monospace;font-size:9px;color:var(--tx3);white-space:nowrap}
 .match-row{display:grid;grid-template-columns:28px 1fr 80px 1fr minmax(160px,1fr);align-items:center;padding:6px 14px;gap:8px;border-top:1px solid var(--b1);transition:background .1s;font-size:11px}
 .match-row:hover{background:var(--s2)}
@@ -636,7 +638,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.243</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.244</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1040,7 +1042,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.243</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.244</span>
         </div>
 
 
@@ -2727,7 +2729,7 @@ function renderFixtures(age) {
             : `<span class="mr-name" style="cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\'")}','${g}')">${m.away}</span>`}
           ${m.provisional && !m.aLogo ? '' : crestHTML(m.away, 16, 'mr-logo')}
         </div>
-        <div class="mr-venue">${m.isFinals && m.date
+        <div class="mr-venue">${m.date
           ? `<span class="mr-date">${dayMon(m.date)}</span> &middot; ` : ''}${venueLink(m.venue, m.venueUrl)}</div>
       </div>`;
     }).join('');
@@ -2890,7 +2892,7 @@ function renderResults(age) {
           <span class="mr-name" style="color:${aWon?'var(--tx)':'var(--tx2)'};font-weight:${aWon?600:400};cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,0.15);text-underline-offset:2px" onclick="openTeamDrilldown('${m.away.replace(/'/g,"\\'")}','${g}')">${m.away}</span>
           ${crestHTML(m.away, 16, 'mr-logo')}
         </div>
-        <div class="mr-venue">${m.isFinals && m.date
+        <div class="mr-venue">${m.date
           ? `<span class="mr-date">${dayMon(m.date)}</span> &middot; ` : ''}${venueLink(m.venue, m.venueUrl)}</div>
       </div>`;
     }).join('');
