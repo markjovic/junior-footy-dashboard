@@ -433,7 +433,7 @@
           "competitionName": "Essendon District Football League (EDFL)",
           "startDate": "2026-04-02",
           "endDate": "2026-09-20",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -659,7 +659,7 @@
           "competitionName": "Northern Football Netball League (NFNL)",
           "startDate": "2026-03-30",
           "endDate": "2026-09-20",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -903,7 +903,7 @@
           "competitionName": "Southern Football Netball League",
           "startDate": "2026-04-02",
           "endDate": "2026-09-20",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -1485,7 +1485,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "e698385f",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-02",
       "endDate": "2026-09-20",
       "retired": false,
@@ -1494,8 +1494,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-21T22:07:55.259Z"
     },
     {
       "org": "3f7be677",
@@ -2090,7 +2090,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "33f0fa7b",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-02",
       "endDate": "2026-09-20",
       "retired": false,
@@ -2099,8 +2099,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-21T22:07:55.259Z"
     },
     {
       "org": "8162176f",
@@ -2147,7 +2147,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "79434cd1",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-03-30",
       "endDate": "2026-09-20",
       "retired": false,
@@ -2156,8 +2156,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-21T22:07:55.259Z"
     },
     {
       "org": "862f96f9",
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-14T21:58:03.662Z",
+  "lastSeasonDiscovery": "2026-09-21T22:08:17.036Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
