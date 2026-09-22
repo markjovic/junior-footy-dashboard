@@ -177,7 +177,7 @@
           "competitionName": "Western Football Netball League (WFNL)",
           "startDate": "2026-04-01",
           "endDate": "2026-09-21",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -1542,7 +1542,7 @@
       "seasonName": "2026",
       "compName": "WFNL 2026",
       "competitionId": "c1d04617",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-21",
       "retired": false,
@@ -1553,8 +1553,8 @@
         "matches": 2273,
         "players_n": 8851
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-22T21:34:42.589Z"
     },
     {
       "org": "4c8b472e",
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-21T22:08:17.036Z",
+  "lastSeasonDiscovery": "2026-09-22T21:35:00.596Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
