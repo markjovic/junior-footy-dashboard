@@ -952,7 +952,7 @@
           "competitionName": "Victorian Amateur Football Association (VAFA)",
           "startDate": "2026-04-01",
           "endDate": "2026-09-25",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -1032,7 +1032,7 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "46a51ab6",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-25",
       "retired": false,
@@ -1041,8 +1041,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-09-26T21:24:07.466Z"
     },
     {
       "org": "1cd834de",
@@ -2255,7 +2255,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-22T21:35:00.596Z",
+  "lastSeasonDiscovery": "2026-09-26T21:24:26.548Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
