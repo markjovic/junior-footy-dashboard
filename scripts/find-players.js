@@ -35,13 +35,15 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'find-players v6 2026-10-10 r3-is-the-list';
+const VERSION = 'find-players v8 2026-10-10 rank-by-words-matched';
 
 const ROOT = path.resolve(__dirname, '..');
 const NAMES_PATH = path.join(ROOT, process.env.FP_NAMES || 'data/name-search.txt');
 const OUT_DIR = path.join(ROOT, process.env.FP_OUT || 'reports');
 const TARGET_NAME = (process.env.FP_TARGET || 'Jovic, Toby').trim();
 const TARGET_UUID = (process.env.FP_TARGET_UUID || '').trim();
+const AGE_MIN = Number(process.env.FP_AGE_MIN || 11);
+const AGE_MAX = Number(process.env.FP_AGE_MAX || 13);
 
 const log = (...a) => console.log(...a);
 const die = (m, c = 1) => { console.error(`FATAL: ${m}`); process.exit(c); };
@@ -73,10 +75,11 @@ const NICK = {
   ellie: ['eleanor', 'elouise'], em: ['emily', 'emma', 'emme'],
   emmy: ['emily', 'emma'], evie: ['evelyn'], fin: ['finlay', 'finn', 'finley'],
   finn: ['finlay', 'finley', 'fin'], gabby: ['gabrielle'],
-  harry: ['harrison', 'harold'], indi: ['indiana', 'indigo'], isaac: ['izaac'],
+  harry: ['harrison', 'harold'], huddy: ['hudson'], hud: ['hudson'], indi: ['indiana', 'indigo'], isaac: ['izaac'],
   issy: ['isabella', 'isabelle'], izzy: ['isabella', 'isabelle'],
   jack: ['jackson', 'john'], jake: ['jacob'], jay: ['jayden', 'james'],
-  jess: ['jessica'], jim: ['james'], joe: ['joseph'], josh: ['joshua'],
+  jess: ['jessica'], jim: ['james'], jaxson: ['jackson', 'jaxon'],
+  jaxon: ['jackson', 'jaxson'], jackson: ['jaxson', 'jaxon'], joe: ['joseph'], josh: ['joshua'],
   katie: ['katherine', 'kate'], lew: ['lewis'], lexie: ['alexis', 'alexandra'],
   liv: ['olivia'], livvy: ['olivia'], lish: ['alicia', 'elisha', 'alisha'],
   lizzy: ['elizabeth'], lou: ['louis', 'louise'], matt: ['matthew'],
@@ -111,6 +114,37 @@ function variants(first, last) {
 const endsKey = (folded) => {
   const t = folded.split(' ');
   return t.length > 1 ? `${t[0]}|${t[t.length - 1]}` : `${t[0]}|${t[0]}`;
+};
+
+// ── Age plausibility ─────────────────────────────────────────────────────────
+// ⚠️ A RANKING SIGNAL, NEVER A FILTER. Nothing is hidden and nothing is excluded;
+// implausible candidates sort last and are marked. A child can play up an age
+// group, a club can register them wrongly, and an adult sharing a name is
+// genuinely in the data — deciding any of that is the reader's job.
+//
+// An AFL age group is a birth-year band: a player in a U12 grade in the 2026
+// season was born around 2014. So an implied birth year is `seasonYear - ageNum`,
+// and a child who is AGE_MIN to AGE_MAX today was born in a known window. One
+// year of slack each way absorbs playing up, playing down, and the fact that a
+// season spans two calendar years.
+const THIS_YEAR = new Date().getUTCFullYear();
+const BORN_FROM = THIS_YEAR - AGE_MAX - 1;
+const BORN_TO = THIS_YEAR - AGE_MIN + 1;
+const yearOfComp = (c) => Number((String(c || '').match(/\b(20\d\d)\b/) || [])[1]) || 0;
+const ageNumOf = (a) => {
+  const m = /U(\d+)/i.exec(String(a || ''));
+  return m ? Number(m[1]) : null;
+};
+// null = cannot tell (no U-number, e.g. a Senior or Veterans grade). That is NOT
+// the same as implausible and is reported differently.
+function impliedBirth(comp, age) {
+  const y = yearOfComp(comp), n = ageNumOf(age);
+  if (!y || !n) return null;
+  return y - n;
+}
+const ageFits = (comp, age) => {
+  const b = impliedBirth(comp, age);
+  return b === null ? null : (b >= BORN_FROM && b <= BORN_TO);
 };
 
 // ── Input ────────────────────────────────────────────────────────────────────
@@ -189,6 +223,8 @@ function main() {
   log(`  Source          : ${path.relative(ROOT, NAMES_PATH)}`);
   log(`  Opponent        : ${TARGET_NAME}`);
   log(`  Seasons indexed : ${manifest.length}`);
+  log(`  Age band        : ${AGE_MIN}–${AGE_MAX} today, so born ${BORN_FROM}–${BORN_TO} ` +
+    `(one year of slack each way)`);
   for (const b of names.filter(n => n.bad)) log(`  ⚠️ line ${b.lineNo}: ${b.bad} — ${b.raw}`);
 
   const wantExact = new Map(), wantEnds = new Map();
@@ -217,6 +253,8 @@ function main() {
   // team-mate who is not on the list still gets a gender column, and v5 printed
   // `unknown` for all 359 of them because this map did not exist.
   const allGender = new Map();
+  // uuid -> 'fits' | 'adult' | 'wrong-age' | 'unknown'
+  const allAge = new Map();
   const teamSet = new Set();
   let playerRows = 0;
 
@@ -231,6 +269,16 @@ function main() {
       const key = fold(p.name);
       const g = genderOf(p.gradeID, grades);
       if (!allGender.has(p.uuid) || allGender.get(p.uuid) === 'unknown') allGender.set(p.uuid, g);
+      {
+        const fit = ageFits(m.compName, p.age);
+        const prev = allAge.get(p.uuid);
+        // ⚠️ ANY fitting season wins. A child who later played a senior grade is
+        // not the child we want, but one who played U12 once is a candidate.
+        if (fit === true) allAge.set(p.uuid, 'fits');
+        else if (prev !== 'fits') {
+          allAge.set(p.uuid, fit === null ? (prev === 'wrong-age' ? 'wrong-age' : 'adult') : 'wrong-age');
+        }
+      }
 
       // ⚠️ INDEXED ONLY FOR WORDS THE LIST ASKS ABOUT. A full word index of
       // 180,000 records costs memory for nothing.
@@ -398,23 +446,60 @@ function main() {
   };
 
   // ── NO MATCH ───────────────────────────────────────────────────────────────
+  // ⚠️ EVERY CANDIDATE, INCLUDING THE ONES THE CAP TRIMS. The log says they are
+  // in the CSV, so they have to be: v8 printed that line while writing no such
+  // file. A claim about an output is an output.
+  const candRows = [['asked_name', 'line', 'words_matched', 'via', 'candidate',
+    'uuid', 'gender', 'age_verdict', 'seasons', 'shown_in_log']];
   if (unmatched.length) {
     log(`\n  NO MATCH (${unmatched.length}) — not in the data under any spelling tried.`);
     log('  Each is followed by every player sharing a word with the name, so you can tell a');
     log('  child who has never played from one we hold under a different spelling.');
     for (const n of unmatched) {
       log(`\n    ${n.raw}`);
-      let any = false;
+      // ⚠️ RANK BY HOW MUCH OF THE NAME MATCHES, not by season count. v7 listed
+      // anyone sharing ONE word, newest-and-busiest first, and a six-row cap then
+      // pushed a candidate matching BOTH words off the end entirely — a known
+      // Hudson Walker sat below six unrelated Walkers. Words matched first, then
+      // age plausibility, then how much we hold on them.
+      const cand = new Map();   // uuid -> { e, words:Set }
       for (const w of n.words) {
         const pool = byWord.get(w);
-        if (!pool || !pool.size) continue;
-        any = true;
-        for (const [u, e] of [...pool.entries()].sort((a, b) => b[1].seasons.size - a[1].seasons.size).slice(0, 6)) {
-          log(`      ? ${pad(e.name, 30)} ${pad([...e.genders][0] || 'unknown', 8)} ` +
-            `${String(e.seasons.size).padStart(2)} season(s)  ${short(u)}   via ${w}`);
+        if (!pool) continue;
+        for (const [u, e] of pool) {
+          if (!cand.has(u)) cand.set(u, { e, words: new Set() });
+          cand.get(u).words.add(w);
         }
       }
-      if (!any) log('      (nothing in the data shares a word with this name)');
+      if (!cand.size) {
+        log('      (nothing in the data shares a word with this name)');
+        candRows.push([n.raw, n.lineNo, 0, '', '(no player shares a word with this name)', '', '', '', '', 'yes']);
+        continue;
+      }
+      const rank = (u) => ({ fits: 0, unknown: 1, adult: 2, 'wrong-age': 3 }[allAge.get(u) || 'unknown']);
+      const ordered = [...cand.entries()].sort((a, b) =>
+        b[1].words.size - a[1].words.size ||
+        rank(a[0]) - rank(b[0]) ||
+        b[1].e.seasons.size - a[1].e.seasons.size);
+      // ⚠️ EVERY MULTI-WORD MATCH IS SHOWN, cap or no cap. Those are the ones
+      // worth reading; the cap only ever trims single-word noise.
+      const strong = ordered.filter(([, c]) => c.words.size > 1);
+      const shown = [...strong, ...ordered.filter(([, c]) => c.words.size === 1).slice(0, 6)];
+      for (const [u, c] of shown) {
+        const v = allAge.get(u) || 'unknown';
+        const mark = v === 'fits' ? '' : v === 'adult' ? '  (adult grade)' : v === 'wrong-age' ? '  (age does not fit)' : '';
+        const via = [...c.words].join('+');
+        log(`      ${c.words.size > 1 ? '»' : '?'} ${pad(c.e.name, 30)} ${pad([...c.e.genders][0] || 'unknown', 8)} ` +
+          `${String(c.e.seasons.size).padStart(2)} season(s)  ${short(u)}   via ${via}${mark}`);
+      }
+      const shownIds = new Set(shown.map(([u]) => u));
+      for (const [u, c] of ordered) {
+        candRows.push([n.raw, n.lineNo, c.words.size, [...c.words].join('+'), c.e.name, u,
+          [...c.e.genders][0] || 'unknown', allAge.get(u) || 'unknown',
+          [...c.e.seasons].sort().join(' | '), shownIds.has(u) ? 'yes' : 'no']);
+      }
+      const hidden = ordered.length - shown.length;
+      if (hidden > 0) log(`        …and ${hidden} more sharing one word — all of them are in name-search-candidates.csv`);
     }
   }
 
@@ -426,10 +511,13 @@ function main() {
     for (const n of multi) {
       const recs = byDisplay.get(n.display);
       log(`\n    ${n.raw} → ${recs.length} candidates`);
-      for (const r of [...recs].sort((a, b) => b.regs.length - a.regs.length)) {
+      const rank = (u) => ({ fits: 0, unknown: 1, adult: 2, 'wrong-age': 3 }[allAge.get(u) || 'unknown']);
+      for (const r of [...recs].sort((a, b) => rank(a.uuid) - rank(b.uuid) || b.regs.length - a.regs.length)) {
         const seasons = new Set(r.regs.map(x => x.comp));
+        const v = allAge.get(r.uuid) || 'unknown';
+        const mark = v === 'fits' ? '' : v === 'adult' ? '  (adult grade)' : v === 'wrong-age' ? '  (age does not fit)' : '';
         log(`      · ${pad(r.name, 28)} ${pad(genderOfUuid(r.uuid), 8)} ${String(seasons.size).padStart(2)} season(s)  ` +
-          `${short(r.uuid)}  [${[...r.how][0] || 'exact'}]`);
+          `${short(r.uuid)}  [${[...r.how][0] || 'exact'}]${mark}`);
         for (const reg of r.regs.slice(-2).reverse()) {
           log(`          ${reg.comp} · ${reg.teamRaw} · ${reg.grade}`);
         }
@@ -569,11 +657,13 @@ function main() {
       r.comp, r.team, r.grade, r.together, r.theirs]);
   }
   fs.writeFileSync(path.join(OUT_DIR, 'opponent-teammates.csv'), csv(tm));
+  fs.writeFileSync(path.join(OUT_DIR, 'name-search-candidates.csv'), csv(candRows));
 
   const rel = path.relative(ROOT, OUT_DIR);
   log(`\n  Written: ${rel}/name-search.csv`);
   log(`           ${rel}/name-search-vs-opponent.csv`);
   log(`           ${rel}/opponent-teammates.csv`);
+  log(`           ${rel}/name-search-candidates.csv`);
   log("  (not committed — download them from the run's artifact)");
   process.exit(0);
 }
