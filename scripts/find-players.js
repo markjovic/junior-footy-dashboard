@@ -35,7 +35,7 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'find-players v5 2026-10-10';
+const VERSION = 'find-players v6 2026-10-10 r3-is-the-list';
 
 const ROOT = path.resolve(__dirname, '..');
 const NAMES_PATH = path.join(ROOT, process.env.FP_NAMES || 'data/name-search.txt');
@@ -213,6 +213,10 @@ function main() {
   const rosterOf = new Map();
   const rosterMeta = new Map();
   const allNames = new Map();
+  // ⚠️ GENDER FOR EVERY PLAYER, not only the asked names. An opponent or a
+  // team-mate who is not on the list still gets a gender column, and v5 printed
+  // `unknown` for all 359 of them because this map did not exist.
+  const allGender = new Map();
   const teamSet = new Set();
   let playerRows = 0;
 
@@ -226,6 +230,7 @@ function main() {
       allNames.set(p.uuid, p.name);
       const key = fold(p.name);
       const g = genderOf(p.gradeID, grades);
+      if (!allGender.has(p.uuid) || allGender.get(p.uuid) === 'unknown') allGender.set(p.uuid, g);
 
       // ⚠️ INDEXED ONLY FOR WORDS THE LIST ASKS ABOUT. A full word index of
       // 180,000 records costs memory for nothing.
@@ -389,11 +394,7 @@ function main() {
       const s = new Set(rec.regs.map(r => r.gender));
       return s.size === 1 ? [...s][0] : [...s].filter(x => x !== 'unknown')[0] || 'unknown';
     }
-    for (const pool of byWord.values()) {
-      const e = pool.get(u);
-      if (e) return [...e.genders][0] || 'unknown';
-    }
-    return 'unknown';
+    return allGender.get(u) || 'unknown';
   };
 
   // ── NO MATCH ───────────────────────────────────────────────────────────────
@@ -437,14 +438,20 @@ function main() {
   }
 
   // ── PLAYED AGAINST ─────────────────────────────────────────────────────────
+  // ⚠️ THE SUPPLIED LIST ONLY. The question is whether any of THEM played against
+  // the target; R5 below is the half that is deliberately not limited. v5 listed
+  // all 359 opponents here, which buries the answer in everyone he has ever met.
   const oppRows = [...conn.entries()]
+    .filter(([u]) => hits.has(u))
     .map(([u, m2]) => ({ u, rows: [...m2.values()].filter(e => e.against > 0) }))
     .filter(x => x.rows.length)
     .map(x => ({ ...x, total: x.rows.reduce((n, e) => n + e.against, 0) }))
     .sort((a, b) => b.total - a.total ||
       String(allNames.get(a.u)).localeCompare(String(allNames.get(b.u))));
 
-  log(`\n  PLAYED AGAINST ${targetName}:`);
+  log(`\n  PLAYED AGAINST ${targetName} (from your list — ${oppRows.length} of ${
+    [...conn.values()].filter(m2 => [...m2.values()].some(e => e.against > 0)).length
+  } opponents in total):`);
   if (!oppRows.length) log('    (none on record)');
   for (const o of oppRows) {
     log(`    ${pad(allNames.get(o.u) || '(unnamed)', 30)} ${pad(genderOfUuid(o.u), 8)} ` +
@@ -455,14 +462,20 @@ function main() {
   }
 
   // ── TEAM-MATES (not opponents) ─────────────────────────────────────────────
+  const mateRowsAll = [...conn.entries()]
+    .map(([u, m2]) => ({ u, rows: [...m2.values()].filter(e => e.with > 0) }))
+    .filter(x => x.rows.length)
+    .map(x => ({ ...x, total: x.rows.reduce((n, e) => n + e.with, 0) }));
+  // Supplied list only, for symmetry with PLAYED AGAINST.
   const mateRows = [...conn.entries()]
+    .filter(([u]) => hits.has(u))
     .map(([u, m2]) => ({ u, rows: [...m2.values()].filter(e => e.with > 0) }))
     .filter(x => x.rows.length)
     .map(x => ({ ...x, total: x.rows.reduce((n, e) => n + e.with, 0),
       alsoOpp: [...conn.get(x.u).values()].some(e => e.against > 0) }))
     .sort((a, b) => b.total - a.total);
 
-  log(`\n  TEAM-MATES of ${targetName} (not opponents):`);
+  log(`\n  TEAM-MATES of ${targetName} from your list (not opponents):`);
   const purely = mateRows.filter(x => !x.alsoOpp);
   if (!purely.length) log('    (none on record)');
   for (const o of purely) {
@@ -495,7 +508,7 @@ function main() {
     }
   }
   // Anyone who shared a game but whose roster key we do not hold still belongs.
-  for (const o of mateRows) {
+  for (const o of mateRowsAll) {
     if (everyMate.has(o.u)) continue;
     const m2 = new Map();
     for (const e of o.rows) m2.set(`${e.sid}|${e.team}`, {
