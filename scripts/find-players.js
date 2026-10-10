@@ -35,7 +35,7 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'find-players v10 2026-10-10 hyphen-is-one-surname';
+const VERSION = 'find-players v12 2026-10-10 every-total-visible';
 
 const ROOT = path.resolve(__dirname, '..');
 const NAMES_PATH = path.join(ROOT, process.env.FP_NAMES || 'data/name-search.txt');
@@ -337,7 +337,12 @@ function main() {
 
       let rec = hits.get(p.uuid);
       if (!rec) { rec = { uuid: p.uuid, name: p.name, asked: new Set(), how: new Set(), regs: [] }; hits.set(p.uuid, rec); }
-      for (const n of (exact || [])) { rec.asked.add(n.display); rec.how.add('exact'); }
+      for (const n of (exact || [])) {
+        rec.asked.add(n.display);
+        // ⚠️ "exact" MEANT "matched through the nickname table" as well, so a
+        // Jackson was offered as an exact match for a Jaxson. Say which it was.
+        rec.how.add(fold(n.display) === key ? 'exact' : 'nickname');
+      }
       for (const n of (ends || [])) { rec.asked.add(n.display); rec.how.add('first+last'); }
       if (isTarget) rec.asked.add(TARGET_NAME);
 
@@ -468,8 +473,31 @@ function main() {
   }
   const regRowCount = [...hits.values()].reduce((n, r) => n + r.regs.length, 0);
 
+  // ⚠️ THE THREE NAME OUTCOMES MUST SUM TO THE NAMES SEARCHED. If they ever do
+  // not, a name fell through a branch and is in no section of the report — which
+  // is exactly how a matched Hudson Walker went missing in v10.
+  const singleCount = usable.filter(n => (byDisplay.get(n.display) || []).length === 1).length;
+  const check = singleCount + multi.length + unmatched.length;
+  const howTally = { exact: 0, nickname: 0, 'first+last': 0 };
+  for (const rec of hits.values()) {
+    const h = rec.how.has('exact') ? 'exact' : rec.how.has('nickname') ? 'nickname' : 'first+last';
+    howTally[h]++;
+  }
+  const ageTally = { fits: 0, adult: 0, 'wrong-age': 0, unknown: 0 };
+  for (const u of hits.keys()) ageTally[allAge.get(u) || 'unknown']++;
+
   log(`  Names searched   : ${usable.length}`);
-  log(`  Players matched  : ${hits.size}`);
+  log(`    matched to one : ${singleCount}`);
+  log(`    several        : ${multi.length}`);
+  log(`    no match       : ${unmatched.length}`);
+  if (check !== usable.length) {
+    log(`  ⚠️ THESE DO NOT SUM TO ${usable.length} (${check}). A name is in no section —`);
+    log('     that is a defect in this report, not in the data.');
+  }
+  log(`  Players matched  : ${hits.size}   ` +
+    `exact ${howTally.exact}   nickname ${howTally.nickname}   first+last ${howTally['first+last']}`);
+  log(`  Age band fit     : fits ${ageTally.fits}   adult grade ${ageTally.adult}   ` +
+    `outside band ${ageTally['wrong-age']}   unknown ${ageTally.unknown}`);
   log(`  Team/season rows : ${regRowCount}`);
   log(`  Shared-game rows : ${[...conn.values()].reduce((n, m2) => n + m2.size, 0)}`);
   log(`  Gender recorded  : ${Object.entries(genderTally).sort((a, b) => b[1] - a[1])
@@ -484,6 +512,26 @@ function main() {
     return allGender.get(u) || 'unknown';
   };
 
+  // ── MATCHED ───────────────────────────────────────────────────────────────
+  const single = usable.filter(n => (byDisplay.get(n.display) || []).length === 1);
+  if (single.length) {
+    const mFits = single.filter(n => allAge.get(byDisplay.get(n.display)[0].uuid) === 'fits').length;
+    log(`\n  MATCHED (${single.length} of ${usable.length}) — one player each, nothing to choose between.`);
+    log(`  ${mFits} fit the ${AGE_MIN}–${AGE_MAX} age band; ${single.length - mFits} do not.`);
+    for (const n of single.sort((a, b) => a.raw.localeCompare(b.raw))) {
+      const r = byDisplay.get(n.display)[0];
+      const seasons = [...new Set(r.regs.map(x => x.comp))].sort();
+      const teams = [...new Set(r.regs.map(x => x.teamRaw))];
+      const v = allAge.get(r.uuid) || 'unknown';
+      const mark = v === 'fits' ? '' : v === 'adult' ? '  (adult grade)' : v === 'wrong-age' ? '  ⚠️ age does not fit' : '';
+      const how = r.how.has('exact') ? 'exact' : r.how.has('nickname') ? 'nickname' : 'first+last';
+      log(`    ${pad(n.raw, 26)} → ${pad(r.name, 24)} ${pad(genderOfUuid(r.uuid), 8)} ` +
+        `${String(seasons.length).padStart(2)} season(s)  ${short(r.uuid)}  [${how}]${mark}`);
+      log(`        ${seasons.join(' | ')}`);
+      log(`        ${teams.slice(0, 4).join(' | ')}${teams.length > 4 ? ` | +${teams.length - 4} more` : ''}`);
+    }
+  }
+
   // ── NO MATCH ───────────────────────────────────────────────────────────────
   // ⚠️ EVERY CANDIDATE, INCLUDING THE ONES THE CAP TRIMS. The log says they are
   // in the CSV, so they have to be: v8 printed that line while writing no such
@@ -491,7 +539,14 @@ function main() {
   const candRows = [['asked_name', 'line', 'match', 'via', 'candidate',
     'uuid', 'gender', 'age_verdict', 'seasons', 'shown_in_log']];
   if (unmatched.length) {
-    log(`\n  NO MATCH (${unmatched.length}) — not in the data under any spelling tried.`);
+    const withCand = unmatched.filter(n => n.words.some(w => {
+      const pool = byWord.get(w);
+      if (!pool) return false;
+      for (const [, e] of pool) if (e.theirLast.has(w) || e.theirFirst.has(w)) return true;
+      return false;
+    })).length;
+    log(`\n  NO MATCH (${unmatched.length} of ${usable.length}) — not in the data under any spelling tried.`);
+    log(`  ${withCand} have someone sharing a name word; ${unmatched.length - withCand} have nobody at all.`);
     log('  Each is followed by every player sharing a word with the name, so you can tell a');
     log('  child who has never played from one we hold under a different spelling.');
     for (const n of unmatched) {
@@ -562,22 +617,38 @@ function main() {
 
   // ── SEVERAL CANDIDATES ─────────────────────────────────────────────────────
   if (multi.length) {
-    log(`\n  SEVERAL CANDIDATES (${multi.length}) — every one is in the CSV; nothing was chosen for you.`);
+    const totalCands = multi.reduce((n, x) => n + byDisplay.get(x.display).length, 0);
+    log(`\n  SEVERAL CANDIDATES (${multi.length} name(s), ${totalCands} candidate(s)) — ` +
+      `every one is in the CSV; nothing was chosen for you.`);
     log('  Gender and recent teams are shown so you can tell them apart: an adult grade on a');
     log('  junior list is someone who happens to share the name.');
     for (const n of multi) {
       const recs = byDisplay.get(n.display);
       log(`\n    ${n.raw} → ${recs.length} candidates`);
       const rank = (u) => ({ fits: 0, unknown: 1, adult: 2, 'wrong-age': 3 }[allAge.get(u) || 'unknown']);
-      for (const r of [...recs].sort((a, b) => rank(a.uuid) - rank(b.uuid) || b.regs.length - a.regs.length)) {
+      const sorted = [...recs].sort((a, b) => rank(a.uuid) - rank(b.uuid) || b.regs.length - a.regs.length);
+      // ⚠️ RULED OUT BY AGE IS STILL IN THE CSV — it is hidden from the LOG only,
+      // and only when something plausible exists to hide it behind. Nothing is
+      // ever chosen for you; this stops a U17 being offered beside a U12.
+      const fitsAny = sorted.some(r => allAge.get(r.uuid) === 'fits');
+      const showList = fitsAny ? sorted.filter(r => allAge.get(r.uuid) !== 'wrong-age') : sorted;
+      const dropped = sorted.length - showList.length;
+      for (const r of showList) {
         const seasons = new Set(r.regs.map(x => x.comp));
         const v = allAge.get(r.uuid) || 'unknown';
         const mark = v === 'fits' ? '' : v === 'adult' ? '  (adult grade)' : v === 'wrong-age' ? '  (age does not fit)' : '';
-        log(`      · ${pad(r.name, 28)} ${pad(genderOfUuid(r.uuid), 8)} ${String(seasons.size).padStart(2)} season(s)  ` +
-          `${short(r.uuid)}  [${[...r.how][0] || 'exact'}]${mark}`);
-        for (const reg of r.regs.slice(-2).reverse()) {
+        const how = r.how.has('exact') ? 'exact' : r.how.has('nickname') ? 'nickname' : 'first+last';
+        log(`      · ${pad(r.name, 28)} ${pad(genderOfUuid(r.uuid), 8)} ${String(seasons.size).padStart(2)} season(s), ` +
+          `${String(r.regs.length).padStart(2)} registration(s)  ${short(r.uuid)}  [${how}]${mark}`);
+        // ⚠️ EVERY REGISTRATION, NOT THE LAST TWO. "3 season(s)" above two printed
+        // rows reads as a contradiction, and a child with two grades in one season
+        // made it worse: 1 season, 2 rows.
+        for (const reg of [...r.regs].sort((a, b) => String(a.comp).localeCompare(String(b.comp)))) {
           log(`          ${reg.comp} · ${reg.teamRaw} · ${reg.grade}`);
         }
+      }
+      if (dropped > 0) {
+        log(`      (${dropped} more ruled out by the ${AGE_MIN}–${AGE_MAX} age band — in name-search.csv)`);
       }
     }
   }
@@ -620,8 +691,9 @@ function main() {
       alsoOpp: [...conn.get(x.u).values()].some(e => e.against > 0) }))
     .sort((a, b) => b.total - a.total);
 
-  log(`\n  TEAM-MATES of ${targetName} from your list (not opponents):`);
   const purely = mateRows.filter(x => !x.alsoOpp);
+  log(`\n  TEAM-MATES of ${targetName} from your list (${purely.length} of ${
+    mateRows.length} list team-mates; ${mateRowsAll.length} team-mates in total) — not opponents:`);
   if (!purely.length) log('    (none on record)');
   for (const o of purely) {
     log(`    ${pad(allNames.get(o.u) || '(unnamed)', 30)} ${pad(genderOfUuid(o.u), 8)} ` +
@@ -717,10 +789,14 @@ function main() {
   fs.writeFileSync(path.join(OUT_DIR, 'name-search-candidates.csv'), csv(candRows));
 
   const rel = path.relative(ROOT, OUT_DIR);
-  log(`\n  Written: ${rel}/name-search.csv`);
-  log(`           ${rel}/name-search-vs-opponent.csv`);
-  log(`           ${rel}/opponent-teammates.csv`);
-  log(`           ${rel}/name-search-candidates.csv`);
+  // Row counts, not byte sizes: a reader wants to know how much there is to read.
+  // Minus one for the header row on each.
+  const written = [['name-search.csv', reg], ['name-search-vs-opponent.csv', vs],
+    ['opponent-teammates.csv', tm], ['name-search-candidates.csv', candRows]];
+  log('\n  Written:');
+  for (const [f, rows] of written) {
+    log(`    ${pad(`${rel}/${f}`, 44)} ${String(rows.length - 1).padStart(6)} row(s)`);
+  }
   log("  (not committed — download them from the run's artifact)");
   process.exit(0);
 }
