@@ -35,7 +35,7 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'find-players v8 2026-10-10 rank-by-words-matched';
+const VERSION = 'find-players v10 2026-10-10 hyphen-is-one-surname';
 
 const ROOT = path.resolve(__dirname, '..');
 const NAMES_PATH = path.join(ROOT, process.env.FP_NAMES || 'data/name-search.txt');
@@ -111,6 +111,30 @@ function variants(first, last) {
 }
 // First token and last token only, so a middle name or one half of a hyphen does
 // not stop a match. Reported as [first+last] so it is never mistaken for exact.
+// ⚠️ THE HYPHEN DECIDES WHICH HALF A WORD IS IN. `fold` turns "Craig-Brown" into
+// two words, so "craig" looked like a given name and six Craig-Browns were offered
+// for "Vo, Craig". Splitting on WHITESPACE ONLY keeps a hyphenated surname whole;
+// its parts are then offered as surname words too, so "Craig" can still meet
+// "Craig-Brown" as a surname — which is a real possibility — while never meeting
+// it as a first name, which is not.
+function halves(name) {
+  const toks = String(name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/['\u2019`]/g, '')
+    .split(/\s+/).map(t => t.replace(/[^a-z0-9-]/g, '')).filter(Boolean);
+  if (!toks.length) return { given: new Set(), surname: new Set() };
+  const lastTok = toks[toks.length - 1];
+  const surname = new Set([lastTok.replace(/-/g, ' '), ...lastTok.split('-')].filter(x => x && x.length > 1));
+  // Everything before the last whitespace token is the given name, which is how
+  // "Muan Pi Kawngte" keeps both of its given words.
+  const given = new Set();
+  for (const t of toks.slice(0, -1)) for (const part of [t.replace(/-/g, ' '), ...t.split('-')]) {
+    if (part && part.length > 1) given.add(part);
+  }
+  if (!given.size) given.add(lastTok.replace(/-/g, ' '));   // single-token name
+  return { given, surname };
+}
+
 const endsKey = (folded) => {
   const t = folded.split(' ');
   return t.length > 1 ? `${t[0]}|${t[t.length - 1]}` : `${t[0]}|${t[0]}`;
@@ -165,6 +189,12 @@ function readNames() {
     rows.push({
       lineNo: i + 1, raw: line, first, last, display: `${first} ${last}`, keys,
       ends: new Set([...keys].map(endsKey)),
+      // ⚠️ ROLE MATTERS. A word is only interesting where it sits in the SAME half
+      // of the name. "Craig" as a given name has nothing to do with Craig-Brown as
+      // a surname, and v8 listed six Craig-Browns under "Vo, Craig" because it
+      // compared bare words.
+      lastWords: halves(`x ${last}`).surname,
+      firstWords: halves(`${first} x`).given,
       words: [...new Set([...fold(last).split(' '), ...fold(first).split(' ')])].filter(w => w.length > 1),
     });
   });
@@ -282,11 +312,20 @@ function main() {
 
       // ⚠️ INDEXED ONLY FOR WORDS THE LIST ASKS ABOUT. A full word index of
       // 180,000 records costs memory for nothing.
+      // Their own halves: last token is the surname, everything before it the
+      // given name. A two-token surname ("de ross") is also offered as a surname
+      // word so it can meet an asked "De Ross".
+      const hv = halves(p.name);
+      const theirLast = hv.surname, theirFirst = hv.given;
       for (const w of new Set(key.split(' '))) {
         if (!wantedWords.has(w)) continue;
         if (!byWord.has(w)) byWord.set(w, new Map());
         let e = byWord.get(w).get(p.uuid);
-        if (!e) { e = { name: p.name, genders: new Set(), seasons: new Set() }; byWord.get(w).set(p.uuid, e); }
+        if (!e) {
+          e = { name: p.name, genders: new Set(), seasons: new Set(),
+                theirLast, theirFirst };
+          byWord.get(w).set(p.uuid, e);
+        }
         e.genders.add(g); e.seasons.add(m.compName);
       }
 
@@ -449,7 +488,7 @@ function main() {
   // ⚠️ EVERY CANDIDATE, INCLUDING THE ONES THE CAP TRIMS. The log says they are
   // in the CSV, so they have to be: v8 printed that line while writing no such
   // file. A claim about an output is an output.
-  const candRows = [['asked_name', 'line', 'words_matched', 'via', 'candidate',
+  const candRows = [['asked_name', 'line', 'match', 'via', 'candidate',
     'uuid', 'gender', 'age_verdict', 'seasons', 'shown_in_log']];
   if (unmatched.length) {
     log(`\n  NO MATCH (${unmatched.length}) — not in the data under any spelling tried.`);
@@ -462,13 +501,24 @@ function main() {
       // pushed a candidate matching BOTH words off the end entirely — a known
       // Hudson Walker sat below six unrelated Walkers. Words matched first, then
       // age plausibility, then how much we hold on them.
-      const cand = new Map();   // uuid -> { e, words:Set }
+      // uuid -> { e, surname:bool, given:bool, words:Set }
+      const cand = new Map();
       for (const w of n.words) {
         const pool = byWord.get(w);
         if (!pool) continue;
         for (const [u, e] of pool) {
-          if (!cand.has(u)) cand.set(u, { e, words: new Set() });
-          cand.get(u).words.add(w);
+          // ⚠️ SAME HALF, OR IT IS NOT A CANDIDATE. Their surname against the
+          // asked surname, their given name against the asked given name. A word
+          // that crosses halves is dropped entirely — it is the single biggest
+          // source of noise in this report and it is never the child.
+          const sHit = n.lastWords.has(w) && e.theirLast.has(w);
+          const gHit = n.firstWords.has(w) && e.theirFirst.has(w);
+          if (!sHit && !gHit) continue;
+          if (!cand.has(u)) cand.set(u, { e, surname: false, given: false, words: new Set() });
+          const c = cand.get(u);
+          if (sHit) c.surname = true;
+          if (gHit) c.given = true;
+          c.words.add(w);
         }
       }
       if (!cand.size) {
@@ -477,24 +527,31 @@ function main() {
         continue;
       }
       const rank = (u) => ({ fits: 0, unknown: 1, adult: 2, 'wrong-age': 3 }[allAge.get(u) || 'unknown']);
+      // ⚠️ SEASON COUNT IS THE LAST RESORT, NOT THE FIRST. How well the NAME
+      // matches decides the order: both halves, then surname alone, then given
+      // name alone — a shared surname is far more use than a shared first name.
+      const score = (c) => (c.surname && c.given) ? 0 : c.surname ? 1 : 2;
       const ordered = [...cand.entries()].sort((a, b) =>
-        b[1].words.size - a[1].words.size ||
+        score(a[1]) - score(b[1]) ||
         rank(a[0]) - rank(b[0]) ||
         b[1].e.seasons.size - a[1].e.seasons.size);
       // ⚠️ EVERY MULTI-WORD MATCH IS SHOWN, cap or no cap. Those are the ones
       // worth reading; the cap only ever trims single-word noise.
-      const strong = ordered.filter(([, c]) => c.words.size > 1);
-      const shown = [...strong, ...ordered.filter(([, c]) => c.words.size === 1).slice(0, 6)];
+      const strong = ordered.filter(([, c]) => c.surname && c.given);
+      const shown = [...strong, ...ordered.filter(([, c]) => !(c.surname && c.given)).slice(0, 6)];
       for (const [u, c] of shown) {
         const v = allAge.get(u) || 'unknown';
         const mark = v === 'fits' ? '' : v === 'adult' ? '  (adult grade)' : v === 'wrong-age' ? '  (age does not fit)' : '';
-        const via = [...c.words].join('+');
-        log(`      ${c.words.size > 1 ? '»' : '?'} ${pad(c.e.name, 30)} ${pad([...c.e.genders][0] || 'unknown', 8)} ` +
+        const via = (c.surname && c.given) ? 'both names'
+          : c.surname ? `surname ${[...c.words].join('+')}` : `given name ${[...c.words].join('+')}`;
+        log(`      ${(c.surname && c.given) ? '»' : '?'} ${pad(c.e.name, 30)} ${pad([...c.e.genders][0] || 'unknown', 8)} ` +
           `${String(c.e.seasons.size).padStart(2)} season(s)  ${short(u)}   via ${via}${mark}`);
       }
       const shownIds = new Set(shown.map(([u]) => u));
       for (const [u, c] of ordered) {
-        candRows.push([n.raw, n.lineNo, c.words.size, [...c.words].join('+'), c.e.name, u,
+        candRows.push([n.raw, n.lineNo,
+          (c.surname && c.given) ? 'both names' : c.surname ? 'surname' : 'given name',
+          [...c.words].join('+'), c.e.name, u,
           [...c.e.genders][0] || 'unknown', allAge.get(u) || 'unknown',
           [...c.e.seasons].sort().join(' | '), shownIds.has(u) ? 'yes' : 'no']);
       }
