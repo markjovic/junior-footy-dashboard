@@ -1431,7 +1431,7 @@
         "results": true,
         "players": true,
         "matches": 5498,
-        "players_n": 16799
+        "players_n": 16804
       },
       "state": "active",
       "stateAt": "2026-09-07T01:00:36.140Z"
@@ -20454,7 +20454,7 @@
   },
   "lastUpdated": "2026-10-31T04:17:31.192Z",
   "lastResultsFetch": "2026-10-31T04:17:31.192Z",
-  "lastStatsFetch": "2026-11-02T02:46:19.506Z",
+  "lastStatsFetch": "2026-11-07T13:42:55.054Z",
   "seasonFiles": [
     {
       "file": "data/seasons/2170ac5a-core.json",
@@ -20490,7 +20490,7 @@
       "file": "data/seasons/2dcbf383-players.json",
       "seasonId": "2dcbf383",
       "kind": "players",
-      "bytes": 7817961
+      "bytes": 7820153
     },
     {
       "file": "data/seasons/3733598c-core.json",
