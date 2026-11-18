@@ -51,4 +51,4 @@ jobs:
           echo "runner public IP (the thing CloudFront sees):"
           curl -s --max-time 10 https://api.ipify.org || echo "(could not determine)"
           echo
-          node scripts/probe-waf-state.js
+          node scripts/probe-waf-state.j
