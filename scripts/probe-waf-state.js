@@ -24,7 +24,7 @@
 
 'use strict';
 
-const VERSION = 'probe-waf-state v1 2026-11-18';
+const VERSION = 'probe-waf-state v2 2026-11-18 header-variants';
 const NOTE = process.env.PW_NOTE || '';
 
 const log = (...a) => console.log(...a);
@@ -80,6 +80,86 @@ const TARGETS = [
     why: 'separates a WAF rule on the host from one on the GraphQL endpoint',
   },
 ];
+
+// ── Header variants ──────────────────────────────────────────────────────────
+// ⚠️ v1 PROVED THE API IS REACHABLE AND NOTHING MORE. It sent browser headers and
+// got 200/400 from the same runner that lib/playhq.js cannot get a session on.
+// The difference has to be in what is SENT, and the obvious suspect is the
+// library's User-Agent:
+//
+//   PlayHQ/1.47.2 Android/28 (Android SDK built for x86)
+//
+// "Android SDK built for x86" is an emulator string. A WAF that has started
+// scoring on it would produce exactly what the logs show: a 403 with an HTML body
+// on every session attempt, from an IP that is otherwise fine.
+//
+// ⚠️ THE QUERY MUST BE THE REAL ONE. v1 invented `tenantConfig` and got a 400 for
+// its trouble, which measured nothing. This sends the library's own
+// `tenantConfiguration { label }` so a 200 here means a session would work.
+const REAL_TENANT_QUERY = JSON.stringify({
+  operationName: 'TenantConfig', variables: {},
+  query: 'query TenantConfig { tenantConfiguration { label } }',
+});
+
+const LIB_UA = 'PlayHQ/1.47.2 Android/28 (Android SDK built for x86)';
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+
+// Each variant changes ONE thing from the one above it, so whichever first
+// answers names the cause rather than leaving a pile of differences.
+const VARIANTS = [
+  { name: 'exactly what lib/playhq.js sends',
+    why: 'the control — this is what fails every night',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+      'User-Agent': LIB_UA, tenant: 'afl', origin: 'https://www.playhq.com' } },
+  { name: 'library headers + browser User-Agent',
+    why: 'changes ONLY the User-Agent — if this answers, the UA is the whole fault',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+      'User-Agent': BROWSER_UA, tenant: 'afl', origin: 'https://www.playhq.com' } },
+  { name: 'library headers + referer and accept-language',
+    why: 'keeps the library UA, adds the browser headers it omits',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+      'User-Agent': LIB_UA, tenant: 'afl', origin: 'https://www.playhq.com',
+      referer: 'https://www.playhq.com/', 'accept-language': 'en-AU,en;q=0.9' } },
+  { name: 'full browser header set',
+    why: 'what v1 sent, with the REAL query — the known-good shape',
+    headers: { 'Content-Type': 'application/json', accept: '*/*',
+      'User-Agent': BROWSER_UA, tenant: 'afl', 'x-phq-tenant': 'afl',
+      origin: 'https://www.playhq.com', referer: 'https://www.playhq.com/',
+      'accept-language': 'en-AU,en;q=0.9' } },
+];
+
+async function variant(v) {
+  const started = Date.now();
+  let res, body = '', err = null;
+  try {
+    res = await fetch('https://api.playhq.com/graphql',
+      { method: 'POST', headers: v.headers, body: REAL_TENANT_QUERY, redirect: 'manual' });
+    body = await res.text();
+  } catch (e) { err = e; }
+  const ms = Date.now() - started;
+
+  log(`\n── ${v.name} ──`);
+  log(`   ${v.why}`);
+  if (err) { log(`   ⚠️ threw: ${err.message} (${ms} ms)`); return { v, blocked: null }; }
+
+  const isHtml = /^\s*<|DOCTYPE/i.test(body) ||
+    /text\/html/i.test(res.headers.get('content-type') || '');
+  const blocked = res.status === 403 && isHtml;
+  // ⚠️ THE COOKIES ARE THE POINT, not the status. A 200 with no Set-Cookie is
+  // still a failed session, and that is a different fault from a block.
+  const setCookie = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie() : [];
+  const names = setCookie.map(c => String(c).split('=')[0].trim());
+  const got = ['phq_tier', 'phq_session', 'phq_sub'].filter(n => names.includes(n));
+
+  log(`   HTTP ${res.status}  (${ms} ms)   x-cache: ${res.headers.get('x-cache') || '-'}`);
+  log(`   cookies: ${got.length ? got.join(', ') : 'NONE'}${
+    got.length === 3 ? '  ← a session would succeed' : ''}`);
+  log(`   body[0..160]: ${body.replace(/\s+/g, ' ').trim().slice(0, 160) || '(empty)'}`);
+  log(`   ⇒ ${blocked ? 'WAF BLOCK (403 + HTML)' : res.status === 200 ? 'ANSWERED' : `status ${res.status}`}`);
+  return { v, blocked, status: res.status, cookies: got.length };
+}
 
 const CF_HEADERS = ['x-amz-cf-id', 'x-cache', 'via', 'server', 'x-amzn-waf-action',
   'retry-after', 'content-type'];
@@ -156,6 +236,30 @@ async function one(t) {
   } else {
     log('\nNothing is blocked right now. The block has lifted — re-enable the daily');
     log('schedules one at a time and read the next run before enabling the second.');
+  }
+  // ── Part 2: which header set gets a session? ───────────────────────────────
+  log('\n\n═══ HEADER VARIANTS — the real TenantConfig query ═══');
+  const vout = [];
+  for (const v of VARIANTS) {
+    vout.push(await variant(v));
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  log('\n═══ WHICH HEADERS WORK ═══');
+  for (const o of vout) {
+    log(`  ${o.cookies === 3 ? 'SESSION OK ' : o.blocked ? 'BLOCKED    ' : 'no cookies '} ${o.v.name}`);
+  }
+  const ctl = vout[0], uaOnly = vout[1];
+  if (ctl && ctl.blocked && uaOnly && uaOnly.cookies === 3) {
+    log('\n  ⇒ THE USER-AGENT IS THE WHOLE FAULT. Only that header changed between');
+    log('    the first two, and the second got a session. Change it in lib/playhq.js.');
+  } else if (ctl && ctl.cookies === 3) {
+    log('\n  ⇒ THE LIBRARY\'S OWN HEADERS WORK RIGHT NOW. The block is intermittent,');
+    log('    so the nightly failure is about WHEN it runs, not what it sends. Do not');
+    log('    change the headers on this evidence.');
+  } else {
+    log('\n  ⇒ No single header explains it. Read the table above before changing');
+    log('    anything — the cause is not what was assumed.');
   }
   log('\n⚠️ One probe is one moment. A block that lifts and returns needs this run');
   log('   twice, hours apart, before anything is concluded from it.');
