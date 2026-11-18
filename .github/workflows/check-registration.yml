@@ -1,0 +1,50 @@
+# .github/workflows/check-registration.yml
+#
+# Why does one player show no next-season line in the dashboard?
+#
+# ⚠️ READ-ONLY. No PlayHQ call, no session, nothing written or committed. It reads
+# data/core.json and data/registrations.json.gz and prints the four conditions the
+# line depends on, with a verdict for each.
+#
+# Seconds to run. The answer is in the log; there is nothing to download.
+
+name: Check a player's registration
+
+on:
+  workflow_dispatch:
+    inputs:
+      player:
+        description: 'player — a name as PlayHQ spells it, or a profile uuid'
+        required: true
+        type: string
+      limit:
+        description: 'limit — how many matching players to print when the name is not unique'
+        required: false
+        default: '5'
+        type: string
+
+# Reads only. A diagnostic that cannot commit cannot damage what it is measuring.
+permissions:
+  contents: read
+
+# NOTE: no concurrency group. It makes no PlayHQ call and writes nothing, so there
+# is nothing to serialise it against.
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      # NOTE: no actions/setup-node. The runner ships Node.
+      - name: Check
+        env:
+          CR_PLAYER: ${{ inputs.player }}
+          CR_LIMIT: ${{ inputs.limit }}
+        run: |
+          node --version
+          node scripts/check-registration.js
