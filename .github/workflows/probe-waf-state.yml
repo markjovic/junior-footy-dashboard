@@ -43,12 +43,20 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
 
+      # ⚠️ GUARD THE PATH. A character was lost editing this file in the web UI on
+      # 2026-11-18 ("probe-waf-state.j") and the run died with MODULE_NOT_FOUND
+      # after the checkout, the IP lookup and nothing else. A missing file should
+      # say so in one line, not in a Node stack trace.
       - name: Probe
         env:
           PW_NOTE: ${{ inputs.note }}
         run: |
+          if [ ! -f scripts/probe-waf-state.js ]; then
+            echo "scripts/probe-waf-state.js is not in this checkout — commit it first."
+            exit 1
+          fi
           node --version
           echo "runner public IP (the thing CloudFront sees):"
           curl -s --max-time 10 https://api.ipify.org || echo "(could not determine)"
           echo
-          node scripts/probe-waf-state.j
+          node scripts/probe-waf-state.js
