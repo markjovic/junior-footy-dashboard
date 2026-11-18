@@ -18,13 +18,34 @@
 // callers expect — resolves with the parsed body, rejects on failure — so call
 // sites do not change.
 //
-// The HTTP stack is deliberately still node's https module rather than global
-// fetch. Changing the outbound stack in the same commit as the session handling
-// would make a regression impossible to attribute.
+// ⚠️ THE HTTP STACK IS NOW global fetch, NOT node's https module. This is the
+// whole reason the nightly jobs stopped working, so it is worth being precise.
+//
+// MEASURED 2026-11-18, four requests seconds apart, same runner, same headers,
+// same query (scripts/probe-waf-state.js v3):
+//
+//   fetch           + library headers              -> 200, all three cookies
+//   fetch           + library headers + request-id -> 200, all three cookies
+//   https.request   + library headers + request-id -> 403 HTML in  61 ms
+//   https.request   + library headers, no request-id -> 403 HTML in   8 ms
+//
+// Eight milliseconds is CloudFront refusing at the edge before PlayHQ sees it.
+// Node's https negotiates HTTP/1.1 with a TLS fingerprint their WAF now scores as
+// a bot; undici negotiates h2 and passes. NOTHING about the headers, the
+// User-Agent, the query or the account was involved — all four were held constant
+// across those requests.
+//
+// ⚠️ DO NOT SWITCH BACK TO node:https "for consistency". It is blocked, instantly
+// and every time, and the failure looks exactly like a rate-limit block: a 403
+// with an HTML body. That cost seven weeks of a dead walk before anyone compared
+// the two clients.
+//
+// The previous note here said the https module was deliberate, so that a
+// regression in the outbound stack could not be confused with the session
+// handling. That reasoning was sound and is now spent.
 
 'use strict';
 
-const https = require('https');
 const crypto = require('crypto');
 
 const API_URL = 'https://api.playhq.com/graphql';
@@ -88,34 +109,42 @@ function headers(extra) {
   return Object.assign(h, extra || {});
 }
 
-// Raw POST. Resolves with { status, text, setCookie } and never rejects, so the
-// classifier above it sees every outcome rather than only the happy path.
-function rawPost(bodyStr, extraHeaders, timeoutMs, url) {
-  return new Promise((resolve) => {
-    const h = headers(extraHeaders);
-    h['Content-Length'] = Buffer.byteLength(bodyStr);
+// Raw POST. Resolves with { status, text, setCookie } and NEVER rejects, so the
+// classifier above it sees every outcome rather than only the happy path. The
+// return shape is unchanged from the https version, so no caller changes.
+async function rawPost(bodyStr, extraHeaders, timeoutMs, url) {
+  const h = headers(extraHeaders);
+  // ⚠️ NO Content-Length. fetch sets it from the body, and setting it by hand is
+  // rejected as a forbidden header. The https version had to set it; this must not.
 
-    const req = https.request(url || API_URL, { method: 'POST', headers: h, timeout: timeoutMs || 60000 }, (res) => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => { data += c; });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          text: data,
-          // node's http gives set-cookie as an ARRAY. The previous code joined
-          // it and then regexed the result, which is what lost phq_tier and
-          // phq_sub. Take the array as it comes.
-          setCookie: res.headers['set-cookie'] || [],
-        });
-      });
+  // ⚠️ AbortSignal.timeout, NOT a `timeout` option. fetch has no such option and
+  // would have silently ignored one, leaving a hung request to sit for the whole
+  // run — which is the sort of thing that looks like a block and is not.
+  let signal;
+  try { signal = AbortSignal.timeout(timeoutMs || 60000); } catch (e) { signal = undefined; }
+
+  try {
+    const res = await fetch(url || API_URL, {
+      method: 'POST',
+      headers: h,
+      body: bodyStr,
+      // node's https does not follow redirects; keep that behaviour so a 30x
+      // stays visible to the classifier instead of being chased silently.
+      redirect: 'manual',
+      signal,
     });
-
-    req.on('error', (err) => resolve({ status: 0, text: '', setCookie: [], networkError: err.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ status: 0, text: '', setCookie: [], networkError: 'timeout' }); });
-    req.write(bodyStr);
-    req.end();
-  });
+    const text = await res.text();
+    // ⚠️ getSetCookie() RETURNS THE ARRAY. res.headers.get('set-cookie') joins
+    // them into one string, and joining then regexing is exactly what once lost
+    // phq_tier and phq_sub. Take the array.
+    const setCookie = typeof res.headers.getSetCookie === 'function'
+      ? res.headers.getSetCookie()
+      : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
+    return { status: res.status, text, setCookie };
+  } catch (err) {
+    const msg = err && err.name === 'TimeoutError' ? 'timeout' : (err && err.message) || String(err);
+    return { status: 0, text: '', setCookie: [], networkError: msg };
+  }
 }
 
 // A CloudFront WAF block is an HTML body with a 403 and is NOT an application
