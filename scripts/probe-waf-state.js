@@ -24,7 +24,10 @@
 
 'use strict';
 
-const VERSION = 'probe-waf-state v2 2026-11-18 header-variants';
+const https = require('https');
+const crypto = require('crypto');
+
+const VERSION = 'probe-waf-state v3 2026-11-18 transport-and-request-id';
 const NOTE = process.env.PW_NOTE || '';
 
 const log = (...a) => console.log(...a);
@@ -128,6 +131,97 @@ const VARIANTS = [
       origin: 'https://www.playhq.com', referer: 'https://www.playhq.com/',
       'accept-language': 'en-AU,en;q=0.9' } },
 ];
+
+// ── Transport ────────────────────────────────────────────────────────────────
+// ⚠️ v2 CHANGED HEADERS AND NOTHING ELSE, AND CALLED ONE VARIANT "exactly what
+// lib/playhq.js sends". It was not. Two things were never controlled:
+//
+//   1. the library uses node's `https.request`; the probe used `fetch`. Different
+//      TLS fingerprint, HTTP/1.1 rather than h2, different header casing and
+//      order. CloudFront bot rules score on exactly that.
+//   2. the library adds `request-id: crypto.randomUUID()` on every call. The
+//      probe sent nothing like it.
+//
+// The library's own header comment says the https module is deliberate, so this
+// is a real difference rather than an oversight. Four requests isolate both
+// variables ONE AT A TIME:
+//
+//   A fetch + library headers            (v2 proved this answers)
+//   B https.request + library headers    ← the real thing, request-id and all
+//   C https.request, no request-id       B vs C isolates the header
+//   D fetch + request-id                 A vs D isolates it the other way
+const LIB_HEADERS = () => ({
+  'Content-Type': 'application/json',
+  Accept: 'application/json',
+  'User-Agent': LIB_UA,
+  tenant: 'afl',
+  origin: 'https://www.playhq.com',
+});
+
+// node's https, called the way lib/playhq.js calls it — same options, same
+// Content-Length, same lack of an explicit agent.
+function nodePost(headers, bodyStr) {
+  return new Promise((resolve) => {
+    const h = { ...headers, 'Content-Length': Buffer.byteLength(bodyStr) };
+    const req = https.request('https://api.playhq.com/graphql',
+      { method: 'POST', headers: h, timeout: 30000 }, (res) => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => resolve({
+          status: res.statusCode, text: data,
+          setCookie: res.headers['set-cookie'] || [],
+          httpVersion: res.httpVersion,
+        }));
+      });
+    req.on('error', (e) => resolve({ status: 0, text: '', setCookie: [], err: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, text: '', setCookie: [], err: 'timeout' }); });
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
+async function fetchPost(headers, bodyStr) {
+  try {
+    const res = await fetch('https://api.playhq.com/graphql',
+      { method: 'POST', headers, body: bodyStr, redirect: 'manual' });
+    const text = await res.text();
+    const setCookie = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    return { status: res.status, text, setCookie, httpVersion: 'fetch/undici' };
+  } catch (e) { return { status: 0, text: '', setCookie: [], err: e.message }; }
+}
+
+const TRANSPORTS = [
+  { name: 'A  fetch + library headers', fn: fetchPost, id: false,
+    why: 'what v2 tested — the control that answered' },
+  { name: 'B  https.request + library headers + request-id', fn: nodePost, id: true,
+    why: 'EXACTLY what lib/playhq.js sends, by the same client' },
+  { name: 'C  https.request + library headers, NO request-id', fn: nodePost, id: false,
+    why: 'B vs C isolates the request-id header' },
+  { name: 'D  fetch + library headers + request-id', fn: fetchPost, id: true,
+    why: 'A vs D isolates request-id the other way round' },
+];
+
+async function transport(t) {
+  const h = LIB_HEADERS();
+  if (t.id) h['request-id'] = crypto.randomUUID();
+  const started = Date.now();
+  const res = await t.fn(h, REAL_TENANT_QUERY);
+  const ms = Date.now() - started;
+
+  log(`\n── ${t.name} ──`);
+  log(`   ${t.why}`);
+  if (res.err) { log(`   ⚠️ threw: ${res.err} (${ms} ms)`); return { t, cookies: 0, blocked: null }; }
+  const isHtml = /^\s*<|DOCTYPE/i.test(res.text) || /Request blocked/i.test(res.text);
+  const blocked = res.status === 403 && isHtml;
+  const names = res.setCookie.map(c => String(c).split('=')[0].trim());
+  const got = ['phq_tier', 'phq_session', 'phq_sub'].filter(n => names.includes(n));
+  log(`   HTTP ${res.status}  (${ms} ms)  http/${res.httpVersion}`);
+  log(`   cookies: ${got.length ? got.join(', ') : 'NONE'}${got.length === 3 ? '  ← a session would succeed' : ''}`);
+  log(`   body[0..160]: ${res.text.replace(/\s+/g, ' ').trim().slice(0, 160) || '(empty)'}`);
+  log(`   ⇒ ${blocked ? 'WAF BLOCK (403 + HTML)' : res.status === 200 ? 'ANSWERED' : `status ${res.status}`}`);
+  return { t, cookies: got.length, blocked, status: res.status };
+}
 
 async function variant(v) {
   const started = Date.now();
@@ -260,6 +354,35 @@ async function one(t) {
   } else {
     log('\n  ⇒ No single header explains it. Read the table above before changing');
     log('    anything — the cause is not what was assumed.');
+  }
+  // ── Part 3: transport and request-id ───────────────────────────────────────
+  log('\n\n═══ TRANSPORT — the two things v2 never controlled ═══');
+  const tout = [];
+  for (const t of TRANSPORTS) {
+    tout.push(await transport(t));
+    await new Promise(r => setTimeout(r, 3000));
+  }
+
+  log('\n═══ WHAT ACTUALLY DIFFERS ═══');
+  for (const o of tout) {
+    log(`  ${o.cookies === 3 ? 'SESSION OK ' : o.blocked ? 'BLOCKED    ' : 'no cookies '} ${o.t.name}`);
+  }
+  const [A, B, C, D] = tout;
+  const ok = (o) => o && o.cookies === 3;
+  if (ok(A) && B && B.blocked && C && C.blocked) {
+    log('\n  ⇒ THE HTTP CLIENT IS THE FAULT. Both https.request variants are blocked');
+    log('    and fetch is not, with request-id making no difference. Swapping the');
+    log('    transport in lib/playhq.js is the fix, and nothing else needs to change.');
+  } else if (ok(A) && ok(C) && B && B.blocked) {
+    log('\n  ⇒ THE request-id HEADER IS THE FAULT. The same client answers without it');
+    log('    and is blocked with it. Remove it from headers() in lib/playhq.js.');
+  } else if (ok(A) && ok(B)) {
+    log('\n  ⇒ EVERYTHING ANSWERS, INCLUDING THE REAL THING. The block is intermittent');
+    log('    and nothing here reproduces it. Do NOT change the transport on this');
+    log('    evidence — run the walk again and compare the two logs by timestamp.');
+  } else {
+    log('\n  ⇒ No single variable explains it. Read the four rows before changing');
+    log('    anything; the cause is not either of the two tested here.');
   }
   log('\n⚠️ One probe is one moment. A block that lifts and returns needs this run');
   log('   twice, hours apart, before anything is concluded from it.');
