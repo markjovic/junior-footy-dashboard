@@ -14,14 +14,24 @@
       ],
       "seasons": [
         {
+          "id": "1c5d3dfb",
+          "name": "2027",
+          "competitionId": "23965e53",
+          "competitionName": "Eastern Football Netball League",
+          "startDate": "2026-11-01",
+          "endDate": "2027-09-19",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
           "id": "2dcbf383",
           "name": "2026",
           "competitionId": "23965e53",
           "competitionName": "Eastern Football Netball League",
           "startDate": "2025-10-01",
           "endDate": "2026-09-30",
-          "status": "ACTIVE",
-          "retired": false
+          "status": "COMPLETED",
+          "retired": true
         },
         {
           "id": "75d8a232",
@@ -63,6 +73,16 @@
       ],
       "seasons": [
         {
+          "id": "f4ffa58d",
+          "name": "2027",
+          "competitionId": "0edb85d5",
+          "competitionName": "South East Juniors",
+          "startDate": "2026-11-01",
+          "endDate": "2027-09-01",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
           "id": "4dfaaab5",
           "name": "2026",
           "competitionId": "0edb85d5",
@@ -70,7 +90,7 @@
           "startDate": "2025-11-01",
           "endDate": "2026-09-01",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "48ad3050",
@@ -139,7 +159,7 @@
           "startDate": "2026-01-01",
           "endDate": "2026-09-01",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "8c46e153",
@@ -178,7 +198,7 @@
           "startDate": "2026-04-01",
           "endDate": "2026-09-21",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "5488f6a0",
@@ -220,6 +240,16 @@
       ],
       "seasons": [
         {
+          "id": "2ededd90",
+          "name": "2027",
+          "competitionId": "a0abf2bc",
+          "competitionName": "Yarra Junior Football League (YJFL)",
+          "startDate": "2027-04-18",
+          "endDate": "2027-09-05",
+          "status": "UPCOMING",
+          "retired": false
+        },
+        {
           "id": "cda2f0ec",
           "name": "2026",
           "competitionId": "a0abf2bc",
@@ -227,7 +257,7 @@
           "startDate": "2026-04-19",
           "endDate": "2026-09-07",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "fbe5e275",
@@ -289,13 +319,23 @@
       ],
       "seasons": [
         {
+          "id": "b0819752",
+          "name": "2027",
+          "competitionId": "a9dec88a",
+          "competitionName": "AFL Barwon FNL",
+          "startDate": "2026-11-01",
+          "endDate": "2027-10-30",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
           "id": "cfa23107",
           "name": "2026",
           "competitionId": "a9dec88a",
           "competitionName": "AFL Barwon FNL",
           "startDate": "2025-11-01",
           "endDate": "2026-10-31",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -365,7 +405,7 @@
           "startDate": "2026-04-24",
           "endDate": "2026-09-13",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "2e54bb6b",
@@ -434,7 +474,7 @@
           "startDate": "2026-04-02",
           "endDate": "2026-09-20",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "6c1ae29c",
@@ -476,6 +516,16 @@
       ],
       "seasons": [
         {
+          "id": "96516ac1",
+          "name": "2027",
+          "competitionId": "effc6355",
+          "competitionName": "Frankston and District Junior Football League",
+          "startDate": "2026-11-01",
+          "endDate": "2027-09-01",
+          "status": "ACTIVE",
+          "retired": false
+        },
+        {
           "id": "d383fabb",
           "name": "2026",
           "competitionId": "effc6355",
@@ -483,7 +533,7 @@
           "startDate": "2025-11-01",
           "endDate": "2026-09-01",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "775ca111",
@@ -503,32 +553,56 @@
     },
     "5b77d8cc": {
       "code": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
       "type": "ASSOCIATION",
       "state": "VIC",
       "suburb": "Kialla",
       "competitions": [
         {
           "id": "3bcc10ae",
-          "name": "Shepparton Toyota Goulburn Murray Juniors"
+          "name": "Goulburn Murray League - Juniors"
+        },
+        {
+          "id": "13bea51e",
+          "name": "Goulburn Murray League - Women & Girls"
         }
       ],
       "seasons": [
         {
+          "id": "41d60160",
+          "name": "2027",
+          "competitionId": "3bcc10ae",
+          "competitionName": "Goulburn Murray League - Juniors",
+          "startDate": "2027-03-28",
+          "endDate": "2027-09-30",
+          "status": "UPCOMING",
+          "retired": false
+        },
+        {
+          "id": "0ced69a8",
+          "name": "2027",
+          "competitionId": "13bea51e",
+          "competitionName": "Goulburn Murray League - Women & Girls",
+          "startDate": "2027-03-01",
+          "endDate": "2027-09-30",
+          "status": "UPCOMING",
+          "retired": false
+        },
+        {
           "id": "5e1a8f79",
           "name": "2026",
           "competitionId": "3bcc10ae",
-          "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
+          "competitionName": "Goulburn Murray League - Juniors",
           "startDate": "2026-04-01",
           "endDate": "2026-09-13",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "a129f3db",
           "name": "2025",
           "competitionId": "3bcc10ae",
-          "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
+          "competitionName": "Goulburn Murray League - Juniors",
           "startDate": "2024-10-01",
           "endDate": "2025-09-08",
           "status": "COMPLETED",
@@ -538,7 +612,7 @@
           "id": "cfd5edd6",
           "name": "2024",
           "competitionId": "3bcc10ae",
-          "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
+          "competitionName": "Goulburn Murray League - Juniors",
           "startDate": "2024-04-13",
           "endDate": "2024-09-25",
           "status": "COMPLETED",
@@ -548,7 +622,7 @@
           "id": "e4525589",
           "name": "2023",
           "competitionId": "3bcc10ae",
-          "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
+          "competitionName": "Goulburn Murray League - Juniors",
           "startDate": "2022-11-01",
           "endDate": "2023-10-31",
           "status": "COMPLETED",
@@ -558,14 +632,14 @@
           "id": "9b435412",
           "name": "2022",
           "competitionId": "3bcc10ae",
-          "competitionName": "Shepparton Toyota Goulburn Murray Juniors",
+          "competitionName": "Goulburn Murray League - Juniors",
           "startDate": "2022-02-28",
           "endDate": "2022-10-31",
           "status": "COMPLETED",
           "retired": true
         }
       ],
-      "name": "Goulburn Murray Juniors",
+      "name": "Goulburn Murray League",
       "vip": false,
       "excludeGrades": [],
       "migrated": false
@@ -590,8 +664,8 @@
           "competitionName": "Mornington Peninsula Football Netball League",
           "startDate": "2026-03-01",
           "endDate": "2026-09-30",
-          "status": "ACTIVE",
-          "retired": false
+          "status": "COMPLETED",
+          "retired": true
         },
         {
           "id": "0a2693db",
@@ -660,7 +734,7 @@
           "startDate": "2026-03-30",
           "endDate": "2026-09-20",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "fde9f6d9",
@@ -707,8 +781,8 @@
           "competitionId": "ad745851",
           "competitionName": "Outer East Football Netball - Senior Football",
           "startDate": "2025-11-01",
-          "endDate": "2026-09-30",
-          "status": "ACTIVE",
+          "endDate": "2026-10-31",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -775,13 +849,23 @@
       ],
       "seasons": [
         {
+          "id": "be2dff14",
+          "name": "2027",
+          "competitionId": "64b5d12c",
+          "competitionName": "Riddell District Football Netball League (RDFNL)",
+          "startDate": "2027-04-01",
+          "endDate": "2027-09-18",
+          "status": "UPCOMING",
+          "retired": false
+        },
+        {
           "id": "15e87e9a",
           "name": "2026",
           "competitionId": "64b5d12c",
           "competitionName": "Riddell District Football Netball League (RDFNL)",
           "startDate": "2025-11-01",
           "endDate": "2026-10-31",
-          "status": "ACTIVE",
+          "status": "COMPLETED",
           "retired": false
         },
         {
@@ -828,6 +912,16 @@
       ],
       "seasons": [
         {
+          "id": "8f2833de",
+          "name": "2027",
+          "competitionId": "e8746f4c",
+          "competitionName": "South Metro Junior Football League (SMJFL)",
+          "startDate": "2027-04-18",
+          "endDate": "2027-09-05",
+          "status": "UPCOMING",
+          "retired": false
+        },
+        {
           "id": "89f4f7fe",
           "name": "2026",
           "competitionId": "e8746f4c",
@@ -835,7 +929,7 @@
           "startDate": "2026-04-17",
           "endDate": "2026-09-06",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "47a22c06",
@@ -844,16 +938,6 @@
           "competitionName": "South Metro Junior Football League (SMJFL)",
           "startDate": "2025-04-27",
           "endDate": "2025-09-14",
-          "status": "COMPLETED",
-          "retired": true
-        },
-        {
-          "id": "2a996ae1",
-          "name": "2024",
-          "competitionId": "9b17453b",
-          "competitionName": "SMJFL & YJFL Youth Girls Competition",
-          "startDate": "2024-06-16",
-          "endDate": "2024-09-08",
           "status": "COMPLETED",
           "retired": true
         },
@@ -904,7 +988,7 @@
           "startDate": "2026-04-02",
           "endDate": "2026-09-20",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "d927d910",
@@ -953,7 +1037,7 @@
           "startDate": "2026-04-01",
           "endDate": "2026-09-25",
           "status": "COMPLETED",
-          "retired": false
+          "retired": true
         },
         {
           "id": "eb054883",
@@ -993,8 +1077,8 @@
       "status": "COMPLETED",
       "startDate": "2026-01-01",
       "endDate": "2026-09-01",
-      "retired": false,
-      "file": "data/orgs/0f20da4f-current.json",
+      "retired": true,
+      "file": "data/orgs/0f20da4f-archive.json",
       "phases": {
         "results": true,
         "players": true,
@@ -1035,8 +1119,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-25",
-      "retired": false,
-      "file": "data/orgs/1cd834de-current.json",
+      "retired": true,
+      "file": "data/orgs/1cd834de-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -1085,6 +1169,25 @@
     {
       "org": "1cf85e52",
       "orgName": "South East Juniors",
+      "seasonId": "f4ffa58d",
+      "seasonName": "2027",
+      "compName": "SEJ 2027",
+      "competitionId": "0edb85d5",
+      "status": "ACTIVE",
+      "startDate": "2026-11-01",
+      "endDate": "2027-09-01",
+      "retired": false,
+      "file": "data/orgs/1cf85e52-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "active",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "1cf85e52",
+      "orgName": "South East Juniors",
       "seasonId": "4dfaaab5",
       "seasonName": "2026",
       "compName": "SEJ 2026",
@@ -1092,8 +1195,8 @@
       "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-09-01",
-      "retired": false,
-      "file": "data/orgs/1cf85e52-current.json",
+      "retired": true,
+      "file": "data/orgs/1cf85e52-archive.json",
       "phases": {
         "results": true,
         "players": true,
@@ -1190,6 +1293,25 @@
     {
       "org": "2377ec77",
       "orgName": "Frankston and District Junior Football League",
+      "seasonId": "96516ac1",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "effc6355",
+      "status": "ACTIVE",
+      "startDate": "2026-11-01",
+      "endDate": "2027-09-01",
+      "retired": false,
+      "file": "data/orgs/2377ec77-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "active",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "2377ec77",
+      "orgName": "Frankston and District Junior Football League",
       "seasonId": "d383fabb",
       "seasonName": "2026",
       "compName": null,
@@ -1197,8 +1319,8 @@
       "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-09-01",
-      "retired": false,
-      "file": "data/orgs/2377ec77-current.json",
+      "retired": true,
+      "file": "data/orgs/2377ec77-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -1228,11 +1350,30 @@
     {
       "org": "2e137b81",
       "orgName": "AFL Barwon FNL",
+      "seasonId": "b0819752",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "a9dec88a",
+      "status": "ACTIVE",
+      "startDate": "2026-11-01",
+      "endDate": "2027-10-30",
+      "retired": false,
+      "file": "data/orgs/2e137b81-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "active",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "2e137b81",
+      "orgName": "AFL Barwon FNL",
       "seasonId": "cfa23107",
       "seasonName": "2026",
       "compName": null,
       "competitionId": "a9dec88a",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-10-31",
       "retired": false,
@@ -1241,8 +1382,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-11-18T10:24:54.195Z"
     },
     {
       "org": "2e137b81",
@@ -1330,8 +1471,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-24",
       "endDate": "2026-09-13",
-      "retired": false,
-      "file": "data/orgs/3686b395-current.json",
+      "retired": true,
+      "file": "data/orgs/3686b395-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -1418,23 +1559,42 @@
     {
       "org": "383836bb",
       "orgName": "Eastern Football Netball League",
+      "seasonId": "1c5d3dfb",
+      "seasonName": "2027",
+      "compName": "EFNL 2027",
+      "competitionId": "23965e53",
+      "status": "ACTIVE",
+      "startDate": "2026-11-01",
+      "endDate": "2027-09-19",
+      "retired": false,
+      "file": "data/orgs/383836bb-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "active",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "383836bb",
+      "orgName": "Eastern Football Netball League",
       "seasonId": "2dcbf383",
       "seasonName": "2026",
       "compName": "EFNL 2026",
       "competitionId": "23965e53",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-10-01",
       "endDate": "2026-09-30",
-      "retired": false,
-      "file": "data/orgs/383836bb-current.json",
+      "retired": true,
+      "file": "data/orgs/383836bb-archive.json",
       "phases": {
         "results": true,
         "players": true,
         "matches": 5498,
         "players_n": 16799
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-11-18T10:24:54.195Z"
     },
     {
       "org": "383836bb",
@@ -1488,8 +1648,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-02",
       "endDate": "2026-09-20",
-      "retired": false,
-      "file": "data/orgs/3f7be677-current.json",
+      "retired": true,
+      "file": "data/orgs/3f7be677-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -1545,8 +1705,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-21",
-      "retired": false,
-      "file": "data/orgs/4c8b472e-current.json",
+      "retired": true,
+      "file": "data/orgs/4c8b472e-archive.json",
       "phases": {
         "results": true,
         "players": true,
@@ -1601,6 +1761,25 @@
     {
       "org": "4f9a099e",
       "orgName": "Yarra Junior Football League (YJFL)",
+      "seasonId": "2ededd90",
+      "seasonName": "2027",
+      "compName": "YJFL 2027",
+      "competitionId": "a0abf2bc",
+      "status": "UPCOMING",
+      "startDate": "2027-04-18",
+      "endDate": "2027-09-05",
+      "retired": false,
+      "file": "data/orgs/4f9a099e-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "upcoming",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "4f9a099e",
+      "orgName": "Yarra Junior Football League (YJFL)",
       "seasonId": "cda2f0ec",
       "seasonName": "2026",
       "compName": "YJFL 2026",
@@ -1608,8 +1787,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-19",
       "endDate": "2026-09-07",
-      "retired": false,
-      "file": "data/orgs/4f9a099e-current.json",
+      "retired": true,
+      "file": "data/orgs/4f9a099e-archive.json",
       "phases": {
         "results": true,
         "players": true,
@@ -1705,7 +1884,45 @@
     },
     {
       "org": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
+      "seasonId": "41d60160",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "3bcc10ae",
+      "status": "UPCOMING",
+      "startDate": "2027-03-28",
+      "endDate": "2027-09-30",
+      "retired": false,
+      "file": "data/orgs/5b77d8cc-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "upcoming",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "5b77d8cc",
+      "orgName": "Goulburn Murray League",
+      "seasonId": "0ced69a8",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "13bea51e",
+      "status": "UPCOMING",
+      "startDate": "2027-03-01",
+      "endDate": "2027-09-30",
+      "retired": false,
+      "file": "data/orgs/5b77d8cc-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "upcoming",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "5b77d8cc",
+      "orgName": "Goulburn Murray League",
       "seasonId": "5e1a8f79",
       "seasonName": "2026",
       "compName": null,
@@ -1713,8 +1930,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-01",
       "endDate": "2026-09-13",
-      "retired": false,
-      "file": "data/orgs/5b77d8cc-current.json",
+      "retired": true,
+      "file": "data/orgs/5b77d8cc-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -1724,7 +1941,7 @@
     },
     {
       "org": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
       "seasonId": "a129f3db",
       "seasonName": "2025",
       "compName": null,
@@ -1743,7 +1960,7 @@
     },
     {
       "org": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
       "seasonId": "cfd5edd6",
       "seasonName": "2024",
       "compName": null,
@@ -1762,7 +1979,7 @@
     },
     {
       "org": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
       "seasonId": "e4525589",
       "seasonName": "2023",
       "compName": null,
@@ -1781,7 +1998,7 @@
     },
     {
       "org": "5b77d8cc",
-      "orgName": "Goulburn Murray Juniors",
+      "orgName": "Goulburn Murray League",
       "seasonId": "9b435412",
       "seasonName": "2022",
       "compName": null,
@@ -1805,17 +2022,17 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "ad745851",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-11-01",
-      "endDate": "2026-09-30",
+      "endDate": "2026-10-31",
       "retired": false,
       "file": "data/orgs/6ad68fba-current.json",
       "phases": {
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-11-18T10:24:54.195Z"
     },
     {
       "org": "6ad68fba",
@@ -1900,17 +2117,17 @@
       "seasonName": "2026",
       "compName": null,
       "competitionId": "0fdbdd33",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2026-03-01",
       "endDate": "2026-09-30",
-      "retired": false,
-      "file": "data/orgs/768f3833-current.json",
+      "retired": true,
+      "file": "data/orgs/768f3833-archive.json",
       "phases": {
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-11-18T10:24:54.195Z"
     },
     {
       "org": "768f3833",
@@ -1991,6 +2208,25 @@
     {
       "org": "803dd171",
       "orgName": "South Metro Junior Football League (SMJFL)",
+      "seasonId": "8f2833de",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "e8746f4c",
+      "status": "UPCOMING",
+      "startDate": "2027-04-18",
+      "endDate": "2027-09-05",
+      "retired": false,
+      "file": "data/orgs/803dd171-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "upcoming",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "803dd171",
+      "orgName": "South Metro Junior Football League (SMJFL)",
       "seasonId": "89f4f7fe",
       "seasonName": "2026",
       "compName": null,
@@ -1998,8 +2234,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-17",
       "endDate": "2026-09-06",
-      "retired": false,
-      "file": "data/orgs/803dd171-current.json",
+      "retired": true,
+      "file": "data/orgs/803dd171-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -2017,25 +2253,6 @@
       "status": "COMPLETED",
       "startDate": "2025-04-27",
       "endDate": "2025-09-14",
-      "retired": true,
-      "file": "data/orgs/803dd171-archive.json",
-      "phases": {
-        "results": false,
-        "players": false
-      },
-      "state": "complete",
-      "stateAt": "2026-09-07T01:00:36.140Z"
-    },
-    {
-      "org": "803dd171",
-      "orgName": "South Metro Junior Football League (SMJFL)",
-      "seasonId": "2a996ae1",
-      "seasonName": "2024",
-      "compName": null,
-      "competitionId": "9b17453b",
-      "status": "COMPLETED",
-      "startDate": "2024-06-16",
-      "endDate": "2024-09-08",
       "retired": true,
       "file": "data/orgs/803dd171-archive.json",
       "phases": {
@@ -2093,8 +2310,8 @@
       "status": "COMPLETED",
       "startDate": "2026-04-02",
       "endDate": "2026-09-20",
-      "retired": false,
-      "file": "data/orgs/8162176f-current.json",
+      "retired": true,
+      "file": "data/orgs/8162176f-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -2150,8 +2367,8 @@
       "status": "COMPLETED",
       "startDate": "2026-03-30",
       "endDate": "2026-09-20",
-      "retired": false,
-      "file": "data/orgs/862f96f9-current.json",
+      "retired": true,
+      "file": "data/orgs/862f96f9-archive.json",
       "phases": {
         "results": false,
         "players": false
@@ -2200,11 +2417,30 @@
     {
       "org": "94ebee61",
       "orgName": "Riddell District Football Netball League (RDFNL)",
+      "seasonId": "be2dff14",
+      "seasonName": "2027",
+      "compName": null,
+      "competitionId": "64b5d12c",
+      "status": "UPCOMING",
+      "startDate": "2027-04-01",
+      "endDate": "2027-09-18",
+      "retired": false,
+      "file": "data/orgs/94ebee61-current.json",
+      "phases": {
+        "results": false,
+        "players": false
+      },
+      "state": "upcoming",
+      "stateAt": "2026-11-18T10:24:54.195Z"
+    },
+    {
+      "org": "94ebee61",
+      "orgName": "Riddell District Football Netball League (RDFNL)",
       "seasonId": "15e87e9a",
       "seasonName": "2026",
       "compName": null,
       "competitionId": "64b5d12c",
-      "status": "ACTIVE",
+      "status": "COMPLETED",
       "startDate": "2025-11-01",
       "endDate": "2026-10-31",
       "retired": false,
@@ -2213,8 +2449,8 @@
         "results": false,
         "players": false
       },
-      "state": "active",
-      "stateAt": "2026-09-07T01:00:36.140Z"
+      "state": "complete",
+      "stateAt": "2026-11-18T10:24:54.195Z"
     },
     {
       "org": "94ebee61",
@@ -2255,7 +2491,7 @@
       "stateAt": "2026-09-07T01:00:36.140Z"
     }
   ],
-  "lastSeasonDiscovery": "2026-09-26T21:24:26.548Z",
+  "lastSeasonDiscovery": "2026-11-18T10:25:12.716Z",
   "clubs": {
     "34253694": {
       "name": "Mooroolbark (Eastern Football Netball League)",
