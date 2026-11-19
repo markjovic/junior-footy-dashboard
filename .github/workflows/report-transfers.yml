@@ -1,0 +1,69 @@
+# .github/workflows/report-transfers.yml
+#
+# Who has registered with a DIFFERENT club for next season?
+#
+# ⚠️ READ-ONLY. No PlayHQ call, no session, nothing committed. It reads
+# data/registrations.json.gz and data/core.json and uploads one CSV as an
+# artifact. Seconds to run.
+#
+# ⚠️ A CLUB IS KNOWN LONG BEFORE A TEAM IS. A pre-season registration carries the
+# organisation from the day a child signs up, months before teams are picked — so
+# a transfer is visible now even though next season's teams do not exist.
+#
+# ⚠️ IT IS A FLOOR UNTIL THE WALK CATCHES UP. walk-registrations covers about
+# 5,770 of 40,382 people a day, and a player it has not reached is not "staying"
+# — nothing is known about them. The report says how many that is every time.
+
+name: Report transfers
+
+on:
+  workflow_dispatch:
+    inputs:
+      club:
+        description: 'club — limit to one club, by name or organisation id. Blank = every club.'
+        required: false
+        default: ''
+        type: string
+      limit:
+        description: 'limit — rows printed per section in the log. The CSV always has them all.'
+        required: false
+        default: '40'
+        type: string
+
+permissions:
+  contents: read
+
+# NOTE: no concurrency group. It makes no PlayHQ call and writes nothing to the
+# repo, so there is nothing to serialise it against.
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      # NOTE: no actions/setup-node. The runner ships Node.
+      - name: Report
+        env:
+          RT_CLUB: ${{ inputs.club }}
+          RT_LIMIT: ${{ inputs.limit }}
+        run: |
+          if [ ! -f scripts/report-transfers.js ]; then
+            echo "scripts/report-transfers.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/report-transfers.js
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transfers-${{ github.run_number }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
