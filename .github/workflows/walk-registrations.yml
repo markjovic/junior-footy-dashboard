@@ -2,10 +2,8 @@
 name: Walk registrations
 
 # Daily slice of the registrations walk — registrations_design.md v2. Writes
-# data/registrations.json.gz (gzip only, decided 2026-09-07) and, from 2026-09-13,
-# a `refetch` flag on career files under players/ — see C2 in OUTSTANDING_TASKS.md.
-# About a seventh of the cohort per run at 100 calls per 80 s: 5–6k calls, roughly
-# 75 minutes.
+# data/registrations.json.gz and nothing else (gzip only, decided 2026-09-07). About a seventh of the cohort per
+# run at 100 calls per 80 s: 5–6k calls, roughly 75 minutes.
 #
 # Runs in the OFF-SEASON only: the season gate inverted. When every tracked season
 # is active there is nothing to learn about next season, and the run skips.
@@ -22,6 +20,18 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      # ⚠️ BOTH OF THESE EXIST TO CLEAR A BACKLOG, NOT FOR DAILY USE. Leave them
+      # blank and the run behaves exactly as the schedule does.
+      daily_fraction:
+        description: 'daily_fraction — 7 is one seventh of the cohort (the default). 1 makes the WHOLE cohort due in one run.'
+        required: false
+        default: ''
+        type: string
+      time_budget_min:
+        description: 'time_budget_min — wall clock before it stops and commits. Default 100. At 75 calls/min, 170 min is about 12,750 players.'
+        required: false
+        default: ''
+        type: string
   schedule:
     # 19:30 UTC = 05:30 AEST, an hour after discovery (18:30 UTC) so the manifest
     # it reads is that morning's. Both hold the data-write group, so if discovery
@@ -42,7 +52,11 @@ jobs:
   walk:
     name: Walk one slice of the cohort
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # ⚠️ 360 IS GITHUB'S CEILING, NOT A TARGET. The SCRIPT stops itself at
+    # WALK_TIME_BUDGET_MS and commits what it has; this only stops a hung run
+    # sitting there. Raised from 150 so a backlog run with a 300-minute budget is
+    # not killed mid-walk — which would discard everything since the last push.
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,6 +91,11 @@ jobs:
       - name: Walk
         id: walk
         if: steps.gate.outputs.run == 'true'
+        env:
+          # Blank means "use the script's default", so the scheduled run is
+          # untouched by these existing at all.
+          WALK_DAILY_FRACTION: ${{ github.event.inputs.daily_fraction }}
+          WALK_TIME_BUDGET_MS: ${{ github.event.inputs.time_budget_min && format('{0}', fromJSON(github.event.inputs.time_budget_min) * 60000) || '' }}
         run: |
           set +e
           node --version
@@ -94,20 +113,9 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # -A so the one-off removal of the plain registrations.json is staged too.
-          #
-          # ⚠️ `players/` IS STAGED FROM 2026-09-13. The walk now sets `refetch` on
-          # a career file when it sees a season of ours that file has never had
-          # (C2). Those writes land OUTSIDE data/, so staging only the
-          # registrations paths would have written every flag and committed none of
-          # them — a silent no-op, and the worst possible outcome for a change
-          # whose whole job is to leave a marker for another script.
-          git add -A data/registrations.json.gz data/registrations.json players/ 2>/dev/null || git add -A data/ players/
+          # -A so the one-off removal of the plain registrations.json is staged
+          # too. Nothing else under data/ changes in this checkout.
+          git add -A data/registrations.json.gz data/registrations.json 2>/dev/null || git add -A data/
           git diff --staged --quiet || git commit -m "registrations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
-          # ⚠️ `-X theirs` DISCARDS THIS RUN'S COMMIT ON A CONFLICT, without
-          # failing. It was safe while this job owned the only file it wrote;
-          # players/ is shared with fetch-career-stats.js, which holds the same
-          # concurrency group, so an overlap should not happen — but if flags ever
-          # go missing after a clean run, this line is where to look first.
           git pull --rebase -X theirs
           git push
