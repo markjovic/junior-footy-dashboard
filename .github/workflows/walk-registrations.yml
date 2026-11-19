@@ -95,9 +95,18 @@ jobs:
           # Blank means "use the script's default", so the scheduled run is
           # untouched by these existing at all.
           WALK_DAILY_FRACTION: ${{ github.event.inputs.daily_fraction }}
-          WALK_TIME_BUDGET_MS: ${{ github.event.inputs.time_budget_min && format('{0}', fromJSON(github.event.inputs.time_budget_min) * 60000) || '' }}
+          # ⚠️ MINUTES HERE, MILLISECONDS IN THE SHELL. GitHub Actions expressions
+          # have NO arithmetic operators — `* 60000` in a ${{ }} is a syntax error
+          # the editor rejects outright. The conversion belongs in bash.
+          BUDGET_MIN: ${{ github.event.inputs.time_budget_min }}
         run: |
           set +e
+          # Only export it when a value was given, so an empty input leaves the
+          # script on its own 100-minute default rather than seeing 0.
+          if [ -n "$BUDGET_MIN" ]; then
+            export WALK_TIME_BUDGET_MS=$(( BUDGET_MIN * 60000 ))
+            echo "time budget: ${BUDGET_MIN} min (${WALK_TIME_BUDGET_MS} ms)"
+          fi
           node --version
           node scripts/walk-registrations.js
           code=$?
