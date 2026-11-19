@@ -122,9 +122,26 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # -A so the one-off removal of the plain registrations.json is staged
-          # too. Nothing else under data/ changes in this checkout.
-          git add -A data/registrations.json.gz data/registrations.json 2>/dev/null || git add -A data/
+          # -A so the one-off removal of the plain registrations.json is staged too.
+          #
+          # ⚠️ `players/` IS STAGED HERE, AND LEAVING IT OUT COSTS A WHOLE RUN. The
+          # walk sets `refetch` on a career file when it sees a season of ours that
+          # file has never held (C2), and those writes land OUTSIDE data/. On
+          # 2026-11-19 run #81 wrote 1,313 of them, staged none, and `git pull
+          # --rebase` then refused — "cannot pull with rebase: You have unstaged
+          # changes" — so a four-hour walk of 18,744 players was committed locally
+          # and never pushed.
+          git add -A data/registrations.json.gz data/registrations.json players/ 2>/dev/null || git add -A data/ players/
+
+          # ⚠️ NOTHING MAY BE LEFT UNSTAGED BEFORE THE REBASE. A rebase needs a
+          # clean tree, and anything this job wrote but did not stage stops the
+          # push dead. Catch whatever is left rather than discovering it in a log.
+          if ! git diff --quiet; then
+            echo "Unstaged changes remain after staging — adding them so the rebase can run:"
+            git diff --name-only | sed 's/^/    /'
+            git add -A
+          fi
+
           git diff --staged --quiet || git commit -m "registrations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
