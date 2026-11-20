@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 // scripts/probe-team-roster.js
+
+// ⚠️ THE VERSION GOES AT THE TOP, where it is visible without scrolling past a
+// comment block. It sat at line 53 and a v4 log was read as a v5 run twice.
+const VERSION = 'probe-team-roster v6 2026-11-20 introspection-then-stop-guessing';
+
 //
 // Can discoverTeams tell us WHO is in a 2027 team? READ-ONLY, writes nothing,
 // and makes a couple of dozen calls at most.
@@ -50,7 +55,6 @@ const path = require('path');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-team-roster v5 2026-11-20 the-club-is-on-the-search-result';
 const ROOT = path.resolve(__dirname, '..');
 const log = (...a) => console.log(...a);
 
@@ -193,6 +197,25 @@ async function main() {
   const profile = (process.env.PR_PROFILE || '').trim();
   const fullName = (process.env.PR_NAME || '').trim();
 
+  // ── 0. ASK THE SCHEMA, RATHER THAN GUESSING AT IT ─────────────────────────
+  // ⚠️ ELEVEN REJECTIONS IN A ROW IS A SIGNAL, NOT BAD LUCK. If introspection is
+  // open, ONE call lists every field on a type and every guess after that is
+  // wasted. This should have been the first thing tried, not the thirtieth.
+  log('\n── 0. introspection ──');
+  for (const t of ['DiscoverProfile', 'DiscoverTeam', 'PublicProfileStatistics', 'Query']) {
+    const r = await tryQuery(`__type(${t})`,
+      `query Probe($n: String!) { __type(name: $n) { name fields { name type { name kind ofType { name } } } } }`,
+      { n: t });
+    if (r.ok && r.data && r.data.__type && r.data.__type.fields) {
+      const fields = r.data.__type.fields;
+      log(`    ${t}: ${fields.length} field(s)`);
+      for (const f of fields) {
+        const ty = (f.type && (f.type.name || (f.type.ofType && f.type.ofType.name))) || f.type.kind;
+        log(`      ${f.name}  :  ${ty}`);
+      }
+    }
+  }
+
   if (fullName) {
     log(`\n── 4a. profileSearch("${fullName}") ──`);
     // ⚠️ THE CLUB IS ON THE SEARCH RESULT. The PlayAFL app's own Search Players
@@ -203,7 +226,15 @@ async function main() {
     // only, throwing away the one field that answers the question.
     //
     // These ask DiscoverProfile what else it holds, one field at a time.
-    for (const f of ['organisation { id name }', 'club { id name }', 'team { id name }',
+    // ⚠️ `lastInteractedOrganisation` IS THE LEAD WORTH TESTING. The app's search
+    // row shows "South Croydon (Eastern Football Netball League)" — his NEW club —
+    // under a name whose publicProfileTeams holds only Norwood. If that field
+    // updates on REGISTRATION rather than on playing a game, it is an earlier
+    // signal of a club change than anything else available, and nobody has
+    // checked. It needs a NAME rather than an id, so it is a spot-check, not a
+    // sweep over 40,382 people.
+    for (const f of ['lastInteractedOrganisation { id name }', 'lastInteractedOrganisation',
+      'organisation { id name }', 'club { id name }', 'team { id name }',
       'season { id name }', 'competition { id name }', 'tenant { id name }',
       'organisationName', 'clubName', 'teamName', 'subtitle', 'description']) {
       await tryQuery(`profileSearch result { ${f} }`,
