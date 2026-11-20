@@ -23,6 +23,16 @@ on:
         required: false
         default: ''
         type: string
+      profile:
+        description: 'profile — a player uuid. Probes which profile-side operations return anything for them.'
+        required: false
+        default: ''
+        type: string
+      name:
+        description: 'name — a full name to put through profileSearch, the operation the app itself uses.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: playhq-data-write
@@ -45,6 +55,8 @@ jobs:
         env:
           PR_SEASON: ${{ github.event.inputs.season }}
           PR_TEAM: ${{ github.event.inputs.team }}
+          PR_PROFILE: ${{ github.event.inputs.profile }}
+          PR_NAME: ${{ github.event.inputs.name }}
         run: |
           if [ ! -f scripts/probe-team-roster.js ]; then
             echo "scripts/probe-team-roster.js is not in this checkout — commit it first."
