@@ -1,0 +1,98 @@
+# .github/workflows/build-organisations.yml
+#
+# data/organisations.json — what each football organisation runs, and whether it
+# is a LEAGUE or an EVENT BODY.
+#
+# ⚠️ REFERENCE DATA, FETCHED ONCE. A season's dates are the same for everybody in
+# it, so they do not belong on a per-player call. This builds the repository and
+# tops it up when an organisation nobody has seen before turns up.
+#
+# ⚠️ IT TOPS UP, IT DOES NOT REBUILD. A normal run fetches only what is new or
+# older than 90 days — usually a handful. The first run is a few hundred calls.
+# force=true refetches everything and should be rare.
+
+name: Build organisations
+
+on:
+  schedule:
+    # 22:30 UTC = 08:30 AEST, an hour after the transfers build, so any
+    # organisation that appeared in last night's walk is picked up the same
+    # morning. All these jobs hold the data-write group, so a late start queues
+    # rather than overlapping.
+    - cron: '30 22 * * *'
+
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'force — refetch every organisation, not just new and stale ones. Rare.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      dry_run:
+        description: 'dry_run — print what would change and write nothing.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      limit:
+        description: 'limit — most organisations to fetch in one run. Default 400.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        # ⚠️ ref IS LOAD-BEARING. Without it the commit lands on a detached head
+        # and the push is silently discarded.
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Build
+        env:
+          BO_FORCE: ${{ github.event.inputs.force }}
+          BO_DRY: ${{ github.event.inputs.dry_run }}
+          BO_LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          if [ ! -f scripts/build-organisations.js ]; then
+            echo "scripts/build-organisations.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/build-organisations.js
+
+      # ⚠️ `!= 'true'` NOT `== 'false'`. On a SCHEDULED run the input is absent and
+      # compares as an empty string: `!= 'true'` is true and the commit runs,
+      # which is what a cron job must do. `== 'false'` would be false every
+      # morning and the file would never once be committed.
+      - name: Commit
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/organisations.json
+
+          # ⚠️ NOTHING MAY BE LEFT UNSTAGED BEFORE THE REBASE. A rebase needs a
+          # clean tree, and on 2026-11-19 an unstaged tree cost a four-hour walk
+          # its push.
+          if ! git diff --quiet; then
+            echo "Unstaged changes remain after staging — adding them so the rebase can run:"
+            git diff --name-only | sed 's/^/    /'
+            git add -A
+          fi
+
+          git diff --staged --quiet || git commit -m "organisations: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
