@@ -50,7 +50,7 @@ const path = require('path');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-team-roster v2 2026-11-20 profile-side-too';
+const VERSION = 'probe-team-roster v3 2026-11-20 operation-name-must-match';
 const ROOT = path.resolve(__dirname, '..');
 const log = (...a) => console.log(...a);
 
@@ -59,6 +59,11 @@ const TEAM = (process.env.PR_TEAM || '').trim();
 
 // Candidate shapes, cheapest and most likely first. Each is ONE call.
 const TEAM_FIELD_CANDIDATES = [
+  // ⚠️ `pool` IS NOT A GUESS. PlayHQ suggested it twice, unprompted, in response
+  // to `players` and `people` — which is the schema telling us the nearest real
+  // field on DiscoverTeam.
+  'pool { id }',
+  'pool { id name }',
   'members { id }',
   'members { person { id } }',
   'players { id }',
@@ -71,11 +76,13 @@ const TEAM_FIELD_CANDIDATES = [
 
 async function tryQuery(label, query, variables) {
   let json;
-  // ⚠️ POSITIONAL (query, variables, operationName) — NOT an object. Checked
-  // against lib/playhq.js rather than assumed; an object would have been
-  // stringified as the query and every probe would have failed identically,
-  // which reads exactly like "the field does not exist".
-  try { json = await phq.gqlPost(query, variables, 'Probe'); }
+  // ⚠️ THE operationName MUST MATCH THE NAME IN THE QUERY TEXT, or PlayHQ answers
+  // HTTP 500 "Unknown operation named X" — and lib/playhq.js RETRIES a 500 four
+  // times, so v2 spent 28 calls learning nothing about six operations. Section 2
+  // passed only because those queries happened to be named `Probe` too. Take the
+  // name from the text rather than asserting one.
+  const named = /\bquery\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(query);
+  try { json = await phq.gqlPost(query, variables, named ? named[1] : undefined); }
   catch (e) { log(`    ${label}: call failed — ${e.message}`); return { ok: false, fatal: true }; }
 
   if (json && json.errors && json.errors.length) {
@@ -149,9 +156,13 @@ async function main() {
   // ── 3. a single team by id, which may expose more ──────────────────────────
   const teamID = TEAM || teams[0].id;
   log(`\n── 3. one team by id (${teamID}) ──`);
+  // ⚠️ discoverTeam EXISTS — "Unknown argument \"id\"" is the server confirming the
+  // field and refusing the argument, which is a different answer from "no such
+  // field". These try the arguments it is most likely to want instead.
   for (const q of [
-    ['discoverTeam(id)', `query Probe($id: ID!) { discoverTeam(id: $id) { id name } }`],
-    ['team(id)', `query Probe($id: ID!) { team(id: $id) { id name } }`],
+    ['discoverTeam(teamID:)', `query Probe($id: ID!) { discoverTeam(teamID: $id) { id name } }`],
+    ['discoverTeam(filter:{teamID:})', `query Probe($id: ID!) { discoverTeam(filter: { teamID: $id }) { id name } }`],
+    ['discoverTeam() no args', `query Probe { discoverTeam { id name } }`],
   ]) {
     await tryQuery(q[0], q[1], { id: teamID });
   }
@@ -186,10 +197,12 @@ async function main() {
         'query P($id: ID!) { profile(id: $id) { id } }'],
       ['discoverProfile',
         'query P($id: ID!) { discoverProfile(id: $id) { id } }'],
-      ['publicProfileRegistrations',
-        'query P($id: ID!) { publicProfileRegistrations(profileID: $id) { id } }'],
-      ['publicProfileSeasons',
-        'query P($id: ID!) { publicProfileSeasons(profileID: $id) { id } }'],
+      // ⚠️ NAMED BY PlayHQ ITSELF in the v2 error text, alongside
+      // publicProfileTeams. Not guesses.
+      ['publicProfileStatistics',
+        'query P($id: ID!) { publicProfileStatistics(profileID: $id) { __typename } }'],
+      ['publicProfile (no arg name assumed)',
+        'query P($id: ID!) { publicProfile(id: $id) { __typename } }'],
     ];
     for (const [label, q] of CANDIDATES) {
       const r = await tryQuery(label, q, { id: profile });
