@@ -2668,7 +2668,7 @@ function renderTransfers() {
     const fill = t.possibleFillIn
       // Flagged, never hidden: one or two games for another club is usually a
       // permit, and only a human can tell which.
-      ? '<span class="tv-tag tv-fill" title="Few games at one of the two clubs — may be a fill-in rather than a move">possible fill-in</span>'
+      ? '<span class="tv-tag tv-fill" title="The two spells overlap — this player was turning out for both clubs, which is usually a permit rather than a transfer">possible fill-in</span>'
       : '';
     const games = (t.fromGames != null && t.toGames != null)
       ? '<span class="tv-games">' + t.fromGames + 'g → ' + t.toGames + 'g</span>' : '';
@@ -7196,10 +7196,11 @@ const HELP = [
       are only as complete as the nightly registration check — the note at the top
       of the view says how many players have not been checked yet. Until that
       reaches zero, the count is a <b>floor, not a total</b>.<br><br>
-      <b>“Possible fill-in”</b> means one of the two clubs has very few games. A
-      child playing once for another club is usually filling in on a permit rather
-      than transferring. These are flagged rather than hidden, because only you can
-      tell which it was.<br><br>
+      <b>“Possible fill-in”</b> means the two spells overlap — the player was
+      turning out for both clubs at the same time, which is usually a permit rather
+      than a transfer. A real move shows every game at the old club finishing
+      before the first game at the new one. These are flagged rather than hidden,
+      because only you can tell which it was.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
