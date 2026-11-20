@@ -50,7 +50,7 @@ const path = require('path');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-team-roster v3 2026-11-20 operation-name-must-match';
+const VERSION = 'probe-team-roster v4 2026-11-20 discoverTeam-and-statistics';
 const ROOT = path.resolve(__dirname, '..');
 const log = (...a) => console.log(...a);
 
@@ -96,6 +96,10 @@ async function tryQuery(label, query, variables) {
     log(`    ${label}: ${exists ? 'FIELD EXISTS, asked wrongly' : 'rejected'} — ${msg.slice(0, 140)}`);
     return { ok: false, exists };
   }
+  // ⚠️ LOG THE SUCCESSES TOO. v3's section 3 only logged failures, so
+  // discoverTeam(teamID:) PASSED and said nothing — the single most useful
+  // result of the run was invisible, and I read its absence as a failure.
+  log(`    ${label}: ACCEPTED — ${JSON.stringify(json && json.data).slice(0, 240)}`);
   return { ok: true, data: json && json.data };
 }
 
@@ -145,11 +149,7 @@ async function main() {
     const r = await tryQuery(f,
       `query Probe($seasonID: ID!) { discoverTeams(filter: { seasonID: $seasonID }) { id ${f} } }`,
       { seasonID });
-    if (r.ok) {
-      accepted.push(f);
-      const first = ((r.data && r.data.discoverTeams) || [])[0];
-      log(`    ${f}: ACCEPTED — sample: ${JSON.stringify(first).slice(0, 200)}`);
-    }
+    if (r.ok) accepted.push(f);
     if (r.fatal) break;
   }
 
@@ -159,12 +159,34 @@ async function main() {
   // ⚠️ discoverTeam EXISTS — "Unknown argument \"id\"" is the server confirming the
   // field and refusing the argument, which is a different answer from "no such
   // field". These try the arguments it is most likely to want instead.
-  for (const q of [
-    ['discoverTeam(teamID:)', `query Probe($id: ID!) { discoverTeam(teamID: $id) { id name } }`],
-    ['discoverTeam(filter:{teamID:})', `query Probe($id: ID!) { discoverTeam(filter: { teamID: $id }) { id name } }`],
-    ['discoverTeam() no args', `query Probe { discoverTeam { id name } }`],
-  ]) {
-    await tryQuery(q[0], q[1], { id: teamID });
+  // ⚠️ discoverTeam(teamID: ID!) IS CONFIRMED GOOD — it answered in v3 without
+  // saying so. These ask what a single team will tell us about its people, one
+  // field at a time because a rejected field fails the whole query.
+  for (const f of ['id name', 'pool { id name }', 'members { id }', 'players { id }',
+    'people { id }', 'roster { id }', 'statistics { __typename }', 'season { id name }',
+    'organisation { id name }', 'grade { id name }']) {
+    await tryQuery(`discoverTeam { ${f} }`,
+      `query Probe($id: ID!) { discoverTeam(teamID: $id) { ${f} } }`, { id: teamID });
+  }
+
+  // ⚠️ A TEAM THAT HAS NOT STARTED MAY SIMPLY HAVE NO POOL. `pool` came back
+  // null on a 2027 team, which proves the field exists and says nothing about
+  // whether it ever carries anybody. Ask a team from a season that has been
+  // PLAYED before concluding the field is useless.
+  const played = manifest.find(m => yearOf(m.compName) === latest - 1 && m.state === 'complete');
+  if (played) {
+    log(`\n── 3b. the same fields on a PLAYED season (${played.compName}) ──`);
+    const t2 = await tryQuery('discoverTeams (played season)',
+      `query Probe($seasonID: ID!) { discoverTeams(filter: { seasonID: $seasonID }) { id name } }`,
+      { seasonID: played.seasonId });
+    const list = (t2.data && t2.data.discoverTeams) || [];
+    if (list.length) {
+      await tryQuery('pool on a played team',
+        `query Probe($id: ID!) { discoverTeam(teamID: $id) { id name pool { id name } } }`,
+        { id: list[0].id });
+    } else {
+      log('    no teams returned for that season — nothing to ask.');
+    }
   }
 
   // ── 4. the profile side ────────────────────────────────────────────────────
@@ -206,12 +228,18 @@ async function main() {
     ];
     for (const [label, q] of CANDIDATES) {
       const r = await tryQuery(label, q, { id: profile });
-      if (r.ok) {
-        const d = JSON.stringify(r.data);
-        const empty = /:\s*(\[\]|null)\s*}/.test(d);
-        log(`    ${label}: ACCEPTED${empty ? ' but EMPTY' : ''} — ${d.slice(0, 220)}`);
-      }
+      /* tryQuery logs it */
     }
+    // ⚠️ publicProfileStatistics ANSWERED with only __typename asked for, so the
+    // operation works and we have never looked inside it. If a player's season
+    // history lives anywhere on the profile side, this is where.
+    log(`\n── 4c. inside publicProfileStatistics ──`);
+    for (const f of ['seasons { id }', 'season { id }', 'teams { id }', 'games { id }',
+      'statistics { __typename }', 'results { __typename }']) {
+      await tryQuery(`publicProfileStatistics { ${f} }`,
+        `query P($id: ID!) { publicProfileStatistics(profileID: $id) { ${f} } }`, { id: profile });
+    }
+
     log('\n    ⚠️ "ACCEPTED but EMPTY" is the interesting one. It means the operation');
     log('       exists and PlayHQ is choosing to return nothing for this person —');
     log('       a different problem from asking down the wrong road.');
