@@ -60,7 +60,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v7 2026-11-21 ignore-next-check';
+const VERSION = 'walk-registrations v8 2026-11-21 forced-runs-make-progress';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -216,9 +216,16 @@ function dueKey(rec, nowMs) {
   // of a genuinely overdue one. Multiply the tier out beyond any timestamp.
   const TIER = 1e15;
   if (nc === null || nc <= nowMs) return 2 * TIER + (nc === null ? 0 : nc);
-  // Due anyway, but sorted LAST — behind triggered players, never-checked ones,
-  // and anything genuinely overdue. A forced run must not jump the real queue.
-  if (IGNORE_NEXT_CHECK) return 3 * TIER + nc;
+  // ⚠️ SORTED BY WHEN THEY WERE LAST WALKED, NOT BY nextCheck. Within a forced
+  // run every player is due, so the order decides whether consecutive runs make
+  // PROGRESS or re-walk the same people. nextCheck is the wrong key for that: a
+  // player walked in Thursday's backlog and one walked an hour ago both land
+  // around the same date, so they tie and the sweep stalls somewhere in the
+  // middle, re-reading some players and never reaching others.
+  //
+  // `at` is unambiguous — oldest first, and a player walked in THIS run goes
+  // straight to the back. Three or four runs then cover the cohort exactly once.
+  if (IGNORE_NEXT_CHECK) return 3 * TIER + (parseIso(rec.at) || 0);
   return null;
 }
 
@@ -230,6 +237,8 @@ async function main() {
   if (IGNORE_NEXT_CHECK) {
     log('  ⚠️ IGNORE_NEXT_CHECK — every player counts as due, whatever their re-check');
     log('     date. One run only; nextCheck is still written normally on the way out.');
+    log('     Order is OLDEST WALKED FIRST, so consecutive forced runs move through');
+    log('     the cohort rather than re-reading the same players.');
   }
 
   const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
