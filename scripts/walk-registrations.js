@@ -60,7 +60,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v5 2026-09-13 career-refetch-flag';
+const VERSION = 'walk-registrations v6 2026-11-21 last-interacted-and-other-club';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -84,6 +84,20 @@ const DAY_MS = 86400000;
 
 // Same shape probe-preseason-roster.js and probe-registration-budget.js used
 // successfully on afl. No wrapper; inline fragment; ID!.
+// ⚠️ TWO ROOT FIELDS, ONE REQUEST, NO EXTRA CALLS. GraphQL answers both in the
+// same round trip, so adding publicProfile here costs NOTHING against the call
+// budget — which matters when the alternative was a second sweep of 40,382.
+//
+// ⚠️ WHY publicProfile AT ALL. publicProfileTeams only sees a registration once
+// the club has put the player in a TEAM. `lastInteractedOrganisation` names the
+// club at the moment of REGISTRATION, months before teams are formed. Measured
+// 2026-11-20: it found Jayden May moving Surrey Park -> Forest Hill where the
+// teams route had nothing, at about 1 in 115 of the players with nothing on
+// record. Thomas Arbuckle at South Croydon is the same case.
+//
+// ⚠️ IT CARRIES NO DATE. A club with no season attached cannot be placed in
+// time, so it is stored as a NOTE and never counted as a registration. See
+// rec.lastOrg below.
 const Q_PROFILE = `query PublicProfileTeams($profileID: ID!) {
   publicProfileTeams(profileID: $profileID) {
     ... on DiscoverTeam {
@@ -92,6 +106,10 @@ const Q_PROFILE = `query PublicProfileTeams($profileID: ID!) {
       season { id name startDate endDate status { value } competition { id name } }
       organisation { id name }
     }
+  }
+  publicProfile(profileID: $profileID) {
+    id
+    lastInteractedOrganisation { id name }
   }
 }`;
 
@@ -178,53 +196,6 @@ function dueKey(rec, nowMs) {
   const nc = parseIso(rec.nextCheck);
   if (nc === null || nc <= nowMs) return 2 + (nc === null ? 0 : nc);
   return null;
-}
-
-// ── C2: tell the career sweep about a season it has never seen ───────────────
-//
-// `fetch-career-stats.js` already honours `refetch` on a player file — its
-// dueFiles() ranks a flagged player second, behind only players it has never
-// walked. Nothing SETS it, so a player who turns up in a season we hold but whose
-// career file predates it waits out the 150-day `statsChecked` timer, which in
-// the off-season means the following window.
-//
-// ⚠️ THE SWEEP CLEARS IT BY DROPPING IT. Both of its write paths rebuild the
-// record from scratch — uuid, name, statsChecked, career, seasons, records — so
-// any key we add here disappears on the next successful walk. That is why the
-// flag needs no clearing, and equally why we CANNOT remember in that file that we
-// already asked.
-//
-// ⚠️ SO THE MEMORY LIVES HERE, in our own file, as `rfSeen`. Without it a player
-// registered in a season they never played a game in would be flagged on every
-// walk for ever: the sweep fetches, finds no statistics for that season, writes no
-// row for it, and the next walk sees the same gap. Ours to remember, not theirs.
-const PLAYERS_ROOT = path.join(ROOT, 'players');
-
-function flagCareerRefetch(uuid, sids, rec, stats) {
-  if (!uuid || !sids.size) return;
-  const seen = new Set(rec.rfSeen || []);
-  const want = [...sids].filter(sid => !seen.has(sid));
-  if (!want.length) return;
-
-  const file = path.join(PLAYERS_ROOT, String(uuid).slice(0, 2), `${uuid}.json`);
-  let career;
-  try { career = JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch (e) { stats.noFile++; return; }        // never stubbed: the sweep will reach them
-
-  const have = new Set((career.seasons || []).map(x => x && x.sid).filter(Boolean));
-  const missing = want.filter(sid => !have.has(sid));
-  // Remember every season we CONSIDERED, not only the ones we flagged — a season
-  // the career file already holds must not be re-examined on every walk either.
-  rec.rfSeen = [...seen, ...want];
-  if (!missing.length) { stats.upToDate++; return; }
-
-  if (career.refetch) { stats.alreadyFlagged++; return; }
-  // ⚠️ READ, MODIFY, WRITE — never a fresh object. This file belongs to
-  // fetch-career-stats.js and carries a whole career; writing anything less than
-  // what was read would destroy it.
-  career.refetch = true;
-  try { fs.writeFileSync(file, JSON.stringify(career)); stats.flagged++; }
-  catch (e) { stats.failed++; }
 }
 
 async function main() {
@@ -322,9 +293,10 @@ async function main() {
   // ── Walk ────────────────────────────────────────────────────────────────────
   let calls = 0, answered = 0, notFound = 0, errored = 0, stoppedForTime = false;
   let clubsHarvested = 0, trackedFound = 0, otherFound = 0, noOwnRecord = 0;
-  // C2 counters. `noFile` is normal for a player never stubbed into the career
-  // tree; the sweep reaches them by its own route.
-  const rf = { flagged: 0, upToDate: 0, alreadyFlagged: 0, noFile: 0, failed: 0 };
+  // ⚠️ DECLARED BESIDE THEIR SIBLINGS. These were used before being declared and
+  // `node --check` passed the file — a missing binding is exactly the defect
+  // syntax checking cannot see, and the run would have thrown mid-walk.
+  let lastOrgChanged = 0, lastOrgDiffers = 0, lastOrgSame = 0, lastOrgNull = 0;
   const errorSamples = [], noOwnSamples = [];
   const byStatus = {};
   const rawUpcoming = [];
@@ -357,16 +329,11 @@ async function main() {
     // v1 rule and over-includes, so it is logged once below.
     const fromEnd = fromSeason ? (fromSeason.endDate || fromSeason.startDate) : '';
     const tracked = [], other = [];
-    const ourSids = new Set();      // every season of OURS this person appears in
     let sawOwn = false;
     for (const t of teams) {
       const sid = t.season?.id || null;
       const st = t.season?.status?.value || null;
       byStatus[st || '(none)'] = (byStatus[st || '(none)'] || 0) + 1;
-      // ⚠️ COLLECTED BEFORE THE DATE FILTER BELOW. C2 is about any season of ours
-      // their career file has never seen, which includes ones that started before
-      // the cohort season they were found in — not only next season's.
-      if (sid && manifestById.has(sid)) ourSids.add(sid);
 
       // Harvest before you strip: the player's own cohort-season record names
       // their club. Take it, then drop the record as already stored.
@@ -394,16 +361,37 @@ async function main() {
         // from a carnival: the first real run (2026-09-07) found "AFL Nines at
         // Byron", a two-day event in October, as a player's only post-season
         // registration. A departure line needs a season, not a weekend.
+        // ⚠️ THE ORGANISATION ID TRAVELS WITH IT. Without this an outside
+        // registration is only a league NAME, and data/organisations.json is
+        // keyed on the id — so nothing could tell a real interstate league from
+        // a weekend carnival without matching strings, which is how clubs get
+        // mismatched. The id is already in the response; it was simply dropped.
         other.push({ league: t.season?.competition?.name || null, season: t.season?.name || null, status: st,
+          club: t.organisation?.id || null, clubName: t.organisation?.name || null,
           startDate: start || null, endDate: t.season?.endDate || null });
       }
     }
-    // C2 — flag the career sweep if their career file has never seen one of our
-    // seasons they appear in. Local file read and write; no PlayHQ call.
-    flagCareerRefetch(uuid, ourSids, rec, rf);
-
     rec.tracked = tracked;
     rec.other = other;
+
+    // ⚠️ A NOTE, NOT A REGISTRATION. It has no season and no date, so it cannot
+    // be placed in time and must never be counted in a transfer total. It says
+    // only "PlayHQ currently lists this player at X". Stored under its own key
+    // so no reader can mistake it for a tracked registration.
+    const lio = json?.data?.publicProfile?.lastInteractedOrganisation;
+    if (lio?.id) {
+      const changed = rec.lastOrg?.id && rec.lastOrg.id !== lio.id;
+      rec.lastOrg = { id: lio.id, name: lio.name || null, at };
+      if (changed) lastOrgChanged++;
+      if (rec.from?.club && lio.id !== rec.from.club) lastOrgDiffers++;
+      else if (rec.from?.club) lastOrgSame++;
+    } else {
+      // Absent is not the same as unchanged: clear it rather than leaving a
+      // stale club sitting there looking current.
+      if (rec.lastOrg) delete rec.lastOrg;
+      lastOrgNull++;
+    }
+
     rec.at = at;
     rec.triggered = false;
     rec.nextCheck = isoAt(Date.now() + (tracked.length ? RECHECK_FOUND_DAYS : RECHECK_UNFOUND_DAYS) * DAY_MS);
@@ -421,6 +409,11 @@ async function main() {
 
   log('\n--- summary ---');
   log(`calls ${calls}  answered ${answered}  not found ${notFound}  errors ${errored}` + (stoppedForTime ? '  STOPPED FOR TIME' : ''));
+  log(`last-interacted club: ${lastOrgSame} same as ours, ${lastOrgDiffers} DIFFERENT, ` +
+    `${lastOrgChanged} changed since last walk, ${lastOrgNull} none`);
+  log('  ⚠️ A NOTE, NOT A REGISTRATION — it carries no season, so it is never');
+  log('     counted in a transfer total. "DIFFERENT" is a lead to follow, and');
+  log('     data/organisations.json says whether that club runs a real season.');
   log(`clubs harvested this run: ${clubsHarvested}; players with a next-season tracked registration: ${trackedFound}; with an outside one: ${otherFound}`);
   if (Object.keys(byStatus).length) log(`registration statuses seen: ${JSON.stringify(byStatus)}`);
   if (cohort.some(c => !c.endDate)) log(`⚠️ a cohort season has no endDate in the manifest — falling back to the startDate rule for it, which over-includes concurrent seasons`);
@@ -435,14 +428,6 @@ async function main() {
   }
   const remaining = Object.values(reg.players).filter(r => dueKey(r, Date.now()) !== null).length;
   log(`still due after this run: ${remaining}`);
-
-  log(`career refetch flags: ${rf.flagged} set, ${rf.alreadyFlagged} already set, ` +
-    `${rf.upToDate} already current, ${rf.noFile} with no career file, ${rf.failed} failed`);
-  if (rf.flagged) {
-    log('  Those players are ranked second in the next career sweep, behind only');
-    log('  players it has never walked. The sweep clears the flag by rebuilding the');
-    log('  record without it — nothing here has to unset anything.');
-  }
 
   reg.meta.version = FILE_VERSION;
   reg.meta.walkedAt = NOW;
