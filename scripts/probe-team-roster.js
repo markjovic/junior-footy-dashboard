@@ -30,8 +30,18 @@
 // Probing eleven field names once cost 36 requests because 400s were retried,
 // and that burst is the likeliest cause of the WAF block that followed.
 //
+// ⚠️ THE PROFILE SIDE IS PROBED TOO. publicProfileTeams returns NOTHING for
+// eccecaba-70f9-4c3b-8798-62a2e5a74d21 — not his 2027 club, not even his 2026
+// one — while the PlayAFL app shows his new team. The app is the same PlayHQ
+// client on the same `afl` tenant that this repo already uses, so the data is
+// reachable; we are using the wrong operation. Section 4 tries the others.
+//
+// `profileSearch(fullName: String!)` is known good — it is the search the app
+// uses, lifted verbatim from the capture brief rather than reconstructed.
+//
 // Env: PR_SEASON (a seasonID to probe; default is the first tracked next-season
-//      entry in the manifest), PR_TEAM (a teamID, to probe a single team).
+//      entry in the manifest), PR_TEAM (a teamID, to probe a single team),
+//      PR_PROFILE (a profile uuid), PR_NAME (a full name for profileSearch).
 
 'use strict';
 
@@ -40,7 +50,7 @@ const path = require('path');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-team-roster v1 2026-11-20';
+const VERSION = 'probe-team-roster v2 2026-11-20 profile-side-too';
 const ROOT = path.resolve(__dirname, '..');
 const log = (...a) => console.log(...a);
 
@@ -144,6 +154,56 @@ async function main() {
     ['team(id)', `query Probe($id: ID!) { team(id: $id) { id name } }`],
   ]) {
     await tryQuery(q[0], q[1], { id: teamID });
+  }
+
+  // ── 4. the profile side ────────────────────────────────────────────────────
+  const profile = (process.env.PR_PROFILE || '').trim();
+  const fullName = (process.env.PR_NAME || '').trim();
+
+  if (fullName) {
+    log(`\n── 4a. profileSearch("${fullName}") ──`);
+    // ⚠️ VERBATIM from the capture brief. A query retyped from memory cost three
+    // wasted dispatches in the sibling project; this one is copied, not tidied.
+    const r = await tryQuery('profileSearch',
+      'query ProfileSearch($fullName: String!) { profileSearch(fullName: $fullName) ' +
+      '{ result { firstName id lastName __typename } __typename } }', { fullName });
+    if (r.ok) {
+      const res = ((r.data && r.data.profileSearch) || {}).result || [];
+      log(`    ${res.length} result(s):`);
+      for (const p of res.slice(0, 10)) log(`      ${p.id}  ${p.firstName} ${p.lastName}`);
+      if (!res.length) log('    ⚠️ The search the APP uses returns nothing for this name either.');
+    }
+  }
+
+  if (profile) {
+    log(`\n── 4b. what operations return anything for ${profile} ──`);
+    const CANDIDATES = [
+      ['publicProfileTeams (what we use now)',
+        'query P($id: ID!) { publicProfileTeams(profileID: $id) { id name } }'],
+      ['publicProfile',
+        'query P($id: ID!) { publicProfile(profileID: $id) { id firstName lastName } }'],
+      ['profile',
+        'query P($id: ID!) { profile(id: $id) { id } }'],
+      ['discoverProfile',
+        'query P($id: ID!) { discoverProfile(id: $id) { id } }'],
+      ['publicProfileRegistrations',
+        'query P($id: ID!) { publicProfileRegistrations(profileID: $id) { id } }'],
+      ['publicProfileSeasons',
+        'query P($id: ID!) { publicProfileSeasons(profileID: $id) { id } }'],
+    ];
+    for (const [label, q] of CANDIDATES) {
+      const r = await tryQuery(label, q, { id: profile });
+      if (r.ok) {
+        const d = JSON.stringify(r.data);
+        const empty = /:\s*(\[\]|null)\s*}/.test(d);
+        log(`    ${label}: ACCEPTED${empty ? ' but EMPTY' : ''} — ${d.slice(0, 220)}`);
+      }
+    }
+    log('\n    ⚠️ "ACCEPTED but EMPTY" is the interesting one. It means the operation');
+    log('       exists and PlayHQ is choosing to return nothing for this person —');
+    log('       a different problem from asking down the wrong road.');
+  } else {
+    log('\n── 4. profile side SKIPPED — set PR_PROFILE to a uuid to probe it ──');
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
