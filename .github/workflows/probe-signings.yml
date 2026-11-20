@@ -1,0 +1,63 @@
+# .github/workflows/probe-signings.yml
+#
+# Does lastInteractedOrganisation find club changes BEFORE a team exists?
+#
+# ⚠️ READ-ONLY. Nothing is written or committed.
+#
+# ⚠️ A DIFFERENT ORGANISATION IS NOT A TRANSFER. PlayHQ is one backend across
+# every sport, so a basketball or netball club can appear for a football player.
+# The probe sorts every answer into same club / a football club we know / an
+# organisation we have never seen, and only the middle one is evidence.
+#
+# ⚠️ IT HOLDS THE DATA-WRITE GROUP. It writes nothing but shares the call budget.
+
+name: Probe signings
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: 'sample — players to check. 120 is about two minutes.'
+        required: false
+        default: '120'
+        type: string
+      comp:
+        description: 'comp — restrict to one competition, e.g. EFNL. Blank samples all five.'
+        required: false
+        default: ''
+        type: string
+      pace_ms:
+        description: 'pace_ms — delay between calls. 900 is about 66/min, inside the measured ceiling.'
+        required: false
+        default: '900'
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          PS_SAMPLE: ${{ github.event.inputs.sample }}
+          PS_COMP: ${{ github.event.inputs.comp }}
+          PS_PACE_MS: ${{ github.event.inputs.pace_ms }}
+        run: |
+          if [ ! -f scripts/probe-signings.js ]; then
+            echo "scripts/probe-signings.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-signings.js
