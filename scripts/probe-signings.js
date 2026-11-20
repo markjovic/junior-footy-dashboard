@@ -2,7 +2,7 @@
 // scripts/probe-signings.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-signings v2 2026-11-20 tenant-scoped';
+const VERSION = 'probe-signings v3 2026-11-20 not-ambiguous-not-returned';
 
 //
 // Does `lastInteractedOrganisation` find club changes BEFORE a team exists?
@@ -114,7 +114,7 @@ async function main() {
 
   await phq.ensureSession();
 
-  const t = { same: 0, knownClub: 0, unknownOrg: 0, none: 0, ambiguous: 0, notFound: 0, error: 0 };
+  const t = { same: 0, knownClub: 0, unknownOrg: 0, none: 0, notThisPlayer: 0, notFound: 0, error: 0 };
   const examples = { knownClub: [], unknownOrg: [] };
 
   for (const e of sample) {
@@ -127,10 +127,14 @@ async function main() {
     const res = ((json.data && json.data.profileSearch) || {}).result || [];
     if (!res.length) { t.notFound++; continue; }
     const exact = res.filter(p => p.id === e.uuid);
-    // ⚠️ NEVER RESOLVED BY GUESSING. A name with no exact id match is skipped and
-    // counted; "Thomas Arbuckle" sits beside "Thomas Tarbuck" in PlayHQ's own
-    // results and picking one would invent an answer.
-    if (!exact.length) { t.ambiguous++; continue; }
+    // ⚠️ THIS IS NOT AMBIGUITY, AND v2 CALLED IT THAT. We match on the UUID, so
+    // several people sharing a name costs us nothing — the right one is picked by
+    // id or nobody is. A miss here means the search returned results for the name
+    // and NONE of them was this player: a different spelling on the profile, a
+    // middle name, or a profile the search does not surface. Counting it as
+    // "ambiguous" led to the claim that a third of names were unusable and that
+    // name search could never be a cohort route. Both were wrong.
+    if (!exact.length) { t.notThisPlayer++; continue; }
 
     const lio = exact[0].lastInteractedOrganisation;
     if (!lio) { t.none++; continue; }
@@ -159,7 +163,7 @@ async function main() {
   log(`  a club we KNOW, different   : ${t.knownClub}   ← the only transfer evidence`);
   log(`  an organisation we DO NOT   : ${t.unknownOrg}   ← UNDECIDED — profile these orgs`);
   log(`  field was null              : ${t.none}`);
-  log(`  name ambiguous, skipped     : ${t.ambiguous}`);
+  log(`  search found the name but    : ${t.notThisPlayer}   not this uuid — spelling differs, or not surfaced`);
   log(`  not found / errored         : ${t.notFound} / ${t.error}`);
 
   if (examples.knownClub.length) {
@@ -196,9 +200,11 @@ async function main() {
       log('     each org is profiled. Do not count them either way.');
     }
   }
-  const amb = t.ambiguous / (sample.length || 1);
-  log(`\n  ⚠️ ${(amb * 100).toFixed(0)}% of names could not be resolved to one profile. Searching by`);
-  log('     name cannot be a cohort-wide route until that is solved.');
+  const miss = (t.notThisPlayer + t.notFound) / (sample.length || 1);
+  log(`\n  ⚠️ ${(miss * 100).toFixed(1)}% of players could not be found by name at all. That is a`);
+  log('     COVERAGE gap, not an ambiguity one: we match on uuid, so a shared name');
+  log('     costs nothing. Those players simply do not come back under the name we');
+  log('     hold, and no amount of disambiguation would reach them.');
 
   phq.logSummary('probe-signings');
   process.exit(0);
