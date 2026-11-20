@@ -2699,8 +2699,10 @@ function renderTransfers() {
       const k = t.toClubName || '(club unknown)';
       arrivals.set(k, (arrivals.get(k) || 0) + 1);
     }
+    // Alphabetical by club. A list people scan for a club they know must be in
+    // the order they would look it up in, not ranked by a count.
     for (const [club, list] of [...groups.entries()].sort((a, b) =>
-      b[1].length - a[1].length || String(a[0]).localeCompare(String(b[0])))) {
+      String(a[0]).localeCompare(String(b[0])))) {
       parts.push('<div class="tv-club">' + tvEsc(club) +
         '<span class="tv-count">' + list.length + ' out' +
         (arrivals.get(club) ? ' · ' + arrivals.get(club) + ' in' : '') + '</span></div>');
