@@ -287,6 +287,20 @@ body{overflow-x:hidden}
 /* The view switch, as a full-width row. Shown only below 768px — above that the
    header has room and keeps it. Margins pull it out of .main's padding so it
    spans edge to edge like the section tabs below it. */
+.tv-note{font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px;padding:8px 10px;
+  background:var(--s2);border:1px solid var(--b1);border-radius:var(--r)}
+.tv-club{display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-weight:600;font-size:13px;color:var(--tx)}
+.tv-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);font-weight:400}
+.tv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--b1);font-size:12px}
+.tv-name{font-weight:600;min-width:150px}
+.tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
+.tv-move{color:var(--t2);flex:1 1 240px}
+.tv-season{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
+.tv-games{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
+.tv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;padding:1px 6px;border-radius:3px;
+  background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.3);color:var(--gold)}
+.tv-tag.tv-mid{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);color:#60a5fa}
+.tv-tag.tv-fill{background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.3);color:#f97316}
 .mob-view-tabs{display:none;gap:1px;background:var(--b1);border-bottom:1px solid var(--b1);
   margin:-12px -12px 12px;padding:0}
 .mob-view-tabs .mob-tab{font-size:11px;padding:11px 4px}
@@ -686,13 +700,14 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">Beta 0.248</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.1</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
     <button id="vsw-dash"   class="on" onclick="switchView('dash')">DASHBOARD</button>
     <button id="vsw-finals"           onclick="switchView('finals')">FINALS</button>
     <button id="vsw-leaders"          onclick="switchView('leaders')">LEADERS</button>
+    <button id="vsw-transfers"        onclick="switchView('transfers')">TRANSFERS</button>
   </span>
   <button class="hdr-btn" id="help-btn" onclick="openHelp()"
     title="What the numbers mean, and why some are missing">? Help</button>
@@ -774,6 +789,7 @@ body{overflow-x:hidden}
       <button class="mob-tab on" id="mvt-dash"   onclick="switchView('dash')">Dashboard</button>
       <button class="mob-tab"    id="mvt-finals" onclick="switchView('finals')">Finals</button>
       <button class="mob-tab"    id="mvt-leaders" onclick="switchView('leaders')">Leaders</button>
+      <button class="mob-tab"    id="mvt-transfers" onclick="switchView('transfers')">Transfers</button>
     </div>
     <div id="no-data" class="no-data-screen">
       <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.9">
@@ -869,6 +885,32 @@ body{overflow-x:hidden}
     <!-- Career leaderboards — career_leaderboards_design.md. A top-level view for
          the reason the finals view gives: the dashboard is scoped to one
          S.selectedAge and this spans every age, grade and year. -->
+    <!-- ⚠️ SPANS EVERY SEASON, so it is a top-level view rather than a card in
+         .dgrid: the dashboard is scoped to one season and one age, and a transfer
+         belongs to a PAIR of seasons. It is deliberately NOT an entry in the
+         season selector — a 2027 season has no games, ladder or results, so
+         selecting it would empty every other panel on the page. -->
+    <div id="transfers-view" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <input id="tv-search" type="search" placeholder="Search player or club"
+               oninput="setTransferSearch(this.value)" autocomplete="off"
+               style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                      padding:6px 10px;font-family:'DM Mono',monospace;font-size:12px;min-width:200px">
+        <span class="fv-switch">
+          <button id="tvs-club" class="on" onclick="setTransferSort('club')">BY CLUB</button>
+          <button id="tvs-name"           onclick="setTransferSort('name')">BY NAME</button>
+        </span>
+        <span class="fv-switch">
+          <button id="tvk-all" class="on" onclick="setTransferKind('all')">ALL</button>
+          <button id="tvk-between"        onclick="setTransferKind('between')">BETWEEN SEASONS</button>
+          <button id="tvk-in"             onclick="setTransferKind('in-season')">MID-SEASON</button>
+        </span>
+        <button class="hdr-btn" onclick="openHelp('transfers')"
+          title="Where this comes from, and what it cannot see">? About</button>
+      </div>
+      <div id="tv-body"></div>
+    </div>
+
     <div id="leaders-view" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <select id="lb-scope" onchange="setLeaderScope(this.value)"
@@ -1112,7 +1154,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">Beta 0.248</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.1</span>
         </div>
 
 
@@ -1480,7 +1522,15 @@ let S = {
   seasonFiles: new Set(), // which files exist, from core.seasonFiles
   yearLoading: false,
   selRound: '',
-  view:       'dash',   // 'dash' | 'finals'
+  view:       'dash',   // 'dash' | 'finals' | 'leaders' | 'transfers'
+  // The transfers view owns these. transfersState is the same four-state
+  // pattern registrationsState uses: undefined | loading | ready | failed.
+  transfers: null,
+  transfersState: undefined,
+  transfersError: '',
+  transferSearch: '',
+  transferSort: 'club',    // 'club' | 'name'
+  transferKind: 'all',     // 'all' | 'between' | 'in-season'
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
   // venue; 'venue' the other way. Both orderings answer a real question — "what
@@ -2501,20 +2551,189 @@ function allTeamsForAge(age) {
 }
 
 // ═══════════════════════════════════════
+// TRANSFERS VIEW
+// ═══════════════════════════════════════
+// data/transfers.json — build-transfers.js. Two kinds of row in one file:
+//
+//   in-season   a player with games for TWO CLUBS inside one season, computed
+//               from the per-game lines. Historical: every season we hold.
+//   between     a next-season registration at a different club, from the
+//               registrations walk. Only as complete as the walk is.
+//
+// ⚠️ FETCHED ONLY WHEN THE VIEW IS OPENED. It is a few hundred KB and nobody
+// looking at a ladder needs it. Same lazy pattern as loadRegistrations().
+// ⚠️ ITS OWN HELPERS, PREFIXED. `esc` is a LOCAL const inside three other
+// functions and `fold` does not exist at the top level at all — referencing
+// either here throws at render time and hangs the page with a blank view. The
+// box score hit this exact defect and solved it the same way, with bxEsc.
+const tvEsc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const tvFold = (t) => String(t == null ? '' : t)
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/['\u2019`]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+let transfersLoading = null;
+function loadTransfers() {
+  if (transfersLoading) return transfersLoading;
+  if (S.transfersState === 'ready') return Promise.resolve(S.transfers);
+  S.transfersState = 'loading';
+  transfersLoading = (async () => {
+    try {
+      const r = await fetch('data/transfers.json');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const t = await r.json();
+      if (!t || !Array.isArray(t.transfers)) throw new Error('unexpected shape');
+      S.transfers = t;
+      S.transfersState = 'ready';
+    } catch (e) {
+      S.transfersState = 'failed';
+      S.transfersError = e.message;
+      console.warn('transfers unavailable:', e.message);
+    }
+    transfersLoading = null;
+    render();
+    return S.transfers;
+  })();
+  return transfersLoading;
+}
+
+function setTransferSearch(v) { S.transferSearch = String(v || ''); renderTransfers(); }
+function setTransferSort(v) {
+  S.transferSort = v;
+  ['club','name'].forEach(k => {
+    const b = document.getElementById('tvs-' + k);
+    if (b) b.classList.toggle('on', k === v);
+  });
+  renderTransfers();
+}
+function setTransferKind(v) {
+  S.transferKind = v;
+  [['all','tvk-all'],['between','tvk-between'],['in-season','tvk-in']].forEach(([k, id]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', k === v);
+  });
+  renderTransfers();
+}
+
+function renderTransfers() {
+  const body = document.getElementById('tv-body');
+  if (!body) return;
+
+  if (S.transfersState !== 'ready') {
+    if (S.transfersState !== 'loading' && S.transfersState !== 'failed') loadTransfers();
+    body.innerHTML = S.transfersState === 'failed'
+      ? '<div class="tv-note">Transfers are unavailable (' + tvEsc(S.transfersError || 'unknown') +
+        '). data/transfers.json is written by build-transfers.js each morning.</div>'
+      : '<div class="tv-note">Loading transfers…</div>';
+    return;
+  }
+
+  const data = S.transfers || {};
+  const cov = data.coverage || {};
+  const rows = (data.transfers || []).filter(t => t &&
+    (S.transferKind === 'all' || t.kind === S.transferKind));
+
+  const q = tvFold(S.transferSearch || '');
+  const match = (t) => !q ||
+    tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q) || tvFold(t.toClubName).includes(q);
+  const shown = rows.filter(match);
+
+  // ⚠️ THE UNKNOWNS GO ON SCREEN, NOT IN A DOC. A club list that silently omits
+  // the players nobody has checked reads as complete. Stating the gap is the
+  // difference between a floor and a falsehood.
+  const unknown = Number(cov.betweenUnknown || 0);
+  const parts = [];
+  parts.push('<div class="tv-note">' +
+    '<b>' + shown.length + '</b> transfer(s) shown' +
+    (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
+    (unknown > 0
+      ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
+        'registration yet, so the between-season count is a FLOOR, not a total.'
+      : 'Every player has been checked for a next-season registration.') +
+    (Array.isArray(cov.seasonsWithoutLines) && cov.seasonsWithoutLines.length
+      ? ' Mid-season moves cannot be seen in: ' + cov.seasonsWithoutLines.map(tvEsc).join(', ') + '.'
+      : '') +
+    '</div>');
+
+  if (!shown.length) {
+    parts.push('<div class="tv-note">Nothing matches.</div>');
+    body.innerHTML = parts.join('');
+    return;
+  }
+
+  const rowHtml = (t) => {
+    const kind = t.kind === 'in-season'
+      ? '<span class="tv-tag tv-mid">mid-season</span>'
+      : '<span class="tv-tag">' + tvEsc([t.toComp, t.toYear].filter(Boolean).join(' ') || 'next season') + '</span>';
+    const fill = t.possibleFillIn
+      // Flagged, never hidden: one or two games for another club is usually a
+      // permit, and only a human can tell which.
+      ? '<span class="tv-tag tv-fill" title="Few games at one of the two clubs — may be a fill-in rather than a move">possible fill-in</span>'
+      : '';
+    const games = (t.fromGames != null && t.toGames != null)
+      ? '<span class="tv-games">' + t.fromGames + 'g → ' + t.toGames + 'g</span>' : '';
+    return '<div class="tv-row">' +
+      '<span class="tv-name">' + tvEsc(t.name || '(unnamed)') + '</span>' +
+      (t.age ? '<span class="tv-age">' + tvEsc(t.age) + '</span>' : '') +
+      '<span class="tv-move">' + tvEsc(t.fromClubName || '?') + ' → ' + tvEsc(t.toClubName || '?') + '</span>' +
+      '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')) + '</span>' +
+      kind + fill + games +
+      '</div>';
+  };
+
+  if (S.transferSort === 'name') {
+    parts.push(shown.slice()
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+      .map(rowHtml).join(''));
+  } else {
+    // Grouped by the club they LEFT, because that is the club with a hole to
+    // fill. Each group also counts arrivals, so a club is readable in one place.
+    const groups = new Map();
+    for (const t of shown) {
+      const k = t.fromClubName || '(club unknown)';
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(t);
+    }
+    const arrivals = new Map();
+    for (const t of shown) {
+      const k = t.toClubName || '(club unknown)';
+      arrivals.set(k, (arrivals.get(k) || 0) + 1);
+    }
+    for (const [club, list] of [...groups.entries()].sort((a, b) =>
+      b[1].length - a[1].length || String(a[0]).localeCompare(String(b[0])))) {
+      parts.push('<div class="tv-club">' + tvEsc(club) +
+        '<span class="tv-count">' + list.length + ' out' +
+        (arrivals.get(club) ? ' · ' + arrivals.get(club) + ' in' : '') + '</span></div>');
+      parts.push(list.slice()
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+        .map(rowHtml).join(''));
+    }
+  }
+  body.innerHTML = parts.join('');
+}
+
+// ═══════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════
 function render() {
   const hasData = S.matches.length > 0;
   const finals  = S.view === 'finals';
   const leaders = S.view === 'leaders';
-  document.getElementById('no-data').style.display = hasData ? 'none' : 'block';
-  document.getElementById('dash').style.display = (hasData && !finals && !leaders) ? 'block' : 'none';
+  // ⚠️ NOT GATED ON hasData. Every other view needs a loaded season; this one
+  // reads its own file and spans all of them, so it must still render when the
+  // selected season has no matches — including in the off-season, which is
+  // exactly when people look at transfers.
+  const transfers = S.view === 'transfers';
+  document.getElementById('no-data').style.display = (hasData || transfers) ? 'none' : 'block';
+  document.getElementById('dash').style.display = (hasData && !finals && !leaders && !transfers) ? 'block' : 'none';
   const fv = document.getElementById('finals-view');
   if (fv) fv.style.display = (hasData && finals) ? 'block' : 'none';
   const lv = document.getElementById('leaders-view');
-  if (lv) lv.style.display = (hasData && leaders) ? 'block' : 'none';
+  if (lv) lv.style.display = (hasData && leaders && !transfers) ? 'block' : 'none';
+  const tv = document.getElementById('transfers-view');
+  if (tv) tv.style.display = transfers ? 'block' : 'none';
   const vs = document.getElementById('view-switch');
-  if (vs) vs.style.display = hasData ? 'inline-flex' : 'none';
+  if (vs) vs.style.display = (hasData || transfers) ? 'inline-flex' : 'none';
   // The mobile row is the same control in a place the header cannot clip it.
   // The media query decides whether it is on screen; this only decides whether
   // there is anything to switch between.
@@ -2525,6 +2744,11 @@ function render() {
   if (mvt) mvt.classList.toggle('has-data', hasData);
   syncViewTabs();
   applyViewChrome();
+
+  // ⚠️ AFTER syncViewTabs AND applyViewChrome, BEFORE the sidebar. This view has
+  // no age tabs and no grade filter, and renderAgeTabs() below assumes a loaded
+  // season — which is not guaranteed here.
+  if (transfers) { renderTransfers(); return; }
 
   // The SIDEBAR belongs to both views, so it is built before the finals branch
   // returns. It used to sit below, which meant a reload straight into the finals
@@ -3042,12 +3266,15 @@ function syncViewTabs() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('on', yes);
   };
-  on('vsw-dash', S.view !== 'finals' && S.view !== 'leaders');
+  const other = S.view === 'finals' || S.view === 'leaders' || S.view === 'transfers';
+  on('vsw-dash', !other);
   on('vsw-finals', S.view === 'finals');
   on('vsw-leaders', S.view === 'leaders');
-  on('mvt-dash', S.view !== 'finals' && S.view !== 'leaders');
+  on('vsw-transfers', S.view === 'transfers');
+  on('mvt-dash', !other);
   on('mvt-finals', S.view === 'finals');
   on('mvt-leaders', S.view === 'leaders');
+  on('mvt-transfers', S.view === 'transfers');
   // ⚠️ SET FROM S.view, LIKE EVERY OTHER CONTROL HERE — not toggled where the
   // click happened. The view is also restored from saved filters and from a
   // shared link, neither of which goes through a click.
@@ -3127,12 +3354,13 @@ function setFinalsMode(m) {
 // becomes a club filter.
 function applyViewChrome() {
   const finals = S.view === 'finals';
-  ['vsw-dash','vsw-finals','vsw-leaders'].forEach(id => {
+  ['vsw-dash','vsw-finals','vsw-leaders','vsw-transfers'].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on',
       id === 'vsw-finals' ? finals
       : id === 'vsw-leaders' ? S.view === 'leaders'
-      : (!finals && S.view !== 'leaders'));
+      : id === 'vsw-transfers' ? S.view === 'transfers'
+      : (!finals && S.view !== 'leaders' && S.view !== 'transfers'));
   });
   [['fvm-age','age'],['fvm-club','club'],['fvm-venue','venue'],['fvm-winners','winners']].forEach(([id,v]) => {
     const b = document.getElementById(id);
@@ -6956,6 +7184,25 @@ function boxHTML(file, gameId, m) {
 // target: `data-help="<id>"` on any element opens the panel at that entry. The
 // title is the convenience; the panel is the actual explanation.
 const HELP = [
+  { id: 'transfers', sec: 'Transfers', term: 'Transfers',
+    tip: 'Who has changed club, and what this list cannot see.',
+    body: `Two different things are listed here, and they are found in two
+      different ways.<br><br>
+      <b>Mid-season</b> moves are players with games for two clubs inside one
+      season, worked out from the team sheets we already hold. These cover every
+      season in the dashboard and are complete.<br><br>
+      <b>Next-season</b> moves come from registrations: a player signed up with a
+      different club for a season that starts after their current one ends. These
+      are only as complete as the nightly registration check — the note at the top
+      of the view says how many players have not been checked yet. Until that
+      reaches zero, the count is a <b>floor, not a total</b>.<br><br>
+      <b>“Possible fill-in”</b> means one of the two clubs has very few games. A
+      child playing once for another club is usually filling in on a permit rather
+      than transferring. These are flagged rather than hidden, because only you can
+      tell which it was.<br><br>
+      What it cannot see: a move to a league the dashboard does not cover shows the
+      departure but not the arrival, and a season with no team sheets shows no
+      mid-season moves at all.` },
   { id: 'ladder-mr', sec: 'Ladders', term: 'MR%',
     tip: 'Match ratio — wins plus half the draws, as a percentage of games played.',
     body: `Match ratio: wins plus half the draws, divided by games played. It ranks
