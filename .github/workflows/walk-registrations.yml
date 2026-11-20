@@ -32,6 +32,16 @@ on:
         required: false
         default: ''
         type: string
+      # ⚠️ FOR A CHANGE TO WHAT WE ASK FOR, NOT FOR SPEED. The re-check clock is
+      # 7 days with nothing found and 28 with a registration — right for a steady
+      # state, useless the day a new field is added, because no record carries it
+      # until the player is walked again.
+      ignore_next_check:
+        description: 'ignore_next_check — treat EVERY player as due, whatever their re-check date. One run only; the clock resets itself. Costs a full cohort of calls.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
   schedule:
     # 19:30 UTC = 05:30 AEST, an hour after discovery (18:30 UTC) so the manifest
     # it reads is that morning's. Both hold the data-write group, so if discovery
@@ -95,6 +105,7 @@ jobs:
           # Blank means "use the script's default", so the scheduled run is
           # untouched by these existing at all.
           WALK_DAILY_FRACTION: ${{ github.event.inputs.daily_fraction }}
+          WALK_IGNORE_NEXT_CHECK: ${{ github.event.inputs.ignore_next_check }}
           # ⚠️ MINUTES HERE, MILLISECONDS IN THE SHELL. GitHub Actions expressions
           # have NO arithmetic operators — `* 60000` in a ${{ }} is a syntax error
           # the editor rejects outright. The conversion belongs in bash.
