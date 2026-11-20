@@ -50,7 +50,7 @@ const path = require('path');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-team-roster v4 2026-11-20 discoverTeam-and-statistics';
+const VERSION = 'probe-team-roster v5 2026-11-20 the-club-is-on-the-search-result';
 const ROOT = path.resolve(__dirname, '..');
 const log = (...a) => console.log(...a);
 
@@ -195,6 +195,22 @@ async function main() {
 
   if (fullName) {
     log(`\n── 4a. profileSearch("${fullName}") ──`);
+    // ⚠️ THE CLUB IS ON THE SEARCH RESULT. The PlayAFL app's own Search Players
+    // screen shows "Thomas Arbuckle — South Croydon (Eastern Football Netball
+    // League)" — his NEW club — while publicProfileTeams returns only his three
+    // Norwood teams. So the current club hangs off the search result type,
+    // DiscoverProfile, and v4 asked that type for firstName, id and lastName
+    // only, throwing away the one field that answers the question.
+    //
+    // These ask DiscoverProfile what else it holds, one field at a time.
+    for (const f of ['organisation { id name }', 'club { id name }', 'team { id name }',
+      'season { id name }', 'competition { id name }', 'tenant { id name }',
+      'organisationName', 'clubName', 'teamName', 'subtitle', 'description']) {
+      await tryQuery(`profileSearch result { ${f} }`,
+        `query ProfileSearch($fullName: String!) { profileSearch(fullName: $fullName) ` +
+        `{ result { id ${f} } } }`, { fullName });
+    }
+    log('');
     // ⚠️ VERBATIM from the capture brief. A query retyped from memory cost three
     // wasted dispatches in the sibling project; this one is copied, not tidied.
     const r = await tryQuery('profileSearch',
@@ -249,10 +265,12 @@ async function main() {
 
   log('\n═══ WHAT THIS SAYS ═══');
   if (accepted.length) {
-    log(`  A team CAN return its members: ${accepted.join(', ')}`);
-    log('  That is the route. One call per team — a few hundred — answers who has');
-    log('  signed where, directly, instead of 40,382 profile calls that return');
-    log('  nothing for players like this one.');
+    // ⚠️ ACCEPTED IS NOT POPULATED. v4 declared `pool` "the route" because it was
+    // not rejected — while being null on a PLAYED 2026 team as well as a 2027
+    // one. A field that is null everywhere is not a roster. The rule this repo
+    // already has: a field accepted is not a field populated.
+    log(`  Fields accepted on a team: ${accepted.join(', ')}`);
+    log('  ⚠️ Check the samples above before believing any of them carry people.');
   } else {
     log('  No member field was accepted on discoverTeams.');
     log('  ⚠️ THIS DOES NOT MEAN THE DATA IS UNREACHABLE. It means this operation is');
