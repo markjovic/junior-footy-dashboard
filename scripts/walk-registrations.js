@@ -60,7 +60,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v6 2026-11-21 last-interacted-and-other-club';
+const VERSION = 'walk-registrations v7 2026-11-21 ignore-next-check';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -190,11 +190,35 @@ function loadRegistrations() {
 
 // Why a player is due, or null. Triggered players sort first, then never-checked,
 // then by nextCheck.
+// ⚠️ IGNORE_NEXT_CHECK MAKES EVERYBODY DUE. The re-check clock is 7 days for a
+// player with nothing found and 28 for one with a registration, which is right
+// for a steady state and useless after a change to WHAT WE ASK FOR. v6 added
+// `lastOrg` and a club id on `other`; no record carries either until the player
+// is walked again, and waiting a week to see whether a new field works is not a
+// test, it is a delay.
+//
+// ⚠️ IT DOES NOT SHORTEN THE CLOCK, IT SUSPENDS IT FOR ONE RUN. Every player
+// walked still has nextCheck set normally on the way out, so the next scheduled
+// run returns to the usual cadence by itself. There is nothing to undo.
+//
+// ⚠️ IT COSTS A FULL COHORT OF CALLS — 40,382 at 75/min is about nine hours, so
+// it will stop on the time budget and roll the remainder to tomorrow, in due
+// order, exactly as a backlog does. Use it deliberately, not as a habit.
+const IGNORE_NEXT_CHECK = /^(1|true|yes)$/i.test(process.env.WALK_IGNORE_NEXT_CHECK || '');
+
 function dueKey(rec, nowMs) {
   if (rec.triggered) return 0;
   if (!rec.at) return 1;
   const nc = parseIso(rec.nextCheck);
-  if (nc === null || nc <= nowMs) return 2 + (nc === null ? 0 : nc);
+  // ⚠️ TIER FIRST, THEN DATE. The original key was `2 + nc`, and adding 1 to a
+  // millisecond timestamp of ~1.76e12 does not separate tiers — it interleaves
+  // them by date. A forced player with an old nextCheck would have sorted AHEAD
+  // of a genuinely overdue one. Multiply the tier out beyond any timestamp.
+  const TIER = 1e15;
+  if (nc === null || nc <= nowMs) return 2 * TIER + (nc === null ? 0 : nc);
+  // Due anyway, but sorted LAST — behind triggered players, never-checked ones,
+  // and anything genuinely overdue. A forced run must not jump the real queue.
+  if (IGNORE_NEXT_CHECK) return 3 * TIER + nc;
   return null;
 }
 
@@ -203,6 +227,10 @@ async function main() {
   const NOW = isoAt(startMs);
   log(`=== ${VERSION} ===`);
   log(`today: ${NOW.slice(0, 10)}  pace: ${RATE} calls / ${WINDOW_MS / 1000}s  time budget: ${Math.round(TIME_BUDGET_MS / 60000)} min`);
+  if (IGNORE_NEXT_CHECK) {
+    log('  ⚠️ IGNORE_NEXT_CHECK — every player counts as due, whatever their re-check');
+    log('     date. One run only; nextCheck is still written normally on the way out.');
+  }
 
   const core = JSON.parse(fs.readFileSync(store.CORE_PATH, 'utf8'));
   const manifest = core.manifest || [];
