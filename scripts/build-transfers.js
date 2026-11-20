@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 // scripts/build-transfers.js
+
+// ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
+const VERSION = 'build-transfers v2 2026-11-20 overlap-beats-game-count';
+
 //
 // Builds data/transfers.json: every player who has changed club, from two
 // sources. READ-ONLY against PlayHQ — no session, no API call. The only thing it
@@ -24,13 +28,26 @@
 // is handled:
 //   the same club spelled two ways  -> compared by club ID, never by name
 //   two teams of the same club      -> same ID, so not a move
-//   a fill-in or a permit           -> CANNOT be settled by a rule. Every move
-//                                      carries its game counts, and a club with
-//                                      fewer than TR_MIN_GAMES games is marked
-//                                      `possibleFillIn` rather than dropped. The
-//                                      run prints the whole distribution so the
-//                                      line can be chosen from data instead of
-//                                      guessed. See transfers_view_design.md §6.
+//   a fill-in or a permit           -> see below. Game count alone does not
+//                                      separate these, so the dates do it.
+//
+// ⚠️ GAME COUNT DOES NOT SEPARATE A FILL-IN FROM A MOVE. Measured 2026-11-20 over
+// 889 moves: the distribution of games at the smaller club decays smoothly —
+// 342 at one game, 152 at two, 106, 97, 72, 54 — with NO gap anywhere. Any
+// threshold on it is arbitrary, and 494 of 889 landed on the wrong side of an
+// arbitrary line.
+//
+// The DATES separate them, and they were already being collected:
+//
+//   a real move   every game at the old club comes BEFORE every game at the new
+//                 one. The spells do not overlap.
+//   a fill-in     the spells INTERLEAVE — a game for another club in the middle
+//                 of a season, then back again.
+//
+// `overlap` is the number of days the two spells share. Zero means a clean
+// switch; anything above zero means the player was turning out for both, which
+// is a permit, not a transfer. The game count is kept as a second opinion and
+// both are in the output.
 //
 // Env: TR_MIN_GAMES (default 3), TR_OUT (data/transfers.json), TR_DRY (print
 //      only, write nothing).
@@ -42,7 +59,6 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'build-transfers v1 2026-11-20';
 
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
@@ -106,6 +122,7 @@ function main() {
   // ── In-season ──────────────────────────────────────────────────────────────
   const inSeason = [];
   const gamesHistogram = new Map();   // games at the smaller club -> count
+  const overlapHistogram = new Map(); // clean | interleaved | undated -> count
   let seasonsWithLines = 0, seasonsWithout = [];
 
   for (const m of manifest) {
@@ -163,13 +180,34 @@ function main() {
         const [fromId, fromE] = order[i - 1], [toId, toE] = order[i];
         const smaller = Math.min(fromE.games, toE.games);
         gamesHistogram.set(smaller, (gamesHistogram.get(smaller) || 0) + 1);
+        // Days the two spells share. null when either side has no dated game —
+        // unknown, which is not the same as zero and must not be read as one.
+        // ⚠️ THE SIGN IS THE SIGNAL, NOT THE MAGNITUDE. A `Math.max(0, …)` here
+        // read a ONE-DAY intersection as zero and called a permit a clean switch:
+        // a single Vermont game sitting in the middle of a Norwood season gives
+        // min(last) - max(first) === 0, which is an overlap of one day, not none.
+        // Negative means the spells do not meet at all; 0 or more means they do.
+        let overlap = null;
+        if (fromE.first !== null && fromE.last !== null && toE.first !== null && toE.last !== null) {
+          overlap = Math.min(fromE.last, toE.last) - Math.max(fromE.first, toE.first);
+        }
+        const verdict = overlap === null ? 'undated' : (overlap >= 0 ? 'interleaved' : 'clean');
+        overlapHistogram.set(verdict, (overlapHistogram.get(verdict) || 0) + 1);
         inSeason.push({
           kind: 'in-season',
           uuid: u, name: info.name || nameAt(0) || '(unnamed)', age: info.age || '',
           comp: sm.comp, year: sm.year, seasonId: m.seasonId,
           fromClub: fromId, fromClubName: clubLabel(fromId), fromTeam: fromE.team, fromGames: fromE.games,
           toClub: toId, toClubName: clubLabel(toId), toTeam: toE.team, toGames: toE.games,
-          possibleFillIn: smaller < MIN_GAMES,
+          // Present on every row so the two kinds share one shape; an in-season
+          // move has no destination SEASON, it is the same one.
+          toComp: '', toYear: '',
+          overlapDays: overlap,
+          // ⚠️ THE DATES DECIDE, the game count only reinforces. An undated pair
+          // falls back to the count, which is the best available and is marked as
+          // such by overlapDays being null.
+          possibleFillIn: overlap === null ? smaller < MIN_GAMES : overlap >= 0,
+          fewGames: smaller < MIN_GAMES,
         });
       }
     }
@@ -193,13 +231,23 @@ function main() {
   log(`  moves found                 : ${inSeason.length}` +
     ` (${inSeason.filter(x => x.possibleFillIn).length} flagged as a possible fill-in)`);
 
+  if (overlapHistogram.size) {
+    const c = overlapHistogram.get('clean') || 0, i = overlapHistogram.get('interleaved') || 0,
+      u = overlapHistogram.get('undated') || 0;
+    log('\n  by whether the two spells OVERLAP — this is what decides a fill-in:');
+    log(`    clean switch (old club finished before the new one started) : ${c}`);
+    log(`    interleaved  (turning out for both — a permit, not a move)  : ${i}`);
+    log(`    undated      (fell back to the game count)                  : ${u}`);
+  }
+
   if (gamesHistogram.size) {
     log('\n  games at the SMALLER of the two clubs — choose the fill-in line here:');
     for (const k of [...gamesHistogram.keys()].sort((a, b) => a - b)) {
       const n = gamesHistogram.get(k);
       log(`    ${String(k).padStart(3)} game(s): ${String(n).padStart(5)}  ${'#'.repeat(Math.min(60, n))}`);
     }
-    log(`  TR_MIN_GAMES is ${MIN_GAMES}; anything below that line is flagged, not dropped.`);
+    log(`  TR_MIN_GAMES is ${MIN_GAMES}; it now only decides UNDATED pairs — the`);
+    log('  dates decide the rest. Kept in the output as `fewGames` either way.');
   }
 
   // ── Between-season ─────────────────────────────────────────────────────────
@@ -237,6 +285,11 @@ function main() {
           toClub: t.club, toClubName: t.clubName || clubLabel(t.club),
           toTeam: t.team || '', toGames: null,
           toComp: ts.comp, toYear: ts.year,
+          // ⚠️ PRESENT AND null, NOT ABSENT. Every row carries every field, so a
+          // reader never sees `undefined` from half the file — adding nulls to an
+          // array once blanked the whole page because one reader destructured
+          // every element.
+          overlapDays: null, fewGames: false,
           possibleFillIn: false,
         });
       }
