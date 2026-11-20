@@ -2,7 +2,7 @@
 // scripts/probe-org-profile.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-org-profile v2 2026-11-20 season-history-not-one-season';
+const VERSION = 'probe-org-profile v3 2026-11-20 find-the-org-argument';
 
 //
 // Given an organisation id, can we learn what KIND of competition it runs?
@@ -122,19 +122,53 @@ async function main() {
   }
 
   // ── 2. does the org carry a state? ─────────────────────────────────────────
-  log('\n── 2. is a STATE reachable for an organisation? ──');
+  // ⚠️ THE ARGUMENT FIRST, THEN THE FIELDS. v2 asked thirteen field names with
+  // `organisationID` and got thirteen identical rejections — all of them on the
+  // ARGUMENT, none of them reaching the field. discoverOrganisation exists;
+  // "Unknown argument" says so. Thirteen calls measured one thing.
+  log('\n── 2a. what argument does discoverOrganisation want? ──');
+  let orgArg = null;
+  for (const a of ['id', 'organisationId', 'code', 'organisationCode', 'slug']) {
+    const r = await tryQuery(`discoverOrganisation(${a}:)`,
+      `query Probe($v: ID!) { discoverOrganisation(${a}: $v) { id name } }`, { v: first });
+    await sleep(PACE);
+    if (r.ok) {
+      orgArg = a;
+      log(`    ${a}: ACCEPTED — ${JSON.stringify(r.data).slice(0, 200)}`);
+      break;
+    }
+    // A rejection naming the TYPE means the argument is right and the type wrong.
+    if (r.msg && /of type|must be/i.test(r.msg)) {
+      log(`      ↳ that argument exists; the type is wrong. Worth retrying as String.`);
+      const r2 = await tryQuery(`discoverOrganisation(${a}: String)`,
+        `query Probe($v: String!) { discoverOrganisation(${a}: $v) { id name } }`, { v: first });
+      await sleep(PACE);
+      if (r2.ok) { orgArg = a; log(`    ${a} as String: ACCEPTED`); break; }
+    }
+  }
+
+  if (!orgArg) {
+    log('\n    No argument accepted. The organisation record cannot be read directly,');
+    log('    so STATE is unavailable by this route and interstate moves cannot be');
+    log('    labelled. The league name is the only locality hint we have.');
+  } else {
+    log(`\n── 2b. what the organisation record holds (arg: ${orgArg}) ──`);
+    for (const f of ['state', 'stateName', 'region { name }', 'address { state }',
+      'tenant { id name }', 'type', 'sport', 'sportName', 'organisationType',
+      'competitionType', 'level', 'shortName', 'timezone', 'logo { sizes { url } }']) {
+      await tryQuery(`discoverOrganisation { ${f} }`,
+        `query Probe($v: ID!) { discoverOrganisation(${orgArg}: $v) { id name ${f} } }`,
+        { v: first });
+      await sleep(PACE);
+    }
+  }
+
+  if (false) log('\n── 2. is a STATE reachable for an organisation? ──');
   // ⚠️ ASK THE ORG RECORD FIRST. If it stores the sport, the competition type or
   // a season type outright, the whole length heuristic is unnecessary — a stored
   // fact beats a derived one every time. Introspection is disabled, so this is
   // one call per candidate and worth it.
-  for (const f of ['state', 'stateName', 'region { name }', 'address { state }',
-    'tenant { id name }', 'type', 'sport', 'sportName', 'organisationType',
-    'competitionType', 'level', 'shortName', 'timezone']) {
-    await tryQuery(`discoverOrganisation { ${f} }`,
-      `query Probe($id: ID!) { discoverOrganisation(organisationID: $id) { id name ${f} } }`,
-      { id: first });
-    await sleep(PACE);
-  }
+
 
   // ── 3. profile each organisation ───────────────────────────────────────────
   log('\n── 3. season shape per organisation ──');
