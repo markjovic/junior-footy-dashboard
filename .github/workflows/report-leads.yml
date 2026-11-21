@@ -1,0 +1,59 @@
+# .github/workflows/report-leads.yml
+#
+# What are the `lastOrg` leads actually worth?
+#
+# ⚠️ READ-ONLY. No PlayHQ call, nothing committed. Seconds. The CSV goes out as a
+# run artifact because it names children.
+#
+# The walk stores the club PlayHQ currently lists a player at. About 3.5% differ
+# from the club we hold — but most of those merely restate a 2027 registration we
+# already found. This splits the genuinely new leads from the restatements, and
+# uses data/organisations.json to say whether each destination runs a real season
+# or carnivals.
+
+name: Report leads
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'limit — rows printed per section in the log. The CSV always has them all.'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+# NOTE: no concurrency group. It makes no PlayHQ call and writes nothing to the
+# repo, so there is nothing to serialise it against.
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Report
+        env:
+          RL_LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          if [ ! -f scripts/report-leads.js ]; then
+            echo "scripts/report-leads.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/report-leads.js
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-${{ github.run_number }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
