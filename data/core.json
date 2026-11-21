@@ -1569,9 +1569,9 @@
       "retired": false,
       "file": "data/orgs/383836bb-current.json",
       "phases": {
-        "results": false,
+        "results": true,
         "players": false,
-        "matches": 0,
+        "matches": 901,
         "players_n": 0
       },
       "state": "active",
@@ -20699,7 +20699,7 @@
       "file": "data/seasons/1c5d3dfb-core.json",
       "seasonId": "1c5d3dfb",
       "kind": "core",
-      "bytes": 2484
+      "bytes": 758907
     },
     {
       "file": "data/seasons/1c5d3dfb-players.json",
@@ -20925,5 +20925,5 @@
     }
   ],
   "lastClubIndex": "2026-08-19T12:29:46.710Z",
-  "lastFixtureFetch": "2026-09-19T13:56:48.961Z"
+  "lastFixtureFetch": "2026-11-21T13:14:59.269Z"
 }
