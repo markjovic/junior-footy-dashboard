@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v2 2026-11-20 overlap-beats-game-count';
+const VERSION = 'build-transfers v4 2026-11-21 registered-no-team';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -121,6 +121,11 @@ function main() {
 
   // ── In-season ──────────────────────────────────────────────────────────────
   const inSeason = [];
+  // ⚠️ CAPTURED AS THE SEASONS ARE READ. A lead needs the player's age and team,
+  // and those live in the per-season player files that this loop already opens.
+  // Reaching for a `prev` map copied from report-transfers.js is what broke the
+  // first version — the name existed there, not here.
+  const playerInfo = new Map();   // uuid -> { age, team }
   const gamesHistogram = new Map();   // games at the smaller club -> count
   const overlapHistogram = new Map(); // clean | interleaved | undated -> count
   let seasonsWithLines = 0, seasonsWithout = [];
@@ -134,8 +139,12 @@ function main() {
     try {
       const d = store.load([m.compName], { players: true });
       for (const r of (d.matches || [])) if (r.gameId) md.set(r.gameId, r);
-      for (const p of (d.players || [])) if (p && p.uuid && !players.has(p.uuid)) {
-        players.set(p.uuid, { name: p.name, age: p.age });
+      for (const p of (d.players || [])) {
+        if (!p || !p.uuid) continue;
+        if (!players.has(p.uuid)) players.set(p.uuid, { name: p.name, age: p.age });
+        if (!playerInfo.has(p.uuid)) {
+          playerInfo.set(p.uuid, { age: p.age || '', team: p.teamRaw || p.team || '' });
+        }
       }
     } catch (e) { console.error(`  ⚠️ ${m.compName}: ${e.message}`); continue; }
 
@@ -202,6 +211,7 @@ function main() {
           // Present on every row so the two kinds share one shape; an in-season
           // move has no destination SEASON, it is the same one.
           toComp: '', toYear: '',
+          orgKind: '', fromComp: sm.comp, fromYear: sm.year,
           overlapDays: overlap,
           // ⚠️ THE DATES DECIDE, the game count only reinforces. An undated pair
           // falls back to the count, which is the best available and is marked as
@@ -291,6 +301,7 @@ function main() {
           // every element.
           overlapDays: null, fewGames: false,
           possibleFillIn: false,
+          orgKind: '', fromComp: fs2.comp, fromYear: fs2.year,
         });
       }
     }
@@ -306,6 +317,56 @@ function main() {
   }
 
   // ── Write ──────────────────────────────────────────────────────────────────
+  // ── Leads ──────────────────────────────────────────────────────────────────
+  // ⚠️ ONLY WHERE WE HOLD NOTHING. A lastOrg naming a club that is already in
+  // `tracked` restates a registration we found by the normal route; emitting it
+  // would double-count the same move under two kinds.
+  const leads = [];
+  let leadsSkippedKnown = 0, leadsSkippedEvent = 0, leadsUnknownOrg = 0;
+  let orgs = {};
+  const ORG_PATH = path.join(ROOT, 'data', 'organisations.json');
+  if (fs.existsSync(ORG_PATH)) {
+    try { orgs = (JSON.parse(fs.readFileSync(ORG_PATH, 'utf8')).organisations) || {}; }
+    catch (e) { console.error(`  ⚠️ organisations.json unreadable: ${e.message}`); }
+  }
+  if (fs.existsSync(REG_PATH)) {
+    const reg2 = JSON.parse(zlib.gunzipSync(fs.readFileSync(REG_PATH)).toString('utf8'));
+    for (const [uuid, r] of Object.entries(reg2.players || {})) {
+      const lo = r.lastOrg;
+      const from = r.from || {};
+      if (!r.at || !lo || !lo.id || !from.club || lo.id === from.club) continue;
+      if ((r.tracked || []).length) { leadsSkippedKnown++; continue; }
+      const kind = (orgs[lo.id] && orgs[lo.id].kind) || 'unknown';
+      // ⚠️ A CARNIVAL IS NOT A MOVE. An organisation that runs Nines and nothing
+      // else is a second registration alongside a normal season.
+      if (kind === 'event') { leadsSkippedEvent++; continue; }
+      if (kind === 'unknown') leadsUnknownOrg++;
+      const f = splitSeason(from.compName);
+      leads.push({
+        kind: 'lead',
+        uuid, name: r.name, age: (playerInfo.get(uuid) || {}).age || '',
+        // ⚠️ NO SEASON AND NO YEAR, deliberately. A lead cannot be placed in time
+        // and the view must not be able to imply otherwise.
+        comp: '', year: '', seasonId: from.seasonId,
+        fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
+        fromTeam: (playerInfo.get(uuid) || {}).team || '', fromGames: null,
+        toClub: lo.id, toClubName: lo.name || clubLabel(lo.id),
+        toTeam: '', toGames: null,
+        toComp: (orgs[lo.id] && orgs[lo.id].competitions && orgs[lo.id].competitions[0]
+          && orgs[lo.id].competitions[0].name) || '', toYear: '',
+        orgKind: kind, fromComp: f.comp, fromYear: f.year,
+        overlapDays: null, fewGames: false, possibleFillIn: false,
+      });
+    }
+  }
+  log('\n── leads ──');
+  log(`  the club PlayHQ now lists them at, where we hold nothing : ${leads.length}`);
+  log(`    of those, the organisation is not profiled yet         : ${leadsUnknownOrg}`);
+  log(`  skipped, already covered by a tracked registration       : ${leadsSkippedKnown}`);
+  log(`  skipped, destination runs carnivals rather than a season : ${leadsSkippedEvent}`);
+  log('  ⚠️ NOT TRANSFERS. No season, no date — they say only that PlayHQ now');
+  log('     lists the player somewhere else, and are never counted as moves.');
+
   const out = {
     version: 1,
     builtAt: new Date().toISOString(),
@@ -315,9 +376,12 @@ function main() {
       clubLookupsResolved: lookupHit, clubLookupsUnresolved: lookupMiss,
       betweenJudged: walked, betweenUnknown: staleCheck + notWalked,
     },
-    transfers: [...inSeason, ...between],
+    transfers: [...inSeason, ...between, ...leads],
   };
-  log(`\n  total rows: ${out.transfers.length} (${inSeason.length} in-season, ${between.length} between-season)`);
+  out.coverage.leads = leads.length;
+  out.coverage.leadsUnknownOrg = leadsUnknownOrg;
+  log(`\n  total rows: ${out.transfers.length} (${inSeason.length} in-season, ` +
+    `${between.length} between-season, ${leads.length} lead)`);
 
   if (DRY) { log('  DRY RUN — not written.'); process.exit(0); }
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
