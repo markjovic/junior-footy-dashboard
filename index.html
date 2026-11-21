@@ -297,6 +297,7 @@ body{overflow-x:hidden}
 .tv-move{color:var(--t2);flex:1 1 240px}
 .tv-season{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
 .tv-games{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
+.tv-teams{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);flex:1 1 220px}
 .tv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;padding:1px 6px;border-radius:3px;
   background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.3);color:var(--gold)}
 .tv-tag.tv-mid{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);color:#60a5fa}
@@ -701,7 +702,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.3</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.4</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -898,7 +899,8 @@ body{overflow-x:hidden}
                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
                       padding:6px 10px;font-family:'DM Mono',monospace;font-size:12px;min-width:200px">
         <span class="fv-switch">
-          <button id="tvs-club" class="on" onclick="setTransferSort('club')">BY CLUB</button>
+          <button id="tvs-out" class="on" onclick="setTransferSort('out')">CLUB LEFT</button>
+          <button id="tvs-in"             onclick="setTransferSort('in')">CLUB JOINED</button>
           <button id="tvs-name"           onclick="setTransferSort('name')">BY NAME</button>
         </span>
         <span class="fv-switch">
@@ -1156,7 +1158,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.3</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.4</span>
         </div>
 
 
@@ -1531,7 +1533,7 @@ let S = {
   transfersState: undefined,
   transfersError: '',
   transferSearch: '',
-  transferSort: 'club',    // 'club' | 'name'
+  transferSort: 'out',     // 'out' (club left) | 'in' (club joined) | 'name'
   transferKind: 'all',     // 'all' | 'between' | 'in-season'
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
@@ -2602,7 +2604,7 @@ function loadTransfers() {
 function setTransferSearch(v) { S.transferSearch = String(v || ''); renderTransfers(); }
 function setTransferSort(v) {
   S.transferSort = v;
-  ['club','name'].forEach(k => {
+  ['out','in','name'].forEach(k => {
     const b = document.getElementById('tvs-' + k);
     if (b) b.classList.toggle('on', k === v);
   });
@@ -2689,10 +2691,18 @@ function renderTransfers() {
       : '';
     const games = (t.fromGames != null && t.toGames != null)
       ? '<span class="tv-games">' + t.fromGames + 'g → ' + t.toGames + 'g</span>' : '';
+    // ⚠️ THE TEAM, NOT JUST THE CLUB. "Norwood → South Croydon" does not say
+    // which age group moved; "Norwood U12 Purple → —" does. The destination team
+    // is EMPTY for a registration with no team yet, and an em dash says so
+    // rather than leaving a blank that reads as missing data.
+    const teams = (t.fromTeam || t.toTeam)
+      ? '<span class="tv-teams">' + tvEsc(t.fromTeam || '—') + ' → ' + tvEsc(t.toTeam || '—') + '</span>'
+      : '';
     return '<div class="tv-row">' +
       '<span class="tv-name">' + tvEsc(t.name || '(unnamed)') + '</span>' +
       (t.age ? '<span class="tv-age">' + tvEsc(t.age) + '</span>' : '') +
       '<span class="tv-move">' + tvEsc(t.fromClubName || '?') + ' → ' + tvEsc(t.toClubName || '?') + '</span>' +
+      teams +
       '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')
         || (t.kind === 'lead' ? 'from ' + [t.fromComp, t.fromYear].filter(Boolean).join(' ') : '')) + '</span>' +
       kind + fill + games +
@@ -2704,17 +2714,21 @@ function renderTransfers() {
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
       .map(rowHtml).join(''));
   } else {
-    // Grouped by the club they LEFT, because that is the club with a hole to
-    // fill. Each group also counts arrivals, so a club is readable in one place.
+    // ⚠️ GROUPED BY WHICHEVER SIDE WAS ASKED FOR. A club losing players and a
+    // club gaining them are two different questions, and the same row answers
+    // only one of them at a time.
+    const byJoined = S.transferSort === 'in';
+    const keyOf = (t) => (byJoined ? t.toClubName : t.fromClubName) || '(club unknown)';
+    const otherOf = (t) => (byJoined ? t.fromClubName : t.toClubName) || '(club unknown)';
     const groups = new Map();
     for (const t of shown) {
-      const k = t.fromClubName || '(club unknown)';
+      const k = keyOf(t);
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(t);
     }
     const arrivals = new Map();
     for (const t of shown) {
-      const k = t.toClubName || '(club unknown)';
+      const k = otherOf(t);
       arrivals.set(k, (arrivals.get(k) || 0) + 1);
     }
     // Alphabetical by club. A list people scan for a club they know must be in
@@ -2723,8 +2737,8 @@ function renderTransfers() {
       String(a[0]).localeCompare(String(b[0])))) {
       const ld = list.filter(t => t.kind === 'lead').length;
       parts.push('<div class="tv-club">' + tvEsc(club) +
-        '<span class="tv-count">' + (list.length - ld) + ' out' +
-        (arrivals.get(club) ? ' · ' + arrivals.get(club) + ' in' : '') +
+        '<span class="tv-count">' + (list.length - ld) + (byJoined ? ' in' : ' out') +
+        (arrivals.get(club) ? ' · ' + arrivals.get(club) + (byJoined ? ' out' : ' in') : '') +
         (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
       parts.push(list.slice()
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
@@ -7232,6 +7246,11 @@ const HELP = [
       They are counted separately because a season and a grade are what let a move
       be placed in time, and these have neither. Whole groups appearing together
       usually means a folded age group or a merger.<br><br>
+      <b>Club left</b> and <b>Club joined</b> group the same rows by the two
+      different sides of a move — one answers “who have we lost”, the other “who
+      is coming in”. Each row shows the team they played for and the team they
+      have joined; a dash means no team yet, which is normal before a club picks
+      its sides.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
