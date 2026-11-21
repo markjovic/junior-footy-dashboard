@@ -1570,7 +1570,9 @@
       "file": "data/orgs/383836bb-current.json",
       "phases": {
         "results": false,
-        "players": false
+        "players": false,
+        "matches": 0,
+        "players_n": 0
       },
       "state": "active",
       "stateAt": "2026-11-18T10:24:54.195Z"
@@ -10901,7 +10903,8 @@
     "SEJ 2022": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
     "SEJ 2023": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
     "SEJ 2024": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
-    "SEJ 2025": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0"
+    "SEJ 2025": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/1cf85e52-6fbf-401d-aca2-5ce8be011026/1733971075171/logo.png?_a=BAMAMifg0",
+    "EFNL 2027": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   },
   "teamLogos": {
     "North Ringwood Senior Women": "https://res.cloudinary.com/playhq/image/upload/h_64,w_64/v1/production/afl/9e3ed6a9-276a-4468-aaee-c89205ebe97f/1696902146129/logo.png?_a=BAMAMifg0",
@@ -20688,10 +20691,16 @@
     "YJFL 2026|Heidelberg Girls|U11 Girls": "62025c6b",
     "YJFL 2026|Richmond Boys 1|U16": "f3dc4036"
   },
-  "lastUpdated": "2026-10-31T04:17:31.192Z",
-  "lastResultsFetch": "2026-10-31T04:17:31.192Z",
+  "lastUpdated": "2026-11-21T04:11:47.827Z",
+  "lastResultsFetch": "2026-11-21T04:11:47.827Z",
   "lastStatsFetch": "2026-11-16T02:44:53.195Z",
   "seasonFiles": [
+    {
+      "file": "data/seasons/1c5d3dfb-core.json",
+      "seasonId": "1c5d3dfb",
+      "kind": "core",
+      "bytes": 2484
+    },
     {
       "file": "data/seasons/2170ac5a-core.json",
       "seasonId": "2170ac5a",
