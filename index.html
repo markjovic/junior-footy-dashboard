@@ -301,6 +301,7 @@ body{overflow-x:hidden}
   background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.3);color:var(--gold)}
 .tv-tag.tv-mid{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);color:#60a5fa}
 .tv-tag.tv-fill{background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.3);color:#f97316}
+.tv-tag.tv-lead{background:rgba(168,85,247,0.12);border-color:rgba(168,85,247,0.32);color:#a855f7}
 .mob-view-tabs{display:none;gap:1px;background:var(--b1);border-bottom:1px solid var(--b1);
   margin:-12px -12px 12px;padding:0}
 .mob-view-tabs .mob-tab{font-size:11px;padding:11px 4px}
@@ -700,7 +701,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.1</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.3</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -904,6 +905,7 @@ body{overflow-x:hidden}
           <button id="tvk-all" class="on" onclick="setTransferKind('all')">ALL</button>
           <button id="tvk-between"        onclick="setTransferKind('between')">BETWEEN SEASONS</button>
           <button id="tvk-in"             onclick="setTransferKind('in-season')">MID-SEASON</button>
+          <button id="tvk-lead"           onclick="setTransferKind('lead')">NO TEAM YET</button>
         </span>
         <button class="hdr-btn" onclick="openHelp('transfers')"
           title="Where this comes from, and what it cannot see">? About</button>
@@ -1154,7 +1156,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.1</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.3</span>
         </div>
 
 
@@ -2643,8 +2645,14 @@ function renderTransfers() {
   // difference between a floor and a falsehood.
   const unknown = Number(cov.betweenUnknown || 0);
   const parts = [];
+  // ⚠️ A LEAD IS NEVER COUNTED AS A TRANSFER. It has no season and no date, so
+  // folding it into a transfer total would state something the data cannot
+  // support. Two numbers, always.
+  const shownLeads = shown.filter(t => t.kind === 'lead').length;
+  const shownMoves = shown.length - shownLeads;
   parts.push('<div class="tv-note">' +
-    '<b>' + shown.length + '</b> transfer(s) shown' +
+    '<b>' + shownMoves + '</b> with a team' +
+    (shownLeads ? ' and <b>' + shownLeads + '</b> registered but not yet in a team' : '') + ' shown' +
     (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
     (unknown > 0
       ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
@@ -2664,7 +2672,16 @@ function renderTransfers() {
   const rowHtml = (t) => {
     const kind = t.kind === 'in-season'
       ? '<span class="tv-tag tv-mid">mid-season</span>'
-      : '<span class="tv-tag">' + tvEsc([t.toComp, t.toYear].filter(Boolean).join(' ') || 'next season') + '</span>';
+      : t.kind === 'lead'
+        // ⚠️ SAYS WHAT IT IS, AND IT IS A FACT, NOT A GUESS. PlayHQ's own order of
+        // events: a player registers with a club; the club then adds REGISTERED
+        // players to teams; the league then puts teams into grades. A club on the
+        // profile with no team can therefore only mean registered-and-not-yet-
+        // placed. Earlier wording called this "not confirmed", which implied
+        // somebody might verify it — nobody will, and it was already certain.
+        ? '<span class="tv-tag tv-lead" title="Registered with this club for next season. The club has not yet put them in a team, which is why no season or grade is shown.">registered, no team yet</span>' +
+          (t.toComp ? '<span class="tv-season">' + tvEsc(t.toComp) + '</span>' : '')
+        : '<span class="tv-tag">' + tvEsc([t.toComp, t.toYear].filter(Boolean).join(' ') || 'next season') + '</span>';
     const fill = t.possibleFillIn
       // Flagged, never hidden: one or two games for another club is usually a
       // permit, and only a human can tell which.
@@ -2676,7 +2693,8 @@ function renderTransfers() {
       '<span class="tv-name">' + tvEsc(t.name || '(unnamed)') + '</span>' +
       (t.age ? '<span class="tv-age">' + tvEsc(t.age) + '</span>' : '') +
       '<span class="tv-move">' + tvEsc(t.fromClubName || '?') + ' → ' + tvEsc(t.toClubName || '?') + '</span>' +
-      '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')) + '</span>' +
+      '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')
+        || (t.kind === 'lead' ? 'from ' + [t.fromComp, t.fromYear].filter(Boolean).join(' ') : '')) + '</span>' +
       kind + fill + games +
       '</div>';
   };
@@ -2703,9 +2721,11 @@ function renderTransfers() {
     // the order they would look it up in, not ranked by a count.
     for (const [club, list] of [...groups.entries()].sort((a, b) =>
       String(a[0]).localeCompare(String(b[0])))) {
+      const ld = list.filter(t => t.kind === 'lead').length;
       parts.push('<div class="tv-club">' + tvEsc(club) +
-        '<span class="tv-count">' + list.length + ' out' +
-        (arrivals.get(club) ? ' · ' + arrivals.get(club) + ' in' : '') + '</span></div>');
+        '<span class="tv-count">' + (list.length - ld) + ' out' +
+        (arrivals.get(club) ? ' · ' + arrivals.get(club) + ' in' : '') +
+        (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
       parts.push(list.slice()
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
         .map(rowHtml).join(''));
@@ -7203,6 +7223,15 @@ const HELP = [
       than a transfer. A real move shows every game at the old club finishing
       before the first game at the new one. These are flagged rather than hidden,
       because only you can tell which it was.<br><br>
+      <b>“Registered, no team yet”</b> is the third kind, and it is the earliest
+      view of a move there is. The order of events is: a player registers with a
+      club; the club then puts registered players into teams; the league then puts
+      those teams into grades. So a club showing against a player with no team
+      simply means they have signed up and the club has not picked its teams yet
+      — which is why there is no season or grade beside it.<br><br>
+      They are counted separately because a season and a grade are what let a move
+      be placed in time, and these have neither. Whole groups appearing together
+      usually means a folded age group or a merger.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
