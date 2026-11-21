@@ -702,7 +702,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.04</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.05</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -901,6 +901,8 @@ body{overflow-x:hidden}
         <span class="fv-switch">
           <button id="tvs-out" class="on" onclick="setTransferSort('out')">CLUB LEFT</button>
           <button id="tvs-in"             onclick="setTransferSort('in')">CLUB JOINED</button>
+          <button id="tvs-comp"           onclick="setTransferSort('comp')">BY COMP</button>
+          <button id="tvs-grade"          onclick="setTransferSort('grade')">BY GRADE</button>
           <button id="tvs-name"           onclick="setTransferSort('name')">BY NAME</button>
         </span>
         <span class="fv-switch">
@@ -909,6 +911,17 @@ body{overflow-x:hidden}
           <button id="tvk-in"             onclick="setTransferKind('in-season')">MID-SEASON</button>
           <button id="tvk-lead"           onclick="setTransferKind('lead')">NO TEAM YET</button>
         </span>
+        <!-- ⚠️ STACKABLE. Competition, grade, kind and the search box all apply
+             TOGETHER; none of them replaces another. The counts in the note
+             below always describe what is on screen after all four. -->
+        <select id="tv-comp" onchange="setTransferComp(this.value)"
+                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                       padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
+        <select id="tv-grade" onchange="setTransferGrade(this.value)"
+                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                       padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
+        <button class="hdr-btn" onclick="resetTransferFilters()"
+          title="Clear the competition, grade, kind and search filters">CLEAR</button>
         <button class="hdr-btn" onclick="openHelp('transfers')"
           title="Where this comes from, and what it cannot see">? About</button>
       </div>
@@ -1158,7 +1171,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.04</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.05</span>
         </div>
 
 
@@ -1534,7 +1547,9 @@ let S = {
   transfersError: '',
   transferSearch: '',
   transferSort: 'out',     // 'out' (club left) | 'in' (club joined) | 'name'
-  transferKind: 'all',     // 'all' | 'between' | 'in-season'
+  transferKind: 'all',     // 'all' | 'between' | 'in-season' | 'lead'
+  transferComp: '',        // '' = every competition
+  transferGrade: '',       // '' = every grade
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
   // venue; 'venue' the other way. Both orderings answer a real question — "what
@@ -2604,12 +2619,20 @@ function loadTransfers() {
 function setTransferSearch(v) { S.transferSearch = String(v || ''); renderTransfers(); }
 function setTransferSort(v) {
   S.transferSort = v;
-  ['out','in','name'].forEach(k => {
+  ['out','in','comp','grade','name'].forEach(k => {
     const b = document.getElementById('tvs-' + k);
     if (b) b.classList.toggle('on', k === v);
   });
   renderTransfers();
 }
+function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); }
+function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); }
+function resetTransferFilters() {
+  S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
+  const q = document.getElementById('tv-search'); if (q) q.value = '';
+  setTransferKind('all');
+}
+
 function setTransferKind(v) {
   S.transferKind = v;
   [['all','tvk-all'],['between','tvk-between'],['in-season','tvk-in']].forEach(([k, id]) => {
@@ -2634,13 +2657,42 @@ function renderTransfers() {
 
   const data = S.transfers || {};
   const cov = data.coverage || {};
-  const rows = (data.transfers || []).filter(t => t &&
-    (S.transferKind === 'all' || t.kind === S.transferKind));
+  const all = data.transfers || [];
 
+  // ⚠️ THE OPTION LISTS COME FROM THE DATA, not from a hardcoded list. A new
+  // competition or age group appears by itself; one that disappears stops being
+  // offered instead of sitting there selecting nothing.
+  const fill = (id, values, label, current) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const want = ['', ...values];
+    const have = [...el.options].map(o => o.value);
+    if (have.length !== want.length || want.some((v, i) => have[i] !== v)) {
+      el.innerHTML = want.map(v =>
+        '<option value="' + tvEsc(v) + '">' + tvEsc(v || label) + '</option>').join('');
+    }
+    el.value = current || '';
+  };
+  fill('tv-comp', [...new Set(all.map(t => t.fromComp).filter(Boolean))].sort(),
+    'All competitions', S.transferComp);
+  fill('tv-grade', [...new Set(all.map(t => t.age).filter(Boolean))]
+    // U9 before U10: sort on the number where there is one.
+    .sort((a, b) => {
+      const na = Number((String(a).match(/\d+/) || [])[0]);
+      const nb = Number((String(b).match(/\d+/) || [])[0]);
+      if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+      return String(a).localeCompare(String(b));
+    }), 'All grades', S.transferGrade);
+
+  // ⚠️ EVERY FILTER APPLIES AT ONCE. Kind, competition, grade and the search box
+  // narrow the same list in turn; none of them resets another.
   const q = tvFold(S.transferSearch || '');
-  const match = (t) => !q ||
-    tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q) || tvFold(t.toClubName).includes(q);
-  const shown = rows.filter(match);
+  const shown = all.filter(t => t
+    && (S.transferKind === 'all' || t.kind === S.transferKind)
+    && (!S.transferComp || t.fromComp === S.transferComp)
+    && (!S.transferGrade || t.age === S.transferGrade)
+    && (!q || tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q)
+      || tvFold(t.toClubName).includes(q)));
 
   // ⚠️ THE UNKNOWNS GO ON SCREEN, NOT IN A DOC. A club list that silently omits
   // the players nobody has checked reads as complete. Stating the gap is the
@@ -2655,6 +2707,8 @@ function renderTransfers() {
   parts.push('<div class="tv-note">' +
     '<b>' + shownMoves + '</b> with a team' +
     (shownLeads ? ' and <b>' + shownLeads + '</b> registered but not yet in a team' : '') + ' shown' +
+    (S.transferComp ? ' in <b>' + tvEsc(S.transferComp) + '</b>' : '') +
+    (S.transferGrade ? ' at <b>' + tvEsc(S.transferGrade) + '</b>' : '') +
     (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
     (unknown > 0
       ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
@@ -2718,8 +2772,15 @@ function renderTransfers() {
     // club gaining them are two different questions, and the same row answers
     // only one of them at a time.
     const byJoined = S.transferSort === 'in';
-    const keyOf = (t) => (byJoined ? t.toClubName : t.fromClubName) || '(club unknown)';
-    const otherOf = (t) => (byJoined ? t.fromClubName : t.toClubName) || '(club unknown)';
+    const byComp = S.transferSort === 'comp';
+    const byGrade = S.transferSort === 'grade';
+    const keyOf = (t) => (byComp ? (t.fromComp || '(competition unknown)')
+      : byGrade ? (t.age || '(grade unknown)')
+      : byJoined ? t.toClubName : t.fromClubName) || '(club unknown)';
+    // Arrivals only mean something when the grouping is a CLUB. Grouping by
+    // competition or grade, an "in" count would be the same number twice.
+    const otherOf = (t) => (byComp || byGrade) ? null
+      : (byJoined ? t.fromClubName : t.toClubName) || '(club unknown)';
     const groups = new Map();
     for (const t of shown) {
       const k = keyOf(t);
@@ -2729,15 +2790,23 @@ function renderTransfers() {
     const arrivals = new Map();
     for (const t of shown) {
       const k = otherOf(t);
+      if (k === null) continue;
       arrivals.set(k, (arrivals.get(k) || 0) + 1);
     }
     // Alphabetical by club. A list people scan for a club they know must be in
     // the order they would look it up in, not ranked by a count.
-    for (const [club, list] of [...groups.entries()].sort((a, b) =>
-      String(a[0]).localeCompare(String(b[0])))) {
+    for (const [club, list] of [...groups.entries()].sort((a, b) => {
+      if (byGrade) {
+        const na = Number((String(a[0]).match(/\d+/) || [])[0]);
+        const nb = Number((String(b[0]).match(/\d+/) || [])[0]);
+        if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
+      }
+      return String(a[0]).localeCompare(String(b[0]));
+    })) {
       const ld = list.filter(t => t.kind === 'lead').length;
       parts.push('<div class="tv-club">' + tvEsc(club) +
-        '<span class="tv-count">' + (list.length - ld) + (byJoined ? ' in' : ' out') +
+        '<span class="tv-count">' + (list.length - ld) +
+        ((byComp || byGrade) ? ' with a team' : byJoined ? ' in' : ' out') +
         (arrivals.get(club) ? ' · ' + arrivals.get(club) + (byJoined ? ' out' : ' in') : '') +
         (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
       parts.push(list.slice()
@@ -7246,11 +7315,16 @@ const HELP = [
       They are counted separately because a season and a grade are what let a move
       be placed in time, and these have neither. Whole groups appearing together
       usually means a folded age group or a merger.<br><br>
-      <b>Club left</b> and <b>Club joined</b> group the same rows by the two
-      different sides of a move — one answers “who have we lost”, the other “who
-      is coming in”. Each row shows the team they played for and the team they
-      have joined; a dash means no team yet, which is normal before a club picks
-      its sides.<br><br>
+      <b>Club left</b>, <b>Club joined</b>, <b>By comp</b> and <b>By grade</b>
+      group the same rows four different ways — the first two answer “who have we
+      lost” and “who is coming in”, the others show where the movement is
+      happening across a competition or an age group. Each row shows the team
+      they played for and the team they have joined; a dash means no team yet,
+      which is normal before a club picks its sides.<br><br>
+      The competition and grade boxes, the kind buttons and the search all apply
+      <b>at the same time</b> — none of them clears another, and the line above
+      the list always describes what is on screen after all of them.
+      <b>Clear</b> resets the lot.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
