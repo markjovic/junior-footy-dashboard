@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v4 2026-11-21 registered-no-team';
+const VERSION = 'build-transfers v5 2026-11-21 age-and-team-on-every-row';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -288,10 +288,15 @@ function main() {
         const fs2 = splitSeason(from.compName);
         const ts = splitSeason((byId.get(t.seasonId) || {}).compName || t.compName || '');
         between.push({
-          kind: 'between', uuid, name: r.name, age: '',
+          // ⚠️ AGE AND TEAM COME FROM THE SEASON FILES, not from the registration.
+          // A between-season row carried age:'' and fromTeam:'' — so grouping or
+          // filtering by grade silently dropped every one of them, which looks
+          // like "there are no U12 transfers" rather than "this row has no age".
+          kind: 'between', uuid, name: r.name,
+          age: (playerInfo.get(uuid) || {}).age || '',
           comp: fs2.comp, year: fs2.year, seasonId: from.seasonId,
           fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
-          fromTeam: '', fromGames: null,
+          fromTeam: (playerInfo.get(uuid) || {}).team || '', fromGames: null,
           toClub: t.club, toClubName: t.clubName || clubLabel(t.club),
           toTeam: t.team || '', toGames: null,
           toComp: ts.comp, toYear: ts.year,
