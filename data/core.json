@@ -20693,13 +20693,19 @@
   },
   "lastUpdated": "2026-11-21T04:11:47.827Z",
   "lastResultsFetch": "2026-11-21T04:11:47.827Z",
-  "lastStatsFetch": "2026-11-16T02:44:53.195Z",
+  "lastStatsFetch": "2026-11-21T13:12:30.576Z",
   "seasonFiles": [
     {
       "file": "data/seasons/1c5d3dfb-core.json",
       "seasonId": "1c5d3dfb",
       "kind": "core",
       "bytes": 2484
+    },
+    {
+      "file": "data/seasons/1c5d3dfb-players.json",
+      "seasonId": "1c5d3dfb",
+      "kind": "players",
+      "bytes": 96
     },
     {
       "file": "data/seasons/2170ac5a-core.json",
