@@ -2,7 +2,7 @@
 // scripts/probe-rate.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-rate v2 2026-11-22 count-blocks-from-the-library';
+const VERSION = 'probe-rate v3 2026-11-22 concurrency-not-rate';
 
 //
 // What rate does publicProfileTeams actually tolerate?
@@ -39,11 +39,15 @@ const VERSION = 'probe-rate v2 2026-11-22 count-blocks-from-the-library';
 // call succeeds. Nothing is thrown unless four attempts all fail. Reading
 // phq.summary().blocked before and after each stage is the only honest count.
 //
-// ⚠️ THE ACHIEVED RATE IS THE REAL ANSWER ANYWAY. Measured 2026-11-22: target
-// 150/min achieved 118 with no blocks; every target from 225 up collapsed to
-// 61-68/min because each stage spent 80 seconds waiting. Pushing harder makes it
-// SLOWER. The ceiling is where achieved stops tracking target, and that is a
-// number no counter can fake.
+// ⚠️ SERIAL CALLS ARE CAPPED BY LATENCY, NOT BY A LIMIT. Measured 2026-11-22:
+// 300 calls, ZERO blocks, and a target of 150/min achieved only 116. A round
+// trip takes about 520 ms, so one-at-a-time cannot exceed roughly 115/min no
+// matter what the target says. v2 read that as a throttle and reported a
+// "ceiling" that was really the speed of light on a serial loop.
+//
+// ⚠️ CONCURRENCY IS THE LEVER, AND IT HAS NEVER BEEN TESTED HERE. StatTrack
+// reach 940-1,340/min on the same backend at concurrency 25. This probe now
+// ramps WORKERS, not the gap between calls, and watches for the first block.
 //
 // Env: PRATE_START (calls/min to begin, default 75), PRATE_STEP (increase per
 //      stage, default 25), PRATE_MAX (stop climbing here, default 250),
@@ -59,9 +63,10 @@ const store = require('./lib/store');
 
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
-const START = Math.max(1, Number(process.env.PRATE_START || 75));
-const STEP = Math.max(1, Number(process.env.PRATE_STEP || 25));
-const MAX = Math.max(START, Number(process.env.PRATE_MAX || 250));
+// ⚠️ WORKERS, NOT A RATE. PRATE_WORKERS is a comma-separated ramp; 1 is the
+// serial control we run today.
+const WORKER_STAGES = (process.env.PRATE_WORKERS || '1,2,4,8,16,25')
+  .split(',').map(x => Math.max(1, Number(x.trim()))).filter(x => isFinite(x));
 const PER_STAGE = Math.max(10, Number(process.env.PRATE_PER_STAGE || 150));
 
 const log = (...a) => console.log(...a);
@@ -74,7 +79,8 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
 async function main() {
   log(`=== ${VERSION} (store ${store.STORE_VERSION}) ===`);
   log('READ-ONLY: nothing is written. It ramps until something blocks.\n');
-  log(`  start ${START}/min, +${STEP} per stage, stop at ${MAX}/min, ${PER_STAGE} calls per stage`);
+  log(`  worker stages: ${WORKER_STAGES.join(', ')}  (${PER_STAGE} calls each)`);
+  log('  ⚠️ 1 worker is the control — it is what the walk does today.');
 
   if (!fs.existsSync(REG_PATH)) { console.error('FATAL: registrations.json.gz is missing.'); process.exit(1); }
   const reg = JSON.parse(zlib.gunzipSync(fs.readFileSync(REG_PATH)).toString('utf8'));
@@ -88,65 +94,73 @@ async function main() {
   const results = [];
   let blockedAt = null;
 
-  for (let rate = START; rate <= MAX && !blockedAt; rate += STEP) {
-    const gap = 60000 / rate;
+  // One measured round trip, so the serial ceiling is a number rather than an
+  // assumption.
+  const t1 = Date.now();
+  try { await phq.gqlPost(Q, { profileID: ids[0] }, 'PublicProfileTeams'); } catch (e) { /* timed anyway */ }
+  const rtt = Date.now() - t1;
+  log(`  one round trip: ${rtt} ms  ->  a SERIAL loop cannot exceed ~${Math.round(60000 / rtt)}/min
+`);
+
+  for (const workers of WORKER_STAGES) {
+    if (blockedAt) break;
     const t0 = Date.now();
     const before = phq.summary ? (phq.summary().blocked || 0) : 0;
-    let ok = 0, blocked = 0, errored = 0;
+    let ok = 0, errored = 0;
 
-    for (let i = 0; i < PER_STAGE; i++) {
-      const id = ids[cursor++ % ids.length];
-      const sent = Date.now();
-      try {
-        const json = await phq.gqlPost(Q, { profileID: id }, 'PublicProfileTeams');
-        if (json && json.errors && json.errors.length) errored++; else ok++;
-      } catch (e) { errored++; }
-      const wait = gap - (Date.now() - sent);
-      if (wait > 0) await sleep(wait);
-    }
+    // ⚠️ N WORKERS PULLING FROM ONE QUEUE, not N batches. A batch waits for its
+    // slowest call before starting the next, which measures the tail rather than
+    // the throughput.
+    const queue = [];
+    for (let i = 0; i < PER_STAGE; i++) queue.push(ids[cursor++ % ids.length]);
+    let next = 0;
+    await Promise.all(Array.from({ length: workers }, async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= queue.length) return;
+        try {
+          const json = await phq.gqlPost(Q, { profileID: queue[i] }, 'PublicProfileTeams');
+          if (json && json.errors && json.errors.length) errored++; else ok++;
+        } catch (e) { errored++; }
+      }
+    }));
 
-    blocked = (phq.summary ? (phq.summary().blocked || 0) : 0) - before;
+    const blocked = (phq.summary ? (phq.summary().blocked || 0) : 0) - before;
     const mins = (Date.now() - t0) / 60000;
     const actual = mins > 0 ? (ok + errored) / mins : 0;
-    // ⚠️ "TRACKING" IS THE TEST. A stage that achieves far less than its target
-    // is being throttled whether or not a block was counted, because every block
-    // costs 80 seconds of wall clock.
-    const tracking = actual >= rate * 0.85;
-    results.push({ rate, actual, ok, blocked, errored, tracking });
-    log(`  target ${String(rate).padStart(4)}/min  achieved ${actual.toFixed(0).padStart(4)}/min  ` +
-      `ok ${String(ok).padStart(4)}  blocked ${String(blocked).padStart(3)}  errors ${errored}  ` +
-      `${tracking ? 'keeping up' : '← NOT keeping up, this is the ceiling'}`);
-    if (blocked > 0 || !tracking) blockedAt = rate;
+    results.push({ workers, actual, ok, blocked, errored });
+    log(`  ${String(workers).padStart(3)} worker(s)  achieved ${actual.toFixed(0).padStart(5)}/min  ` +
+      `ok ${String(ok).padStart(4)}  blocked ${String(blocked).padStart(3)}  errors ${errored}` +
+      `${blocked ? '  ← BLOCKED, stopping' : ''}`);
+    // ⚠️ STOP AT THE FIRST BLOCK. Climbing past it measures the recovery wait,
+    // not the ceiling — which is what made every stage above 225 in v1 report
+    // 61-68/min.
+    if (blocked > 0) blockedAt = workers;
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
-  const best = results.filter(r => !r.blocked && r.tracking).slice(-1)[0];
-  if (!blockedAt) {
-    log(`  Nothing blocked, up to ${MAX}/min.`);
-    log(`  The highest rate actually achieved was ${best ? best.actual.toFixed(0) : '?'}/min.`);
-    log('  ⚠️ NOT BLOCKING IS NOT THE SAME AS SAFE. This ran for minutes; the walk');
-    log('     runs for hours, and the WAF window is shared across every run on the');
-    log('     account. Raise the walk in steps and read each run, rather than');
-    log('     jumping to the number above.');
+  const clean = results.filter(r => !r.blocked);
+  const best = clean.slice(-1)[0];
+  const serial = results.find(r => r.workers === 1);
+  if (serial) log(`  Serial (what the walk does now): ${serial.actual.toFixed(0)}/min`);
+  if (!best) {
+    log('  Nothing completed cleanly. No conclusion.');
   } else {
-    log(`  Stopped at a target of ${blockedAt}/min — blocked, or no longer keeping up.`);
-    log(`  The highest rate that BOTH avoided blocks and kept pace was ` +
-      `${best ? best.rate : 'none'}/min${best ? ` (achieved ${best.actual.toFixed(0)}/min)` : ''}.`);
-    if (best) {
-      log(`\n  A walk at ${Math.floor(best.rate * 0.9)}/min — 10% under that — would cover`);
-      log(`  40,382 players in about ${Math.round(40382 / (best.rate * 0.9) / 60)} hour(s), against nine at the current 75/min.`);
-    }
-    log('  ⚠️ ONE RUN IS ONE MOMENT. The window is shared with every other job on');
-    log('     the account, so a figure taken while something else was running is');
-    log('     lower than the truth. Repeat before changing the walk.');
+    log(`  Fastest clean stage: ${best.workers} worker(s) at ${best.actual.toFixed(0)}/min` +
+      `${serial ? ` — ${(best.actual / serial.actual).toFixed(1)}x serial` : ''}.`);
+    const hours = 40382 / (best.actual * 0.8) / 60;
+    log(`  At 80% of that, a 40,382-player sweep takes about ${hours.toFixed(1)} hour(s).`);
   }
-  const cur = results.find(r => r.rate === 75);
-  if (cur && !cur.blocked) {
-    log('\n  Our current pace of 75/min did not block, which is the control working.');
+  if (blockedAt) {
+    log(`\n  ⚠️ BLOCKED at ${blockedAt} worker(s). The stage below it is the most`);
+    log('     this account tolerates, and even that was measured once.');
+  } else {
+    log('\n  ⚠️ NOTHING BLOCKED, which is not the same as safe. This ran for minutes;');
+    log('     the walk runs for hours and the WAF window is shared across every run');
+    log('     on the account.');
   }
-  log('\n  ⚠️ CHANGE NOTHING ON THE STRENGTH OF THIS ALONE. If it supports a higher');
-  log('     rate, raise the walk one step and read the next full run before going');
-  log('     further. Seven weeks of outage came from assuming, not from measuring.');
+  log('\n  ⚠️ RAISE THE WALK ONE STEP AND READ A FULL RUN before going further.');
+  log('     Seven weeks of outage came from assuming, not from measuring.');
   phq.logSummary('probe-rate');
   process.exit(0);
 }
