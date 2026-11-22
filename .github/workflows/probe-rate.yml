@@ -2,8 +2,10 @@
 #
 # What rate does publicProfileTeams actually tolerate?
 #
-# ⚠️ IT RAMPS UNTIL SOMETHING BLOCKS, ON PURPOSE. That is the only way to find a
-# ceiling. It stops at the first block and reports the rate that was running.
+# ⚠️ IT RAMPS CONCURRENCY UNTIL SOMETHING BLOCKS, ON PURPOSE. Serial calls are
+# capped by LATENCY, not by any limit — 300 calls blocked zero times and still
+# could not pass 116/min. Parallelism is the lever; StatTrack reach 940-1,340/min
+# on the same backend at concurrency 25.
 #
 # ⚠️ RUN IT ALONE. The WAF window is shared across every run on the account, so a
 # figure taken while a walk is going is lower than the truth. It holds the
@@ -19,23 +21,16 @@ name: Probe rate
 on:
   workflow_dispatch:
     inputs:
-      start:
-        description: 'start — calls/min to begin at. 75 is our current pace and acts as the control.'
+      # ⚠️ WORKERS, NOT A RATE. Serial calls are capped by latency — 300 calls on
+      # 2026-11-22 blocked zero times and still could not pass 116/min, because a
+      # round trip is about 520 ms. Parallelism is the only lever.
+      workers:
+        description: 'workers — comma-separated concurrency ramp. 1 is the control: it is what the walk does today.'
         required: false
-        default: '75'
-        type: string
-      step:
-        description: 'step — increase per stage.'
-        required: false
-        default: '75'
-        type: string
-      max:
-        description: 'max — stop climbing here. StatTrack report 940-1340/min on the same backend.'
-        required: false
-        default: '900'
+        default: '1,2,4,8,16,25'
         type: string
       per_stage:
-        description: 'per_stage — calls at each rate before stepping up.'
+        description: 'per_stage — calls at each level of concurrency.'
         required: false
         default: '150'
         type: string
@@ -58,9 +53,10 @@ jobs:
           ref: ${{ github.ref_name }}
       - name: Probe
         env:
-          PRATE_START: ${{ github.event.inputs.start }}
-          PRATE_STEP: ${{ github.event.inputs.step }}
-          PRATE_MAX: ${{ github.event.inputs.max }}
+          # ⚠️ AN EXPLICIT INPUT BEATS A SCRIPT DEFAULT. v2's new defaults never
+          # ran because this workflow kept passing the old ones — the script was
+          # changed and the workflow was not.
+          PRATE_WORKERS: ${{ github.event.inputs.workers }}
           PRATE_PER_STAGE: ${{ github.event.inputs.per_stage }}
         run: |
           if [ ! -f scripts/probe-rate.js ]; then
