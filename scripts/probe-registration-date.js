@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v3 2026-11-22 both-halves-of-the-filter';
+const VERSION = 'probe-registration-date v4 2026-11-22 the-third-filter-field';
 
 //
 // Two questions, both open after today's work.
@@ -242,6 +242,54 @@ async function main() {
     }
   } else {
     log('    no registration id returned — nothing to follow.');
+  }
+
+  // ── 10. THE FILTER WANTS A THIRD FIELD ─────────────────────────────────────
+  // ⚠️ EACH ROUND THE SERVER NAMES ONE MORE THING. seasonID, then
+  // organisationID, and now `type` of SeasonRegistrationType — and we already
+  // know its values from seasonRegistrations: PARTICIPANT_TO_CLUB and
+  // PARTICIPANT_TO_ASSOCIATION. The list type also has a field called `result`,
+  // singular, which it suggested when `results` was rejected.
+  log('\n── 10. myTeamsParticipants with all three filter fields ──');
+  for (const type of ['PARTICIPANT_TO_CLUB', 'PARTICIPANT_TO_ASSOCIATION']) {
+    for (const f of ['result { id }', 'result { id firstName lastName }',
+      'result { __typename }']) {
+      await tryQuery(`myTeamsParticipants(type: ${type}) { ${f} }`,
+        `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { ${f} } }`,
+        { f: { seasonID: season, organisationID: org, type } });
+      await sleep(PACE);
+    }
+  }
+
+  // ── 11. WHAT ELSE IS ON DiscoverRegistration ───────────────────────────────
+  // ⚠️ `products` AND `endDate` WERE NAMED BY THE SERVER, not guessed —
+  // suggested when `profiles` and `entrants` were rejected. seasonRegistrations
+  // works and returns these objects, so ask IT rather than
+  // discoverSeasonRegistration, which validates the query and then answers
+  // "could not be found" at runtime: the field list is right, the ID FORMAT is
+  // wrong, and that is a separate problem.
+  log('\n── 11. the rest of DiscoverRegistration, via seasonRegistrations ──');
+  for (const f of ['products { __typename }', 'products { id name }',
+    'startDate', 'endDate', 'name', 'displayName', 'fee', 'url', 'code']) {
+    await tryQuery(`seasonRegistrations { ${f} }`,
+      `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id ${f} } }`, { id: season });
+    await sleep(PACE);
+  }
+
+  // ── 12. the id format discoverSeasonRegistration wants ─────────────────────
+  // It took the uuid without complaint and found nothing, so it is keyed on
+  // something else. If `code` exists on the object above, that is the candidate.
+  log('\n── 12. does discoverSeasonRegistration want a code rather than a uuid? ──');
+  const withCode = await tryQuery('seasonRegistrations { id code }',
+    `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id code } }`, { id: season });
+  await sleep(PACE);
+  const code = ((withCode.data && withCode.data.seasonRegistrations) || [])[0]?.code;
+  if (code) {
+    await tryQuery(`discoverSeasonRegistration(registrationID: "${code}")`,
+      `query Probe($id: String!) { discoverSeasonRegistration(registrationID: $id) { id type } }`,
+      { id: code });
+  } else {
+    log('    no code field to try.');
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
