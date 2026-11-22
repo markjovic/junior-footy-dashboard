@@ -2,7 +2,7 @@
 // scripts/probe-org-registrations.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-org-registrations v2 2026-11-22 the-names-playhq-gave-us';
+const VERSION = 'probe-org-registrations v3 2026-11-22 what-is-in-a-registration';
 
 //
 // Can we ask a CLUB who has registered with it, instead of asking 40,382 players
@@ -128,6 +128,38 @@ async function main() {
     await sleep(PACE);
   }
 
+  // ── 2c. WHAT IS INSIDE A REGISTRATION ──────────────────────────────────────
+  // ⚠️ THIS IS THE WHOLE QUESTION NOW. seasonRegistrations(seasonID: ID!) returns
+  // a populated list for a season with NO TEAMS PICKED — exactly the state the
+  // per-player walk cannot see. If a record carries the PERSON and the
+  // ORGANISATION, the walk stops being a walk: a handful of season calls replace
+  // 40,382 profile calls, and the rate ceiling stops mattering at all.
+  //
+  // ⚠️ AN ID ALONE IS USELESS. The list came back as bare ids. If that is all a
+  // registration exposes, we would still need a lookup per registration and
+  // nothing is saved. One field at a time, because a rejected field fails the
+  // whole query.
+  log('\n── 2c. what does a SeasonRegistration actually hold? ──');
+  for (const f of ['profile { id firstName lastName }', 'person { id }', 'player { id }',
+    'participant { id }', 'organisation { id name }', 'club { id name }',
+    'team { id name }', 'status', 'status { value }', 'createdAt', 'registeredAt',
+    'season { id name }', 'type', 'role']) {
+    await tryQuery(`seasonRegistrations { ${f} }`,
+      `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id ${f} } }`, { id: season });
+    await sleep(PACE);
+  }
+
+  // ── 2d. the organisation route, with the argument PlayHQ named ─────────────
+  // ⚠️ `code: ID!` CAME FROM PlayHQ'S OWN ERROR, not from guessing: "argument
+  // \"code\" of type \"ID!\" is required". v2 never tried it.
+  log('\n── 2d. organisationRegistrations(code: ID!) ──');
+  for (const f of ['id', 'id profile { id }', 'id organisation { id name }',
+    'id season { id name }']) {
+    await tryQuery(`organisationRegistrations { ${f} }`,
+      `query Probe($v: ID!) { organisationRegistrations(code: $v) { ${f} } }`, { v: org });
+    await sleep(PACE);
+  }
+
   log('\n── 2b. the invented names, kept so the NO stays recorded ──');
   for (const [label, q, vars] of [
     ['discoverRegistrations(organisationID:)',
@@ -165,6 +197,13 @@ async function main() {
     `query Probe($v: String!) { discoverSeason(seasonID: $v) { id name } }`, { v: season });
 
   log('\n═══ WHAT THIS SAYS ═══');
+  log('  seasonRegistrations(seasonID: ID!) is CONFIRMED to return a populated');
+  log('  list for a season with no teams. The question section 2c answers is');
+  log('  whether a record names the PERSON and the CLUB.');
+  log('    both       -> the walk is replaceable, outright');
+  log('    person only-> still need the club from somewhere, but far fewer calls');
+  log('    ids only   -> a lookup per registration, and nothing is saved');
+  log('');
   log('  If ANY of the above returned a populated list of people, the walk can be');
   log('  replaced: ~195 organisation calls instead of 40,382 player calls, and a');
   log('  nine-hour sweep becomes minutes.');
