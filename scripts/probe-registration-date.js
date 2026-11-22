@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v2 2026-11-22 close-out-the-named-ops';
+const VERSION = 'probe-registration-date v3 2026-11-22 both-halves-of-the-filter';
 
 //
 // Two questions, both open after today's work.
@@ -202,6 +202,46 @@ async function main() {
     }
   } else {
     log('    no team returned for this season — nothing to ask.');
+  }
+
+  // ── 8. BOTH HALVES OF THE FILTER, TOGETHER ─────────────────────────────────
+  // ⚠️ I SUPPLIED THEM ONE AT A TIME AND NEVER BOTH. MyTeamsParticipantsFilter
+  // requires seasonID AND organisationID; each attempt named the half that was
+  // missing and I read two rejections as a dead end instead of as one
+  // instruction. Both are values we already hold for every club and season.
+  log('\n── 8. myTeamsParticipants with BOTH filter fields ──');
+  const bothFilter = { seasonID: season, organisationID: org };
+  for (const f of ['__typename', 'participants { id }', 'items { id }', 'nodes { id }',
+    'edges { node { id } }', 'results { id }', 'totalCount']) {
+    await tryQuery(`myTeamsParticipants { ${f} }`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { ${f} } }`,
+      { f: bothFilter });
+    await sleep(PACE);
+  }
+
+  // ── 9. FOLLOW THE REGISTRATION ID ──────────────────────────────────────────
+  // ⚠️ discoverSeasonRegistration WANTS registrationID: String!, AND
+  // seasonRegistrations HANDS US THOSE IDS. The chain has been available since
+  // the moment seasonRegistrations was found and nobody followed it: list the
+  // registrations for a season, then ask what one of them contains.
+  log('\n── 9. seasonRegistrations -> discoverSeasonRegistration ──');
+  const list = await tryQuery('seasonRegistrations (for ids)',
+    `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id type } }`, { id: season });
+  await sleep(PACE);
+  const regs = (list.data && list.data.seasonRegistrations) || [];
+  log(`    ${regs.length} registration(s) on this season`);
+  const regId = regs[0] && regs[0].id;
+  if (regId) {
+    for (const f of ['__typename', 'id', 'name', 'type', 'organisation { id name }',
+      'participants { id }', 'members { id }', 'profiles { id }', 'entrants { id }',
+      'season { __typename }', 'fees { __typename }']) {
+      await tryQuery(`discoverSeasonRegistration { ${f} }`,
+        `query Probe($id: String!) { discoverSeasonRegistration(registrationID: $id) { ${f} } }`,
+        { id: regId });
+      await sleep(PACE);
+    }
+  } else {
+    log('    no registration id returned — nothing to follow.');
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
