@@ -1,0 +1,54 @@
+# .github/workflows/probe-org-registrations.yml
+#
+# Can we ask a CLUB who has registered with it, instead of asking 40,382 players?
+#
+# ⚠️ READ-ONLY. Nothing written or committed. About 23 calls.
+#
+# The walk makes one call per player — nine hours at 75/min. A registration lands
+# at one of ~195 clubs we already hold, so if an organisation will list its
+# registered players the sweep becomes minutes. Never probed; expect it to fail,
+# and a clear NO is worth writing down.
+
+name: Probe org registrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      org:
+        description: 'org — an organisation code. Blank uses one of ours.'
+        required: false
+        default: ''
+        type: string
+      season:
+        description: 'season — a seasonID. Blank uses the latest tracked one.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Probe
+        env:
+          PR_ORG: ${{ github.event.inputs.org }}
+          PR_SEASON: ${{ github.event.inputs.season }}
+        run: |
+          if [ ! -f scripts/probe-org-registrations.js ]; then
+            echo "scripts/probe-org-registrations.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-org-registrations.js

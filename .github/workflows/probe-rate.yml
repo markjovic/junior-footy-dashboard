@@ -1,0 +1,71 @@
+# .github/workflows/probe-rate.yml
+#
+# What rate does publicProfileTeams actually tolerate?
+#
+# ⚠️ IT RAMPS UNTIL SOMETHING BLOCKS, ON PURPOSE. That is the only way to find a
+# ceiling. It stops at the first block and reports the rate that was running.
+#
+# ⚠️ RUN IT ALONE. The WAF window is shared across every run on the account, so a
+# figure taken while a walk is going is lower than the truth. It holds the
+# data-write group for exactly that reason.
+#
+# ⚠️ A BLOCK COSTS ~80 SECONDS, NOT A DAY. Recovery is 76-77s and does not
+# escalate. The seven-week outage was node:https, which is fixed.
+#
+# ⚠️ READ-ONLY. Nothing written or committed. Worst case 1,800 calls over ~7 min.
+
+name: Probe rate
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: 'start — calls/min to begin at. 75 is our current pace and acts as the control.'
+        required: false
+        default: '75'
+        type: string
+      step:
+        description: 'step — increase per stage.'
+        required: false
+        default: '75'
+        type: string
+      max:
+        description: 'max — stop climbing here. StatTrack report 940-1340/min on the same backend.'
+        required: false
+        default: '900'
+        type: string
+      per_stage:
+        description: 'per_stage — calls at each rate before stepping up.'
+        required: false
+        default: '150'
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Probe
+        env:
+          PRATE_START: ${{ github.event.inputs.start }}
+          PRATE_STEP: ${{ github.event.inputs.step }}
+          PRATE_MAX: ${{ github.event.inputs.max }}
+          PRATE_PER_STAGE: ${{ github.event.inputs.per_stage }}
+        run: |
+          if [ ! -f scripts/probe-rate.js ]; then
+            echo "scripts/probe-rate.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-rate.js
