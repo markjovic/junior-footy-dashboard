@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v5 2026-11-22 stop-truncating-the-answer';
+const VERSION = 'probe-registration-date v6 2026-11-23 guess-the-user-type';
 
 //
 // Two questions, both open after today's work.
@@ -30,7 +30,12 @@ const VERSION = 'probe-registration-date v5 2026-11-22 stop-truncating-the-answe
 //
 // READ-ONLY: nothing is written. About 30 calls.
 //
-// Env: PD_PROFILE (a uuid), PD_SEASON (a seasonID), PD_PACE_MS (default 900).
+// ⚠️ PD_ONLY=16 RUNS ONLY THE LAST SECTION. Sections 1-15 are settled and are
+// kept as the written record, but re-running 74 calls to reach the one open
+// question wastes the budget and the clock.
+//
+// Env: PD_PROFILE (a uuid), PD_SEASON (a seasonID), PD_PACE_MS (default 900),
+//      PD_ONLY (section number to run alone).
 
 'use strict';
 
@@ -95,10 +100,13 @@ async function main() {
   const org = Object.keys(core.clubs || {})[0] || '';
   log(`profile : ${profile}`);
   log(`season  : ${season}`);
-  log(`org     : ${org}\n`);
+  log(`org     : ${org}`);
+  const ONLY = (process.env.PD_ONLY || '').trim();
+  if (ONLY) log(`⚠️ PD_ONLY=${ONLY} — running that section alone\n`); else log('');
   await phq.ensureSession();
 
   // ── 1. a date anywhere on the profile ──────────────────────────────────────
+  if (!ONLY) {
   log('── 1. is there a DATE on the profile or its last organisation? ──');
   for (const f of ['lastInteractedAt', 'lastInteractedDate', 'lastActiveAt', 'updatedAt',
     'createdAt', 'lastSeenAt', 'lastInteraction { at }', 'lastInteraction { date }',
@@ -294,6 +302,43 @@ async function main() {
       { id: code });
   } else {
     log('    no code field to try.');
+  }
+
+  } // end of the settled sections
+
+  // ── 16. THE ONE OPEN QUESTION: what is a SeasonRegistrationUserType? ───────
+  // ⚠️ THE ENUM TRICK IS SPENT. Apollo lists valid values only when the one sent
+  // is CLOSE to a real one; "PARTICIPANT_TO_CLUB" was not close to anything and
+  // the server said so without naming a single alternative. The remaining way in
+  // is a short list of plausible values — and a near-miss would make it suggest
+  // the real one, which is the actual goal here.
+  //
+  // ⚠️ EXPECT "Unauthenticated" EVEN IF ONE IS ACCEPTED. The operation is called
+  // myTeamsParticipants. If it answers that, this whole line of enquiry is
+  // closed and the per-player walk stands as the only route.
+  log('\n── 16. plausible values for SeasonRegistrationUserType ──');
+  for (const t of ['PARTICIPANT', 'PLAYER', 'COACH', 'TEAM_MANAGER', 'VOLUNTEER',
+    'OFFICIAL', 'ADMIN', 'MEMBER', 'GUARDIAN', 'PARENT']) {
+    const r = await tryQuery(`type: ${t}`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { result { __typename } } }`,
+      { f: { seasonID: season, organisationID: org, type: t } });
+    await sleep(PACE);
+    // The moment one is accepted, ask what the participant holds — that is the
+    // only reason any of this matters.
+    if (r.ok || (r.kind === 'BEHIND A LOGIN')) {
+      log(`    ⇒ "${t}" is a VALID value.`);
+      if (r.kind === 'BEHIND A LOGIN') {
+        log('      …and the operation needs a login, so it is unavailable to us. Closed.');
+        break;
+      }
+      for (const f of ['id', 'profileID', 'participantID', 'displayName', 'fullName']) {
+        await tryQuery(`MyTeamsParticipant { ${f} }`,
+          `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { result { ${f} } } }`,
+          { f: { seasonID: season, organisationID: org, type: t } });
+        await sleep(PACE);
+      }
+      break;
+    }
   }
 
   // ── 13. MAKE THE SERVER LIST THE ENUM ──────────────────────────────────────
