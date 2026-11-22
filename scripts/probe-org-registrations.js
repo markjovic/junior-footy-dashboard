@@ -2,7 +2,7 @@
 // scripts/probe-org-registrations.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-org-registrations v1 2026-11-22';
+const VERSION = 'probe-org-registrations v2 2026-11-22 the-names-playhq-gave-us';
 
 //
 // Can we ask a CLUB who has registered with it, instead of asking 40,382 players
@@ -95,8 +95,40 @@ async function main() {
     await sleep(PACE);
   }
 
-  // ── 2. a root operation for registrations ──────────────────────────────────
-  log('\n── 2. is there a registrations operation at all? ──');
+  // ── 2. THE OPERATIONS PlayHQ NAMED ITSELF ──────────────────────────────────
+  // ⚠️ NOT GUESSES. v1 asked for five invented names and PlayHQ answered each
+  // with "Did you mean …?", listing REAL fields on Query. Those suggestions are
+  // the schema telling us what exists, and they are worth more than any further
+  // guessing. v1 then stopped without trying a single one of them.
+  //
+  //   organisationRegistrations      suggested for publicOrganisationRegistrations
+  //   seasonRegistrations            suggested for registrations
+  //   discoverSeasonRegistration     suggested for discoverRegistrations
+  //   participant, myTeamsParticipants, duplicateProfiles
+  log('\n── 2a. the operations PlayHQ named in its own suggestions ──');
+  for (const [label, q, vars] of [
+    ['organisationRegistrations(organisationID:)',
+      `query Probe($id: ID!) { organisationRegistrations(organisationID: $id) { id } }`, { id: org }],
+    ['organisationRegistrations(organisationID: String)',
+      `query Probe($id: String!) { organisationRegistrations(organisationID: $id) { id } }`, { id: org }],
+    ['organisationRegistrations() no args',
+      `query Probe { organisationRegistrations { id } }`, {}],
+    ['seasonRegistrations(seasonID: String)',
+      `query Probe($id: String!) { seasonRegistrations(seasonID: $id) { id } }`, { id: season }],
+    ['seasonRegistrations(seasonID: ID)',
+      `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id } }`, { id: season }],
+    ['discoverSeasonRegistration(seasonID: String)',
+      `query Probe($id: String!) { discoverSeasonRegistration(seasonID: $id) { id } }`, { id: season }],
+    ['participant(id:)',
+      `query Probe($id: ID!) { participant(id: $id) { id } }`, { id: org }],
+    ['myTeamsParticipants',
+      `query Probe { myTeamsParticipants { id } }`, {}],
+  ]) {
+    await tryQuery(label, q, vars);
+    await sleep(PACE);
+  }
+
+  log('\n── 2b. the invented names, kept so the NO stays recorded ──');
   for (const [label, q, vars] of [
     ['discoverRegistrations(organisationID:)',
       `query Probe($id: ID!) { discoverRegistrations(organisationID: $id) { id } }`, { id: org }],
@@ -117,20 +149,20 @@ async function main() {
   // ⚠️ A SEASON KNOWS ITS REGISTRATIONS even before teams exist — that is how a
   // club picks teams from a list. Whether it PUBLISHES them is the question.
   log('\n── 3. does a season expose its registrations? ──');
+  // ⚠️ String!, NOT ID!. v1 ran all five of these with an ID! variable and every
+  // one failed on the VARIABLE before reaching the field — so section 3 measured
+  // nothing at all. Same mistake as probe-org-profile v2, one script later.
   for (const f of ['registrations { id }', 'participants { id }', 'members { id }',
-    'players { id }', 'teams { id name }']) {
+    'players { id }', 'teams { id name }', 'competition { id name }', 'status { value }']) {
     await tryQuery(`discoverSeason { ${f} }`,
-      `query Probe($id: ID!) { discoverSeason(seasonID: $id) { id name ${f} } }`, { id: season });
+      `query Probe($id: String!) { discoverSeason(seasonID: $id) { id name ${f} } }`, { id: season });
     await sleep(PACE);
   }
 
   // ── 4. the argument shape, if the field exists but the argument is wrong ────
-  log('\n── 4. discoverSeason, to confirm the argument name ──');
-  for (const a of ['seasonID', 'id', 'seasonId', 'code']) {
-    await tryQuery(`discoverSeason(${a}:)`,
-      `query Probe($v: ID!) { discoverSeason(${a}: $v) { id name } }`, { v: season });
-    await sleep(PACE);
-  }
+  log('\n── 4. confirmed: discoverSeason(seasonID: String!) ──');
+  await tryQuery('discoverSeason(seasonID: String)',
+    `query Probe($v: String!) { discoverSeason(seasonID: $v) { id name } }`, { v: season });
 
   log('\n═══ WHAT THIS SAYS ═══');
   log('  If ANY of the above returned a populated list of people, the walk can be');
