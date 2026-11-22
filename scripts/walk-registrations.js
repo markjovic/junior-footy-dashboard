@@ -75,7 +75,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v9 2026-11-22 pace-110';
+const VERSION = 'walk-registrations v10 2026-11-22 spread-the-recheck';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -90,6 +90,28 @@ const LEGACY_PATH = path.join(ROOT, 'data', 'registrations.json');
 
 const RECHECK_UNFOUND_DAYS = 7;
 const RECHECK_FOUND_DAYS = 28;
+
+// ⚠️ EVERY PLAYER GETTING EXACTLY N DAYS DESTROYS THE ROLLING DESIGN. The budget
+// is ceil(cohort / 7) a day because roughly a seventh should come due each day.
+// A bulk run — a backlog, or WALK_IGNORE_NEXT_CHECK — walks tens of thousands of
+// players within one window and hands them all the SAME nextCheck. On
+// 2026-11-20/21 three forced sweeps left all 40,382 due on one day and nothing
+// due on the other six: a thundering herd, the exact opposite of the design.
+//
+// ⚠️ THE SPREAD IS DETERMINISTIC, FROM THE uuid, NOT RANDOM. A player keeps the
+// same slot every time, so the cohort stays spread run after run instead of
+// being reshuffled into a new clump. Random jitter would spread it once and then
+// drift back together.
+//
+// The offset is centred on zero, so the MEAN interval is unchanged — 7 days
+// stays 7 days on average, it just stops being 7 days for everybody at once.
+function spreadDays(uuid, baseDays) {
+  const half = Math.max(1, Math.floor(baseDays / 2));
+  let h = 0;
+  const str = String(uuid || '');
+  for (let i = 0; i < str.length; i++) h = ((h * 31) + str.charCodeAt(i)) >>> 0;
+  return baseDays + ((h % (2 * half + 1)) - half);
+}
 const DAILY_FRACTION = Math.max(1, Number(process.env.WALK_DAILY_FRACTION || 7));
 const TIME_BUDGET_MS = Number(process.env.WALK_TIME_BUDGET_MS || 100 * 60 * 1000);
 const RATE = Math.max(1, Number(process.env.WALK_RATE || 110));
@@ -367,7 +389,7 @@ async function main() {
       if (/NOT_FOUND|failed to find profile/i.test(msg)) {
         notFound++;
         rec.at = at; rec.missing = true; rec.triggered = false;
-        rec.nextCheck = isoAt(Date.now() + RECHECK_FOUND_DAYS * DAY_MS);
+        rec.nextCheck = isoAt(Date.now() + spreadDays(uuid, RECHECK_FOUND_DAYS) * DAY_MS);
       } else { errored++; if (errorSamples.length < 5) errorSamples.push(`${uuid}: ${msg.slice(0, 160)}`); }
       continue;
     }
@@ -446,7 +468,7 @@ async function main() {
 
     rec.at = at;
     rec.triggered = false;
-    rec.nextCheck = isoAt(Date.now() + (tracked.length ? RECHECK_FOUND_DAYS : RECHECK_UNFOUND_DAYS) * DAY_MS);
+    rec.nextCheck = isoAt(Date.now() + spreadDays(uuid, tracked.length ? RECHECK_FOUND_DAYS : RECHECK_UNFOUND_DAYS) * DAY_MS);
     if (tracked.length) trackedFound++;
     if (other.length) otherFound++;
     if (!sawOwn) {
