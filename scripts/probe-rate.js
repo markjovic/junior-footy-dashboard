@@ -2,7 +2,7 @@
 // scripts/probe-rate.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-rate v1 2026-11-22';
+const VERSION = 'probe-rate v2 2026-11-22 count-blocks-from-the-library';
 
 //
 // What rate does publicProfileTeams actually tolerate?
@@ -33,8 +33,20 @@ const VERSION = 'probe-rate v1 2026-11-22';
 //
 // READ-ONLY: nothing is written.
 //
+// ⚠️ BLOCKS ARE COUNTED FROM THE LIBRARY, NOT FROM EXCEPTIONS. v1 reported
+// "blocked 0" on every stage while the log showed eight `[waf] blocked` lines,
+// because lib/playhq.js ABSORBS a block: it waits 80 seconds, retries, and the
+// call succeeds. Nothing is thrown unless four attempts all fail. Reading
+// phq.summary().blocked before and after each stage is the only honest count.
+//
+// ⚠️ THE ACHIEVED RATE IS THE REAL ANSWER ANYWAY. Measured 2026-11-22: target
+// 150/min achieved 118 with no blocks; every target from 225 up collapsed to
+// 61-68/min because each stage spent 80 seconds waiting. Pushing harder makes it
+// SLOWER. The ceiling is where achieved stops tracking target, and that is a
+// number no counter can fake.
+//
 // Env: PRATE_START (calls/min to begin, default 75), PRATE_STEP (increase per
-//      stage, default 75), PRATE_MAX (stop climbing here, default 900),
+//      stage, default 25), PRATE_MAX (stop climbing here, default 250),
 //      PRATE_PER_STAGE (calls at each rate, default 150).
 
 'use strict';
@@ -48,8 +60,8 @@ const store = require('./lib/store');
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
 const START = Math.max(1, Number(process.env.PRATE_START || 75));
-const STEP = Math.max(1, Number(process.env.PRATE_STEP || 75));
-const MAX = Math.max(START, Number(process.env.PRATE_MAX || 900));
+const STEP = Math.max(1, Number(process.env.PRATE_STEP || 25));
+const MAX = Math.max(START, Number(process.env.PRATE_MAX || 250));
 const PER_STAGE = Math.max(10, Number(process.env.PRATE_PER_STAGE || 150));
 
 const log = (...a) => console.log(...a);
@@ -79,6 +91,7 @@ async function main() {
   for (let rate = START; rate <= MAX && !blockedAt; rate += STEP) {
     const gap = 60000 / rate;
     const t0 = Date.now();
+    const before = phq.summary ? (phq.summary().blocked || 0) : 0;
     let ok = 0, blocked = 0, errored = 0;
 
     for (let i = 0; i < PER_STAGE; i++) {
@@ -87,28 +100,27 @@ async function main() {
       try {
         const json = await phq.gqlPost(Q, { profileID: id }, 'PublicProfileTeams');
         if (json && json.errors && json.errors.length) errored++; else ok++;
-      } catch (e) {
-        // ⚠️ THE LIBRARY ABSORBS A BLOCK — it waits 80s and retries up to four
-        // times before throwing, so a throw here means it never recovered. The
-        // counters are the reliable signal, not the exception text.
-        const msg = String(e.message || '');
-        if (/cloudfront|block|403/i.test(msg)) blocked++; else errored++;
-      }
+      } catch (e) { errored++; }
       const wait = gap - (Date.now() - sent);
       if (wait > 0) await sleep(wait);
-      if (blocked) break;
     }
 
+    blocked = (phq.summary ? (phq.summary().blocked || 0) : 0) - before;
     const mins = (Date.now() - t0) / 60000;
-    const actual = mins > 0 ? (ok + blocked + errored) / mins : 0;
-    results.push({ rate, actual, ok, blocked, errored });
+    const actual = mins > 0 ? (ok + errored) / mins : 0;
+    // ⚠️ "TRACKING" IS THE TEST. A stage that achieves far less than its target
+    // is being throttled whether or not a block was counted, because every block
+    // costs 80 seconds of wall clock.
+    const tracking = actual >= rate * 0.85;
+    results.push({ rate, actual, ok, blocked, errored, tracking });
     log(`  target ${String(rate).padStart(4)}/min  achieved ${actual.toFixed(0).padStart(4)}/min  ` +
-      `ok ${String(ok).padStart(4)}  blocked ${blocked}  errors ${errored}`);
-    if (blocked) blockedAt = rate;
+      `ok ${String(ok).padStart(4)}  blocked ${String(blocked).padStart(3)}  errors ${errored}  ` +
+      `${tracking ? 'keeping up' : '← NOT keeping up, this is the ceiling'}`);
+    if (blocked > 0 || !tracking) blockedAt = rate;
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
-  const best = results.filter(r => !r.blocked).slice(-1)[0];
+  const best = results.filter(r => !r.blocked && r.tracking).slice(-1)[0];
   if (!blockedAt) {
     log(`  Nothing blocked, up to ${MAX}/min.`);
     log(`  The highest rate actually achieved was ${best ? best.actual.toFixed(0) : '?'}/min.`);
@@ -117,9 +129,13 @@ async function main() {
     log('     account. Raise the walk in steps and read each run, rather than');
     log('     jumping to the number above.');
   } else {
-    log(`  Blocked at a target of ${blockedAt}/min.`);
-    log(`  The highest rate that did NOT block was ${best ? best.rate : 'none'}/min` +
-      `${best ? ` (achieved ${best.actual.toFixed(0)}/min)` : ''}.`);
+    log(`  Stopped at a target of ${blockedAt}/min — blocked, or no longer keeping up.`);
+    log(`  The highest rate that BOTH avoided blocks and kept pace was ` +
+      `${best ? best.rate : 'none'}/min${best ? ` (achieved ${best.actual.toFixed(0)}/min)` : ''}.`);
+    if (best) {
+      log(`\n  A walk at ${Math.floor(best.rate * 0.9)}/min — 10% under that — would cover`);
+      log(`  40,382 players in about ${Math.round(40382 / (best.rate * 0.9) / 60)} hour(s), against nine at the current 75/min.`);
+    }
     log('  ⚠️ ONE RUN IS ONE MOMENT. The window is shared with every other job on');
     log('     the account, so a figure taken while something else was running is');
     log('     lower than the truth. Repeat before changing the walk.');
