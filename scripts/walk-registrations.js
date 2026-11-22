@@ -75,7 +75,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v10 2026-11-22 spread-the-recheck';
+const VERSION = 'walk-registrations v11 2026-11-22 spread-earlier-never-later';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -103,14 +103,32 @@ const RECHECK_FOUND_DAYS = 28;
 // being reshuffled into a new clump. Random jitter would spread it once and then
 // drift back together.
 //
-// The offset is centred on zero, so the MEAN interval is unchanged — 7 days
-// stays 7 days on average, it just stops being 7 days for everybody at once.
+// ⚠️ THE SPREAD ONLY EVER GOES EARLIER. NEVER LATER.
+//
+// v10 centred the offset on zero so the MEAN stayed 7 and 28. That is true and
+// it is beside the point: it also pushed the worst case to 10 and 42 days. A
+// player waiting six weeks instead of four for a re-check is a REGRESSION, and
+// "the average is fine" does not make it one less day of staleness for the
+// person at the back.
+//
+// The base is a MAXIMUM, not a target. A player is re-checked at base days or
+// sooner, never later, and the spread is taken off the front:
+//
+//   unfound  7 days  -> 1 to 7   (mean 4)
+//   found   28 days  -> 22 to 28 (mean 25)
+//
+// The found case keeps a tight window because 28 days is already long; the
+// unfound case spreads across the whole week because that is the cycle the daily
+// budget is built around. Both are FASTER than before, never slower.
 function spreadDays(uuid, baseDays) {
-  const half = Math.max(1, Math.floor(baseDays / 2));
+  // How far back from the base this player may be pulled. A week for the 7-day
+  // cycle, so the cohort lands evenly across it; a week for the 28-day cycle
+  // too, which spreads it without stretching it.
+  const window = Math.min(7, baseDays);
   let h = 0;
   const str = String(uuid || '');
   for (let i = 0; i < str.length; i++) h = ((h * 31) + str.charCodeAt(i)) >>> 0;
-  return baseDays + ((h % (2 * half + 1)) - half);
+  return Math.max(1, baseDays - (h % window));
 }
 const DAILY_FRACTION = Math.max(1, Number(process.env.WALK_DAILY_FRACTION || 7));
 const TIME_BUDGET_MS = Number(process.env.WALK_TIME_BUDGET_MS || 100 * 60 * 1000);
