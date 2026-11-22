@@ -13,10 +13,25 @@
 //            or flagged by the club trigger
 //   budget   ceil(cohort / 7) calls per run, and a wall-clock cap — the remainder
 //            simply rolls to tomorrow, in due order
-//   pace     100 calls per 80 s. Measured 2026-09-07: this operation blocks at
-//            ~147 unpaced calls (2.07 req/s) and runs clean at 1.88 req/s; the
-//            WAF rule is a RATE over about a minute, not a count. 75/min is 40%
-//            under the lowest reading. playhq_api_reference_updates.md §12.
+//   pace     110 calls per 60 s. RAISED FROM 75/min on 2026-11-22, on two
+//            measurements rather than one.
+//
+//            ⚠️ CONCURRENCY IS NOT AVAILABLE ON THIS OPERATION. scripts/
+//            probe-rate.js v3, run twice at different hours: ONE worker achieved
+//            132/min and then 148/min with ZERO blocks, and TWO workers blocked
+//            within 150 calls BOTH times. StatTrack reach 940-1,340/min at
+//            concurrency 25 on the same backend — that is for discoverGrade and
+//            discoverFixtureByRound, and it does NOT transfer to
+//            publicProfileTeams. Do not add workers here.
+//
+//            ⚠️ 110 IS 83% OF THE LOWER READING (132), deliberately. The earlier
+//            figure of ~120-130/min inferred from three runs in September was
+//            right; today's 132 and 148 sit on it. A full 40,382 sweep goes from
+//            about nine hours to six.
+//
+//            Serial calls are also capped by LATENCY: one round trip measured
+//            696-745 ms, so a target far above this cannot be reached anyway.
+//            playhq_api_reference_updates.md §12.
 //
 // THE CLUB TRIGGER. Registration is to a club; the team is assigned later. Each
 // run makes one discoverTeams(filter:{seasonID}) call per UPCOMING tracked season
@@ -60,7 +75,7 @@ const zlib = require('zlib');
 const store = require('./lib/store');
 const { gqlPost, sleep, logSummary } = require('./lib/playhq');
 
-const VERSION = 'walk-registrations v8 2026-11-21 forced-runs-make-progress';
+const VERSION = 'walk-registrations v9 2026-11-22 pace-110';
 const FILE_VERSION = 2;
 
 const ROOT = path.resolve(__dirname, '..');
@@ -77,8 +92,8 @@ const RECHECK_UNFOUND_DAYS = 7;
 const RECHECK_FOUND_DAYS = 28;
 const DAILY_FRACTION = Math.max(1, Number(process.env.WALK_DAILY_FRACTION || 7));
 const TIME_BUDGET_MS = Number(process.env.WALK_TIME_BUDGET_MS || 100 * 60 * 1000);
-const RATE = Math.max(1, Number(process.env.WALK_RATE || 100));
-const WINDOW_MS = Math.max(1, Number(process.env.WALK_WINDOW_MS || 80000));
+const RATE = Math.max(1, Number(process.env.WALK_RATE || 110));
+const WINDOW_MS = Math.max(1, Number(process.env.WALK_WINDOW_MS || 60000));
 const RAW_UPCOMING_LIMIT = 10;
 const DAY_MS = 86400000;
 
