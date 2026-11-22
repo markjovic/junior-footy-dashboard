@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v4 2026-11-22 the-third-filter-field';
+const VERSION = 'probe-registration-date v5 2026-11-22 stop-truncating-the-answer';
 
 //
 // Two questions, both open after today's work.
@@ -58,8 +58,12 @@ async function tryQuery(label, query, variables) {
     const kind = /unauthenticated|unauthorized|forbidden/i.test(msg) ? 'BEHIND A LOGIN'
       : /must have a selection of subfields|Unknown argument|used in position expecting/i.test(msg) ? 'EXISTS, asked wrongly'
       : 'does not exist';
-    log(`    ${label}: ${kind} — ${msg.slice(0, 130)}`);
-    if (/Did you mean/i.test(msg)) log(`      ↳ ${msg.slice(msg.search(/Did you mean/i)).slice(0, 120)}`);
+    // ⚠️ DO NOT TRUNCATE AN ERROR THAT CONTAINS THE ANSWER. A rejected enum
+    // value makes GraphQL list EVERY VALID VALUE after the type name, and a
+    // 130-character slice cut the list off on every run for four versions —
+    // the server was answering the question and the log was throwing it away.
+    const full = /does not exist in|must have a selection|of required type|Did you mean/i.test(msg);
+    log(`    ${label}: ${kind} — ${msg.slice(0, full ? 600 : 130)}`);
     return { ok: false, kind, msg };
   }
   const d = JSON.stringify(json && json.data);
@@ -290,6 +294,40 @@ async function main() {
       { id: code });
   } else {
     log('    no code field to try.');
+  }
+
+  // ── 13. MAKE THE SERVER LIST THE ENUM ──────────────────────────────────────
+  // ⚠️ AN INVALID ENUM VALUE IS A QUESTION. GraphQL answers it by naming every
+  // valid one. The values we had — PARTICIPANT_TO_CLUB, PARTICIPANT_TO_ASSOCIATION
+  // — come from DiscoverRegistration.type, which is a DIFFERENT enum from the
+  // filter's SeasonRegistrationType. One deliberately wrong value gets the list.
+  log('\n── 13. what values does the filter type accept? ──');
+  await tryQuery('myTeamsParticipants(type: NOT_A_REAL_VALUE)',
+    `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { __typename } }`,
+    { f: { seasonID: season, organisationID: org, type: 'NOT_A_REAL_VALUE' } });
+  await sleep(PACE);
+
+  // The same trick on the participant type: a wrong field makes it suggest real
+  // ones, and `firstName` was rejected so it holds something else.
+  log('\n── 14. what is on MyTeamsParticipant? ──');
+  for (const f of ['id', 'name', 'profile { id }', 'participant { id }', 'xyzzy']) {
+    await tryQuery(`MyTeamsParticipant { ${f} }`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { result { ${f} } } }`,
+      { f: { seasonID: season, organisationID: org, type: 'NOT_A_REAL_VALUE' } });
+    await sleep(PACE);
+  }
+
+  // ── 15. THE FIRST DATE WE HAVE FOUND ANYWHERE ──────────────────────────────
+  // ⚠️ startDate AND endDate ARE REAL on DiscoverRegistration, as
+  // TimeZoneDateTime!. They are the window the registration form is OPEN, not
+  // when a person signed up — but no date has turned up anywhere else, so its
+  // shape is worth knowing.
+  log('\n── 15. the dates on a registration ──');
+  for (const f of ['startDate { __typename }', 'startDate { date }', 'startDate { dateTime }',
+    'startDate { value }', 'startDate { timeZone }', 'endDate { date }']) {
+    await tryQuery(`seasonRegistrations { ${f} }`,
+      `query Probe($id: ID!) { seasonRegistrations(seasonID: $id) { id ${f} } }`, { id: season });
+    await sleep(PACE);
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
