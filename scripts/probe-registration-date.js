@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v1 2026-11-22';
+const VERSION = 'probe-registration-date v2 2026-11-22 close-out-the-named-ops';
 
 //
 // Two questions, both open after today's work.
@@ -88,8 +88,10 @@ async function main() {
   const season = (process.env.PD_SEASON || '').trim()
     || (manifest.find(m => yearOf(m.compName) === latest) || {}).seasonId;
 
+  const org = Object.keys(core.clubs || {})[0] || '';
   log(`profile : ${profile}`);
-  log(`season  : ${season}\n`);
+  log(`season  : ${season}`);
+  log(`org     : ${org}\n`);
   await phq.ensureSession();
 
   // ── 1. a date anywhere on the profile ──────────────────────────────────────
@@ -149,6 +151,57 @@ async function main() {
   ]) {
     await tryQuery(label, q, vars);
     await sleep(PACE);
+  }
+
+  // ── 5. THE OPERATIONS THAT EXIST BUT REJECTED EVERY ARGUMENT ───────────────
+  // ⚠️ "Unknown argument X" MEANS THE FIELD IS REAL. registrationCheck,
+  // registrationAssert and discoverSeasonRegistration all exist and refused
+  // seasonID, profileID, id and code. The argument has a name we have not
+  // guessed, and PlayHQ will tell us: asking with NO arguments makes the server
+  // name the required one, exactly as it did for organisationRegistrations
+  // ("argument \"code\" of type \"ID!\" is required").
+  log('\n── 5. ask with NO arguments, and let the server name them ──');
+  for (const op of ['registrationCheck', 'registrationAssert',
+    'discoverSeasonRegistration', 'seasonRegistrationCart', 'socialTeamRegistration']) {
+    await tryQuery(`${op}() no args`, `query Probe { ${op} { __typename } }`, {});
+    await sleep(PACE);
+  }
+
+  // ⚠️ A FILTER TYPE IS A NAMED SHAPE, and the server names its fields the same
+  // way. myTeamsParticipants wants MyTeamsParticipantsFilter! — passing an empty
+  // object makes it list what is missing.
+  log('\n── 6. myTeamsParticipants: make the server describe its filter ──');
+  for (const [label, vars] of [
+    ['empty filter', {}],
+    ['filter { seasonID }', { seasonID: season }],
+    ['filter { organisationID }', { organisationID: org }],
+  ]) {
+    await tryQuery(`myTeamsParticipants(filter: ${label})`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { __typename } }`,
+      { f: vars });
+    await sleep(PACE);
+  }
+
+  // ── 7. the TEAM route, now that a 2027 team exists ─────────────────────────
+  // ⚠️ `pool` WAS NULL ON EVERY TEAM TRIED — but every team tried was either a
+  // 2027 team with nobody in it yet or a completed season. YJFL 2027 now has 217
+  // teams that clubs have actually filled. Asking one of those is a different
+  // question from the one that was answered NO.
+  log('\n── 7. does a FILLED 2027 team expose its players? ──');
+  const t = await tryQuery('discoverTeams (a season with filled teams)',
+    `query Probe($seasonID: ID!) { discoverTeams(filter: { seasonID: $seasonID }) { id name } }`,
+    { seasonID: season });
+  await sleep(PACE);
+  const teamId = ((t.data && t.data.discoverTeams) || [])[0]?.id;
+  if (teamId) {
+    for (const f of ['pool { id name }', 'pool { __typename }', 'lineup { id }',
+      'squad { id }', 'playerList { id }', 'teamSheet { id }']) {
+      await tryQuery(`discoverTeam(${teamId}) { ${f} }`,
+        `query Probe($id: ID!) { discoverTeam(teamID: $id) { id name ${f} } }`, { id: teamId });
+      await sleep(PACE);
+    }
+  } else {
+    log('    no team returned for this season — nothing to ask.');
   }
 
   log('\n═══ WHAT THIS SAYS ═══');
