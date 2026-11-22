@@ -2,7 +2,7 @@
 // scripts/probe-registration-date.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-registration-date v6 2026-11-23 guess-the-user-type';
+const VERSION = 'probe-registration-date v7 2026-11-23 it-is-a-surname-search';
 
 //
 // Two questions, both open after today's work.
@@ -339,6 +339,70 @@ async function main() {
       }
       break;
     }
+  }
+
+  // ── 17. IT IS A SURNAME SEARCH, AND THE ENUM IS SOLVED ─────────────────────
+  // ⚠️ PLAYER, COACH, TEAM_MANAGER, VOLUNTEER and OFFICIAL ARE ALL VALID. Four
+  // of the ten guesses were right, and the error then moved PAST the enum to
+  // the next missing field:
+  //
+  //     Field "lastName" of required type "String!" was not provided
+  //
+  // So myTeamsParticipants is a search for REGISTERED PARTICIPANTS at a club, in
+  // a season, of a given type, BY SURNAME. That is the club-side registration
+  // list this probe has spent six versions failing to find — and nothing has
+  // demanded a login yet.
+  //
+  // ⚠️ "THE TRICK IS SPENT" WAS WRONG. One round of near-misses moved the error
+  // forward. A rejected enum that names no alternatives means the value sent was
+  // not close to a real one — it does NOT mean there is nothing to find.
+  if (ONLY === '17' || !ONLY) {
+  log('\n── 17. myTeamsParticipants with a real surname ──');
+
+  // A surname that certainly exists in this cohort, taken from our own data
+  // rather than invented.
+  let surname = 'Smith';
+  if (fs.existsSync(REG_PATH)) {
+    const reg = JSON.parse(zlib.gunzipSync(fs.readFileSync(REG_PATH)).toString('utf8'));
+    const counts = {};
+    for (const r of Object.values(reg.players || {})) {
+      const n = String(r.name || '').trim().split(/\s+/).pop();
+      if (n) counts[n] = (counts[n] || 0) + 1;
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (top) { surname = top[0]; log(`    commonest surname in our cohort: ${top[0]} (${top[1]})`); }
+  }
+
+  const base = { seasonID: season, organisationID: org, type: 'PLAYER', lastName: surname };
+  for (const f of ['__typename', 'result { __typename }', 'result { id }',
+    'result { lastName }', 'result { firstName }', 'result { dateOfBirth }',
+    'result { team { id name } }', 'result { organisation { id name } }',
+    'result { profile { id } }', 'result { profileID }', 'result { status }',
+    'result { registeredAt }', 'result { createdAt }']) {
+    await tryQuery(`PLAYER lastName:"${surname}" { ${f} }`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { ${f} } }`,
+      { f: base });
+    await sleep(PACE);
+  }
+
+  // ⚠️ IS lastName A PREFIX OR AN EXACT MATCH? That decides whether the whole
+  // club roster can be enumerated (a, b, c …) or only looked up name by name.
+  log('\n── 17b. does lastName match a prefix, or exactly? ──');
+  for (const probe of [surname.slice(0, 2), surname.slice(0, 1), '', 'Zzzzzz']) {
+    await tryQuery(`lastName: "${probe}"`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { result { __typename } } }`,
+      { f: { ...base, lastName: probe } });
+    await sleep(PACE);
+  }
+
+  // And whether the other participant types answer the same way.
+  log('\n── 17c. the other valid types ──');
+  for (const t of ['COACH', 'TEAM_MANAGER', 'VOLUNTEER', 'OFFICIAL']) {
+    await tryQuery(`type: ${t}`,
+      `query Probe($f: MyTeamsParticipantsFilter!) { myTeamsParticipants(filter: $f) { result { __typename } } }`,
+      { f: { ...base, type: t } });
+    await sleep(PACE);
+  }
   }
 
   // ── 13. MAKE THE SERVER LIST THE ENUM ──────────────────────────────────────
