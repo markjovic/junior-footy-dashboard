@@ -728,7 +728,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.13</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.14</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -3111,7 +3111,16 @@ function rvDetail(row) {
     return bits.join(' · ');
   }
   const p = row.p;
-  if (!p) return 'no previous season held';
+  if (!p) {
+    // ⚠️ TWO DIFFERENT FACTS, AND SAYING THE WRONG ONE IS WORSE THAN SAYING
+    // NOTHING. "No previous season held" is a claim about the PLAYER. A file
+    // built before build-transfers v11 carries no `p` on any row, so that
+    // claim appeared against every registration in the competition — twenty
+    // East Ringwood U13s who had all played in 2026. The file's own version
+    // is what separates the two, which is why it exists.
+    const v = (S.rosters && S.rosters.version) || 1;
+    return v < 2 ? 'last season not in this file — rebuild' : 'no previous season';
+  }
   const bits = [];
   if (p.gp) bits.push(`${p.gp} game${p.gp === 1 ? '' : 's'}`);
   if (p.gl) bits.push(`${p.gl} goal${p.gl === 1 ? '' : 's'}`);
