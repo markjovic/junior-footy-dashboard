@@ -741,7 +741,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.15</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.16</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1681,6 +1681,11 @@ let S = {
   // rosters file is not loaded yet — so they are parked here and resolved by
   // renderRosters on the first draw after the data arrives.
   rosterWant: null,        // { s: compName, c: clubName } | null
+  rosterData: {},          // seasonId -> that season's clubs, fetched on demand
+  rosterLoad: {},          // seasonId -> 'loading' | 'ready' | 'failed'
+  rosterError: '',
+  rosterSearchAll: false,  // true once every season has been pulled for a search
+  rosterClubWant: '',      // a club name from a shared link, held until its season arrives
   // The transfers view owns these. transfersState is the same four-state
   // pattern registrationsState uses: undefined | loading | ready | failed.
   transfers: null,
@@ -2975,6 +2980,25 @@ function renderTransfers() {
 // builder; this view only has to render the result honestly, which means never
 // presenting an 'r' as if a game had been played.
 // ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ TWO FETCHES, NOT ONE. data/rosters/index.json is a few KB and lists the
+// seasons with their counts; each season's players live in their own
+// data/rosters/<sid>.json.gz and are fetched only when that season is shown.
+// The single file had reached 1,612 KB gzipped and 5,286 KB inflated, all of
+// it downloaded and parsed to look at one club in one season.
+async function rvFetchGz(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  // Magic bytes, not an assumption: if the server sent Content-Encoding: gzip
+  // the browser has already inflated it and inflating again throws.
+  const buf = await r.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    if (typeof DecompressionStream !== 'function') throw new Error('no DecompressionStream');
+    return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  }
+  return new TextDecoder().decode(buf);
+}
+
 let rostersLoading = null;
 function loadRosters() {
   if (rostersLoading) return rostersLoading;
@@ -2982,22 +3006,10 @@ function loadRosters() {
   S.rostersState = 'loading';
   rostersLoading = (async () => {
     try {
-      const r = await fetch('data/rosters.json.gz');
+      const r = await fetch('data/rosters/index.json');
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      // Magic bytes, not an assumption: if the server sent Content-Encoding:
-      // gzip the browser has already inflated it and inflating again throws.
-      // Same check as loadRegistrations, for the same reason.
-      const buf = await r.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let text;
-      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-        if (typeof DecompressionStream !== 'function') throw new Error('no DecompressionStream');
-        text = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-      } else {
-        text = new TextDecoder().decode(buf);
-      }
-      const d = JSON.parse(text);
-      if (!d || !d.seasons || typeof d.seasons !== 'object') throw new Error('unexpected shape');
+      const d = await r.json();
+      if (!d || !Array.isArray(d.seasons)) throw new Error('unexpected shape');
       S.rosters = d;
       S.rostersState = 'ready';
     } catch (e) {
@@ -3010,6 +3022,50 @@ function loadRosters() {
     return S.rosters;
   })();
   return rostersLoading;
+}
+
+// One season's players. Cached by season id, so switching back and forth does
+// not refetch. A failure is recorded against that season alone — one bad file
+// must not take the whole view down with it.
+const rosterSeasonLoading = {};
+function loadRosterSeason(sid) {
+  if (!sid) return Promise.resolve(null);
+  if (S.rosterData[sid]) return Promise.resolve(S.rosterData[sid]);
+  if (rosterSeasonLoading[sid]) return rosterSeasonLoading[sid];
+  const entry = rvIndexEntry(sid);
+  if (!entry) return Promise.resolve(null);
+  S.rosterLoad[sid] = 'loading';
+  rosterSeasonLoading[sid] = (async () => {
+    try {
+      const d = JSON.parse(await rvFetchGz('data/rosters/' + (entry.file || `${sid}.json.gz`)));
+      if (!d || !d.clubs) throw new Error('unexpected shape');
+      S.rosterData[sid] = d;
+      S.rosterLoad[sid] = 'ready';
+    } catch (e) {
+      S.rosterLoad[sid] = 'failed';
+      S.rosterError = e.message;
+      console.warn('roster season ' + sid + ' unavailable:', e.message);
+    }
+    rosterSeasonLoading[sid] = null;
+    renderRosters();
+    return S.rosterData[sid] || null;
+  })();
+  return rosterSeasonLoading[sid];
+}
+
+const rvIndexEntry = (sid) => ((S.rosters && S.rosters.seasons) || []).find(x => x.sid === sid) || null;
+
+function rvFillSeasonSelect(sid) {
+  const sel = document.getElementById('rv-season');
+  if (!sel) return;
+  const html = rvSeasonIds().map(x => {
+    const c = rvSeasonCounts(x);
+    return `<option value="${tvEsc(x)}"${x === sid ? ' selected' : ''}>` +
+      `${tvEsc((rvIndexEntry(x) || {}).compName || x)} — ${c.total.toLocaleString()}` +
+      `${c.r ? ` (${c.r.toLocaleString()} registered)` : ''}</option>`;
+  }).join('');
+  if (sel.dataset.last !== html) { sel.innerHTML = html; sel.dataset.last = html; }
+  sel.value = sid;
 }
 
 // ⚠️ "U9" MUST COME BEFORE "U10". A plain string sort puts it after, which is
@@ -3030,12 +3086,10 @@ function rvTeamOrder(names, teamAge) {
 // Newest season first, by startDate. ⚠️ startDate PRECEDES the year in the
 // name — an AFL 2026 season starts 2025-10-01 — so this orders by the date and
 // never derives a year from it.
+// The index is already written newest-first by the builder, so this preserves
+// its order rather than re-deriving one the builder might disagree with.
 function rvSeasonIds() {
-  const d = S.rosters;
-  if (!d || !d.seasons) return [];
-  return Object.keys(d.seasons).sort((a, b) =>
-    String(d.seasons[b].startDate || '').localeCompare(String(d.seasons[a].startDate || '')) ||
-    String(d.seasons[a].compName || '').localeCompare(String(d.seasons[b].compName || '')));
+  return ((S.rosters && S.rosters.seasons) || []).map(x => x.sid);
 }
 
 // Every row of a club, teams then unassigned, each carrying where it sits.
@@ -3047,12 +3101,14 @@ function rvClubRows(club) {
   return out;
 }
 
+// ⚠️ FROM THE INDEX, NOT BY COUNTING ROWS. The season selector shows a count
+// for every season, and counting rows would mean downloading all of them —
+// which is the thing this split exists to stop.
 function rvSeasonCounts(sid) {
-  const se = S.rosters && S.rosters.seasons && S.rosters.seasons[sid];
-  let p = 0, r = 0;
-  if (se) Object.values(se.clubs || {}).forEach(c =>
-    rvClubRows(c).forEach(({ row }) => { if (row.s === 'p') p++; else r++; }));
-  return { p, r, total: p + r };
+  const e = rvIndexEntry(sid);
+  if (!e) return { p: 0, r: 0, total: 0 };
+  const total = e.players || 0, r = e.registered || 0;
+  return { p: total - r, r, total };
 }
 
 // WHICH SEASON OPENS. Not simply the newest: the view exists for the season
@@ -3192,12 +3248,14 @@ function renderRosters() {
     return;
   }
 
-  const d = S.rosters || {};
   const ids = rvSeasonIds();
   if (!ids.length) {
-    body.innerHTML = '<div class="tv-note">The rosters file holds no seasons yet.</div>';
+    body.innerHTML = '<div class="tv-note">The rosters index holds no seasons yet.</div>';
     return;
   }
+  // compName by season id, straight from the index — a shared link resolves
+  // without any season file being fetched.
+  const compOf = (x) => (rvIndexEntry(x) || {}).compName || '';
 
   // A shared link's season and club arrive as words and are resolved HERE,
   // on the first draw after the data loads, because nothing earlier can
@@ -3205,38 +3263,46 @@ function renderRosters() {
   // overriding what the reader then picks by hand.
   if (S.rosterWant) {
     const want = S.rosterWant; S.rosterWant = null;
-    const sid = ids.find(x => String(d.seasons[x].compName || '') === want.s);
+    const sid = ids.find(x => compOf(x) === want.s);
     if (sid) {
       S.rosterSeason = sid;
-      if (want.c) {
-        const clubs = d.seasons[sid].clubs || {};
-        const cid = Object.keys(clubs).find(k => String(clubs[k].name || '') === want.c);
-        if (cid) S.rosterClub = cid;
-        else toast(`Club ${want.c} is not in ${want.s} — showing every club`);
-      }
+      // ⚠️ THE CLUB CANNOT BE RESOLVED YET. Club names live in the season
+      // file, which is not fetched at this point. Held until it arrives
+      // rather than dropped with a misleading "club not found".
+      if (want.c) S.rosterClubWant = want.c;
     } else {
-      toast(`Season ${want.s} is not in the rosters file`);
+      toast(`Season ${want.s} is not in the rosters index`);
     }
   }
 
-  if (!S.rosterSeason || !d.seasons[S.rosterSeason]) S.rosterSeason = rvDefaultSeason();
+  if (!S.rosterSeason || !rvIndexEntry(S.rosterSeason)) S.rosterSeason = rvDefaultSeason();
   const sid = S.rosterSeason;
-  const season = d.seasons[sid] || {};
+
+  // The season selector is drawn from the index and is usable before any
+  // season file has arrived, so the control never flickers or sits empty.
+  rvFillSeasonSelect(sid);
+
+  const season = S.rosterData[sid];
+  if (!season) {
+    const st = S.rosterLoad[sid];
+    if (st !== 'loading' && st !== 'failed') loadRosterSeason(sid);
+    body.innerHTML = st === 'failed'
+      ? `<div class="tv-note">${tvEsc(compOf(sid))} could not be loaded (` +
+        tvEsc(S.rosterError || 'unknown') + '). Its file is data/rosters/' +
+        tvEsc((rvIndexEntry(sid) || {}).file || '') + '.</div>'
+      : `<div class="tv-note">Loading ${tvEsc(compOf(sid))}…</div>`;
+    return;
+  }
   const clubs = season.clubs || {};
+  // A club held from a shared link, resolvable now the file is here.
+  if (S.rosterClubWant) {
+    const wantName = S.rosterClubWant; S.rosterClubWant = '';
+    const cid = Object.keys(clubs).find(k => String(clubs[k].name || '') === wantName);
+    if (cid) S.rosterClub = cid;
+    else toast(`Club ${wantName} is not in ${compOf(sid)} — showing every club`);
+  }
   if (S.rosterClub && !clubs[S.rosterClub]) S.rosterClub = '';
 
-  // ── the two selects, built from the DATA ────────────────────────────────
-  const seasonSel = document.getElementById('rv-season');
-  if (seasonSel) {
-    const html = ids.map(x => {
-      const c = rvSeasonCounts(x);
-      return `<option value="${tvEsc(x)}"${x === sid ? ' selected' : ''}>` +
-        `${tvEsc(d.seasons[x].compName || x)} — ${c.total.toLocaleString()}` +
-        `${c.r ? ` (${c.r.toLocaleString()} registered)` : ''}</option>`;
-    }).join('');
-    if (seasonSel.dataset.last !== html) { seasonSel.innerHTML = html; seasonSel.dataset.last = html; }
-    seasonSel.value = sid;
-  }
   const clubIds = Object.keys(clubs).sort((a, b) =>
     String(clubs[a].name || '').localeCompare(String(clubs[b].name || '')));
   const clubSel = document.getElementById('rv-club');
@@ -3295,26 +3361,48 @@ function renderRosters() {
     : (!S.rosterGrade && (!S.rosterAge || row.a === S.rosterAge));
   const filterOn = !!(S.rosterAge || S.rosterGrade);
   const q = tvFold(S.rosterSearch);
-  const built = d.builtAt ? String(d.builtAt).slice(0, 10) : '';
+  // From the INDEX, which is where builtAt now lives — the season files carry
+  // no timestamp at all, which is what lets them be skipped when unchanged.
+  const built = (S.rosters && S.rosters.builtAt) ? String(S.rosters.builtAt).slice(0, 10) : '';
   const note = (txt) => `<div class="tv-note">${txt}${built ? ` · built ${built}` : ''}</div>`;
 
   // ── SEARCH spans every season and club, which is the point of it ────────
   if (q.length >= 2) {
+    // ⚠️ SEARCHING SPANS EVERY SEASON, SO EVERY SEASON MUST BE HERE. With the
+    // files split, a search is the one action that needs all of them — they
+    // are fetched on the first search and then cached, rather than being
+    // downloaded up front on the chance that someone searches.
+    const missing = ids.filter(x => !S.rosterData[x] && S.rosterLoad[x] !== 'failed');
+    if (missing.length) {
+      missing.forEach(loadRosterSeason);
+      const have = ids.length - missing.length;
+      body.innerHTML = note(`Searching every season — loading ${missing.length} of ` +
+        `${ids.length} season file(s)${have ? `, ${have} already here` : ''}…`);
+      return;
+    }
+    const broken = ids.filter(x => !S.rosterData[x]);
     const hits = [];
     ids.forEach(x => {
-      const cl = (d.seasons[x].clubs) || {};
+      const se = S.rosterData[x];
+      if (!se) return;
+      const cl = se.clubs || {};
       Object.keys(cl).forEach(cid => rvClubRows(cl[cid]).forEach(({ row, team }) => {
         if (!keep(row)) return;
         if (!tvFold(row.n).includes(q)) return;
         hits.push({ row, sid: x, cid,
-          where: [d.seasons[x].compName, cl[cid].name, team].filter(Boolean).join(' · ') });
+          where: [compOf(x), cl[cid].name, team].filter(Boolean).join(' · ') });
       }));
     });
     hits.sort((a, b) => String(a.row.n || '').localeCompare(String(b.row.n || '')));
     const shown = hits.slice(0, 300);
     body.innerHTML = note(`${hits.length.toLocaleString()} player${hits.length === 1 ? '' : 's'} ` +
-      `matching “${tvEsc(S.rosterSearch)}” across every season` +
-      (hits.length > shown.length ? ` — first ${shown.length} shown` : '')) +
+      `matching “${tvEsc(S.rosterSearch)}” across ${ids.length - broken.length} season` +
+      `${ids.length - broken.length === 1 ? '' : 's'}` +
+      (hits.length > shown.length ? ` — first ${shown.length} shown` : '') +
+      // ⚠️ NAMED, NOT SWALLOWED. "No match" when a season failed to load is a
+      // false answer; the reader must know the search was incomplete.
+      (broken.length ? ` · ⚠️ ${broken.length} season(s) could not be loaded and were NOT searched`
+                     : '')) +
       (shown.length
         ? shown.map(h => rvRowHTML(h.row, h.sid, h.where, h.cid)).join('')
         : '<div class="tv-note">No match.</div>');
