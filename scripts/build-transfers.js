@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v10 2026-11-24 grade-stats-and-last-season';
+const VERSION = 'build-transfers v11 2026-11-24 prove-the-previous-season';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -629,7 +629,12 @@ function main() {
     `${between.length} between-season, ${leads.length} lead)`);
 
   // ── Rosters: serialise and report ──────────────────────────────────────────
-  const rosterOut = { version: 1, builtAt: out.builtAt, seasons: {} };
+  // ⚠️ VERSION 2 MEANS THE ROWS CARRY gp, gl AND p. Without a version bump a
+  // page reading a v1 file says "no previous season held" about every single
+  // registration — which is a statement about the player, and false. It was on
+  // screen before this line existed. The page now reports the two cases
+  // differently, and can only do so because this number moved.
+  const rosterOut = { version: 2, builtAt: out.builtAt, seasons: {} };
   let rClubs = 0, rTeams = 0, rUnassigned = 0;
   for (const [sid, byClub] of rosters) {
     const m = byId.get(sid) || {};
@@ -722,6 +727,20 @@ function main() {
         if (c.teamGrade[t]) { gradedTeams++; gradeSeasons.add(se.compName || sid); }
         else ungradedTeams++;
       }
+  // ⚠️ PROVE IT RATHER THAN ASSERT IT. v10 added the previous-season block and
+  // printed nothing about it, so a file built before it and a genuine absence
+  // looked identical in the log — the one thing a version line exists to stop.
+  let regWithPrev = 0, regNoPrev = 0;
+  for (const se of Object.values(rosterOut.seasons))
+    for (const c of Object.values(se.clubs))
+      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned])
+        if (row.s === 'r') (row.p ? regWithPrev++ : regNoPrev++);
+  log(`  registrations carrying last season : ${regWithPrev} of ${regWithPrev + regNoPrev}`);
+  if (regNoPrev) {
+    log(`  ⚠️ ${regNoPrev} registration(s) have NO previous season. Every walked`);
+    log('     player comes from a cohort season, so this should be near zero —');
+    log('     anything larger means the player files and the walk disagree.');
+  }
   log(`  teams with a grade : ${gradedTeams}; without : ${ungradedTeams}`);
   log(`  seasons that have grades : ${[...gradeSeasons].sort().join(', ') || '(none)'}`);
   log('  ⚠️ A SEASON WITH NO GAMES HAS NO GRADE. Grade comes from the stored');
