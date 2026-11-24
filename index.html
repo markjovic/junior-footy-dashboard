@@ -702,6 +702,11 @@ body{overflow-x:hidden}
 .rv-club{display:flex;align-items:center;gap:8px;margin:16px 0 2px;font-weight:600;font-size:14px}
 .rv-team{display:flex;align-items:baseline;gap:8px;margin:12px 0 2px;font-weight:600;font-size:12px;
   color:var(--tx2)}
+/* A team PlayHQ lists that nobody has registered for yet. Dimmed, not hidden:
+   during the registration window it is the club's shape for next season. */
+.rv-team-empty{color:var(--tx3);font-weight:500}
+.rv-empty-note{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);
+  padding:5px 10px;border-bottom:1px solid var(--b1);font-style:italic}
 .rv-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);font-weight:400}
 .rv-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--b1);
   font-size:12px}
@@ -741,7 +746,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.17</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.19</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1404,9 +1409,20 @@ function buildHash() {
   // "Here is our team" is the whole reason this view exists, so the season and
   // the club travel in the link. In WORDS, like the finals view's club key: a
   // season id is a UUID and no one should have to paste one.
+  // ⚠️ THE INDEX IS AN ARRAY, NOT A MAP KEYED BY SEASON ID. This read
+  // S.rosters.seasons[sid] from when rosters were one file whose `seasons` was
+  // an object; after the per-season split `seasons` became the index array, so
+  // the lookup returned undefined and every shared rosters link carried `v`
+  // alone — no season, no club. Silent, because a link with one key still
+  // works, it just lands the reader somewhere else.
+  //
+  // The club NAME now lives in the season's own file, which may not be loaded
+  // when the hash is built; when it is not, the season still travels and the
+  // club is simply omitted rather than guessed at.
   if (S.view === 'rosters' && S.rostersState === 'ready' && S.rosters) {
-    const se = (S.rosters.seasons || {})[S.rosterSeason];
-    if (se && se.compName) p.push(['rs', se.compName]);
+    const e = ((S.rosters.seasons || []).find(x => x.sid === S.rosterSeason)) || null;
+    if (e && e.compName) p.push(['rs', e.compName]);
+    const se = S.rosterData && S.rosterData[S.rosterSeason];
     const cl = se && (se.clubs || {})[S.rosterClub];
     if (cl && cl.name) p.push(['rc', cl.name]);
   }
@@ -3429,14 +3445,19 @@ function renderRosters() {
         ? (c.unassigned || []).filter(r => keep(r) && r.a === S.rosterAge) : [];
       const blocks = [];
       names.forEach(t => {
-        const list = (c.teams[t] || []).filter(keep);
-        if (!list.length) return;
+        const all = c.teams[t] || [];
+        const list = all.filter(keep);
+        // Same rule as the single-club branch: empty by nature is shown,
+        // emptied by the filter is not.
+        if (!list.length && all.length) return;
+        const bare = !all.length;
         nTeams++; nPlayers += list.length;
         const a = teamAgeOf(c, t), g = teamGradeOf(c, t);
-        blocks.push(`<div class="rv-team">${tvEsc(t)}<span class="rv-meta">` +
-          `${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
-          `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
-          list.map(row => rvRowHTML(row, sid, '', cid)).join(''));
+        blocks.push(`<div class="rv-team${bare ? ' rv-team-empty' : ''}">${tvEsc(t)}` +
+          `<span class="rv-meta">${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
+          `${bare ? 'no players yet' : `${list.length} player${list.length === 1 ? '' : 's'}`}` +
+          `</span></div>` +
+          (bare ? '' : list.map(row => rvRowHTML(row, sid, '', cid)).join('')));
       });
       if (un.length) {
         nPlayers += un.length;
@@ -3468,9 +3489,16 @@ function renderRosters() {
       // nothing but played rows would otherwise advertise teams that are not
       // on the screen behind it.
       const tset = new Set(list.filter(x => x.team).map(x => x.team));
+      // ⚠️ A CLUB CAN HAVE TEAMS AND NO PLAYERS AT ALL, and filtering on
+      // `n > 0` below would hide it completely — which is the state most clubs
+      // are in early in a registration window. Teams with nobody in them are
+      // counted here so the club still appears with an honest count.
+      const bare = Object.keys(clubs[cid].teams || {})
+        .filter(t => !(clubs[cid].teams[t] || []).length && keepTeam(clubs[cid], t));
+      bare.forEach(t => tset.add(t));
       return { cid, name: clubs[cid].name || cid, n: list.length, p: pc, r: list.length - pc,
-               teams: tset.size };
-    }).filter(c => c.n > 0);
+               teams: tset.size, bare: bare.length };
+    }).filter(c => c.n > 0 || c.bare > 0);
     const tot = rows.reduce((a, c) => a + c.n, 0);
     body.innerHTML = note(`${tvEsc(season.compName || sid)} — ${rows.length} club` +
       `${rows.length === 1 ? '' : 's'}, ${tot.toLocaleString()} player` +
@@ -3483,6 +3511,7 @@ function renderRosters() {
         // that has signed players and not yet graded them.
         `<span class="rv-where">${c.teams ? `${c.teams} team${c.teams === 1 ? '' : 's'}` : 'no team yet'} · ` +
         `${c.n.toLocaleString()} player${c.n === 1 ? '' : 's'}` +
+        `${c.bare ? ` · ${c.bare} empty` : ''}` +
         `${c.p && c.r ? ` (${c.p.toLocaleString()} played, ${c.r.toLocaleString()} registered)` : ''}` +
         '</span></div>').join('')
         : '<div class="tv-note">No club has a player matching this filter.</div>');
@@ -3501,15 +3530,28 @@ function renderRosters() {
   const teamNames = rvTeamOrder(Object.keys(teams).filter(t => keepTeam(club, t)), teamAge);
   let html = '';
   let shown = 0;
+  let emptyShown = 0;
   teamNames.forEach(t => {
-    const list = (teams[t] || []).filter(keep);
-    if (!list.length) return;
+    const all = teams[t] || [];
+    const list = all.filter(keep);
+    // ⚠️ AN EMPTY TEAM IS SHOWN, NOT SKIPPED. `if (!list.length) return` would
+    // silently drop every team the registry contributes, which is the entire
+    // point of having it. The two cases are different, though: a team with NO
+    // ONE in it is a fact about the club, while a team emptied by the source
+    // filter is an artefact of the filter and stays hidden.
+    if (!list.length && all.length) return;
     shown += list.length;
     const a = teamAge[t] || '', g = teamGrade[t] || '';
-    html += `<div class="rv-team">${tvEsc(t)}` +
+    const bare = !all.length;
+    if (bare) emptyShown++;
+    html += `<div class="rv-team${bare ? ' rv-team-empty' : ''}">${tvEsc(t)}` +
       `<span class="rv-meta">${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
-      `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
-      list.map(row => rvRowHTML(row, sid, '', cid)).join('');
+      `${bare ? 'no players yet' : `${list.length} player${list.length === 1 ? '' : 's'}`}` +
+      `</span></div>` +
+      (bare
+        ? '<div class="rv-empty-note">PlayHQ lists this team; nobody has been ' +
+          'placed in it yet.</div>'
+        : list.map(row => rvRowHTML(row, sid, '', cid)).join(''));
   });
   // ⚠️ A registration with no team is NOT dropped. team: null is the normal
   // state of a new registration — the club has signed them and not yet graded
