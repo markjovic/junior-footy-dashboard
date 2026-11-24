@@ -1,0 +1,44 @@
+# .github/workflows/probe-registrations-and-config.yml
+#
+# Three anonymous questions: does seasonRegistrations carry teams/people; what
+# does the afl tenantConfiguration expose; what cookies does a guest bootstrap get.
+#
+# ⚠️ READ-ONLY. Nothing written or committed. About 30 calls.
+
+name: Probe registrations and config
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'season — a seasonID. Blank uses EFNL 2026 (2dcbf383).'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Probe
+        env:
+          PC_SEASON: ${{ github.event.inputs.season }}
+        run: |
+          if [ ! -f scripts/probe-registrations-and-config.js ]; then
+            echo "scripts/probe-registrations-and-config.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-registrations-and-config.js

@@ -1,0 +1,53 @@
+# .github/workflows/probe-rate-sharded.yml
+#
+# Does a fresh session per worker lift the concurrency ceiling probe-rate found?
+# Separates "our shared cookie" from "PlayHQ's per-IP limit".
+#
+# ⚠️ IT RAMPS CONCURRENCY UNTIL SOMETHING BLOCKS, each worker on its own guest
+# session. Stops at the first block. READ-ONLY, nothing committed.
+#
+# ⚠️ RUN IT ALONE — the WAF window is shared across every run on the account.
+
+name: Probe rate sharded
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: 'workers — comma concurrency ramp, each worker its own session.'
+        required: false
+        default: '1,2,4,8'
+        type: string
+      per:
+        description: 'per — calls per stage. 200 is StatTrack''s clean figure.'
+        required: false
+        default: '200'
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Probe
+        env:
+          PRS_WORKERS: ${{ github.event.inputs.workers }}
+          PRS_PER: ${{ github.event.inputs.per }}
+        run: |
+          if [ ! -f scripts/probe-rate-sharded.js ]; then
+            echo "scripts/probe-rate-sharded.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-rate-sharded.js
