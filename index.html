@@ -702,7 +702,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.07</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.08</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -8545,9 +8545,15 @@ async function init() {
       else toast(`Ladder ${_url.l} not available in ${S.selectedAge} — showing the first grade`);
     }
     if (_url.r && S.selectedAge) {
+      // SAYS SO, AND RESETS FIRST — same two corrections `t` got in v1.06/v1.07,
+      // for the same two reasons. Without the reset the reader's own saved round
+      // survived a round the link could not resolve; without the toast the link
+      // silently showed every round and looked correct. v1.08.
+      S.selRound = '';
       const validRounds = new Set(S.matches
         .filter(m => m.age === S.selectedAge && matchesComp(m)).map(m => roundKey(m)));
       if (validRounds.has(String(_url.r))) S.selRound = _url.r;
+      else toast(`Round ${_url.r} not found in ${S.selectedAge} — showing all rounds`);
     }
     if (_url.t) {
       // ⚠️ SAYS SO WHEN IT CANNOT RESOLVE. `t` carries the team NAME, and a rename
@@ -8630,7 +8636,20 @@ async function init() {
         const hit = visible.find(g => String(gLabel(g) || g).toLowerCase() === u.l.toLowerCase());
         if (hit) S.selLdrGrade = hit;
       }
-      S.selRound = u.r || null;
+      // ⚠️ VALIDATED, for the reason `t` three lines down was. `S.selRound = u.r
+      // || null` assigned the raw value, so a round that does not exist under this
+      // age filtered EVERY match out and rendered "0 matches / No results match
+      // current filters" with nothing said — the same 0-matches screenshot the
+      // team key produced on 2026-11-24, reachable by any link carrying an `r`.
+      // Fixed in v1.08 without ever having been seen in the wild: no alert link
+      // carries `r`, but a shared link from the dashboard's own share button does.
+      S.selRound = null;
+      if (u.r && S.selectedAge) {
+        const validRounds = new Set(S.matches
+          .filter(m => m.age === S.selectedAge && matchesComp(m)).map(m => roundKey(m)));
+        if (validRounds.has(String(u.r))) S.selRound = u.r;
+        else toast(`Round ${u.r} not found in ${S.selectedAge} — showing all rounds`);
+      }
       // ⚠️ VALIDATED, like every other key in this handler. `S.selTeam = u.t ||
       // null` assigned the raw value, so a team that does not exist under this
       // age — a rename, a regrade, or a hand-edited link — filtered EVERY match
