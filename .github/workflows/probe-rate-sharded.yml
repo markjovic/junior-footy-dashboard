@@ -7,6 +7,18 @@
 # session. Stops at the first block. READ-ONLY, nothing committed.
 #
 # ⚠️ RUN IT ALONE — the WAF window is shared across every run on the account.
+#
+# ⚠️ pace_ms EXISTS BECAUSE AN UNPACED STAGE CANNOT TELL TWO LIMITS APART.
+# On 2026-11-24 eight workers, each on its own session, ran 2,000 unpaced calls:
+# 1,434 ok at 2,334/min and then a block. That is ~179 calls per session AND an
+# aggregate well above anything the walk would sustain, so the block is equally
+# consistent with a rate limit and with the documented ~250-290-call per-session
+# wall. Holding the rate down while pushing the per-session COUNT past 250 is
+# what separates them. The script has always read PRS_PACE_MS; only the workflow
+# could not reach it.
+#
+# ⚠️ THE GAP IS TAKEN AFTER EACH CALL, ON TOP OF LATENCY. A worker's real rate is
+# 1 / (round trip + pace_ms), not 60000 / pace_ms.
 
 name: Probe rate sharded
 
@@ -19,9 +31,14 @@ on:
         default: '1,2,4,8'
         type: string
       per:
-        description: 'per — calls per stage. 200 is StatTrack''s clean figure.'
+        description: 'per — calls per stage, shared across the workers. 200 at 8 workers is an 8-second burst; use thousands to measure anything sustained.'
         required: false
         default: '200'
+        type: string
+      pace_ms:
+        description: 'pace_ms — minimum gap each worker waits AFTER each call. 0 (default) pushes concurrency. Set it to hold the aggregate rate down while the per-session call count climbs.'
+        required: false
+        default: '0'
         type: string
 
 concurrency:
@@ -44,6 +61,9 @@ jobs:
         env:
           PRS_WORKERS: ${{ github.event.inputs.workers }}
           PRS_PER: ${{ github.event.inputs.per }}
+          # Blank or absent is 0 in the script (Number('') === 0), so leaving the
+          # input empty behaves exactly as it did before this input existed.
+          PRS_PACE_MS: ${{ github.event.inputs.pace_ms }}
         run: |
           if [ ! -f scripts/probe-rate-sharded.js ]; then
             echo "scripts/probe-rate-sharded.js is not in this checkout — commit it first."
