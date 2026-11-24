@@ -26,7 +26,7 @@ const path = require('path');
 const zlib = require('zlib');
 const store = require('./lib/store');
 
-const VERSION = 'check-registration v1 2026-11-18';
+const VERSION = 'check-registration v2 2026-11-24 nightly-sweep';
 
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
@@ -116,19 +116,25 @@ function main() {
     const fromSeason = byId.get(from.seasonId) || {};
     log(`    from        : ${from.compName || '(none)'} · ${from.clubName || '(club not harvested)'}`);
     log(`    checked at  : ${r.at || 'NEVER'}`);
-    log(`    next check  : ${r.nextCheck || '(none)'}`);
     if (r.missing) log(`    ⚠️ missing  : ${r.missing}`);
 
     // (2) walked?
     if (!r.at) {
       log('    ⚠️ THE WALK HAS NEVER LOOKED AT THIS PLAYER.');
-      log('       It covers about a seventh of the cohort a day. Nothing can be known');
-      log('       about them until it reaches them — this is not a missing registration.');
+      log('       The walk sweeps the WHOLE cohort every night, so a player it has never');
+      log('       looked at is either new to the file this run, or their competition is');
+      log('       still in season and therefore not walked at all.');
     } else {
       const age = Math.floor((Date.now() - Date.parse(r.at)) / DAY);
       log(`    last looked : ${age} day(s) ago`);
-      if (age > 28) {
-        log('    ⚠️ OLDER THAN THE 28-DAY RE-CHECK. A move made since then has not been seen.');
+      // ⚠️ TWO DAYS, NOT TWENTY-EIGHT. The 7/28-day re-check clocks were
+      // removed in walk-registrations v12: everyone is walked every night, so
+      // anything older than a couple of days means the walk did not reach this
+      // player — a time budget, a block, or their season going active again.
+      if (age > 2) {
+        log(`    ⚠️ ${age} DAYS OLD. The walk sweeps everyone nightly, so this player has been`);
+        log('       missed — check the last run for STOPPED FOR TIME, blocks, or their');
+        log('       competition going back in season.');
       }
     }
 

@@ -53,6 +53,10 @@ const FILE_VERSION = 3;
 // walked every night, so none of them has a job, and the whole thundering-herd
 // class of defect goes with them. A FILE_VERSION 3 load strips the dead fields.
 //
+// ⚠️ C2, THE CAREER REFETCH FLAG, IS BACK. It was lost in an edit somewhere
+// between v5 and v11 — no writer set it, while the suite still tested it and
+// the workflow still staged players/ for it. See flagCareerRefetch below.
+//
 // ⚠️ THE CLUB HARVEST STAYS. The club TRIGGER is gone; harvesting `from.club`
 // from the player's own cohort-season record is not. core.json's teamClub /
 // teamOrg resolve only ~60% of a cohort (measured WFNL 2026: 4,688 of 7,675),
@@ -102,6 +106,12 @@ const ROOT = path.resolve(__dirname, '..');
 // GitHub web UI; the run log prints what you would look for. A leftover plain
 // .json from v1-v3 is read once, converted and deleted.
 const OUT_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
+// ⚠️ C2 WRITES OUTSIDE data/. Career files live at players/<xx>/<uuid>.json and
+// the workflow must stage players/ as well as data/ — run #81 committed a
+// four-hour walk locally and never pushed it because those writes were
+// unstaged and `git pull --rebase` then refused on a dirty tree.
+const PLAYERS_DIR = path.join(ROOT, 'players');
+const careerPath = (uuid) => path.join(PLAYERS_DIR, String(uuid).slice(0, 2), `${uuid}.json`);
 const LEGACY_PATH = path.join(ROOT, 'data', 'registrations.json');
 
 const POOL_SIZE = Math.max(1, Number(process.env.WALK_POOL_SIZE || 8));
@@ -245,6 +255,65 @@ function loadRegistrations() {
   return r;
 }
 
+// ── C2: flag a career file that has never held a season of ours ──────────────
+//
+// ⚠️ THIS WAS LOST IN AN EDIT BETWEEN v5 AND v11 AND NOTHING LOOKED WRONG.
+// scripts/verify-registrations.js section 10 still tested it, the workflow
+// still staged players/ for it, and no writer set the flag. That is the exact
+// invisible failure the flag exists to prevent, happening to the flag itself:
+// a player whose career file is missing one of our seasons simply waits out
+// the 150-day timer while every run stays green.
+//
+// The walk is the only thing that sees a player's FULL registration list, so
+// it is the only thing that can notice a season of ours the career file has
+// never held. It sets refetch: true and leaves the rest of the file alone —
+// read, modify, write, never rebuild.
+//
+// ⚠️ rfSeen IS WHAT STOPS AN ENDLESS LOOP. The career sweep clears the flag by
+// rebuilding the record without it, and it writes no season row for a
+// registration that carries no statistics. Without a memory of what has
+// already been asked, the same gap is seen and flagged on EVERY walk, for
+// ever. rfSeen records the season ids already raised for that player.
+function flagCareerRefetch(uuid, rec, teams, manifestById, tally) {
+  // Seasons of OURS this player is registered in, from the API's own answer.
+  //
+  // ⚠️ UPCOMING SEASONS ARE EXCLUDED, AND LEAVING THEM IN IS EXPENSIVE. A
+  // season that has not started has no games and no statistics, so a career
+  // file cannot hold a row for it and never will until it is played. Counting
+  // one as "missing" flags a refetch that fetches nothing — and once a 2027
+  // season exists, that is most of the cohort, which is tens of thousands of
+  // pointless career fetches. Only a season that could HAVE statistics counts.
+  const ourSids = [...new Set(teams
+    .filter(t => t.season?.status?.value !== 'UPCOMING')
+    .map(t => t.season?.id)
+    .filter(sid => sid && manifestById.has(sid)))];
+  if (!ourSids.length) return;
+
+  const seen = new Set(Array.isArray(rec.rfSeen) ? rec.rfSeen : []);
+  const f = careerPath(uuid);
+  let career;
+  try {
+    if (!fs.existsSync(f)) { tally.noFile++; return; }
+    career = JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch (e) {
+    tally.unreadable++;
+    if (tally.samples.length < 5) tally.samples.push(`${uuid}: career file unreadable — ${e.message}`);
+    return;
+  }
+
+  const held = new Set((Array.isArray(career.seasons) ? career.seasons : []).map(x => x && x.sid).filter(Boolean));
+  const missing = ourSids.filter(sid => !held.has(sid) && !seen.has(sid));
+  if (!missing.length) { tally.alreadyHeld++; return; }
+
+  // Remember BEFORE flagging, so a crash between the two re-flags rather than
+  // silently never flagging again.
+  rec.rfSeen = [...seen, ...missing];
+  career.refetch = true;
+  fs.writeFileSync(f, JSON.stringify(career));
+  tally.set++;
+  if (tally.samples.length < 5) tally.samples.push(`${uuid}: missing ${missing.join(', ')}`);
+}
+
 async function main() {
   const startMs = Date.now();
   const NOW = isoAt(startMs);
@@ -317,6 +386,7 @@ async function main() {
   let answered = 0, notFound = 0, errored = 0;
   let clubsHarvested = 0, trackedFound = 0, otherFound = 0, noOwnRecord = 0;
   let lastOrgChanged = 0, lastOrgDiffers = 0, lastOrgSame = 0, lastOrgNull = 0;
+  const rf = { set: 0, noFile: 0, alreadyHeld: 0, unreadable: 0, samples: [] };
   const errorSamples = [], noOwnSamples = [];
   const byStatus = {};
   const rawUpcoming = [];
@@ -420,6 +490,9 @@ async function main() {
       lastOrgNull++;
     }
 
+    // C2, after the record is settled: a career file missing a season of ours.
+    flagCareerRefetch(uuid, rec, teams, manifestById, rf);
+
     rec.at = at;
     if (tracked.length) trackedFound++;
     if (other.length) otherFound++;
@@ -486,6 +559,9 @@ async function main() {
   log('  ⚠️ A NOTE, NOT A REGISTRATION — it carries no season, so it is never');
   log('     counted in a transfer total. "DIFFERENT" is a lead to follow.');
   log(`clubs harvested this run: ${clubsHarvested}; with a next-season tracked registration: ${trackedFound}; with an outside one: ${otherFound}`);
+  log(`career refetch flags: ${rf.set} set, ${rf.alreadyHeld} already complete, ` +
+    `${rf.noFile} with no career file` + (rf.unreadable ? `, ${rf.unreadable} UNREADABLE` : ''));
+  for (const l of rf.samples) log('  ' + l);
   if (Object.keys(byStatus).length) log(`registration statuses seen: ${JSON.stringify(byStatus)}`);
   if (cohort.some(c => !c.endDate)) {
     log(`⚠️ a cohort season has no endDate in the manifest — falling back to the startDate rule for it, which over-includes concurrent seasons`);
@@ -508,7 +584,7 @@ async function main() {
     walked: done, answered, notFound, errored,
     calls: result.calls, rotations: result.rotations, blocks: result.blockCount,
     requeued: result.requeued, requeuePending: result.requeuePending,
-    gapMs: result.gapMs, poolSize: POOL_SIZE,
+    gapMs: result.gapMs, poolSize: POOL_SIZE, refetchFlagged: rf.set,
     stoppedForTime: stoppedForTime.yes, aborted: result.aborted,
     minutes: Number(elapsedMin.toFixed(1)),
   };
