@@ -96,7 +96,11 @@ const counters = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function headers(extra) {
+// ⚠️ `cookie` IS OPTIONAL AND ITS ABSENCE IS NOT THE SAME AS null. Omitted, the
+// module-level session is used and every existing caller behaves exactly as
+// before. Passed explicitly — including as null — that value wins, which is how
+// a pool session sends its own cookie and how a bootstrap sends none.
+function headers(extra, cookie) {
   const h = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -105,15 +109,16 @@ function headers(extra) {
     origin: 'https://www.playhq.com',
     'request-id': crypto.randomUUID(),
   };
-  if (sessionCookie) h.Cookie = sessionCookie;
+  const c = cookie === undefined ? sessionCookie : cookie;
+  if (c) h.Cookie = c;
   return Object.assign(h, extra || {});
 }
 
 // Raw POST. Resolves with { status, text, setCookie } and NEVER rejects, so the
 // classifier above it sees every outcome rather than only the happy path. The
 // return shape is unchanged from the https version, so no caller changes.
-async function rawPost(bodyStr, extraHeaders, timeoutMs, url) {
-  const h = headers(extraHeaders);
+async function rawPost(bodyStr, extraHeaders, timeoutMs, url, cookie) {
+  const h = headers(extraHeaders, cookie);
   // ⚠️ NO Content-Length. fetch sets it from the body, and setting it by hand is
   // rejected as a forbidden header. The https version had to set it; this must not.
 
@@ -153,6 +158,19 @@ function isWafBlock(status, text) {
   return status === 403 && (/DOCTYPE/i.test(text) || /Request blocked/i.test(text));
 }
 
+// The three cookies, assembled in the one order that works. ⚠️ ONE PLACE KNOWS
+// THIS ORDER. acquireSession and the session pool both come through here, so a
+// pool cannot drift into assembling them differently — wrong order is a
+// documented CloudFront 403.
+function pickCookie(setCookie) {
+  const parts = (setCookie || []).map((c) => String(c).split(';')[0].trim());
+  const pick = (n) => parts.find((p) => p.startsWith(n + '=')) || null;
+  const tier = pick('phq_tier');
+  const sess = pick('phq_session');
+  const sub = pick('phq_sub');
+  return { cookie: (tier && sess && sub) ? `${tier}; ${sess}; ${sub}` : null, tier, sess, sub };
+}
+
 // ── Session ──────────────────────────────────────────────────────────────────
 
 // Two alternating query shapes, because PlayHQ intermittently returns no
@@ -178,15 +196,10 @@ async function acquireSession() {
       const res = await rawPost(JSON.stringify(body), null, 30000);
       sessionCookie = prev;
 
-      const parts = res.setCookie.map((c) => String(c).split(';')[0].trim());
-      const pick = (n) => parts.find((p) => p.startsWith(n + '=')) || null;
-      const tier = pick('phq_tier');
-      const sess = pick('phq_session');
-      const sub = pick('phq_sub');
+      const { cookie, tier, sess, sub } = pickCookie(res.setCookie);
 
-      if (tier && sess && sub) {
-        // Order matters — wrong order causes CloudFront 403s.
-        sessionCookie = `${tier}; ${sess}; ${sub}`;
+      if (cookie) {
+        sessionCookie = cookie;
         sessionAcquiredAt = Date.now();
         counters.sessionRefreshes++;
         console.log(`  [session] acquired on attempt ${attempt} (${body.operationName})`);
@@ -453,7 +466,324 @@ function logSummary(label) {
   );
 }
 
+// ── Session pool ─────────────────────────────────────────────────────────────
+//
+// N INDEPENDENT GUEST SESSIONS, each paced by a minimum gap. Additive: nothing
+// above this line changed behaviour, and every existing export keeps its
+// signature. docs/walk_pool_design.md is the approved design.
+//
+// ⚠️ WHAT THE LIMIT ACTUALLY IS (measured 2026-11-24, six runs of
+// scripts/probe-rate-sharded.js, one runner, anonymous cookie-no-jwt):
+//
+//   workers  gap      per session   aggregate    calls/session   result
+//      8       270ms    224/min      ~1,790/min       179        BLOCKED
+//      2       450ms    134/min         268/min       154        BLOCKED
+//      8     1,600ms     37/min         298/min       350        clean
+//     16     1,490ms     40/min         644/min       302        clean
+//      8       776ms     77/min         618/min       261        clean
+//     16       662ms     91/min       1,451/min       308        clean
+//
+// The limit is the MINIMUM GAP BETWEEN CONSECUTIVE REQUESTS ON ONE SESSION.
+// Blocked at or below 450ms, clean at or above 662ms. Throughput scales
+// linearly with the number of independent sessions.
+//
+// Falsified by those rows, each of which had been asserted somewhere in this
+// repo or its brief:
+//   per-IP                  the same runner took 1,434 ok, then 308.
+//   an aggregate rate       blocked at 268/min; clean at 1,451/min.
+//   a ~250-290 call budget  261, 302, 308 and 350 per session all clean, and
+//                           both blocks happened BELOW it, at 154 and 179.
+//
+// ⚠️ A TOKEN BUCKET IS THE WRONG INSTRUMENT HERE, and walk-registrations v11
+// used one. "110 calls per rolling 60s" fires at full speed until the allowance
+// empties and then idles — bursts spaced at the round trip alone, 262-376ms,
+// which is exactly the blocked region. Pace by the GAP, never by a rate.
+//
+// ⚠️ THE GAP IS TARGETED START-TO-START, not slept after the call. A fixed
+// sleep drifts with latency: the same 400ms pace produced a 776ms gap at one
+// latency and 662ms at another.
+//
+// ROTATION IS NOT FORCED BY A CALL BUDGET — no such budget was observed. It is
+// forced by the cookie's 30-40 minute TTL, which a 67-minute sweep outlives
+// twice. The caps below stay inside every clean reading above, so no session
+// enters territory that has not been measured.
+//
+// ⚠️ A HANDLER MUST NOT MUTATE ANYTHING BEFORE ITS CALL RETURNS. When a call is
+// blocked the pool requeues the item and the handler never completes, so any
+// state written ahead of the call would be written twice.
+
+const LIB_VERSION = 'playhq.js v2 2026-11-24 session-pool';
+
+class PoolBlocked extends Error {
+  constructor(msg) { super(msg || 'cloudfront block'); this.name = 'PoolBlocked'; }
+}
+
+// One independent guest session, or null. Uses the same two query shapes and
+// the same cookie assembly as acquireSession — via pickCookie, so there is one
+// place that knows the order — but touches no module state.
+async function mintCookie() {
+  for (const body of COOKIE_QUERIES) {
+    // cookie: null, explicitly. Never offer an existing cookie while asking for
+    // a new one, and never fall back to the module-level session here.
+    const res = await rawPost(JSON.stringify(body), null, 30000, null, null);
+    const { cookie } = pickCookie(res.setCookie);
+    if (cookie) return cookie;
+    // A WAF block will not be fixed by trying the other query shape.
+    if (isWafBlock(res.status, res.text)) return null;
+  }
+  return null;
+}
+
+function createPool(opts) {
+  const o = opts || {};
+  const size = Math.max(1, Number(o.size || 8));
+  const baseGapMs = Number(o.gapMs == null ? 800 : o.gapMs);
+  // ⚠️ Math.max(1, ...), NOT Math.max(10, ...). A floor here silently overrode a
+  // smaller maxCalls — the caller asked for 5 and got 10 with nothing said.
+  const maxCalls = Math.max(1, Number(o.maxCalls || 300));
+  const stagger = Math.max(0, Number(o.stagger == null ? 20 : o.stagger));
+  const maxAgeMs = Math.max(1000, Number(o.maxAgeMs || 15 * 60 * 1000));
+  const blockWaitMs = Number(o.blockWaitMs == null ? 80000 : o.blockWaitMs);
+  const clusterMs = Number(o.clusterMs == null ? 10000 : o.clusterMs);
+  const maxBlocks = Number(o.maxBlocks == null ? 20 : o.maxBlocks);
+  const mintAttempts = Math.max(1, Number(o.mintAttempts || 5));
+  const log = typeof o.log === 'function' ? o.log : console.log;
+
+  let gapMs = baseGapMs;
+  let poolPauseUntil = 0;
+  let aborted = false;
+  const blocks = [];
+  const stats = {
+    calls: 0, ok: 0, blockCount: 0, rotations: 0,
+    mintFailures: 0, requeued: 0, handlerErrors: 0, widened: 0,
+  };
+
+  // ⚠️ STAGGERED CAPS. Eight sessions minted together and capped identically
+  // all retire in the same few seconds, and the sweep stalls while the whole
+  // pool re-bootstraps. Session n retires sooner, so replacement is rolling.
+  //
+  // ⚠️ THE STAGGER IS CLAMPED, NOT THE CAP. An earlier version floored each cap
+  // at 25, which SILENTLY IGNORED any maxCalls below that — a pool asked for 5
+  // calls a session quietly did 25. Clamping the stagger instead keeps the last
+  // session at no less than half of maxCalls and leaves maxCalls meaning what
+  // it says at every pool size: 8 sessions of 300 stagger by 18, 16 by 9.
+  const stepMs = Math.min(stagger, Math.floor(maxCalls / (2 * size)));
+  const sessions = [];
+  for (let i = 0; i < size; i++) {
+    sessions.push({
+      i, cookie: null, calls: 0, bornAt: 0, lastStart: 0, blocks: 0,
+      pauseUntil: 0, cap: Math.max(1, maxCalls - stepMs * i),
+    });
+  }
+
+  async function waitForPause(s) {
+    for (;;) {
+      const now = Date.now();
+      const until = Math.max(poolPauseUntil, s ? s.pauseUntil : 0);
+      if (now >= until) return;
+      await sleep(until - now);
+    }
+  }
+
+  // Mint on first use, and whenever the session has hit its cap, its age, or a
+  // block. Throws only when a cookie cannot be obtained at all.
+  async function ensureFresh(s) {
+    const now = Date.now();
+    if (s.cookie && s.calls < s.cap && (now - s.bornAt) < maxAgeMs) return;
+    if (s.cookie) {
+      const why = s.calls >= s.cap ? `cap ${s.cap}` : 'age';
+      log(`  [pool ${s.i}] retiring session: ${s.calls} calls, ` +
+        `${Math.round((now - s.bornAt) / 1000)}s old (${why})`);
+      stats.rotations++;
+    }
+    s.cookie = null;
+    for (let attempt = 1; attempt <= mintAttempts; attempt++) {
+      const c = await mintCookie();
+      if (c) {
+        s.cookie = c; s.calls = 0; s.bornAt = Date.now(); s.lastStart = 0;
+        counters.sessionRefreshes++;
+        return;
+      }
+      stats.mintFailures++;
+      log(`  [pool ${s.i}] could not mint a session (attempt ${attempt}/${mintAttempts}) — waiting ${Math.round(blockWaitMs / 1000)}s`);
+      await sleep(blockWaitMs);
+    }
+    throw new Error(`pool worker ${s.i}: could not obtain a session after ${mintAttempts} attempts`);
+  }
+
+  function noteBlock(s) {
+    const at = Date.now();
+    s.blocks++;
+    stats.blockCount++;
+    counters.blocked++;
+    blocks.push({ at, atIso: new Date(at).toISOString(), worker: s.i, callsOnSession: s.calls });
+    log(`  [pool ${s.i}] ⚠️ BLOCKED after ${s.calls} calls on this session, ` +
+      `${Math.round((at - s.bornAt) / 1000)}s old`);
+    // Retired, never reused. ensureFresh mints a replacement on the next call.
+    s.cookie = null;
+
+    // ⚠️ CLUSTERED BLOCKS ARE TREATED AS RUNNER-WIDE. Whether a WAF block
+    // penalises the cookie or the whole runner is NOT established: in both
+    // blocked probe runs every session stopped succeeding at once, but every
+    // session was identically paced and in lockstep, so the runs cannot tell
+    // the two apart. Pausing the pool is correct under both readings and costs
+    // nothing under the per-cookie one.
+    const recent = blocks.filter(b => at - b.at <= clusterMs);
+    if (recent.length >= 2) {
+      poolPauseUntil = Math.max(poolPauseUntil, at + blockWaitMs);
+      log(`  [pool] ${recent.length} blocks within ${Math.round(clusterMs / 1000)}s — ` +
+        `pausing the WHOLE pool for ${Math.round(blockWaitMs / 1000)}s`);
+    } else {
+      s.pauseUntil = at + blockWaitMs;
+    }
+
+    // Fires once per session, on its second block: one unlucky session should
+    // not widen the gap, a repeat offender means the gap itself is too narrow.
+    if (s.blocks === 2) {
+      gapMs = Math.round(gapMs * 1.25);
+      stats.widened++;
+      log(`  [pool] session ${s.i} has blocked twice — widening the gap to ${gapMs}ms for the rest of the run`);
+    }
+
+    if (blocks.length >= maxBlocks) {
+      aborted = true;
+      log(`  [pool] ${blocks.length} blocks — ABORTING the sweep; what has been collected is kept`);
+    }
+  }
+
+  // One GraphQL call on one session. Same classification as gqlPost, with one
+  // difference that matters: a WAF block throws PoolBlocked instead of sleeping
+  // 80s inline, so the pool can requeue the item and keep the other sessions
+  // working.
+  async function callOn(s, query, variables, operationName) {
+    const bodyStr = JSON.stringify(operationName
+      ? { operationName, query, variables } : { query, variables });
+    const authIsData = operationName && AUTH_403_IS_DATA.has(operationName);
+    let lastReason = 'unknown';
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (attempt > 1) counters.retries++;
+      await waitForPause(s);
+      await ensureFresh(s);
+
+      // The gap, targeted start-to-start. If the previous round trip already
+      // took longer than the gap, this waits for nothing.
+      if (s.lastStart) {
+        const wait = (s.lastStart + gapMs) - Date.now();
+        if (wait > 0) await sleep(wait);
+      }
+      s.lastStart = Date.now();
+      s.calls++;
+      stats.calls++;
+
+      const res = await rawPost(bodyStr, null, 60000, null, s.cookie);
+
+      if (isWafBlock(res.status, res.text)) {
+        noteBlock(s);
+        throw new PoolBlocked(`blocked on ${operationName || 'query'}`);
+      }
+      if (res.status === 0) {
+        counters.transient++;
+        lastReason = `network: ${res.networkError}`;
+        await sleep(attempt * 1000);
+        continue;
+      }
+      if (res.status === 403) {
+        counters.auth403++;
+        if (authIsData) throw new Error(`403 not accessible: ${operationName}`);
+        // Not a WAF body, so the cookie has expired rather than been punished.
+        lastReason = 'session 403';
+        s.cookie = null;
+        continue;
+      }
+      if (res.status === 400) {
+        counters.graphqlError++;
+        try { return JSON.parse(res.text); }
+        catch (e) { throw new Error(`${operationName || 'query'} rejected (400): ${res.text.slice(0, 200)}`); }
+      }
+      if (res.status !== 200) {
+        counters.transient++;
+        lastReason = `HTTP ${res.status}: ${res.text.slice(0, 200)}`;
+        await sleep(attempt * 1000);
+        continue;
+      }
+      let json;
+      try { json = JSON.parse(res.text); }
+      catch (e) {
+        counters.transient++;
+        lastReason = `JSON parse: ${e.message}`;
+        await sleep(attempt * 1000);
+        continue;
+      }
+      if (json.errors && json.errors.length) counters.graphqlError++;
+      else { counters.ok++; stats.ok++; }
+      return json;
+    }
+    throw new Error(`${operationName || 'query'} failed after ${MAX_ATTEMPTS} attempts — ${lastReason}`);
+  }
+
+  // Run `handler(item, call)` over every item, `size` sessions at a time.
+  // `call(query, variables, operationName)` is bound to that worker's session.
+  //
+  // A blocked item goes BACK ON THE QUEUE and is retried by whichever session
+  // reaches it. It is never reported as done and never reported as empty.
+  async function each(items, handler, runOpts) {
+    const ro = runOpts || {};
+    const shouldStop = typeof ro.shouldStop === 'function' ? ro.shouldStop : () => false;
+    const onError = typeof ro.onError === 'function' ? ro.onError : null;
+    const queue = items.slice();
+    const requeue = [];
+    let next = 0;
+    let stopped = false;
+
+    await Promise.all(sessions.map(async (s) => {
+      for (;;) {
+        if (aborted || stopped) return;
+        if (shouldStop()) { stopped = true; return; }
+        let item;
+        if (next < queue.length) item = queue[next++];
+        else if (requeue.length) item = requeue.shift();
+        else return;
+        try {
+          await handler(item, (q, v, op) => callOn(s, q, v, op));
+        } catch (e) {
+          if (e instanceof PoolBlocked) {
+            requeue.push(item);
+            stats.requeued++;
+            await waitForPause(s);
+            continue;
+          }
+          stats.handlerErrors++;
+          if (onError) onError(item, e);
+        }
+      }
+    }));
+
+    return {
+      ...stats,
+      blocks: blocks.slice(),
+      aborted,
+      stoppedEarly: stopped,
+      gapMs,
+      // ⚠️ NOT ZERO IS NOT A BUG, BUT IT IS NOT NOTHING EITHER. An item requeued
+      // after the last worker had already run out of queue is left here rather
+      // than silently dropped. Those players keep their previous `at` and are
+      // walked first on the next run.
+      requeuePending: requeue.length,
+    };
+  }
+
+  function describe() {
+    return { size, gapMs, maxCalls, stagger: stepMs, maxAgeMs, caps: sessions.map(s => s.cap) };
+  }
+
+  return { each, describe, stats, blocks };
+}
+
 module.exports = {
+  LIB_VERSION,
+  createPool,
+  PoolBlocked,
   gqlPost,
   specPost,
   spectatorScore,
