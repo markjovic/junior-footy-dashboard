@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v13 2026-11-24 per-season-rosters';
+const VERSION = 'build-transfers v14 2026-11-24 club-from-the-games';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -351,25 +351,6 @@ function main() {
           playerInfo.set(p.uuid, { age: p.age || '', team: p.teamRaw || p.team || '' });
         }
       }
-      // ⚠️ LATEST YEAR FIRST, THEN MOST GAMES — not latest startDate. A player
-      // in two competitions in the SAME year was decided by whichever league
-      // happened to open its season later in the calendar, which is arbitrary
-      // and picked the wrong club for anyone whose second competition was a
-      // handful of games. The year comes from the season NAME; a season's
-      // startDate precedes the year in its name and must never yield one.
-      const y = yearOf(m.compName);
-      for (const [u, agg] of players) {
-        const prev = lastPlayed.get(u);
-        if (!prev || y > prev.y || (y === prev.y && agg.gp > prev.gp)) {
-          // ⚠️ THE CLUB ID, NOT JUST THE NAME. "Did this player come from
-          // somewhere else" is decided on the id — one club spelled two ways
-          // would otherwise read as a transfer, which is the first rule in
-          // this file's own header.
-          lastPlayed.set(u, { y, comp: m.compName, club: agg.club || '', team: agg.team || '',
-                              clubId: clubOfQuiet(m.compName, agg.team, agg.age) || '',
-                              age: agg.age || '', gp: agg.gp, goals: agg.goals });
-        }
-      }
     } catch (e) { console.error(`  ⚠️ ${m.compName}: ${e.message}`); continue; }
 
     // ⚠️ GRADE IS STORED, AND NOT ON THE PLAYER. `roster` is keyed
@@ -413,6 +394,43 @@ function main() {
           }
         }
       }
+    }
+
+    // ── The player's last played season ───────────────────────────────────
+    //
+    // ⚠️ THE CLUB COMES FROM `seen`, WHICH IS BUILT FROM THE GAMES. v12 and
+    // v13 looked it up with clubOfQuiet(compName, teamRaw, age) and that key
+    // does not exist: teamClub is keyed on the MATCH team name — the same
+    // rec.home/rec.away the loop above resolves 103,406 times with no misses —
+    // while teamRaw is the player-record name, which clubs write differently.
+    // "Pakenham JFC U13 Boys Maroon" never matched anything. 2,261 of 2,330
+    // registrations came out unresolved, and because an unresolved club is
+    // indistinguishable from an unchanged one, the page showed almost no
+    // transfers in at all. The club id is already in `seen`; nothing needed
+    // looking up.
+    //
+    // ⚠️ LATEST YEAR FIRST, THEN MOST GAMES — not latest startDate. A player in
+    // two competitions in the SAME year was decided by whichever league opened
+    // later in the calendar, which is arbitrary. The year comes from the season
+    // NAME; a season's startDate precedes the year in its name.
+    const y = yearOf(m.compName);
+    for (const [u, agg] of players) {
+      const prev = lastPlayed.get(u);
+      if (prev && !(y > prev.y || (y === prev.y && agg.gp > prev.gp))) continue;
+      // The club they played MOST games for in this season. A player with an
+      // in-season move has two, and the bigger spell is the one that answers
+      // "where were they last year".
+      let clubId = '', best = -1, teamName = '';
+      for (const [club, e] of (seen.get(u) || new Map())) {
+        if (e.games > best) { best = e.games; clubId = club; teamName = e.team || ''; }
+      }
+      // Falls back to the lookup only for someone in the players file with no
+      // game in the lines — rare, and better than nothing.
+      if (!clubId) clubId = clubOfQuiet(m.compName, agg.team, agg.age) || '';
+      lastPlayed.set(u, { y, comp: m.compName,
+        club: (clubId && clubLabel(clubId)) || agg.club || '',
+        team: teamName || agg.team || '', clubId,
+        age: agg.age || '', gp: agg.gp, goals: agg.goals });
     }
 
     // ── Rosters, the PLAYED half ───────────────────────────────────────────
