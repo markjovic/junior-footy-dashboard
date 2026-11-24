@@ -2,7 +2,7 @@
 // scripts/probe-team-logo.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-team-logo v3 2026-11-25 chase-the-named-type';
+const VERSION = 'probe-team-logo v4 2026-11-25 list-types-are-types-too';
 
 //
 // Where can a CURRENT team or club logo be read from, when the season that
@@ -125,8 +125,14 @@ const LOGO_CANDIDATES = ['logo', 'logoUrl', 'image'];
 // obvious accessors, this asks for the pieces that would let the URL be built.
 // Asked one level deeper whenever a rejection names an object type. Kept short
 // on purpose: this runs once per named type, not once per candidate.
-const URLISH = ['url', 'src', 'href', 'uri', 'path', 'key', 'small', 'medium',
-  'large', 'original', 'thumbnail', '__typename'];
+// ⚠️ `sizes` IS A LIST OF ImageSource (measured 2026-11-25), so each entry is
+// one rendition — almost certainly an address plus its dimensions. The combined
+// form is asked FIRST: if it is accepted it answers the whole question in one
+// call and names which rendition is which, which is what a refresh needs in
+// order to pick the right size rather than taking whatever comes first.
+const URLISH = ['url width height', 'url', 'src', 'href', 'uri', 'path', 'key',
+  'width', 'height', 'size', 'name', 'small', 'medium', 'large', 'original',
+  'thumbnail', '__typename'];
 
 const IMAGE_SUBFIELDS = [
   // ⚠️ NO NESTED FORMS HERE. The chase below handles anything that turns out
@@ -159,10 +165,18 @@ async function tryQuery(label, query, variables) {
     // 'Field "sizes" of type "ImageSizes" must have a selection of subfields'
     // names a real object one level further down. v2 printed it and stopped,
     // which left the answer one dispatch away for no reason.
-    const t = /of type "([A-Za-z_][A-Za-z0-9_]*)" must have a selection/.exec(msg);
+    // ⚠️ A GRAPHQL TYPE NAME IS NOT ALWAYS A BARE IDENTIFIER. v3 matched
+    // [A-Za-z_][A-Za-z0-9_]* and PlayHQ answered
+    //   Field "sizes" of type "[ImageSource!]!" must have a selection of subfields
+    // — a non-null list of non-null ImageSource. The brackets and bangs failed
+    // the pattern, so the type was captured as null and the chase never fired.
+    // The whole point of v3 was that chase, and it sat silent for one character
+    // class. Take everything inside the quotes and strip the wrappers.
+    const t = /of type "([^"]+)" must have a selection/.exec(msg);
+    const typeName = t ? t[1].replace(/[[\]!]/g, '') : null;
     log(`    ${label}: ${exists ? 'FIELD EXISTS, asked wrongly' : 'rejected'} — ${msg.slice(0, 150)}`);
     if (hint) log(`      ↳ ${hint.slice(0, 140)}`);
-    return { ok: false, exists, typeName: t ? t[1] : null };
+    return { ok: false, exists, typeName, typeRaw: t ? t[1] : null };
   }
   // ⚠️ LOG THE SUCCESSES TOO, with their data. A probe that only logs failures
   // hides its single most useful result — that happened to probe-team-roster v3,
@@ -250,7 +264,19 @@ async function main() {
   ];
   const nextSeasons = manifest.filter(m => yearOf(m.compName) === latest && !hasPlayers(m.seasonId));
 
-  const playedID = PLAYED || (playedSeasons[0] && playedSeasons[0].seasonId);
+  // ⚠️ PREFER A RETIRED SEASON THAT ACTUALLY CONTAINS THE CLUB. v3 picked
+  // YJFL 2026 while probing Norwood, an EFNL club, and reported "0 of them
+  // belong to 6d405ccb" — true, useless, and easy to misread as the club
+  // having vanished. teamClub maps comp|team|age to a club id, so the
+  // competitions a club appears in are already known offline.
+  const orgComps = new Set();
+  for (const [k, v] of Object.entries(core.teamClub || {})) {
+    if (v === ORG) { const c = String(k).split('|')[0]; if (c) orgComps.add(c); }
+  }
+  const inOrgComp = (m) => orgComps.has(m.compName);
+  const preferred = playedSeasons.filter(m => m.retired && inOrgComp(m));
+  const playedID = PLAYED || (preferred[0] && preferred[0].seasonId)
+    || (playedSeasons[0] && playedSeasons[0].seasonId);
   const seasonID = SEASON || (nextSeasons[0] && nextSeasons[0].seasonId) || playedID;
   const nameOf = (sid) => (manifest.find(m => m.seasonId === sid) || {}).compName || sid;
   const entryOf = (sid) => manifest.find(m => m.seasonId === sid) || {};
@@ -267,7 +293,8 @@ async function main() {
   if (!refused) {
     log('     test the claim. Pass a retired seasonID as `played` to test it properly.');
   }
-  log(`  organisation  ${ORG}`);
+  log(`  organisation  ${ORG}` +
+    (orgComps.size ? `  (appears in ${[...orgComps].sort().join(', ')})` : '  — not in teamClub at all'));
 
   // What the stored map holds for this organisation, and whether it still works.
   log(`\n── the stored logos for organisation ${ORG} ──`);
@@ -407,20 +434,25 @@ async function main() {
       { code: ORG });
     if (r.ok) { imageFields.push(f); found.push({ where: 'DiscoverOrganisation.logo', field: f, data: r.data }); }
     // A named object type one level down is the next question, so ask it now.
-    else if (r.typeName && !/^\w+ /.test(f)) chase.push({ f, type: r.typeName });
+    else if (r.typeName && !/^\w+ /.test(f)) chase.push({ f, type: r.typeName, raw: r.typeRaw });
     if (r.fatal) break;
   }
 
   for (const c of chase) {
-    log(`\n  ↳ "${c.f}" is of type ${c.type} — asking what IS inside it`);
+    log(`\n  ↳ "${c.f}" is of type ${c.raw || c.type} — asking what IS inside it`);
     for (const g of URLISH) {
       if (imageFields.includes(`${c.f} { ${g} }`)) continue;   // already answered
       const r = await tryQuery(`logo { ${c.f} { ${g} } }`,
         `query Probe($code: String!) { discoverOrganisation(code: $code) { id logo { ${c.f} { ${g} } } } }`,
         { code: ORG });
       if (r.ok) {
-        imageFields.push(`${c.f} { ${g} }`);
-        found.push({ where: `DiscoverOrganisation.logo.${c.f}`, field: g, data: r.data });
+        // ⚠️ THE SAME STRING IN BOTH PLACES. These recorded `url width height`
+        // in `found` and `sizes { url width height }` in `imageFields`, so the
+        // "did this shape yield a URL" test below matched nothing and section
+        // 6c silently did no work at all.
+        const shape = `${c.f} { ${g} }`;
+        imageFields.push(shape);
+        found.push({ where: 'DiscoverOrganisation.logo', field: shape, data: r.data });
       }
       if (r.fatal) break;
     }
@@ -430,8 +462,11 @@ async function main() {
     // ⚠️ THE SAME SHAPE ON A TEAM IS WORTH MORE THAN ON A CLUB. One call per
     // SEASON over discoverTeams refreshes every club at once; one call per CLUB
     // over discoverOrganisation needs 165 of them.
-    // Deduped: a shape can be reached both directly and through the chase.
-    const good = [...new Set(imageFields.filter(f => f !== '__typename'))];
+    // ⚠️ ONLY SHAPES THAT ACTUALLY PRODUCED A URL. `sizes { width }` is
+    // accepted and useless — re-probing it on a team costs a call to learn
+    // that a number is still a number.
+    const yielded = new Set(found.filter(f => urlsIn(f.data).length).map(f => f.field));
+    const good = [...new Set(imageFields.filter(f => f !== '__typename' && yielded.has(f)))];
     if (good.length) {
       log('\n── 6c. the same subfield on a TEAM — one call per season, not per club ──');
       for (const f of good.slice(0, 3)) {
