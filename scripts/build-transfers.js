@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v5 2026-11-21 age-and-team-on-every-row';
+const VERSION = 'build-transfers v6 2026-11-24 rosters';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -49,8 +49,16 @@ const VERSION = 'build-transfers v5 2026-11-21 age-and-team-on-every-row';
 // is a permit, not a transfer. The game count is kept as a second opinion and
 // both are in the output.
 //
-// Env: TR_MIN_GAMES (default 3), TR_OUT (data/transfers.json), TR_DRY (print
-//      only, write nothing).
+// ⚠️ IT ALSO WRITES data/rosters.json.gz. season -> club -> team -> players,
+// merged from the games already read here and from the tracked registrations
+// the walk files. Registration and game rosters MERGE rather than replace, so
+// a player who has signed but not yet played stays visible; where both place
+// the same player in one season, the GAME wins, which is how a mid-season move
+// surfaces without anyone asking PlayHQ a second question.
+//
+// Env: TR_MIN_GAMES (default 3), TR_OUT (data/transfers.json),
+//      TR_ROSTERS_OUT (data/rosters.json.gz), TR_DRY (print only, write
+//      nothing).
 
 'use strict';
 
@@ -63,6 +71,12 @@ const store = require('./lib/store');
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
 const OUT_PATH = path.join(ROOT, process.env.TR_OUT || 'data/transfers.json');
+// ⚠️ GZIP, like registrations and for the same reason. Once most of the cohort
+// holds a next-season registration this is the better part of 2 MB plain, and
+// it is committed on every walk. The page decompresses it with
+// DecompressionStream exactly as it already does for registrations. Cost: it is
+// not readable in the GitHub web UI — the run log prints the counts.
+const ROSTERS_PATH = path.join(ROOT, process.env.TR_ROSTERS_OUT || 'data/rosters.json.gz');
 const MIN_GAMES = Math.max(1, Number(process.env.TR_MIN_GAMES || 3));
 const DRY = /^(1|true|yes)$/i.test(process.env.TR_DRY || '');
 
@@ -126,6 +140,40 @@ function main() {
   // Reaching for a `prev` map copied from report-transfers.js is what broke the
   // first version — the name existed there, not here.
   const playerInfo = new Map();   // uuid -> { age, team }
+
+  // ── Rosters ─────────────────────────────────────────────────────────────────
+  // season -> club -> team -> [{ u, n, a, s }]; s is 'p' played or 'r'
+  // registered. `rosters.md` in the design: the registration roster is NOT
+  // replaced when games start — the two MERGE, so a player who signed but has
+  // not played yet stays visible instead of vanishing until round one.
+  //
+  // ⚠️ GAME-DERIVED WINS PLACEMENT. "Who they turned out for" beats "who they
+  // signed with", so a mid-season move surfaces from the games by itself. The
+  // conflict is resolved per (season, player): once a played row exists for
+  // someone in a season, a registered row for that season is dropped rather
+  // than listing them at two clubs.
+  const rosters = new Map();          // sid -> Map(clubId -> Map(teamKey -> Map(uuid -> row)))
+  const placed = new Set();           // `${sid}|${uuid}` already placed by a GAME
+  const TEAM_NONE = '';               // the club's unassigned list
+  let rosterPlayed = 0, rosterRegistered = 0, rosterConflicts = 0;
+
+  function rosterAdd(sid, club, team, uuid, name, age, source) {
+    if (!sid || !club || !uuid) return;
+    const key = `${sid}|${uuid}`;
+    if (source === 'played') placed.add(key);
+    else if (placed.has(key)) { rosterConflicts++; return; }
+
+    if (!rosters.has(sid)) rosters.set(sid, new Map());
+    const byClub = rosters.get(sid);
+    if (!byClub.has(club)) byClub.set(club, new Map());
+    const byTeam = byClub.get(club);
+    const tk = team || TEAM_NONE;
+    if (!byTeam.has(tk)) byTeam.set(tk, new Map());
+    const byUuid = byTeam.get(tk);
+    if (byUuid.has(uuid)) return;
+    byUuid.set(uuid, { u: uuid, n: name || null, a: age || '', s: source === 'played' ? 'p' : 'r' });
+    if (source === 'played') rosterPlayed++; else rosterRegistered++;
+  }
   const gamesHistogram = new Map();   // games at the smaller club -> count
   const overlapHistogram = new Map(); // clean | interleaved | undated -> count
   let seasonsWithLines = 0, seasonsWithout = [];
@@ -174,6 +222,22 @@ function main() {
             if (e.last === null || day > e.last) e.last = day;
           }
         }
+      }
+    }
+
+    // ── Rosters, the PLAYED half ───────────────────────────────────────────
+    // ⚠️ THIS IS `seen` BEFORE IT IS FILTERED TO TRANSFERS. The loop below
+    // keeps only players with two or more clubs; a roster wants every player
+    // at every club, so it is harvested here rather than recomputed.
+    //
+    // Only players whose team resolved to a club appear — the same
+    // comp|team|age lookup, and the same miss count reported above. A roster
+    // built on a 20% miss rate would be quietly short of a fifth of its
+    // players, which is why that figure is printed loudly.
+    for (const [u, cm] of seen) {
+      for (const [club, e] of cm) {
+        rosterAdd(m.seasonId, club, e.team || null, u,
+          (players.get(u) || {}).name || null, (players.get(u) || {}).age || '', 'played');
       }
     }
 
@@ -284,6 +348,13 @@ function main() {
       walked++;
       const from = r.from || {};
       for (const t of (r.tracked || [])) {
+        // ⚠️ THE ROSTER TAKES EVERY TRACKED REGISTRATION, the transfer list only
+        // the ones that CHANGE CLUB. A player re-signing with their own club is
+        // not a transfer and is skipped below — but they are still on that
+        // club's roster, and leaving them off would make every roster look like
+        // a list of departures.
+        rosterAdd(t.seasonId, t.club, t.team || null, uuid,
+          r.name || null, (playerInfo.get(uuid) || {}).age || '', 'registered');
         if (!t.club || !from.club || t.club === from.club) continue;
         const fs2 = splitSeason(from.compName);
         const ts = splitSeason((byId.get(t.seasonId) || {}).compName || t.compName || '');
@@ -388,11 +459,52 @@ function main() {
   log(`\n  total rows: ${out.transfers.length} (${inSeason.length} in-season, ` +
     `${between.length} between-season, ${leads.length} lead)`);
 
+  // ── Rosters: serialise and report ──────────────────────────────────────────
+  const rosterOut = { version: 1, builtAt: out.builtAt, seasons: {} };
+  let rClubs = 0, rTeams = 0, rUnassigned = 0;
+  for (const [sid, byClub] of rosters) {
+    const m = byId.get(sid) || {};
+    const season = { compName: m.compName || null, startDate: m.startDate || null, endDate: m.endDate || null, clubs: {} };
+    for (const [club, byTeam] of byClub) {
+      rClubs++;
+      const c = { name: clubLabel(club), teams: {}, unassigned: [] };
+      for (const [team, byUuid] of byTeam) {
+        // ⚠️ SORTED, so the committed file does not churn. An unsorted Map
+        // iteration reorders rows whenever the input order shifts, and every
+        // nightly commit would then be a whole-file diff of nothing.
+        const rows = [...byUuid.values()].sort((a, b) => String(a.n || '').localeCompare(String(b.n || '')) || a.u.localeCompare(b.u));
+        if (team === TEAM_NONE) { c.unassigned = rows; rUnassigned += rows.length; }
+        else { c.teams[team] = rows; rTeams++; }
+      }
+      season.clubs[club] = c;
+    }
+    rosterOut.seasons[sid] = season;
+  }
+
+  log('\n── rosters ──');
+  log(`  seasons ${rosters.size}, clubs ${rClubs}, teams ${rTeams}`);
+  log(`  players: ${rosterPlayed} from games (source p), ${rosterRegistered} from registrations (source r)`);
+  log(`  registered with no team assigned yet : ${rUnassigned}`);
+  log(`  registrations dropped because a GAME already placed that player : ${rosterConflicts}`);
+  log('  ⚠️ THE TWO HALVES MERGE, they do not replace. A player who signed but has');
+  log('     not played yet stays visible as `r`; once they play they become `p`.');
+  log('     Where both exist for one season the GAME decides which club they are at.');
+  if (!rosters.size) {
+    log('  ⚠️ NO ROSTERS AT ALL. Either no season has per-game lines and no player');
+    log('     holds a tracked registration, or the comp|team|age lookup is missing.');
+  }
+
   if (DRY) { log('  DRY RUN — not written.'); process.exit(0); }
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
   fs.writeFileSync(OUT_PATH, JSON.stringify(out));
   const kb = Math.round(fs.statSync(OUT_PATH).size / 1024);
   log(`  Wrote ${path.relative(ROOT, OUT_PATH)} (${kb} KB)`);
+
+  const rosterJson = JSON.stringify(rosterOut);
+  const rosterGz = zlib.gzipSync(Buffer.from(rosterJson, 'utf8'), { level: 9 });
+  fs.writeFileSync(ROSTERS_PATH, rosterGz);
+  log(`  Wrote ${path.relative(ROOT, ROSTERS_PATH)} ` +
+    `(${Math.round(rosterGz.length / 1024)} KB gzipped, ${Math.round(rosterJson.length / 1024)} KB plain)`);
   process.exit(0);
 }
 
