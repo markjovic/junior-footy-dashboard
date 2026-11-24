@@ -2,7 +2,7 @@
 // scripts/walk-registrations.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'walk-registrations v12 2026-11-24 session-pool';
+const VERSION = 'walk-registrations v13 2026-11-24 playing-not-active';
 const FILE_VERSION = 3;
 
 //
@@ -12,8 +12,9 @@ const FILE_VERSION = 3;
 // approved design; docs/registrations_design.md v2 still governs the cohort
 // definition, the "next season" rule and the storage shape.
 //
-//   cohort   every distinct person in the most recent season WITH A PLAYERS
-//            FILE of each tracked organisation THAT IS ITSELF OFF-SEASON
+//   cohort   every distinct person in the most recent season of each tracked
+//            organisation THAT HAS ACTUALLY BEEN PLAYED, skipping any
+//            organisation that is playing right now
 //   order    oldest walked first; never-walked ahead of everyone
 //   pace     8 sessions, each with a minimum 800ms gap -> about 600/min, so
 //            40,382 people take roughly 67 minutes
@@ -62,15 +63,20 @@ const FILE_VERSION = 3;
 // teamOrg resolve only ~60% of a cohort (measured WFNL 2026: 4,688 of 7,675),
 // so the API's own record is the only reliable source.
 //
-// OFF-SEASON ONLY, PER ORGANISATION. The workflow's season gate opens when ANY
-// tracked season is complete or upcoming, but the cohort is built only from
-// organisations whose own latest season is complete or upcoming. SEJ and SER
-// 2026 ended 2026-09-01 and EFNL on 2026-09-30, so through September the walk
-// covers the finished competitions and leaves the running ones alone. There is
-// no in-season walk: a mid-season transfer is a registration in the SAME
-// season, which the "starts after ours ends" rule below discards, so walking in
-// season would record nothing. build-transfers.js already derives that half
-// from season data at no API cost.
+// NOT PLAYING, PER ORGANISATION — see the long note above cohortSeasons. The
+// test is games, never PlayHQ's status, because PlayHQ calls a season ACTIVE
+// the day registrations open. There is no in-season walk: a mid-season
+// transfer is a registration in the SAME season, which the "starts after ours
+// ends" rule below discards, so walking a competition mid-season would record
+// nothing. build-transfers.js already derives that half from season data at no
+// API cost.
+//
+// ⚠️ THE WORKFLOW HAS NO SEASON GATE ANY MORE. It had one, built on `state`,
+// and it carried this same defect: once every competition's next season went
+// ACTIVE the job would have stopped running altogether, through the whole
+// registration window. One place decides this now, and it is this script,
+// which can read the season files. The job starts, exits 2 in seconds when
+// nothing qualifies, and commits nothing.
 //
 // WHICH REGISTRATIONS ARE "NEXT SEASON". A season counts only if it starts
 // AFTER THE COHORT SEASON ENDS (startDate > endDate, both from the manifest).
@@ -89,7 +95,8 @@ const FILE_VERSION = 3;
 //
 // Env: WALK_POOL_SIZE (8), WALK_GAP_MS (800), WALK_MAX_CALLS (300),
 //      WALK_TIME_BUDGET_MS (110 min), WALK_FRACTION (1 = everyone),
-//      WALK_BLOCK_WAIT_MS (80000).
+//      WALK_BLOCK_WAIT_MS (80000), WALK_PLAY_WINDOW_DAYS (21),
+//      WALK_ANYWAY (walk even an organisation that is playing).
 
 'use strict';
 
@@ -122,6 +129,12 @@ const TIME_BUDGET_MS = Number(process.env.WALK_TIME_BUDGET_MS || 110 * 60 * 1000
 // takes the first 1/N of the ordered cohort. The remainder are not "due
 // tomorrow", they are just older and therefore first next time.
 const FRACTION = Math.max(1, Number(process.env.WALK_FRACTION || 1));
+// ⚠️ DAYS EITHER SIDE OF TODAY THAT COUNT AS "PLAYING". It must span a finals
+// gap and a bye round without a March practice match reading as "the season
+// has started". discover-seasons' own backstop calls a season quiet after 14.
+const PLAY_WINDOW_DAYS = Math.max(1, Number(process.env.WALK_PLAY_WINDOW_DAYS || 21));
+// Walk every tracked organisation whether or not it is playing.
+const WALK_ANYWAY = /^(1|true|yes)$/i.test(process.env.WALK_ANYWAY || '');
 // ⚠️ EXPOSED SO THE BLOCK PATH CAN BE EXERCISED AT ALL. CloudFront recovery is
 // a flat ~80s and that is the right production value, but a guard that has
 // never fired is untested, and twenty blocks at 80s each is also 27 minutes a
@@ -166,37 +179,123 @@ function parseIso(iso) {
 }
 const isoAt = (ms) => new Date(ms).toISOString();
 
-// ── Cohort ────────────────────────────────────────────────────────────────────
-// Per organisation: the manifest entry with the greatest startDate that has a
-// players file — but only for organisations that are themselves off-season.
-// Returns [{ seasonId, compName, org, startDate, endDate }].
+// ── Is this organisation playing? ────────────────────────────────────────────
 //
-// ⚠️ `state` IS THE ORGANISATION'S OWN. The workflow gate opens when any
-// tracked season is off-season; without this filter the walk would sweep every
-// player of every competition through September, including the two still
-// playing.
+// ⚠️ PlayHQ's `ACTIVE` MEANS REGISTRATIONS ARE OPEN, NOT THAT ANYONE IS
+// PLAYING. An AFL season "starts" months before its first game — SEJ 2026 runs
+// from 2025-11-01, EFNL 2026 from 2025-10-01 — because that is when
+// registration opens. discover-seasons maps ACTIVE to state 'active', so
+// `state` conflates "registrations just opened, no game until April" with
+// "they play every weekend".
+//
+// ⚠️ THAT CONFLATION FROZE THE WALK AT THE WORST POSSIBLE MOMENT. On
+// 2026-11-24 EFNL 2027 was ACTIVE with registrations open and no fixture until
+// April; the previous rule read that as in-season and dropped all 15,960 EFNL
+// players out of the cohort — during the one window the walk exists to watch.
+// The off-season gate in the workflow made the same mistake, and would have
+// stopped the job entirely once every competition's 2027 season went ACTIVE.
+//
+// There is no status to reinterpret: `complete` is finished, `upcoming` is
+// PlayHQ's UPCOMING, and `active` is everything else. So ask the games
+// instead. Every match in a season core file carries a date, and
+// fetch-fixtures rewrites every `scheduled: true` record each run, so their
+// presence means PlayHQ still lists future games.
+//
+// PLAYING = a result dated within the last PLAY_WINDOW_DAYS, or a scheduled
+// fixture within the next PLAY_WINDOW_DAYS. Nothing else.
+
+// YYYY-MM-DD arithmetic. Never new Date(str) — split and use Date.UTC.
+function addDays(ymd, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+  if (!m) return '';
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + n)).toISOString().slice(0, 10);
+}
+
+const gamesCache = new Map();
+// { results, lastResult, nextScheduled } for one season, from its core file.
+function seasonGames(seasonId, today) {
+  if (gamesCache.has(seasonId)) return gamesCache.get(seasonId);
+  const out = { results: 0, lastResult: '', nextScheduled: '', file: false };
+  const p = path.join(store.SEASONS_DIR, `${seasonId}-core.json`);
+  if (fs.existsSync(p)) {
+    out.file = true;
+    try {
+      const payload = JSON.parse(fs.readFileSync(p, 'utf8'));
+      for (const m of (Array.isArray(payload.matches) ? payload.matches : [])) {
+        if (!m || !m.date) continue;                 // byes and partial records
+        if (m.scheduled === true) {
+          if (m.date >= today && (!out.nextScheduled || m.date < out.nextScheduled)) out.nextScheduled = m.date;
+          continue;
+        }
+        out.results++;
+        if (m.date > out.lastResult) out.lastResult = m.date;
+      }
+    } catch (e) {
+      // ⚠️ AN UNREADABLE FILE MUST NOT READ AS "NOT PLAYING". That would walk a
+      // competition mid-season. Treat it as playing and say so.
+      out.unreadable = e.message;
+    }
+  }
+  gamesCache.set(seasonId, out);
+  return out;
+}
+
+// ── Cohort ────────────────────────────────────────────────────────────────────
+// Per organisation: the latest season THAT HAS ACTUALLY BEEN PLAYED — a players
+// file and at least one dated result — skipping organisations that are playing
+// right now.
+//
+// ⚠️ "HAS A PLAYERS FILE" IS NOT ENOUGH ON ITS OWN. EFNL 2027 has one the
+// moment registrations produce teams, and taking it as the cohort season would
+// make the cohort the people who have ALREADY registered — excluding exactly
+// the players the walk is looking for.
 function cohortSeasons(manifest) {
-  const byOrg = new Map();
-  let skipped = 0;
+  const today = isoAt(Date.now()).slice(0, 10);
+  const from = addDays(today, -PLAY_WINDOW_DAYS);
+  const to = addDays(today, PLAY_WINDOW_DAYS);
+
+  const byOrg = new Map();      // org -> { played: entry|null, playing: reason|null }
   for (const m of manifest) {
     if (!m.compName || !m.seasonId || !m.org) continue;
-    if (!fs.existsSync(path.join(store.SEASONS_DIR, `${m.seasonId}-players.json`))) continue;
-    const cur = byOrg.get(m.org);
-    if (!cur || String(m.startDate || '') > String(cur.startDate || '')) byOrg.set(m.org, m);
+    const g = seasonGames(m.seasonId, today);
+    const o = byOrg.get(m.org) || { played: null, playing: null, seen: [] };
+
+    if (g.unreadable) o.playing = o.playing || `${m.compName}: season file unreadable (${g.unreadable}) — assuming in season`;
+    else if (g.lastResult && g.lastResult >= from) o.playing = o.playing || `${m.compName}: result ${g.lastResult}, within ${PLAY_WINDOW_DAYS} days`;
+    else if (g.nextScheduled && g.nextScheduled <= to) o.playing = o.playing || `${m.compName}: fixture ${g.nextScheduled}, within ${PLAY_WINDOW_DAYS} days`;
+
+    const hasPlayers = fs.existsSync(path.join(store.SEASONS_DIR, `${m.seasonId}-players.json`));
+    if (hasPlayers && g.results > 0) {
+      if (!o.played || String(m.startDate || '') > String(o.played.startDate || '')) o.played = m;
+    }
+    o.seen.push({ compName: m.compName, lastResult: g.lastResult, nextScheduled: g.nextScheduled, results: g.results });
+    byOrg.set(m.org, o);
   }
-  const out = [];
-  for (const m of byOrg.values()) {
-    if (m.state !== 'complete' && m.state !== 'upcoming') {
-      log(`  ${String(m.compName).padEnd(14)} state=${m.state === undefined ? '(none)' : m.state} — still in season, NOT walked`);
-      skipped++;
+
+  const cohort = [];
+  let playing = 0, noPlayed = 0;
+  for (const [org, o] of byOrg) {
+    if (!o.played) {
+      log(`  ${org}: no season with a players file AND a dated result — nothing to walk`);
+      noPlayed++;
       continue;
     }
-    out.push({
-      seasonId: m.seasonId, compName: m.compName, org: m.org,
-      startDate: m.startDate || '', endDate: m.endDate || '', state: m.state,
+    if (o.playing && !WALK_ANYWAY) {
+      log(`  ${String(o.played.compName).padEnd(14)} PLAYING — ${o.playing} — NOT walked`);
+      playing++;
+      continue;
+    }
+    const g = seasonGames(o.played.seasonId, today);
+    log(`  ${String(o.played.compName).padEnd(14)} cohort ${o.played.seasonId} ` +
+      `(${o.played.startDate} to ${o.played.endDate || '?'}), ${g.results} result(s), last ${g.lastResult || 'none'}` +
+      (o.playing ? `  [walk_anyway overrode: ${o.playing}]` : ''));
+    cohort.push({
+      seasonId: o.played.seasonId, compName: o.played.compName, org,
+      startDate: o.played.startDate || '', endDate: o.played.endDate || '',
+      state: o.played.state,
     });
   }
-  return { cohort: out, skipped };
+  return { cohort, playing, noPlayed };
 }
 
 // ⚠️ READ BY SEASON ID, NOT BY COMPETITION NAME. v11 called
@@ -326,12 +425,12 @@ async function main() {
   const manifest = core.manifest || [];
   const manifestById = new Map(manifest.filter(m => m.seasonId).map(m => [m.seasonId, m]));
 
-  const { cohort, skipped } = cohortSeasons(manifest);
+  log(`organisations — playing is a result in the last ${PLAY_WINDOW_DAYS} days or a fixture in the next ${PLAY_WINDOW_DAYS}:`);
+  const { cohort, playing, noPlayed } = cohortSeasons(manifest);
   if (!cohort.length) {
-    log(`No tracked organisation is off-season with a players file (${skipped} still in season) — nothing to walk.`);
+    log(`Nothing to walk: ${playing} organisation(s) are playing, ${noPlayed} have no played season stored.`);
     process.exit(2);
   }
-  for (const c of cohort) log(`  cohort season ${c.seasonId} ${c.compName} ${c.state} (${c.startDate} to ${c.endDate || '?'})`);
   const cohortById = new Map(cohort.map(c => [c.seasonId, c]));
 
   const reg = loadRegistrations();
