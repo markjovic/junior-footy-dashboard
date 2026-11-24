@@ -726,7 +726,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.09</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.10</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -3146,8 +3146,13 @@ function renderRosters() {
     const rows = clubIds.map(cid => {
       const list = rvClubRows(clubs[cid]).filter(({ row }) => keep(row));
       const pc = list.filter(({ row }) => row.s === 'p').length;
+      // Teams counted from the rows that SURVIVED the filter, not from the
+      // club's full team list — under REGISTERED only, a club whose teams hold
+      // nothing but played rows would otherwise advertise teams that are not
+      // on the screen behind it.
+      const tset = new Set(list.filter(x => x.team).map(x => x.team));
       return { cid, name: clubs[cid].name || cid, n: list.length, p: pc, r: list.length - pc,
-               teams: Object.keys(clubs[cid].teams || {}).length };
+               teams: tset.size };
     }).filter(c => c.n > 0);
     const tot = rows.reduce((a, c) => a + c.n, 0);
     body.innerHTML = note(`${tvEsc(season.compName || sid)} — ${rows.length} club` +
@@ -3157,7 +3162,9 @@ function renderRosters() {
         '<div class="rv-row">' +
         `<span class="rv-nm" onclick="setRosterClub('${tvEsc(c.cid)}')" ` +
         `title="Show this club">${tvEsc(c.name)}</span>` +
-        `<span class="rv-where">${c.teams} team${c.teams === 1 ? '' : 's'} · ` +
+        // "0 teams" reads as a fault rather than as the normal state of a club
+        // that has signed players and not yet graded them.
+        `<span class="rv-where">${c.teams ? `${c.teams} team${c.teams === 1 ? '' : 's'}` : 'no team yet'} · ` +
         `${c.n.toLocaleString()} player${c.n === 1 ? '' : 's'}` +
         `${c.p && c.r ? ` (${c.p.toLocaleString()} played, ${c.r.toLocaleString()} registered)` : ''}` +
         '</span></div>').join('')
