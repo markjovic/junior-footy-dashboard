@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v12 2026-11-24 career-and-club-id';
+const VERSION = 'build-transfers v13 2026-11-24 per-season-rosters';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -90,7 +90,17 @@ const OUT_PATH = path.join(ROOT, process.env.TR_OUT || 'data/transfers.json');
 // it is committed on every walk. The page decompresses it with
 // DecompressionStream exactly as it already does for registrations. Cost: it is
 // not readable in the GitHub web UI — the run log prints the counts.
-const ROSTERS_PATH = path.join(ROOT, process.env.TR_ROSTERS_OUT || 'data/rosters.json.gz');
+// ⚠️ ONE FILE PER SEASON, NOT ONE FILE. docs/rosters_storage_design.md.
+// The single data/rosters.json.gz was 1,612 KB gzipped and was rewritten every
+// night — gzip cannot be delta-compressed by git, so one changed byte stores
+// the whole blob again, about 590 MB of history a year. The played half is
+// STATIC once a season finishes; only the season taking registrations changes.
+// Split per season, a normal night rewrites the ~100 KB 2027 files and nothing
+// else, and the page downloads one season instead of eight.
+const ROSTERS_DIR = path.join(ROOT, process.env.TR_ROSTERS_DIR || 'data/rosters');
+const ROSTERS_INDEX = path.join(ROSTERS_DIR, 'index.json');
+// The file the split replaces. Removed once, on the first v13 run.
+const ROSTERS_LEGACY = path.join(ROOT, 'data/rosters.json.gz');
 const MIN_GAMES = Math.max(1, Number(process.env.TR_MIN_GAMES || 3));
 const ROSTER_ALL = /^(1|true|yes)$/i.test(process.env.TR_ROSTER_ALL || '');
 const DRY = /^(1|true|yes)$/i.test(process.env.TR_DRY || '');
@@ -801,12 +811,33 @@ function main() {
     log('     half-written file reads as "no career" and silently loses a player.');
   }
   // Transfers IN, countable here because the club id is stored.
-  let xferIn = 0;
-  for (const [sid, se] of Object.entries(rosterOut.seasons))
+  //
+  // ⚠️ "SAME CLUB" AND "COULD NOT RESOLVE THE CLUB" ARE NOT THE SAME ANSWER,
+  // and v12 printed one number that quietly merged them. It reported 2 against
+  // 111 between-season moves found in the same run — a figure that cannot both
+  // be right, and the log gave no way to tell which. A row whose previous club
+  // would not resolve through teamClub has no `ci` at all and was simply not
+  // counted, so an unresolved lookup looked exactly like a player staying put.
+  let xferIn = 0, xferSame = 0, xferUnresolved = 0;
+  const xferSample = [];
+  for (const se of Object.values(rosterOut.seasons))
     for (const [cid, c] of Object.entries(se.clubs))
-      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned])
-        if (row.p && row.p.ci && row.p.ci !== cid) xferIn++;
-  log(`  registrations whose last club was a DIFFERENT club : ${xferIn}`);
+      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned]) {
+        if (row.s !== 'r' || !row.p) continue;
+        if (!row.p.ci) {
+          xferUnresolved++;
+          if (xferSample.length < 5) xferSample.push(`${row.n || row.u} — ${row.p.y} ${row.p.t || row.p.c || '(no team)'}`);
+        } else if (row.p.ci !== cid) xferIn++;
+        else xferSame++;
+      }
+  log(`  registrations by last club : ${xferIn} DIFFERENT, ${xferSame} same, ` +
+    `${xferUnresolved} could not be resolved`);
+  if (xferUnresolved) {
+    log('  ⚠️ An unresolved previous club is NOT "stayed put" — the page cannot');
+    log('     mark it as a transfer in, so it reads as a player who stayed. The');
+    log('     comp|team|age key did not resolve for these:');
+    xferSample.forEach(x => log(`       ${x}`));
+  }
   if (regNoPrev) {
     log(`  ⚠️ ${regNoPrev} registration(s) have NO previous season. Every walked`);
     log('     player comes from a cohort season, so this should be near zero —');
@@ -829,11 +860,66 @@ function main() {
   const kb = Math.round(fs.statSync(OUT_PATH).size / 1024);
   log(`  Wrote ${path.relative(ROOT, OUT_PATH)} (${kb} KB)`);
 
-  const rosterJson = JSON.stringify(rosterOut);
-  const rosterGz = zlib.gzipSync(Buffer.from(rosterJson, 'utf8'), { level: 9 });
-  fs.writeFileSync(ROSTERS_PATH, rosterGz);
-  log(`  Wrote ${path.relative(ROOT, ROSTERS_PATH)} ` +
-    `(${Math.round(rosterGz.length / 1024)} KB gzipped, ${Math.round(rosterJson.length / 1024)} KB plain)`);
+  // ── Rosters: one file per season, written only when the CONTENT changed ───
+  //
+  // ⚠️ NO TIMESTAMP INSIDE A SEASON FILE. builtAt lives in index.json alone.
+  // While it sat in the rosters payload every season file differed from the
+  // last run by construction, so "write only if changed" could never fire —
+  // the same trap build-player-index documents for generatedAt.
+  fs.mkdirSync(ROSTERS_DIR, { recursive: true });
+  let wrote = 0, unchanged = 0, gzTotal = 0, plainTotal = 0;
+  const indexSeasons = [];
+  for (const [sid, se] of Object.entries(rosterOut.seasons)) {
+    let players = 0, registered = 0, teams = 0;
+    for (const c of Object.values(se.clubs)) {
+      teams += Object.keys(c.teams).length;
+      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned]) {
+        players++; if (row.s === 'r') registered++;
+      }
+    }
+    const payload = JSON.stringify({ version: 2, sid, compName: se.compName,
+      startDate: se.startDate, endDate: se.endDate, clubs: se.clubs });
+    const f = path.join(ROSTERS_DIR, `${sid}.json.gz`);
+    let same = false;
+    if (fs.existsSync(f)) {
+      // Compare the CONTENT, not the gzip bytes: a gzip of identical input is
+      // reproducible here, but relying on that makes the check hostage to a
+      // zlib upgrade. Inflate and compare the JSON.
+      try { same = zlib.gunzipSync(fs.readFileSync(f)).toString('utf8') === payload; }
+      catch (e) { same = false; }
+    }
+    const gz = zlib.gzipSync(Buffer.from(payload, 'utf8'), { level: 9 });
+    if (same) unchanged++; else { fs.writeFileSync(f, gz); wrote++; }
+    gzTotal += gz.length; plainTotal += payload.length;
+    indexSeasons.push({ sid, compName: se.compName, startDate: se.startDate,
+      endDate: se.endDate, clubs: Object.keys(se.clubs).length, teams, players,
+      registered, file: `${sid}.json.gz`, bytes: gz.length });
+  }
+  // Newest first, so the page does not have to sort before it can draw.
+  indexSeasons.sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')) ||
+    String(a.compName || '').localeCompare(String(b.compName || '')));
+
+  // ⚠️ A SEASON THAT LEFT THE SCOPE MUST LOSE ITS FILE. Otherwise last year's
+  // roster is still served long after the index stopped listing it, and the
+  // next reader to guess the URL gets data nothing in the repo vouches for.
+  let removed = 0;
+  const want = new Set(indexSeasons.map(x => x.file));
+  for (const f of fs.readdirSync(ROSTERS_DIR)) {
+    if (!/\.json\.gz$/.test(f) || want.has(f)) continue;
+    fs.unlinkSync(path.join(ROSTERS_DIR, f)); removed++;
+  }
+  fs.writeFileSync(ROSTERS_INDEX, JSON.stringify({ version: 2, builtAt: out.builtAt,
+    seasons: indexSeasons }));
+  if (fs.existsSync(ROSTERS_LEGACY)) {
+    fs.unlinkSync(ROSTERS_LEGACY);
+    log(`  Removed ${path.relative(ROOT, ROSTERS_LEGACY)} — replaced by ${path.relative(ROOT, ROSTERS_DIR)}/`);
+  }
+  log(`  Wrote ${path.relative(ROOT, ROSTERS_DIR)}/ — ${wrote} season file(s) changed, ` +
+    `${unchanged} unchanged${removed ? `, ${removed} removed` : ''}`);
+  log(`  total ${Math.round(gzTotal / 1024)} KB gzipped, ${Math.round(plainTotal / 1024)} KB plain ` +
+    `across ${indexSeasons.length} file(s); the page loads ONE of them`);
+  indexSeasons.forEach(x => log(`      ${pad(x.compName, 14)} ${String(Math.round(x.bytes / 1024)).padStart(5)} KB  ` +
+    `${String(x.players).padStart(6)} player(s)${x.registered ? `, ${x.registered} registered` : ''}`));
   process.exit(0);
 }
 
