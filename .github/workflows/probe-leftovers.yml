@@ -1,0 +1,44 @@
+# .github/workflows/probe-leftovers.yml
+#
+# Loose ends before calling PlayHQ discovery done: the rest of tenantConfiguration,
+# DiscoverRegistration.products, and the full registration-form shape.
+#
+# ⚠️ READ-ONLY. Nothing written or committed. ~25 calls.
+
+name: Probe leftovers
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'season — a seasonID. Blank uses EFNL 2026 (2dcbf383).'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Probe
+        env:
+          PL_SEASON: ${{ github.event.inputs.season }}
+        run: |
+          if [ ! -f scripts/probe-leftovers.js ]; then
+            echo "scripts/probe-leftovers.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-leftovers.js
