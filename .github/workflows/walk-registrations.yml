@@ -2,8 +2,9 @@
 name: Walk registrations
 
 # The registrations walk — docs/walk_pool_design.md, approved 2026-11-24.
-# Writes data/registrations.json.gz, data/transfers.json and the C2 refetch
-# flags under players/.
+# Writes data/registrations.json.gz, data/transfers.json, data/rosters/
+# (one file per season plus index.json — docs/rosters_storage_design.md) and
+# the C2 refetch flags under players/.
 #
 # ⚠️ IT SWEEPS THE WHOLE COHORT EVERY NIGHT NOW, not a seventh of it. Eight
 # independent guest sessions, each paced by a minimum 800ms gap, give about
@@ -170,7 +171,13 @@ jobs:
           # `git pull --rebase` then refused — "cannot pull with rebase: You
           # have unstaged changes" — so a four-hour walk of 18,744 players was
           # committed locally and never pushed.
-          git add -A data/registrations.json.gz data/registrations.json data/transfers.json players/ 2>/dev/null || git add -A data/ players/
+          #
+          # ⚠️ data/rosters/ IS A DIRECTORY NOW, and data/rosters.json.gz is
+          # named here so its one-off DELETION is staged. build-transfers v13
+          # splits the rosters into one file per season and unlinks the old
+          # single file; an unstaged delete would stop the rebase dead, the
+          # same way the unstaged players/ writes did on run #81.
+          git add -A data/registrations.json.gz data/registrations.json data/transfers.json data/rosters.json.gz data/rosters/ players/ 2>/dev/null || git add -A data/ players/
 
           # ⚠️ NOTHING MAY BE LEFT UNSTAGED BEFORE THE REBASE. A rebase needs a
           # clean tree, and anything this job wrote but did not stage stops the
