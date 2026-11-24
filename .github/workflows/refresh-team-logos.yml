@@ -43,6 +43,19 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+  schedule:
+    # ⚠️ IT RUNS ITSELF. A repair that only happens when somebody notices a
+    # blank crest is not a repair — Norwood's logo had been dead for an unknown
+    # number of weeks before anyone looked, and nothing in the system was ever
+    # going to report it. Weekly is right for the rate this changes: a club
+    # replaces its logo once in a long while, and nobody minds a crest being a
+    # few days stale.
+    #
+    # 16:40 UTC Sunday = 03:40 AEDT Monday. Clear of the nightly walk (19:30
+    # UTC), clear of discovery (18:30 UTC) and clear of the weekend results
+    # runs, so it is not queueing behind the data-write group or spending WAF
+    # budget beside something that needs it. One call per season, 21 calls.
+    - cron: '40 16 * * 0'
 
 concurrency:
   group: playhq-data-write
@@ -67,6 +80,12 @@ jobs:
       - name: Refresh
         id: refresh
         env:
+          # ⚠️ A SCHEDULED RUN HAS NO INPUTS, so github.event.inputs.dry_run is
+          # EMPTY on a cron fire — not 'true'. The script treats empty as false
+          # and does the repair, which is what the schedule is for. Spelling
+          # this out because the dispatch default IS 'true', and the two
+          # behaving differently is the sort of thing that looks like a bug six
+          # months from now.
           RL_DRY: ${{ github.event.inputs.dry_run }}
           RL_SEASONS: ${{ github.event.inputs.seasons }}
           RL_PACE_MS: ${{ github.event.inputs.pace_ms }}
@@ -95,6 +114,7 @@ jobs:
       # change and wrote nothing, so there is no commit to make — unlike the
       # walk, where a 2 can still accompany data worth keeping.
       - name: Commit
+        # Empty on a scheduled run, so the condition holds there too.
         if: steps.refresh.outputs.code == '0' && github.event.inputs.dry_run != 'true'
         run: |
           git config user.name  "github-actions[bot]"
