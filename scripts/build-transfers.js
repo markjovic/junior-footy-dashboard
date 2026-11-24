@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v11 2026-11-24 prove-the-previous-season';
+const VERSION = 'build-transfers v12 2026-11-24 career-and-club-id';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -80,6 +80,9 @@ const store = require('./lib/store');
 
 
 const ROOT = path.resolve(__dirname, '..');
+// Career totals, one small file per player, written by fetch-career-stats.js.
+const PLAYERS_DIR = path.join(ROOT, 'players');
+const careerPath = (uuid) => path.join(PLAYERS_DIR, String(uuid).slice(0, 2), `${uuid}.json`);
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
 const OUT_PATH = path.join(ROOT, process.env.TR_OUT || 'data/transfers.json');
 // ⚠️ GZIP, like registrations and for the same reason. Once most of the cohort
@@ -166,6 +169,16 @@ function main() {
     }
     lookupMiss++;
     if (missExamples.length < 5) missExamples.push(`${comp}|${team}|${age}`);
+    return null;
+  }
+  // ⚠️ SAME LOOKUP, NO COUNTERS. The hit/miss figures above are the alarm for a
+  // broken teamClub key and are quoted as a coverage rate; 40,000 extra calls
+  // from the roster side would dilute that rate and hide a real miss.
+  function clubOfQuiet(comp, team, age) {
+    if (!team) return null;
+    for (const k of [`${comp}|${team}|${age}`, `${comp}|${team}|`, `${comp}|${team}`]) {
+      if (teamClub[k]) return teamClub[k];
+    }
     return null;
   }
 
@@ -279,6 +292,7 @@ function main() {
       const lp = lastPlayed.get(uuid);
       if (lp) {
         row.p = { y: lp.comp, c: lp.club || '', t: lp.team || '' };
+        if (lp.clubId) row.p.ci = lp.clubId;
         if (lp.gp) row.p.gp = lp.gp;
         if (lp.goals) row.p.gl = lp.goals;
       }
@@ -337,7 +351,12 @@ function main() {
       for (const [u, agg] of players) {
         const prev = lastPlayed.get(u);
         if (!prev || y > prev.y || (y === prev.y && agg.gp > prev.gp)) {
+          // ⚠️ THE CLUB ID, NOT JUST THE NAME. "Did this player come from
+          // somewhere else" is decided on the id — one club spelled two ways
+          // would otherwise read as a transfer, which is the first rule in
+          // this file's own header.
           lastPlayed.set(u, { y, comp: m.compName, club: agg.club || '', team: agg.team || '',
+                              clubId: clubOfQuiet(m.compName, agg.team, agg.age) || '',
                               age: agg.age || '', gp: agg.gp, goals: agg.goals });
         }
       }
@@ -674,6 +693,43 @@ function main() {
     rosterOut.seasons[sid] = season;
   }
 
+  // ── Career totals ─────────────────────────────────────────────────────────
+  // ⚠️ READ ONCE PER PERSON, NOT ONCE PER ROW. A player appears in several
+  // rows — two clubs in a season, or a played row and a registration — and
+  // 40,000 files is already the slowest thing this script does.
+  //
+  // A missing file is NORMAL, not an error: fetch-career-stats shards its
+  // sweep and a new player may not have been reached yet. It is counted and
+  // reported rather than logged 4,000 times.
+  const careerRows = [];
+  const careerWant = new Set();
+  for (const se of Object.values(rosterOut.seasons))
+    for (const c of Object.values(se.clubs))
+      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned]) {
+        careerRows.push(row); careerWant.add(row.u);
+      }
+  const careerBy = new Map();
+  let careerRead = 0, careerMissing = 0, careerUnreadable = 0;
+  const careerStart = Date.now();
+  for (const u of careerWant) {
+    const f = careerPath(u);
+    if (!fs.existsSync(f)) { careerMissing++; continue; }
+    try {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+      if (j && j.career) { careerBy.set(u, j.career); careerRead++; }
+      else careerMissing++;
+    } catch (e) { careerUnreadable++; }
+  }
+  let careerOn = 0;
+  for (const row of careerRows) {
+    const c = careerBy.get(row.u);
+    if (!c) continue;
+    const o = {};
+    if (c.gp) o.gp = c.gp;
+    if (c.goals) o.gl = c.goals;
+    if (Object.keys(o).length) { row.c = o; careerOn++; }
+  }
+
   log('\n── rosters ──');
   if (rosterScope) {
     const { latestPlayed, withLines, retiredFuture } = rosterScope;
@@ -736,6 +792,21 @@ function main() {
       for (const row of [...Object.values(c.teams).flat(), ...c.unassigned])
         if (row.s === 'r') (row.p ? regWithPrev++ : regNoPrev++);
   log(`  registrations carrying last season : ${regWithPrev} of ${regWithPrev + regNoPrev}`);
+  log(`  career totals : ${careerOn} row(s) of ${careerRows.length} from ` +
+    `${careerRead} file(s) in ${((Date.now() - careerStart) / 1000).toFixed(1)}s; ` +
+    `${careerMissing} player(s) have no career file` +
+    (careerUnreadable ? `, ${careerUnreadable} UNREADABLE` : ''));
+  if (careerUnreadable) {
+    log('  ⚠️ An unreadable career file is a fault, not a gap — a truncated or');
+    log('     half-written file reads as "no career" and silently loses a player.');
+  }
+  // Transfers IN, countable here because the club id is stored.
+  let xferIn = 0;
+  for (const [sid, se] of Object.entries(rosterOut.seasons))
+    for (const [cid, c] of Object.entries(se.clubs))
+      for (const row of [...Object.values(c.teams).flat(), ...c.unassigned])
+        if (row.p && row.p.ci && row.p.ci !== cid) xferIn++;
+  log(`  registrations whose last club was a DIFFERENT club : ${xferIn}`);
   if (regNoPrev) {
     log(`  ⚠️ ${regNoPrev} registration(s) have NO previous season. Every walked`);
     log('     player comes from a cohort season, so this should be near zero —');
