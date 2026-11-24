@@ -715,6 +715,8 @@ body{overflow-x:hidden}
   border-radius:3px;flex-shrink:0}
 .rv-src-p{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#22c55e}
 .rv-src-r{background:rgba(240,192,64,.12);border:1px solid rgba(240,192,64,.3);color:var(--gold)}
+.rv-det{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2);flex:0 1 auto;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rv-where{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);flex:1 1 200px;
   min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 </style>
@@ -726,7 +728,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.11</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.13</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -962,6 +964,8 @@ body{overflow-x:hidden}
     <div id="rosters-view" style="display:none">
       <div class="rv-bar">
         <select id="rv-season" class="rv-sel" onchange="setRosterSeason(this.value)"></select>
+        <select id="rv-age" class="rv-sel" onchange="setRosterAge(this.value)"></select>
+        <select id="rv-grade" class="rv-sel" onchange="setRosterGrade(this.value)"></select>
         <select id="rv-club" class="rv-sel" onchange="setRosterClub(this.value)"></select>
         <input id="rv-search" type="search" placeholder="Search any player"
                oninput="setRosterSearch(this.value)" autocomplete="off"
@@ -1330,6 +1334,43 @@ function compShort(compName) {
   return String(compName || '').replace(/\s*\d{4}\s*$/, '').trim();
 }
 
+// Resolve a `t` URL value to a stored team NAME. PlayHQ's team ID is tried FIRST,
+// then the name, so a link built from an id survives a rename or a regrade while
+// every link ever shared carrying a name keeps working. Returns '' when it cannot
+// resolve, which both callers report with a toast.
+//
+// Used by init() and by the popstate handler. It is one function because those two
+// paths drifting apart is exactly how `t` came to fail two different ways —
+// init() widened the view in silence, popstate emptied it in silence.
+//
+// ⚠️ THE LATEST DATED RECORD WINS. A team renamed mid-season carries its OLD name
+// on the earlier rounds' records and its new one on the later rounds', both under
+// the same id, so the first hit in array order is not reliably the current name.
+// Dates are compared as strings: stored dates are YYYY-MM-DD, which sorts
+// correctly, and new Date(string) is not used anywhere in this file.
+//
+// Records written before engine v28 have no homeId/awayId, so for every season
+// fetched before 2026-11-24 the id branch finds nothing and the name branch
+// answers — which is the whole point of trying both.
+function resolveTeamKey(v, age) {
+  if (!v || !age) return '';
+  const scope = S.matches.filter(m => m.age === age && matchesComp(m));
+  const hits = scope.filter(m => m.homeId === v || m.awayId === v);
+  if (hits.length) {
+    const latest = hits.reduce((a, b) => (String(b.date || '') > String(a.date || '') ? b : a));
+    return latest.homeId === v ? latest.home : latest.away;
+  }
+  const names = new Set(scope.flatMap(m => [m.home, m.away]));
+  return names.has(v) ? v : '';
+}
+
+// A team id in a toast reads as noise, so an unresolved id is reported as "That
+// team". A NAME is still quoted verbatim, keeping the wording confirmed on a phone
+// in v1.07 and v1.08 byte-for-byte.
+function teamKeyLabel(v) {
+  return /^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(String(v || '')) ? 'That team' : `Team ${v}`;
+}
+
 function buildHash() {
   const p = [];
   if (S.selYear) p.push(['y', S.selYear]);
@@ -1620,6 +1661,8 @@ let S = {
   rosterClub: '',          // '' = no club chosen, which shows the club index
   rosterSearch: '',
   rosterSource: 'all',     // 'all' | 'p' (played) | 'r' (registered)
+  rosterAge: '',           // '' = every age
+  rosterGrade: '',         // '' = every grade; only played seasons have grades
   // A shared link names the season and club in WORDS, so the ids never have to
   // appear in a URL a person reads. They cannot be resolved at parse time — the
   // rosters file is not loaded yet — so they are parked here and resolved by
@@ -3013,7 +3056,16 @@ function rvDefaultSeason() {
   return bestR > 0 ? best : ids[0];
 }
 
-function setRosterSeason(v) { S.rosterSeason = String(v || ''); S.rosterClub = ''; saveFilters(); renderRosters(); }
+function setRosterSeason(v) {
+  S.rosterSeason = String(v || '');
+  // Age, grade and club all belong to the season that was showing. Carrying
+  // them across selects nothing in the new one and leaves the reader looking
+  // at an empty screen with three filters set.
+  S.rosterClub = ''; S.rosterAge = ''; S.rosterGrade = '';
+  saveFilters(); renderRosters();
+}
+function setRosterAge(v)   { S.rosterAge = String(v || ''); saveFilters(); renderRosters(); }
+function setRosterGrade(v) { S.rosterGrade = String(v || ''); saveFilters(); renderRosters(); }
 function setRosterClub(v)   { S.rosterClub = String(v || ''); saveFilters(); renderRosters(); }
 function setRosterSearch(v) { S.rosterSearch = String(v || ''); renderRosters(); }
 function setRosterSource(v) {
@@ -3025,7 +3077,7 @@ function setRosterSource(v) {
   renderRosters();
 }
 function resetRosterFilters() {
-  S.rosterClub = ''; S.rosterSearch = '';
+  S.rosterClub = ''; S.rosterSearch = ''; S.rosterAge = ''; S.rosterGrade = '';
   const q = document.getElementById('rv-search'); if (q) q.value = '';
   setRosterSource('all');
   saveFilters();
@@ -3046,13 +3098,36 @@ function rvOpen(uuid, sid, src) {
   openPlayerPanel(uuid);
 }
 
+// What a row says beyond the name. A PLAYED row carries this season's own
+// games and goals. A REGISTERED row has none — they have not played yet — so
+// it carries LAST season instead: the club and team they played most for, with
+// that season's games and goals. The two are visibly different statements and
+// are never run together into one figure.
+function rvDetail(row) {
+  if (row.s === 'p') {
+    const bits = [];
+    if (row.gp) bits.push(`${row.gp} game${row.gp === 1 ? '' : 's'}`);
+    if (row.gl) bits.push(`${row.gl} goal${row.gl === 1 ? '' : 's'}`);
+    return bits.join(' · ');
+  }
+  const p = row.p;
+  if (!p) return 'no previous season held';
+  const bits = [];
+  if (p.gp) bits.push(`${p.gp} game${p.gp === 1 ? '' : 's'}`);
+  if (p.gl) bits.push(`${p.gl} goal${p.gl === 1 ? '' : 's'}`);
+  const where = p.t || p.c || '';
+  return `${p.y}: ${where}${bits.length ? ' · ' + bits.join(' · ') : ''}`;
+}
+
 function rvRowHTML(row, sid, where) {
   const nm = toProperCase(row.n || '') || '(no name)';
+  const det = rvDetail(row);
   return '<div class="rv-row">' +
     `<span class="rv-nm" onclick="rvOpen('${tvEsc(row.u)}','${tvEsc(sid)}','${row.s === 'p' ? 'p' : 'r'}')" ` +
     `title="Open this player">${tvEsc(nm)}</span>` +
     `<span class="rv-age">${tvEsc(row.a || '')}</span>` +
     rvSrcTag(row.s) +
+    (det ? `<span class="rv-det">${tvEsc(det)}</span>` : '') +
     (where ? `<span class="rv-where">${tvEsc(where)}</span>` : '') +
     '</div>';
 }
@@ -3127,8 +3202,52 @@ function renderRosters() {
     clubSel.value = S.rosterClub || '';
   }
 
+  // ── AGE AND GRADE ─────────────────────────────────────────────────────────
+  // Both come from the data, never from a hardcoded list. ⚠️ A GRADE IS NOT A
+  // TEAM NAME. "Heathmont U12 Girls" is a team; its grade is what the league
+  // graded that team into, stored per played team in the season's roster map.
+  // A season with no games has no grades at all, so the control says that
+  // rather than sitting there empty.
+  const teamAgeOf   = (c, t) => (c.teamAge || {})[t] || '';
+  const teamGradeOf = (c, t) => (c.teamGrade || {})[t] || '';
+  const ages = new Set(), grades = new Set();
+  Object.values(clubs).forEach(c => Object.keys(c.teams || {}).forEach(t => {
+    const a = teamAgeOf(c, t); if (a) ages.add(a);
+    const g = teamGradeOf(c, t); if (g) grades.add(g);
+  }));
+  if (S.rosterAge && !ages.has(S.rosterAge)) S.rosterAge = '';
+  if (S.rosterGrade && !grades.has(S.rosterGrade)) S.rosterGrade = '';
+  const ageSel = document.getElementById('rv-age');
+  if (ageSel) {
+    const html = '<option value="">Every age</option>' +
+      [...ages].sort((a, b) => rvAgeRank(a) - rvAgeRank(b) || a.localeCompare(b))
+        .map(a => `<option value="${tvEsc(a)}"${a === S.rosterAge ? ' selected' : ''}>${tvEsc(a)}</option>`).join('');
+    if (ageSel.dataset.last !== html) { ageSel.innerHTML = html; ageSel.dataset.last = html; }
+    ageSel.value = S.rosterAge || '';
+  }
+  const gradeSel = document.getElementById('rv-grade');
+  if (gradeSel) {
+    const html = grades.size
+      ? '<option value="">Every grade</option>' +
+        [...grades].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+          .map(g => `<option value="${tvEsc(g)}"${g === S.rosterGrade ? ' selected' : ''}>${tvEsc(g)}</option>`).join('')
+      : '<option value="">No grades — season not graded</option>';
+    if (gradeSel.dataset.last !== html) { gradeSel.innerHTML = html; gradeSel.dataset.last = html; }
+    gradeSel.value = S.rosterGrade || '';
+    gradeSel.disabled = !grades.size;
+  }
+
   const src = S.rosterSource || 'all';
   const keep = (row) => src === 'all' || (src === 'p' ? row.s === 'p' : row.s !== 'p');
+  // A team passes when it matches both filters. An UNASSIGNED row has no team
+  // and therefore no grade: it matches on its own age, and is excluded by any
+  // grade filter rather than being quietly shown under one it is not in.
+  const keepTeam = (c, t) =>
+    (!S.rosterAge || teamAgeOf(c, t) === S.rosterAge) &&
+    (!S.rosterGrade || teamGradeOf(c, t) === S.rosterGrade);
+  const keepLoose = (c, t, row) => t ? keepTeam(c, t)
+    : (!S.rosterGrade && (!S.rosterAge || row.a === S.rosterAge));
+  const filterOn = !!(S.rosterAge || S.rosterGrade);
   const q = tvFold(S.rosterSearch);
   const built = d.builtAt ? String(d.builtAt).slice(0, 10) : '';
   const note = (txt) => `<div class="tv-note">${txt}${built ? ` · built ${built}` : ''}</div>`;
@@ -3156,10 +3275,51 @@ function renderRosters() {
     return;
   }
 
+  // ── A FILTER AND NO CLUB: every matching team, across every club ────────
+  // This is the "show me all the teams in this grade" view. Grouped by club,
+  // because a bare list of 40 teams with no clubs attached answers nothing.
+  if (!S.rosterClub && filterOn) {
+    let html = '', nTeams = 0, nPlayers = 0;
+    clubIds.forEach(cid => {
+      const c = clubs[cid];
+      const names = rvTeamOrder(Object.keys(c.teams || {}).filter(t => keepTeam(c, t)), c.teamAge);
+      const un = (!S.rosterGrade && S.rosterAge)
+        ? (c.unassigned || []).filter(r => keep(r) && r.a === S.rosterAge) : [];
+      const blocks = [];
+      names.forEach(t => {
+        const list = (c.teams[t] || []).filter(keep);
+        if (!list.length) return;
+        nTeams++; nPlayers += list.length;
+        const a = teamAgeOf(c, t), g = teamGradeOf(c, t);
+        blocks.push(`<div class="rv-team">${tvEsc(t)}<span class="rv-meta">` +
+          `${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
+          `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
+          list.map(row => rvRowHTML(row, sid, '')).join(''));
+      });
+      if (un.length) {
+        nPlayers += un.length;
+        blocks.push(`<div class="rv-team">No team yet<span class="rv-meta">` +
+          `${un.length} player${un.length === 1 ? '' : 's'}</span></div>` +
+          un.map(row => rvRowHTML(row, sid, '')).join(''));
+      }
+      if (blocks.length) {
+        html += `<div class="rv-club">${crestHTML(c.name || '', 20)}${tvEsc(c.name || cid)}</div>` +
+          blocks.join('');
+      }
+    });
+    const what = [S.rosterGrade && `grade ${S.rosterGrade}`, S.rosterAge].filter(Boolean).join(', ');
+    body.innerHTML = note(`${tvEsc(season.compName || sid)} — ${tvEsc(what)}: ` +
+      `${nTeams} team${nTeams === 1 ? '' : 's'}, ${nPlayers.toLocaleString()} player` +
+      `${nPlayers === 1 ? '' : 's'}`) +
+      (html || '<div class="tv-note">Nothing matches that combination.</div>');
+    return;
+  }
+
   // ── NO CLUB CHOSEN: the club index, not 15,000 rows ─────────────────────
   if (!S.rosterClub) {
     const rows = clubIds.map(cid => {
-      const list = rvClubRows(clubs[cid]).filter(({ row }) => keep(row));
+      const list = rvClubRows(clubs[cid])
+        .filter(({ row, team }) => keep(row) && keepLoose(clubs[cid], team, row));
       const pc = list.filter(({ row }) => row.s === 'p').length;
       // Teams counted from the rows that SURVIVED the filter, not from the
       // club's full team list — under REGISTERED only, a club whose teams hold
@@ -3191,23 +3351,24 @@ function renderRosters() {
   const club = clubs[S.rosterClub];
   const teams = club.teams || {};
   const teamAge = club.teamAge || {};
-  const teamNames = rvTeamOrder(Object.keys(teams), teamAge);
+  const teamGrade = club.teamGrade || {};
+  const teamNames = rvTeamOrder(Object.keys(teams).filter(t => keepTeam(club, t)), teamAge);
   let html = '';
   let shown = 0;
   teamNames.forEach(t => {
     const list = (teams[t] || []).filter(keep);
     if (!list.length) return;
     shown += list.length;
-    const a = teamAge[t] || '';
+    const a = teamAge[t] || '', g = teamGrade[t] || '';
     html += `<div class="rv-team">${tvEsc(t)}` +
-      `<span class="rv-meta">${a ? tvEsc(a) + ' · ' : ''}` +
+      `<span class="rv-meta">${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
       `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
       list.map(row => rvRowHTML(row, sid, '')).join('');
   });
   // ⚠️ A registration with no team is NOT dropped. team: null is the normal
   // state of a new registration — the club has signed them and not yet graded
   // them — and hiding those would make the view say a club had nobody.
-  const un = (club.unassigned || []).filter(keep);
+  const un = (club.unassigned || []).filter(r => keep(r) && keepLoose(club, '', r));
   if (un.length) {
     shown += un.length;
     html += `<div class="rv-team">No team yet` +
@@ -9010,11 +9171,14 @@ async function init() {
       // filters were restored above, so without this an unresolved `t` left the
       // READER'S OWN last team selected and the toast said "showing all teams"
       // while showing one team's games. v1.06 added the toast and not this.
+      //
+      // v1.13: resolved through resolveTeamKey, so `t` takes PlayHQ's team id as
+      // well as the name. fixture-watch builds its alert links from the id it
+      // already holds; the dashboard's own share button still emits the name.
       S.selTeam = '';
-      const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
-        .flatMap(m => [m.home, m.away]));
-      if (teams.has(_url.t)) S.selTeam = _url.t;
-      else if (S.selectedAge) toast(`Team ${_url.t} not found in ${S.selectedAge} — showing all teams`);
+      const hit = resolveTeamKey(_url.t, S.selectedAge);
+      if (hit) S.selTeam = hit;
+      else if (S.selectedAge) toast(`${teamKeyLabel(_url.t)} not found in ${S.selectedAge} — showing all teams`);
     }
   } catch(e) {}
 
@@ -9102,10 +9266,10 @@ async function init() {
       // 2026-11-24 against v1.06, which fixed init() alone.
       S.selTeam = null;
       if (u.t && S.selectedAge) {
-        const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
-          .flatMap(m => [m.home, m.away]));
-        if (teams.has(u.t)) S.selTeam = u.t;
-        else toast(`Team ${u.t} not found in ${S.selectedAge} — showing all teams`);
+        // Same resolver as init(), id first — see resolveTeamKey.
+        const hit = resolveTeamKey(u.t, S.selectedAge);
+        if (hit) S.selTeam = hit;
+        else toast(`${teamKeyLabel(u.t)} not found in ${S.selectedAge} — showing all teams`);
       }
       _lastHash = buildHash();
     } finally {
