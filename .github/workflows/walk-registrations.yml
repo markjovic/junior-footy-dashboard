@@ -11,10 +11,18 @@ name: Walk registrations
 # hours on one shared session paced by a token bucket, which fired in bursts at
 # the round trip and ate silent 80-second WAF waits.
 #
-# Runs in the OFF-SEASON only: the season gate inverted. The SCRIPT narrows it
-# further, to organisations whose own season is complete or upcoming, so during
-# September the finished competitions are swept and the running ones are not.
-# Manual dispatch ignores the gate.
+# ⚠️ THERE IS NO SEASON GATE HERE ANY MORE, AND ITS REMOVAL IS THE POINT.
+# The gate skipped the job unless some tracked season was `complete` or
+# `upcoming`. PlayHQ marks a season ACTIVE THE DAY REGISTRATIONS OPEN, months
+# before the first game — so once every competition's next season went ACTIVE,
+# this job would have stopped running entirely, through the whole registration
+# window it exists to watch. On 2026-11-24 EFNL 2027 was already ACTIVE with no
+# fixture until April.
+#
+# The script decides now, per organisation, from the GAMES in the season files:
+# playing means a result in the last 21 days or a fixture in the next 21. It
+# exits 2 in seconds when nothing qualifies. One place owns the rule, and it is
+# the place that can read the evidence.
 #
 # Exit codes: 0 = changed, commit. 2 = nothing changed. 3 = DEGRADED — the walk
 # hit its block ceiling, the data it did collect IS committed and then the job
@@ -23,8 +31,8 @@ name: Walk registrations
 on:
   workflow_dispatch:
     inputs:
-      ignore_gate:
-        description: 'Run even when every tracked season is active'
+      walk_anyway:
+        description: 'walk_anyway — walk every tracked organisation even one that is currently playing. Replaces the old ignore_gate.'
         required: false
         default: 'false'
         type: choice
@@ -86,37 +94,10 @@ jobs:
           # succeeds and the push never happens.
           ref: ${{ github.ref_name }}
 
-      # ── Off-season gate ─────────────────────────────────────────────────────
-      # Inverse of fetch-results.yml's Season gate: run when any tracked season
-      # is complete or upcoming. A manifest with no `state` (pre discover-seasons
-      # v4) is treated as in season, so this SKIPS — registrations depend on the
-      # state field existing.
-      #
-      # ⚠️ THIS GATE IS COARSER THAN THE WALK. It opens on ANY off-season
-      # tracked season; the script then builds its cohort only from the
-      # organisations that are themselves off-season. Both are deliberate.
-      - name: Off-season gate
-        id: gate
-        env:
-          IGNORE: ${{ github.event.inputs.ignore_gate }}
-        run: |
-          node -e '
-            const fs = require("fs");
-            const core = JSON.parse(fs.readFileSync("data/core.json", "utf8"));
-            const tracked = (core.manifest || []).filter(m => m.compName && m.seasonId);
-            for (const m of tracked) console.log(`  ${m.compName.padEnd(14)} state=${m.state === undefined ? "(none)" : m.state}`);
-            const off = tracked.filter(m => m.state === "complete" || m.state === "upcoming");
-            let run = true;
-            if (process.env.IGNORE === "true") console.log("ignore_gate=true — running regardless");
-            else if (off.length) console.log(`OFF SEASON for: ${off.map(m => m.compName).join(", ")} — walking`);
-            else { run = false; console.log("every tracked season is active (or has no state) — nothing to learn about next season; skipping"); }
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `run=${run}\n`);
-          '
-
       - name: Walk
         id: walk
-        if: steps.gate.outputs.run == 'true'
         env:
+          WALK_ANYWAY: ${{ github.event.inputs.walk_anyway }}
           # Blank means "use the script's default", so the scheduled run is
           # untouched by these existing at all.
           WALK_POOL_SIZE: ${{ github.event.inputs.pool_size }}
@@ -155,7 +136,7 @@ jobs:
       # registrations. Only a fatal walk skips it, and that already failed above.
       - name: Build transfers
         id: transfers
-        if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code != '1'
+        if: steps.walk.outputs.code != '1'
         run: |
           set +e
           if [ ! -f scripts/build-transfers.js ]; then
@@ -176,7 +157,7 @@ jobs:
       # for "degraded but collected"; both must still commit. With `== '0'` a
       # degraded run would throw away everything it gathered.
       - name: Commit
-        if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code != '1'
+        if: steps.walk.outputs.code != '1'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -211,7 +192,7 @@ jobs:
       # Actions list and sends the notification. Failing any earlier would have
       # skipped the commit and thrown an hour of collection away.
       - name: Fail the run if the walk was degraded
-        if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code == '3'
+        if: steps.walk.outputs.code == '3'
         run: |
           echo "::error::The walk was DEGRADED (exit 3): it stopped after hitting its WAF block ceiling."
           echo "What it collected before stopping has been committed by the step above — nothing is lost."
