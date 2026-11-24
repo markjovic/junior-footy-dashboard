@@ -693,6 +693,30 @@ body{overflow-x:hidden}
   .fv-hdr-row{display:none !important}
   .fv-cell{border-left:2px solid var(--b1);padding-left:8px}
 }
+/* ── ROSTERS VIEW ──
+   Reuses .tv-note and the .fv-switch pill row rather than inventing a second
+   look for the same controls. Only what is genuinely new is declared here. */
+.rv-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rv-sel{background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+  padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px;max-width:280px}
+.rv-club{display:flex;align-items:center;gap:8px;margin:16px 0 2px;font-weight:600;font-size:14px}
+.rv-team{display:flex;align-items:baseline;gap:8px;margin:12px 0 2px;font-weight:600;font-size:12px;
+  color:var(--tx2)}
+.rv-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);font-weight:400}
+.rv-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--b1);
+  font-size:12px}
+.rv-nm{flex:1 1 180px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)}
+.rv-nm:hover{border-bottom-color:var(--gold)}
+.rv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);flex-shrink:0}
+/* PLAYED and REGISTERED are different facts, not two shades of one. Green is a
+   game that happened; gold is a signature. */
+.rv-src{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;padding:1px 6px;
+  border-radius:3px;flex-shrink:0}
+.rv-src-p{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#22c55e}
+.rv-src-r{background:rgba(240,192,64,.12);border:1px solid rgba(240,192,64,.3);color:var(--gold)}
+.rv-where{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);flex:1 1 200px;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 </style>
 </head>
 <body>
@@ -702,7 +726,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.08</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.09</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -710,6 +734,7 @@ body{overflow-x:hidden}
     <button id="vsw-finals"           onclick="switchView('finals')">FINALS</button>
     <button id="vsw-leaders"          onclick="switchView('leaders')">LEADERS</button>
     <button id="vsw-transfers"        onclick="switchView('transfers')">TRANSFERS</button>
+    <button id="vsw-rosters"          onclick="switchView('rosters')">ROSTERS</button>
   </span>
   <button class="hdr-btn" id="help-btn" onclick="openHelp()"
     title="What the numbers mean, and why some are missing">? Help</button>
@@ -792,6 +817,7 @@ body{overflow-x:hidden}
       <button class="mob-tab"    id="mvt-finals" onclick="switchView('finals')">Finals</button>
       <button class="mob-tab"    id="mvt-leaders" onclick="switchView('leaders')">Leaders</button>
       <button class="mob-tab"    id="mvt-transfers" onclick="switchView('transfers')">Transfers</button>
+      <button class="mob-tab"    id="mvt-rosters" onclick="switchView('rosters')">Rosters</button>
     </div>
     <div id="no-data" class="no-data-screen">
       <svg width="80" height="80" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;opacity:0.9">
@@ -926,6 +952,33 @@ body{overflow-x:hidden}
           title="Where this comes from, and what it cannot see">? About</button>
       </div>
       <div id="tv-body"></div>
+    </div>
+
+    <!-- ROSTERS — data/rosters.json.gz, built by build-transfers.js.
+         ⚠️ A TOP-LEVEL VIEW, like TRANSFERS and for the same reason: a roster for
+         a season that has not been played has no ladder, no results and no
+         scorers, so it cannot be a card on a dashboard scoped to one season and
+         one age. It reads its own file and is not gated on a loaded season. -->
+    <div id="rosters-view" style="display:none">
+      <div class="rv-bar">
+        <select id="rv-season" class="rv-sel" onchange="setRosterSeason(this.value)"></select>
+        <select id="rv-club" class="rv-sel" onchange="setRosterClub(this.value)"></select>
+        <input id="rv-search" type="search" placeholder="Search any player"
+               oninput="setRosterSearch(this.value)" autocomplete="off"
+               style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);
+                      border-radius:var(--r);padding:6px 10px;font-family:'DM Mono',monospace;
+                      font-size:12px;min-width:200px">
+        <span class="fv-switch">
+          <button id="rvs-all" class="on" onclick="setRosterSource('all')">ALL</button>
+          <button id="rvs-p"            onclick="setRosterSource('p')">PLAYED</button>
+          <button id="rvs-r"            onclick="setRosterSource('r')">REGISTERED</button>
+        </span>
+        <button class="hdr-btn" onclick="resetRosterFilters()"
+          title="Clear the club, source and search filters">CLEAR</button>
+        <button class="hdr-btn" onclick="openHelp('rosters')"
+          title="Where this comes from, and what it cannot see">? About</button>
+      </div>
+      <div id="rv-body"></div>
     </div>
 
     <div id="leaders-view" style="display:none">
@@ -1293,6 +1346,17 @@ function buildHash() {
   // one would be writing state the dashboard does not hold.
   if (S.view && S.view !== 'dash') p.push(['v', S.view]);
 
+  // ── ROSTERS VIEW STATE ────────────────────────────────────────────────────
+  // "Here is our team" is the whole reason this view exists, so the season and
+  // the club travel in the link. In WORDS, like the finals view's club key: a
+  // season id is a UUID and no one should have to paste one.
+  if (S.view === 'rosters' && S.rostersState === 'ready' && S.rosters) {
+    const se = (S.rosters.seasons || {})[S.rosterSeason];
+    if (se && se.compName) p.push(['rs', se.compName]);
+    const cl = se && (se.clubs || {})[S.rosterClub];
+    if (cl && cl.name) p.push(['rc', cl.name]);
+  }
+
   // ── FINALS VIEW STATE ─────────────────────────────────────────────────────
   // `v=finals` alone put the reader in the finals view in THEIR OWN last-used
   // mode, because the URL overrode `v` and localStorage supplied everything else.
@@ -1348,6 +1412,10 @@ function parseHash(h) {
 // tweak — a reader who lands on a by-club link and presses back expects to leave,
 // not to shuffle through finals modes.
 const URL_PUSH_KEYS = ['y', 'c', 'v', 'fm'];
+// Every value S.view may legally hold. The saved-filter reader, the URL reader
+// and the popstate reader all validate against THIS, so a new view cannot be
+// restorable in one place and not another.
+const VIEW_IDS = ['dash', 'finals', 'leaders', 'transfers', 'rosters'];
 let _lastHash = null;
 function syncURL() {
   if (_urlApplying) return;          // do not write while reading
@@ -1454,6 +1522,9 @@ function saveFilters() {
       finalsGender: S.finalsGender,
       finalsLevel:  S.finalsLevel,
       selClub:    S.selClub,
+      rosterSeason: S.rosterSeason,
+      rosterClub:   S.rosterClub,
+      rosterSource: S.rosterSource,
     }));
   } catch(e) {}
 }
@@ -1539,7 +1610,21 @@ let S = {
   seasonFiles: new Set(), // which files exist, from core.seasonFiles
   yearLoading: false,
   selRound: '',
-  view:       'dash',   // 'dash' | 'finals' | 'leaders' | 'transfers'
+  view:       'dash',   // 'dash' | 'finals' | 'leaders' | 'transfers' | 'rosters'
+  // The rosters view owns these. Same four-state loader pattern as transfers
+  // and registrations: undefined | loading | ready | failed.
+  rosters: null,
+  rostersState: undefined,
+  rostersError: '',
+  rosterSeason: '',        // season id; '' until the data picks a default
+  rosterClub: '',          // '' = no club chosen, which shows the club index
+  rosterSearch: '',
+  rosterSource: 'all',     // 'all' | 'p' (played) | 'r' (registered)
+  // A shared link names the season and club in WORDS, so the ids never have to
+  // appear in a URL a person reads. They cannot be resolved at parse time — the
+  // rosters file is not loaded yet — so they are parked here and resolved by
+  // renderRosters on the first draw after the data arrives.
+  rosterWant: null,        // { s: compName, c: clubName } | null
   // The transfers view owns these. transfersState is the same four-state
   // pattern registrationsState uses: undefined | loading | ready | failed.
   transfers: null,
@@ -2820,6 +2905,296 @@ function renderTransfers() {
 // ═══════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// ROSTERS
+// data/rosters.json.gz, written by build-transfers.js v6. Shape:
+//   { version, builtAt, seasons: { <sid>: { compName, startDate, endDate,
+//       clubs: { <clubId>: { name, teams: { <teamName>: [row] }, unassigned: [row] } } } } }
+//   row = { u: uuid, n: name, a: age, s: 'p' | 'r' }
+//
+// 'p' is a player who has PLAYED a game for that team; 'r' is a registration
+// with no game yet. The two are a UNION, not a replacement — a roster does not
+// stop being a registration list the day the season starts — and where they
+// disagree about placement the played record wins. That rule lives in the
+// builder; this view only has to render the result honestly, which means never
+// presenting an 'r' as if a game had been played.
+// ═══════════════════════════════════════════════════════════════════════════
+let rostersLoading = null;
+function loadRosters() {
+  if (rostersLoading) return rostersLoading;
+  if (S.rostersState === 'ready') return Promise.resolve(S.rosters);
+  S.rostersState = 'loading';
+  rostersLoading = (async () => {
+    try {
+      const r = await fetch('data/rosters.json.gz');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      // Magic bytes, not an assumption: if the server sent Content-Encoding:
+      // gzip the browser has already inflated it and inflating again throws.
+      // Same check as loadRegistrations, for the same reason.
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let text;
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        if (typeof DecompressionStream !== 'function') throw new Error('no DecompressionStream');
+        text = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      } else {
+        text = new TextDecoder().decode(buf);
+      }
+      const d = JSON.parse(text);
+      if (!d || !d.seasons || typeof d.seasons !== 'object') throw new Error('unexpected shape');
+      S.rosters = d;
+      S.rostersState = 'ready';
+    } catch (e) {
+      S.rostersState = 'failed';
+      S.rostersError = e.message;
+      console.warn('rosters unavailable:', e.message);
+    }
+    rostersLoading = null;
+    render();
+    return S.rosters;
+  })();
+  return rostersLoading;
+}
+
+// Newest season first, by startDate. ⚠️ startDate PRECEDES the year in the
+// name — an AFL 2026 season starts 2025-10-01 — so this orders by the date and
+// never derives a year from it.
+function rvSeasonIds() {
+  const d = S.rosters;
+  if (!d || !d.seasons) return [];
+  return Object.keys(d.seasons).sort((a, b) =>
+    String(d.seasons[b].startDate || '').localeCompare(String(d.seasons[a].startDate || '')) ||
+    String(d.seasons[a].compName || '').localeCompare(String(d.seasons[b].compName || '')));
+}
+
+// Every row of a club, teams then unassigned, each carrying where it sits.
+function rvClubRows(club) {
+  const out = [];
+  const teams = (club && club.teams) || {};
+  Object.keys(teams).forEach(t => (teams[t] || []).forEach(row => out.push({ row, team: t })));
+  ((club && club.unassigned) || []).forEach(row => out.push({ row, team: '' }));
+  return out;
+}
+
+function rvSeasonCounts(sid) {
+  const se = S.rosters && S.rosters.seasons && S.rosters.seasons[sid];
+  let p = 0, r = 0;
+  if (se) Object.values(se.clubs || {}).forEach(c =>
+    rvClubRows(c).forEach(({ row }) => { if (row.s === 'p') p++; else r++; }));
+  return { p, r, total: p + r };
+}
+
+// WHICH SEASON OPENS. Not simply the newest: the view exists for the season
+// that has not been played yet, and in the off-season the newest season holds
+// nothing but registrations while the one before it holds 40,000 played rows.
+// Opening on the season with the most REGISTRATIONS puts the reader where the
+// new information is; with no registrations anywhere it falls back to newest.
+function rvDefaultSeason() {
+  const ids = rvSeasonIds();
+  if (!ids.length) return '';
+  let best = ids[0], bestR = -1;
+  // `>` not `>=`, so a tie keeps the newer season — ids are newest-first.
+  for (const sid of ids) { const c = rvSeasonCounts(sid).r; if (c > bestR) { bestR = c; best = sid; } }
+  return bestR > 0 ? best : ids[0];
+}
+
+function setRosterSeason(v) { S.rosterSeason = String(v || ''); S.rosterClub = ''; saveFilters(); renderRosters(); }
+function setRosterClub(v)   { S.rosterClub = String(v || ''); saveFilters(); renderRosters(); }
+function setRosterSearch(v) { S.rosterSearch = String(v || ''); renderRosters(); }
+function setRosterSource(v) {
+  S.rosterSource = v;
+  [['all','rvs-all'],['p','rvs-p'],['r','rvs-r']].forEach(([k, id]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', k === v);
+  });
+  renderRosters();
+}
+function resetRosterFilters() {
+  S.rosterClub = ''; S.rosterSearch = '';
+  const q = document.getElementById('rv-search'); if (q) q.value = '';
+  setRosterSource('all');
+  saveFilters();
+}
+
+const rvSrcTag = (src) => src === 'p'
+  ? '<span class="rv-src rv-src-p" title="Has played a game for this team">PLAYED</span>'
+  : '<span class="rv-src rv-src-r" title="Registered — no game yet">REGISTERED</span>';
+
+// A PLAYED row has a season with games, so the panel can be opened the way the
+// cross-season search opens it — loading that season first. A REGISTERED row
+// has no games and often no players file at all, so loading its season would
+// fail; the panel opens on the uuid alone and fills itself from the career
+// index. Two paths because they are two different situations, not one with a
+// special case.
+function rvOpen(uuid, sid, src) {
+  if (src === 'p' && sid) { openPlayerFromSearch(uuid, sid); return; }
+  openPlayerPanel(uuid);
+}
+
+function rvRowHTML(row, sid, where) {
+  const nm = toProperCase(row.n || '') || '(no name)';
+  return '<div class="rv-row">' +
+    `<span class="rv-nm" onclick="rvOpen('${tvEsc(row.u)}','${tvEsc(sid)}','${row.s === 'p' ? 'p' : 'r'}')" ` +
+    `title="Open this player">${tvEsc(nm)}</span>` +
+    `<span class="rv-age">${tvEsc(row.a || '')}</span>` +
+    rvSrcTag(row.s) +
+    (where ? `<span class="rv-where">${tvEsc(where)}</span>` : '') +
+    '</div>';
+}
+
+function renderRosters() {
+  const body = document.getElementById('rv-body');
+  if (!body) return;
+
+  if (S.rostersState !== 'ready') {
+    if (S.rostersState !== 'loading' && S.rostersState !== 'failed') loadRosters();
+    body.innerHTML = S.rostersState === 'failed'
+      ? '<div class="tv-note">Rosters are unavailable (' + tvEsc(S.rostersError || 'unknown') +
+        '). data/rosters.json.gz is written by build-transfers.js after each ' +
+        'registration walk.</div>'
+      : '<div class="tv-note">Loading rosters…</div>';
+    return;
+  }
+
+  const d = S.rosters || {};
+  const ids = rvSeasonIds();
+  if (!ids.length) {
+    body.innerHTML = '<div class="tv-note">The rosters file holds no seasons yet.</div>';
+    return;
+  }
+
+  // A shared link's season and club arrive as words and are resolved HERE,
+  // on the first draw after the data loads, because nothing earlier can
+  // resolve them. Cleared either way, so a failed match does not keep
+  // overriding what the reader then picks by hand.
+  if (S.rosterWant) {
+    const want = S.rosterWant; S.rosterWant = null;
+    const sid = ids.find(x => String(d.seasons[x].compName || '') === want.s);
+    if (sid) {
+      S.rosterSeason = sid;
+      if (want.c) {
+        const clubs = d.seasons[sid].clubs || {};
+        const cid = Object.keys(clubs).find(k => String(clubs[k].name || '') === want.c);
+        if (cid) S.rosterClub = cid;
+        else toast(`Club ${want.c} is not in ${want.s} — showing every club`);
+      }
+    } else {
+      toast(`Season ${want.s} is not in the rosters file`);
+    }
+  }
+
+  if (!S.rosterSeason || !d.seasons[S.rosterSeason]) S.rosterSeason = rvDefaultSeason();
+  const sid = S.rosterSeason;
+  const season = d.seasons[sid] || {};
+  const clubs = season.clubs || {};
+  if (S.rosterClub && !clubs[S.rosterClub]) S.rosterClub = '';
+
+  // ── the two selects, built from the DATA ────────────────────────────────
+  const seasonSel = document.getElementById('rv-season');
+  if (seasonSel) {
+    const html = ids.map(x => {
+      const c = rvSeasonCounts(x);
+      return `<option value="${tvEsc(x)}"${x === sid ? ' selected' : ''}>` +
+        `${tvEsc(d.seasons[x].compName || x)} — ${c.total.toLocaleString()}` +
+        `${c.r ? ` (${c.r.toLocaleString()} registered)` : ''}</option>`;
+    }).join('');
+    if (seasonSel.dataset.last !== html) { seasonSel.innerHTML = html; seasonSel.dataset.last = html; }
+    seasonSel.value = sid;
+  }
+  const clubIds = Object.keys(clubs).sort((a, b) =>
+    String(clubs[a].name || '').localeCompare(String(clubs[b].name || '')));
+  const clubSel = document.getElementById('rv-club');
+  if (clubSel) {
+    const html = '<option value="">Every club</option>' + clubIds.map(cid =>
+      `<option value="${tvEsc(cid)}"${cid === S.rosterClub ? ' selected' : ''}>` +
+      `${tvEsc(clubs[cid].name || cid)} (${rvClubRows(clubs[cid]).length})</option>`).join('');
+    if (clubSel.dataset.last !== html) { clubSel.innerHTML = html; clubSel.dataset.last = html; }
+    clubSel.value = S.rosterClub || '';
+  }
+
+  const src = S.rosterSource || 'all';
+  const keep = (row) => src === 'all' || (src === 'p' ? row.s === 'p' : row.s !== 'p');
+  const q = tvFold(S.rosterSearch);
+  const built = d.builtAt ? String(d.builtAt).slice(0, 10) : '';
+  const note = (txt) => `<div class="tv-note">${txt}${built ? ` · built ${built}` : ''}</div>`;
+
+  // ── SEARCH spans every season and club, which is the point of it ────────
+  if (q.length >= 2) {
+    const hits = [];
+    ids.forEach(x => {
+      const cl = (d.seasons[x].clubs) || {};
+      Object.keys(cl).forEach(cid => rvClubRows(cl[cid]).forEach(({ row, team }) => {
+        if (!keep(row)) return;
+        if (!tvFold(row.n).includes(q)) return;
+        hits.push({ row, sid: x,
+          where: [d.seasons[x].compName, cl[cid].name, team].filter(Boolean).join(' · ') });
+      }));
+    });
+    hits.sort((a, b) => String(a.row.n || '').localeCompare(String(b.row.n || '')));
+    const shown = hits.slice(0, 300);
+    body.innerHTML = note(`${hits.length.toLocaleString()} player${hits.length === 1 ? '' : 's'} ` +
+      `matching “${tvEsc(S.rosterSearch)}” across every season` +
+      (hits.length > shown.length ? ` — first ${shown.length} shown` : '')) +
+      (shown.length
+        ? shown.map(h => rvRowHTML(h.row, h.sid, h.where)).join('')
+        : '<div class="tv-note">No match.</div>');
+    return;
+  }
+
+  // ── NO CLUB CHOSEN: the club index, not 15,000 rows ─────────────────────
+  if (!S.rosterClub) {
+    const rows = clubIds.map(cid => {
+      const list = rvClubRows(clubs[cid]).filter(({ row }) => keep(row));
+      const pc = list.filter(({ row }) => row.s === 'p').length;
+      return { cid, name: clubs[cid].name || cid, n: list.length, p: pc, r: list.length - pc,
+               teams: Object.keys(clubs[cid].teams || {}).length };
+    }).filter(c => c.n > 0);
+    const tot = rows.reduce((a, c) => a + c.n, 0);
+    body.innerHTML = note(`${tvEsc(season.compName || sid)} — ${rows.length} club` +
+      `${rows.length === 1 ? '' : 's'}, ${tot.toLocaleString()} player` +
+      `${tot === 1 ? '' : 's'}. Pick a club to see its teams.`) +
+      (rows.length ? rows.map(c =>
+        '<div class="rv-row">' +
+        `<span class="rv-nm" onclick="setRosterClub('${tvEsc(c.cid)}')" ` +
+        `title="Show this club">${tvEsc(c.name)}</span>` +
+        `<span class="rv-where">${c.teams} team${c.teams === 1 ? '' : 's'} · ` +
+        `${c.n.toLocaleString()} player${c.n === 1 ? '' : 's'}` +
+        `${c.p && c.r ? ` (${c.p.toLocaleString()} played, ${c.r.toLocaleString()} registered)` : ''}` +
+        '</span></div>').join('')
+        : '<div class="tv-note">No club has a player matching this filter.</div>');
+    return;
+  }
+
+  // ── ONE CLUB: its teams, then anyone with no team ───────────────────────
+  const club = clubs[S.rosterClub];
+  const teams = club.teams || {};
+  const teamNames = Object.keys(teams).sort((a, b) => String(a).localeCompare(String(b)));
+  let html = '';
+  let shown = 0;
+  teamNames.forEach(t => {
+    const list = (teams[t] || []).filter(keep);
+    if (!list.length) return;
+    shown += list.length;
+    html += `<div class="rv-team">${tvEsc(t)}` +
+      `<span class="rv-meta">${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
+      list.map(row => rvRowHTML(row, sid, '')).join('');
+  });
+  // ⚠️ A registration with no team is NOT dropped. team: null is the normal
+  // state of a new registration — the club has signed them and not yet graded
+  // them — and hiding those would make the view say a club had nobody.
+  const un = (club.unassigned || []).filter(keep);
+  if (un.length) {
+    shown += un.length;
+    html += `<div class="rv-team">No team yet` +
+      `<span class="rv-meta">${un.length} player${un.length === 1 ? '' : 's'}</span></div>` +
+      un.map(row => rvRowHTML(row, sid, '')).join('');
+  }
+  body.innerHTML =
+    note(`<span class="rv-club">${crestHTML(club.name || '', 20)}${tvEsc(club.name || S.rosterClub)}</span>` +
+      `${tvEsc(season.compName || sid)} — ${shown.toLocaleString()} player${shown === 1 ? '' : 's'}`) +
+    (html || '<div class="tv-note">No player in this club matches the filter.</div>');
+}
+
 function render() {
   const hasData = S.matches.length > 0;
   const finals  = S.view === 'finals';
@@ -2829,16 +3204,23 @@ function render() {
   // selected season has no matches — including in the off-season, which is
   // exactly when people look at transfers.
   const transfers = S.view === 'transfers';
-  document.getElementById('no-data').style.display = (hasData || transfers) ? 'none' : 'block';
-  document.getElementById('dash').style.display = (hasData && !finals && !leaders && !transfers) ? 'block' : 'none';
+  // Same reasoning, and more sharply: a roster for a season that has not been
+  // played has no matches at all, so gating this on hasData would blank the one
+  // view whose whole purpose is the season before it starts.
+  const rosters = S.view === 'rosters';
+  const own = transfers || rosters;        // views that supply their own data
+  document.getElementById('no-data').style.display = (hasData || own) ? 'none' : 'block';
+  document.getElementById('dash').style.display = (hasData && !finals && !leaders && !own) ? 'block' : 'none';
   const fv = document.getElementById('finals-view');
   if (fv) fv.style.display = (hasData && finals) ? 'block' : 'none';
   const lv = document.getElementById('leaders-view');
-  if (lv) lv.style.display = (hasData && leaders && !transfers) ? 'block' : 'none';
+  if (lv) lv.style.display = (hasData && leaders && !own) ? 'block' : 'none';
   const tv = document.getElementById('transfers-view');
   if (tv) tv.style.display = transfers ? 'block' : 'none';
+  const rv = document.getElementById('rosters-view');
+  if (rv) rv.style.display = rosters ? 'block' : 'none';
   const vs = document.getElementById('view-switch');
-  if (vs) vs.style.display = (hasData || transfers) ? 'inline-flex' : 'none';
+  if (vs) vs.style.display = (hasData || own) ? 'inline-flex' : 'none';
   // The mobile row is the same control in a place the header cannot clip it.
   // The media query decides whether it is on screen; this only decides whether
   // there is anything to switch between.
@@ -2854,6 +3236,9 @@ function render() {
   // no age tabs and no grade filter, and renderAgeTabs() below assumes a loaded
   // season — which is not guaranteed here.
   if (transfers) { renderTransfers(); return; }
+  // Before renderAgeTabs for the same reason as transfers: no age tabs, no
+  // grade filter, and no guarantee that a season is loaded at all.
+  if (rosters) { renderRosters(); return; }
 
   // The SIDEBAR belongs to both views, so it is built before the finals branch
   // returns. It used to sit below, which meant a reload straight into the finals
@@ -3371,15 +3756,14 @@ function syncViewTabs() {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('on', yes);
   };
-  const other = S.view === 'finals' || S.view === 'leaders' || S.view === 'transfers';
+  // One list, used for both rows and for the dash button's "none of the
+  // others" state — adding a view to the switch used to mean editing the same
+  // set of names in five places, and the dash button kept being the one missed.
+  const VIEWS = ['finals', 'leaders', 'transfers', 'rosters'];
+  const other = VIEWS.includes(S.view);
   on('vsw-dash', !other);
-  on('vsw-finals', S.view === 'finals');
-  on('vsw-leaders', S.view === 'leaders');
-  on('vsw-transfers', S.view === 'transfers');
   on('mvt-dash', !other);
-  on('mvt-finals', S.view === 'finals');
-  on('mvt-leaders', S.view === 'leaders');
-  on('mvt-transfers', S.view === 'transfers');
+  VIEWS.forEach(v => { on('vsw-' + v, S.view === v); on('mvt-' + v, S.view === v); });
   // ⚠️ SET FROM S.view, LIKE EVERY OTHER CONTROL HERE — not toggled where the
   // click happened. The view is also restored from saved filters and from a
   // shared link, neither of which goes through a click.
@@ -3459,14 +3843,15 @@ function setFinalsMode(m) {
 // becomes a club filter.
 function applyViewChrome() {
   const finals = S.view === 'finals';
-  ['vsw-dash','vsw-finals','vsw-leaders','vsw-transfers'].forEach(id => {
-    const b = document.getElementById(id);
-    if (b) b.classList.toggle('on',
-      id === 'vsw-finals' ? finals
-      : id === 'vsw-leaders' ? S.view === 'leaders'
-      : id === 'vsw-transfers' ? S.view === 'transfers'
-      : (!finals && S.view !== 'leaders' && S.view !== 'transfers'));
+  // Was a per-id ternary chain that had to be extended for every new view and
+  // whose final branch repeated the whole list again.
+  const CHROME_VIEWS = ['finals', 'leaders', 'transfers', 'rosters'];
+  CHROME_VIEWS.forEach(v => {
+    const b = document.getElementById('vsw-' + v);
+    if (b) b.classList.toggle('on', S.view === v);
   });
+  const dashBtn = document.getElementById('vsw-dash');
+  if (dashBtn) dashBtn.classList.toggle('on', !CHROME_VIEWS.includes(S.view));
   [['fvm-age','age'],['fvm-club','club'],['fvm-venue','venue'],['fvm-winners','winners']].forEach(([id,v]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', S.finalsMode === v);
@@ -7455,6 +7840,21 @@ const HELP = [
       <b>By winners</b> lists the premiers.<br><br>Finals rounds restart numbering
       at 1, so rows carry their abbreviation (QF, PF, GF) rather than a round
       number.` },
+  { id: 'rosters', sec: 'What is shown', term: 'The ROSTERS view',
+    tip: 'Who is at each club: players who have played, and players who have only registered.',
+    body: `Pick a season, then a club, then read its teams.<br><br>A
+      <b>PLAYED</b> row is someone who has played a game for that team, taken
+      from the results. A <b>REGISTERED</b> row is someone whose registration has
+      been seen on PlayHQ but who has not played yet — which is every row of a
+      season that has not started. The two are shown together rather than one
+      replacing the other, so a roster does not empty out when the season turns
+      over, and where they disagree about which team someone is in, the game
+      that was actually played wins.<br><br><b>No team yet</b> is the normal
+      state of a new registration: the club has signed the player and has not
+      graded them. They are listed under the club rather than hidden.<br><br>
+      The search box looks across every season and club, not just the one on
+      screen. Registrations are refreshed by an overnight sweep, so a signature
+      shows up the following day; the date the file was built is on screen.` },
   { id: 'dates', sec: 'What is shown', term: 'Dates on a round',
     tip: 'A round is not one day — the heading shows the span it covers.',
     body: `Rounds spread out. A home-and-away round routinely runs Saturday and
@@ -8458,7 +8858,15 @@ async function init() {
         // else: round gone (new season?) — fall back to all rounds
       }
 
-      if (f.view === 'finals' || f.view === 'dash' || f.view === 'leaders') S.view = f.view;
+      // ⚠️ ONE LIST, shared with the URL and popstate readers below. It used to
+      // be three hand-written disjunctions and 'transfers' was in none of them,
+      // so the transfers view saved itself on every click and was silently
+      // dropped back to the dashboard on reload, on a shared link and on the
+      // back button. Found 2026-11-24 while adding the rosters view.
+      if (VIEW_IDS.includes(f.view)) S.view = f.view;
+      if (typeof f.rosterSeason === 'string') S.rosterSeason = f.rosterSeason;
+      if (typeof f.rosterClub === 'string') S.rosterClub = f.rosterClub;
+      if (['all', 'p', 'r'].includes(f.rosterSource)) S.rosterSource = f.rosterSource;
       if (['age','club','venue','winners'].includes(f.finalsMode)) S.finalsMode = f.finalsMode;
       if (['date','venue'].includes(f.venueGroup)) S.venueGroup = f.venueGroup;
       if (typeof f.clubSummaryOpen === 'boolean') S.clubSummaryOpen = f.clubSummaryOpen;
@@ -8518,7 +8926,11 @@ async function init() {
       if (ids.length) S.selGrades = new Set(ids);
       else toast(`Grade ${_url.g} not found in ${S.selectedAge} — showing all grades`);
     }
-    if (_url.v === 'finals' || _url.v === 'dash' || _url.v === 'leaders') S.view = _url.v;
+    if (VIEW_IDS.includes(_url.v)) S.view = _url.v;
+    // Parked, not resolved: the rosters file is not loaded at this point and a
+    // compName cannot be turned into a season id without it. renderRosters
+    // resolves it on the first draw after the data arrives.
+    if (S.view === 'rosters' && _url.rs) S.rosterWant = { s: _url.rs, c: _url.rc || '' };
     if (QTR_MODES.includes(_url.q)) S.qtrMode = _url.q;
     if (S.view === 'finals') {
       if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
@@ -8607,7 +9019,11 @@ async function init() {
       }
       if (u.c) { const w = `${u.c} ${S.selYear}`.trim(); if (getComps().includes(w)) S.selComp = w; }
       if (u.a && getAges().includes(u.a)) S.selectedAge = u.a;
-      if (u.v === 'finals' || u.v === 'dash' || u.v === 'leaders') S.view = u.v;
+      S.view = VIEW_IDS.includes(u.v) ? u.v : 'dash';
+      // Reset first, like the finals keys below: going BACK from a club link
+      // must not leave that club selected.
+      S.rosterClub = ''; S.rosterSearch = '';
+      S.rosterWant = (S.view === 'rosters' && u.rs) ? { s: u.rs, c: u.rc || '' } : null;
       S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'cum';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
