@@ -702,7 +702,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.05</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.06</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -8550,9 +8550,22 @@ async function init() {
       if (validRounds.has(String(_url.r))) S.selRound = _url.r;
     }
     if (_url.t) {
+      // ⚠️ SAYS SO WHEN IT CANNOT RESOLVE. `t` carries the team NAME, and a rename
+      // or a regrade between a link being built and the link being tapped makes
+      // that name unresolvable — which is precisely what a fixture-watch alert
+      // notifies about, so the link is most likely to break at the moment it is
+      // used. Until v1.06 it was the one key here that dropped in silence:
+      // the alert opened, rendered the whole unfiltered age group, and looked
+      // entirely correct. An unfiltered view that looks right is worse than an
+      // error. The toast is worded like the `l` key's. Reported 2026-11-24.
+      //
+      // Guarded on S.selectedAge like `l` and `r`: with no age resolved yet the
+      // team set is empty for every value of `t`, and a toast there would be
+      // complaining about the missing age, which the `a` key already reports.
       const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
         .flatMap(m => [m.home, m.away]));
       if (teams.has(_url.t)) S.selTeam = _url.t;
+      else if (S.selectedAge) toast(`Team ${_url.t} not found in ${S.selectedAge} — showing all teams`);
     }
   } catch(e) {}
 
