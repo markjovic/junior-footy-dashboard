@@ -1,0 +1,82 @@
+# .github/workflows/probe-team-logo.yml
+#
+# Where can a CURRENT team or club logo be read from?
+#
+# Norwood replaced its logo file; every stored URL for the club 404s, and
+# store.fetchTargets() drops a retired season on its first test, so a results
+# fetch can never refresh them. This asks whether discoverTeams or
+# discoverOrganisation can, since discoverTeams is known to answer for COMPLETED
+# seasons (playhq_api_reference.md §8) — exactly the ones fetchTargets refuses.
+#
+# It also answers two questions that need the same call: how many teams exist
+# with no player we have seen, and whether next season has been graded yet.
+#
+# ⚠️ READ-ONLY. Nothing is written and nothing is committed. About forty calls.
+#
+# ⚠️ IT HOLDS THE DATA-WRITE GROUP ANYWAY. It writes nothing, but the PlayHQ
+# call budget is shared across every run on the account, and a probe burst
+# beside a walk is how the September WAF block started. A dispatch arriving
+# while the nightly walk holds the group QUEUES, which is the intent.
+
+name: Probe team logo
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'season — a seasonID to probe for teams. Blank uses the first next-season entry in the manifest.'
+        required: false
+        default: ''
+        type: string
+      played:
+        description: 'played — a COMPLETED/retired seasonID, to prove discoverTeams reaches one. Blank uses the newest season with a players file.'
+        required: false
+        default: ''
+        type: string
+      org:
+        description: 'org — an 8-character organisation code for the club probes. Blank uses 6d405ccb, the club whose logo is broken.'
+        required: false
+        default: ''
+        type: string
+      pace_ms:
+        description: 'pace_ms — gap between calls. Blank uses 800, the walk''s measured-safe value.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # Nothing is committed here, but keep the ref for consistency with
+          # every other workflow in the repo — a detached HEAD has cost three
+          # outages and the habit is cheaper than the exception.
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          # Blank means "use the script's default", so an empty input leaves the
+          # script on its own value rather than seeing an empty string.
+          PL_SEASON: ${{ github.event.inputs.season }}
+          PL_PLAYED: ${{ github.event.inputs.played }}
+          PL_ORG: ${{ github.event.inputs.org }}
+          PL_PACE_MS: ${{ github.event.inputs.pace_ms }}
+        run: |
+          if [ ! -f scripts/probe-team-logo.js ]; then
+            echo "scripts/probe-team-logo.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe-team-logo.js
