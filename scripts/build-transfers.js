@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v6 2026-11-24 rosters';
+const VERSION = 'build-transfers v7 2026-11-24 roster-scope';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -56,9 +56,20 @@ const VERSION = 'build-transfers v6 2026-11-24 rosters';
 // the same player in one season, the GAME wins, which is how a mid-season move
 // surfaces without anyone asking PlayHQ a second question.
 //
+// ⚠️ ROSTERS COVER THE CURRENT AND THE NEXT SEASON, NOT ALL OF HISTORY.
+// v6 harvested a played row from whatever season the in-season loop happened
+// to be reading, which was all 22. Measured on the first real run,
+// 2026-11-24: 160,920 played rows, 5,142 KB gzipped and 13,880 KB plain —
+// a 5 MB download before the reader sees a single name, re-committed on every
+// walk. Historical played-season rosters were explicitly out of scope for v1;
+// they were in the file by accident, not by design. v7 keeps, per competition,
+// the LATEST season that has actually been played plus every season that has
+// not been played yet, which is the scope that was agreed.
+//
 // Env: TR_MIN_GAMES (default 3), TR_OUT (data/transfers.json),
 //      TR_ROSTERS_OUT (data/rosters.json.gz), TR_DRY (print only, write
-//      nothing).
+//      nothing), TR_ROSTER_ALL (true = every season, for a one-off history
+//      build; it is not what the page wants).
 
 'use strict';
 
@@ -78,6 +89,7 @@ const OUT_PATH = path.join(ROOT, process.env.TR_OUT || 'data/transfers.json');
 // not readable in the GitHub web UI — the run log prints the counts.
 const ROSTERS_PATH = path.join(ROOT, process.env.TR_ROSTERS_OUT || 'data/rosters.json.gz');
 const MIN_GAMES = Math.max(1, Number(process.env.TR_MIN_GAMES || 3));
+const ROSTER_ALL = /^(1|true|yes)$/i.test(process.env.TR_ROSTER_ALL || '');
 const DRY = /^(1|true|yes)$/i.test(process.env.TR_DRY || '');
 
 const log = (...a) => console.log(...a);
@@ -94,6 +106,13 @@ const splitSeason = (s) => {
 function dayNum(s) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : null;
+}
+
+// Whether a season has been PLAYED, asked without reading the file. A season
+// with no per-game lines has no games in it — which is the normal state of a
+// season whose registrations are open and whose first bounce is in April.
+function hasLines(sid) {
+  return fs.existsSync(path.join(store.SEASONS_DIR, `${sid}-lines.json.gz`));
 }
 
 function loadLines(sid) {
@@ -155,10 +174,40 @@ function main() {
   const rosters = new Map();          // sid -> Map(clubId -> Map(teamKey -> Map(uuid -> row)))
   const placed = new Set();           // `${sid}|${uuid}` already placed by a GAME
   const TEAM_NONE = '';               // the club's unassigned list
-  let rosterPlayed = 0, rosterRegistered = 0, rosterConflicts = 0;
+  let rosterPlayed = 0, rosterRegistered = 0, rosterConflicts = 0, rosterOutOfScope = 0;
+
+  // ── WHICH SEASONS GET A ROSTER ────────────────────────────────────────────
+  // Per competition: the latest season that has been PLAYED, plus every
+  // non-retired season that has not been played yet. In November that is the
+  // 2026 season just finished and the 2027 season taking registrations — the
+  // two a reader can do anything with. Returns null when the gate is off.
+  function pickRosterSeasons() {
+    if (ROSTER_ALL) return null;
+    const keep = new Set();
+    const latestPlayed = new Map();   // competition, no year -> manifest entry
+    for (const m of manifest) {
+      if (m.retired) continue;
+      if (!hasLines(m.seasonId)) { keep.add(m.seasonId); continue; }
+      const comp = splitSeason(m.compName).comp;
+      const cur = latestPlayed.get(comp);
+      // startDate, then compName, then seasonId — so the choice is the same on
+      // every run whatever order the manifest happens to be in.
+      const rank = (x) => `${x.startDate || ''}|${x.compName || ''}|${x.seasonId}`;
+      if (!cur || rank(m) > rank(cur)) latestPlayed.set(comp, m);
+    }
+    for (const m of latestPlayed.values()) keep.add(m.seasonId);
+    return keep;
+  }
+  const rosterSeasons = pickRosterSeasons();
 
   function rosterAdd(sid, club, team, uuid, name, age, source) {
     if (!sid || !club || !uuid) return;
+    // Before placed.add, so a season outside the scope leaves no trace at all
+    // rather than a conflict marker nothing will ever read. It cannot suppress
+    // another season's registration either way — `placed` is keyed by season
+    // as well as player — but dead state in a Set that decides what is dropped
+    // is not worth leaving behind.
+    if (rosterSeasons && !rosterSeasons.has(sid)) { rosterOutOfScope++; return; }
     const key = `${sid}|${uuid}`;
     if (source === 'played') placed.add(key);
     else if (placed.has(key)) { rosterConflicts++; return; }
@@ -482,6 +531,18 @@ function main() {
   }
 
   log('\n── rosters ──');
+  if (rosterSeasons) {
+    const kept = [...rosterSeasons].map(sid => (byId.get(sid) || {}).compName)
+      .filter(Boolean).sort();
+    log(`  scope: the latest PLAYED season per competition, plus every season not`);
+    log(`         played yet — ${kept.length} of ${manifest.length} season(s):`);
+    kept.forEach(c => log(`           ${c}`));
+    log(`  rows skipped as out of scope : ${rosterOutOfScope}` +
+      (rosterOutOfScope ? '  (set TR_ROSTER_ALL=true for every season)' : ''));
+  } else {
+    log('  ⚠️ TR_ROSTER_ALL IS SET — every season in the manifest. This is a');
+    log('     one-off history build and is far larger than the page wants.');
+  }
   log(`  seasons ${rosters.size}, clubs ${rClubs}, teams ${rTeams}`);
   log(`  players: ${rosterPlayed} from games (source p), ${rosterRegistered} from registrations (source r)`);
   log(`  registered with no team assigned yet : ${rUnassigned}`);
