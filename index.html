@@ -741,7 +741,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.16</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.17</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1895,10 +1895,18 @@ function logoKey(teamName) {
   // teamLogos is keyed by full name including colour (e.g. "Norwood Purple").
   // Try exact match first, then fall back to colour-stripped name since all
   // colour variants of a club share the same Cloudinary logo.
+  //
+  // ⚠️ THE BACKSLASH MUST BE ESCAPED. This read new RegExp('\s+' + c + '\s*$')
+  // inside a NORMAL string literal, where \s is not an escape sequence and the
+  // backslash is simply dropped — the pattern compiled to `s+Purples*$`, which
+  // matches a literal "s" and never a space. The fallback has therefore never
+  // once fired, for any club, for as long as it has existed; every team whose
+  // exact name was missing from teamLogos silently showed no crest.
+  // cleanTeam(), ten lines above, has always had this right.
   if (S.teamLogos[teamName]) return teamName;
   let stripped = teamName;
   LOGO_COLOUR_WORDS.forEach(c => {
-    stripped = stripped.replace(new RegExp('\s+' + c + '\s*$', 'i'), '').trim();
+    stripped = stripped.replace(new RegExp('\\s+' + c + '\\s*$', 'i'), '').trim();
   });
   return stripped;
 }
