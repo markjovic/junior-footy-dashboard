@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v7 2026-11-24 roster-scope';
+const VERSION = 'build-transfers v9 2026-11-24 age-and-order';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -108,6 +108,23 @@ function dayNum(s) {
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : null;
 }
 
+// ⚠️ THE AGE ON A NEXT-SEASON REGISTRATION ROW WAS A YEAR OUT OF DATE. It came
+// from playerInfo, which is the player's age in the season they last PLAYED —
+// so a 2027 registration showed U12 for a child who will be U13. The team name
+// PlayHQ assigned carries the real one ("Balwyn U13 Blue"), and that is the age
+// the reader wants, so it is parsed from there and the stale value is used only
+// when the name has no age in it.
+function ageFromTeam(team) {
+  const m = /\bU(\d{1,2})(?:\.\d+)?\b/i.exec(String(team || ''));
+  return m ? `U${m[1]}` : '';
+}
+// Sort key for an age group. "U9" must come before "U10"; a plain string sort
+// puts it after, which is how a roster list ends up reading U10, U11, U9.
+function ageRank(a) {
+  const m = /^U(\d{1,2})/i.exec(String(a || ''));
+  return m ? Number(m[1]) : 999;      // anything unparsed sorts last, not first
+}
+
 // Whether a season has been PLAYED, asked without reading the file. A season
 // with no per-game lines has no games in it — which is the normal state of a
 // season whose registrations are open and whose first bounce is in April.
@@ -181,25 +198,48 @@ function main() {
   // non-retired season that has not been played yet. In November that is the
   // 2026 season just finished and the 2027 season taking registrations — the
   // two a reader can do anything with. Returns null when the gate is off.
+  // ⚠️ `retired` DOES NOT MEAN THE SEASON WAS NEVER PLAYED. v7 skipped every
+  // retired season and shipped a rosters file with ZERO played rows: 161,147
+  // skipped, all 18 played seasons gone, 3 of 21 kept. `retired` means the
+  // season is no longer walked or fetched, which is true of every season that
+  // has finished — it says nothing about whether games happened in it. The
+  // continuity half of this file is precisely the season that WAS played, so
+  // the flag is now consulted only where it means something: a future season
+  // belonging to an organisation we have stopped following.
+  //
+  // The per-competition choice is PRINTED below rather than assumed. v7 looked
+  // correct in its own summary line while being completely wrong about what it
+  // had chosen, and a scope rule that cannot be checked from the log is a rule
+  // that fails silently.
   function pickRosterSeasons() {
     if (ROSTER_ALL) return null;
     const keep = new Set();
     const latestPlayed = new Map();   // competition, no year -> manifest entry
+    const withLines = [];
+    let retiredFuture = 0;
+    // startDate, then compName, then seasonId — so the choice is the same on
+    // every run whatever order the manifest happens to be in.
+    const rank = (x) => `${x.startDate || ''}|${x.compName || ''}|${x.seasonId}`;
     for (const m of manifest) {
-      if (m.retired) continue;
-      if (!hasLines(m.seasonId)) { keep.add(m.seasonId); continue; }
+      if (!hasLines(m.seasonId)) {
+        // Not played yet. THIS is where retirement means something: a dead
+        // organisation's future season is not a roster anyone wants.
+        if (m.retired) { retiredFuture++; continue; }
+        keep.add(m.seasonId);
+        continue;
+      }
+      withLines.push(m);
       const comp = splitSeason(m.compName).comp;
       const cur = latestPlayed.get(comp);
-      // startDate, then compName, then seasonId — so the choice is the same on
-      // every run whatever order the manifest happens to be in.
-      const rank = (x) => `${x.startDate || ''}|${x.compName || ''}|${x.seasonId}`;
       if (!cur || rank(m) > rank(cur)) latestPlayed.set(comp, m);
     }
     for (const m of latestPlayed.values()) keep.add(m.seasonId);
-    return keep;
+    return { keep, latestPlayed, withLines, retiredFuture };
   }
-  const rosterSeasons = pickRosterSeasons();
+  const rosterScope = pickRosterSeasons();
+  const rosterSeasons = rosterScope ? rosterScope.keep : null;
 
+  const teamAges = new Map();         // `${sid}|${club}|${team}` -> age
   function rosterAdd(sid, club, team, uuid, name, age, source) {
     if (!sid || !club || !uuid) return;
     // Before placed.add, so a season outside the scope leaves no trace at all
@@ -219,8 +259,18 @@ function main() {
     const tk = team || TEAM_NONE;
     if (!byTeam.has(tk)) byTeam.set(tk, new Map());
     const byUuid = byTeam.get(tk);
+    // The team name beats the carried-over age for a registration; for a
+    // played row the carried age IS that season's, so it wins.
+    const rowAge = source === 'played' ? (age || ageFromTeam(team))
+                                       : (ageFromTeam(team) || age || '');
     if (byUuid.has(uuid)) return;
-    byUuid.set(uuid, { u: uuid, n: name || null, a: age || '', s: source === 'played' ? 'p' : 'r' });
+    byUuid.set(uuid, { u: uuid, n: name || null, a: rowAge, s: source === 'played' ? 'p' : 'r' });
+    if (tk !== TEAM_NONE && rowAge) {
+      const ak = `${sid}|${club}|${tk}`;
+      if (!teamAges.has(ak)) teamAges.set(ak, new Map());
+      const tally = teamAges.get(ak);
+      tally.set(rowAge, (tally.get(rowAge) || 0) + 1);
+    }
     if (source === 'played') rosterPlayed++; else rosterRegistered++;
   }
   const gamesHistogram = new Map();   // games at the smaller club -> count
@@ -516,14 +566,31 @@ function main() {
     const season = { compName: m.compName || null, startDate: m.startDate || null, endDate: m.endDate || null, clubs: {} };
     for (const [club, byTeam] of byClub) {
       rClubs++;
-      const c = { name: clubLabel(club), teams: {}, unassigned: [] };
+      const c = { name: clubLabel(club), teams: {}, teamAge: {}, unassigned: [] };
       for (const [team, byUuid] of byTeam) {
         // ⚠️ SORTED, so the committed file does not churn. An unsorted Map
         // iteration reorders rows whenever the input order shifts, and every
         // nightly commit would then be a whole-file diff of nothing.
-        const rows = [...byUuid.values()].sort((a, b) => String(a.n || '').localeCompare(String(b.n || '')) || a.u.localeCompare(b.u));
+        //
+        // ⚠️ CASE-INSENSITIVELY. The stored names are whatever PlayHQ holds —
+        // "BEN JONES" beside "ava smith" — and a plain localeCompare put every
+        // upper-case name in a block of its own ahead of the rest, which on
+        // screen reads as a list that is not sorted at all.
+        const rows = [...byUuid.values()].sort((a, b) =>
+          String(a.n || '').toLowerCase().localeCompare(String(b.n || '').toLowerCase()) ||
+          a.u.localeCompare(b.u));
         if (team === TEAM_NONE) { c.unassigned = rows; rUnassigned += rows.length; }
-        else { c.teams[team] = rows; rTeams++; }
+        else {
+          c.teams[team] = rows;
+          // The age the team's own players agree on, most common wins. Stored
+          // per team so the page can order by age without parsing names, and
+          // so a team whose name omits the age still sorts with its peers.
+          const tally = teamAges.get(`${sid}|${club}|${team}`);
+          let best = '', bestN = 0;
+          if (tally) for (const [a, nn] of tally) if (nn > bestN) { bestN = nn; best = a; }
+          if (best) c.teamAge[team] = best;
+          rTeams++;
+        }
       }
       season.clubs[club] = c;
     }
@@ -531,14 +598,34 @@ function main() {
   }
 
   log('\n── rosters ──');
-  if (rosterSeasons) {
-    const kept = [...rosterSeasons].map(sid => (byId.get(sid) || {}).compName)
-      .filter(Boolean).sort();
-    log(`  scope: the latest PLAYED season per competition, plus every season not`);
-    log(`         played yet — ${kept.length} of ${manifest.length} season(s):`);
-    kept.forEach(c => log(`           ${c}`));
+  if (rosterScope) {
+    const { latestPlayed, withLines, retiredFuture } = rosterScope;
+    const chosen = new Set([...latestPlayed.values()].map(m => m.seasonId));
+    log('  scope: the latest PLAYED season per competition, plus every season not');
+    log(`         played yet — ${rosterSeasons.size} of ${manifest.length} season(s).`);
+    log('  seasons WITH per-game lines, and which one each competition chose:');
+    withLines.slice().sort((a, b) => String(a.compName).localeCompare(String(b.compName)))
+      .forEach(m => log(`      ${chosen.has(m.seasonId) ? '->' : '  '} ` +
+        `${pad(m.compName, 14)} ${pad(m.startDate || '(no start date)', 12)}` +
+        `${m.retired ? '  retired' : ''}`));
+    const future = [...rosterSeasons].filter(sid => !chosen.has(sid))
+      .map(sid => (byId.get(sid) || {}).compName).filter(Boolean).sort();
+    log(`  seasons not played yet, kept in full : ${future.length}` +
+      (future.length ? ` — ${future.join(', ')}` : ''));
+    if (retiredFuture) log(`  not-yet-played seasons dropped as retired : ${retiredFuture}`);
     log(`  rows skipped as out of scope : ${rosterOutOfScope}` +
       (rosterOutOfScope ? '  (set TR_ROSTER_ALL=true for every season)' : ''));
+    // ⚠️ THE FAILURE v7 SHIPPED, NAMED — and tested against the OUTCOME, not
+    // against the scope rule. `!latestPlayed.size` could never be true once
+    // the rule was fixed, so it would have been an unreachable branch
+    // pretending to be a safety net. No played row in the finished file is
+    // the symptom that matters, and it catches a collapsed scope rule and a
+    // total comp|team|age lookup failure alike.
+    if (withLines.length && !rosterPlayed) {
+      log(`  ⚠️ ${withLines.length} SEASON(S) HAVE PER-GAME LINES AND NOT ONE PLAYED ROW`);
+      log('     REACHED THE FILE. Every roster below is registrations only and the');
+      log('     continuity half is missing. This is a fault, not a quiet season.');
+    }
   } else {
     log('  ⚠️ TR_ROSTER_ALL IS SET — every season in the manifest. This is a');
     log('     one-off history build and is far larger than the page wants.');
@@ -550,6 +637,16 @@ function main() {
   log('  ⚠️ THE TWO HALVES MERGE, they do not replace. A player who signed but has');
   log('     not played yet stays visible as `r`; once they play they become `p`.');
   log('     Where both exist for one season the GAME decides which club they are at.');
+  let agedTeams = 0, unagedTeams = 0;
+  for (const se of Object.values(rosterOut.seasons))
+    for (const c of Object.values(se.clubs))
+      for (const t of Object.keys(c.teams)) (c.teamAge[t] ? agedTeams++ : unagedTeams++);
+  log(`  teams with an age : ${agedTeams}; without : ${unagedTeams}` +
+    (unagedTeams ? '  (they sort last rather than first)' : ''));
+  log('  ⚠️ NO GRADE IS STORED. publicProfileTeams returns id, name, season and');
+  log('     organisation only — a registration carries no grade, and a season');
+  log('     with no games has none to derive. Age is all there is until the');
+  log('     clubs grade their teams.');
   if (!rosters.size) {
     log('  ⚠️ NO ROSTERS AT ALL. Either no season has per-game lines and no player');
     log('     holds a tracked registration, or the comp|team|age lookup is missing.');
