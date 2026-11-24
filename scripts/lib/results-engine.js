@@ -25,7 +25,7 @@
 
 // Bump on every change. Printed by run() so a stale copy in an Actions log is
 // distinguishable from a real failure.
-const ENGINE_VERSION = 'v27 2026-09-05 keep-goals-behinds';
+const ENGINE_VERSION = 'v28 2026-11-24 team-ids';
 
 'use strict';
 
@@ -877,6 +877,12 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
         id: `${grade.compName}|${age}|${id}|${rToken}|${[hN, aN].sort().join('|')}`,
         gameId: game.id,
         age, rawGrade, gradeId: id, round: number, compName: grade.compName,
+        // Same team ids as the played record below. A live record is superseded by
+        // the confirmed result, which carries them too, so this only matters while
+        // the game is in progress — but a link tapped from an alert DURING a game
+        // is exactly when someone looks.
+        homeId: game.home?.id || '',
+        awayId: game.away?.id || '',
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         home: hN, away: aN,
         hScore: sc.hScore ?? 0, hG: sc.hG ?? 0, hB: sc.hB ?? 0,
@@ -1005,6 +1011,30 @@ async function fetchGrade(grade, knownRounds, byId, knownFinals, ignoreSeasonEnd
         // re-keying 53,606 records would be a migration, and this needs none:
         // records acquire gameId as their round is next fetched.
         gameId: game.id || '',
+        // PlayHQ's own TEAM ids, for the per-team deep link. Q_FIXTURE already
+        // selected `id` on both sides and the value was discarded, so this costs
+        // no query change and no extra call — measured 2026-11-24.
+        //
+        // WHY, when `home`/`away` already identify the team: the name is not
+        // stable. cleanTeam strips the age token, PlayHQ renames teams mid-season
+        // (sixteen sides in SEJ a5a8276d in one week), and a regrade moves a team
+        // to a different age. markjovic/fixture-watch sends alerts ABOUT exactly
+        // those events and its alert links carry the team, so a name-keyed link
+        // is at its most fragile at the moment someone taps it. fixture-watch
+        // already receives the id in the same publicProfileTeams response that
+        // gives it the name, so an id-keyed link also removes its copy of
+        // cleanTeam's age-strip rule — two repos no longer have to agree on a
+        // string-mangling function.
+        //
+        // NOT a new stored key and NOT a map: two fields on a record that already
+        // exists needs no store.js change, no CORE_KEYS or PREFIX_KEYS entry and
+        // no store version bump. ~90 bytes a game, about 73 KB on a season file.
+        //
+        // Records written before this do not have it. Nothing is backfilled:
+        // index.html resolves `t` as an id FIRST and falls back to the name, so a
+        // season with no ids answers by name exactly as it did.
+        homeId: game.home?.id || '',
+        awayId: game.away?.id || '',
         ...(isFinals ? { isFinals: true, finalsAbbrev: fAbbrev, finalsName: fName } : {}),
         compName: grade.compName,
         home: homeName, away: awayName,
@@ -1660,6 +1690,14 @@ async function run(o) {
         // published them, m wins. Both directions are correct only because the
         // patch is absent rather than empty when there is nothing.
         const gainedQuarters = !prev.hQ && !!m.hQ;
+        // ⚠️ GAINING THE TEAM IDS IS A CHANGE. Without this line a re-fetch of a
+        // round whose records predate v28 merges the ids in, finds every score
+        // equal, reports `0 new, 0 updated`, and the workflow SKIPS THE COMMIT —
+        // so the ids are computed, merged, and thrown away, run after run, with a
+        // log identical to a run that had nothing to do. That is the same shape as
+        // the v18 scheduled-flag defect recorded above, which sat undetected for a
+        // season.
+        const gainedIds = (!prev.homeId && !!m.homeId) || (!prev.awayId && !!m.awayId);
 
         // FIXTURE SUPERSEDED BY A RESULT (v18).
         //
@@ -1724,7 +1762,7 @@ async function run(o) {
         // The promotion is itself a change, even when every score already matched.
         // Without this the repair run reports no changes and is never committed,
         // which is the state this defect has been sitting in.
-        if (scoreChanged || wasScheduled || wasLive || gainedQuarters) updatedCount++;
+        if (scoreChanged || wasScheduled || wasLive || gainedQuarters || gainedIds) updatedCount++;
       } else {
         byId.set(m.id, m);
         newCount++;
