@@ -9151,5 +9151,23 @@
     "seasonID": "1c5d3dfb",
     "compName": "EFNL 2027",
     "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "b16884e8",
+    "name": "Division 4 - Eastland Senior Men",
+    "ageName": "i18n:config.age-groups.senior",
+    "genderName": "Men",
+    "seasonID": "1c5d3dfb",
+    "compName": "EFNL 2027",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
+  },
+  {
+    "id": "018ec3ea",
+    "name": "Division 4 - Reserve Men",
+    "ageName": "i18n:config.age-groups.senior",
+    "genderName": "Men",
+    "seasonID": "1c5d3dfb",
+    "compName": "EFNL 2027",
+    "compLogoUrl": "https://res.cloudinary.com/playhq/image/upload/h_128,w_128/v1/production/afl/383836bb-a225-4d92-b7b8-432535f4cc7a/1702259201091/logo.jpg?_a=BAMAMifg0"
   }
 ]
