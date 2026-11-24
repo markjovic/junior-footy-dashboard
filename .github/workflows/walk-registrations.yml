@@ -1,15 +1,24 @@
 # .github/workflows/walk-registrations.yml
 name: Walk registrations
 
-# Daily slice of the registrations walk — registrations_design.md v2. Writes
-# data/registrations.json.gz and nothing else (gzip only, decided 2026-09-07). About a seventh of the cohort per
-# run at 100 calls per 80 s: 5–6k calls, roughly 75 minutes.
+# The registrations walk — docs/walk_pool_design.md, approved 2026-11-24.
+# Writes data/registrations.json.gz, data/transfers.json and the C2 refetch
+# flags under players/.
 #
-# Runs in the OFF-SEASON only: the season gate inverted. When every tracked season
-# is active there is nothing to learn about next season, and the run skips.
+# ⚠️ IT SWEEPS THE WHOLE COHORT EVERY NIGHT NOW, not a seventh of it. Eight
+# independent guest sessions, each paced by a minimum 800ms gap, give about
+# 600 calls a minute: roughly 67 minutes for 40,382 people. v11 took about nine
+# hours on one shared session paced by a token bucket, which fired in bursts at
+# the round trip and ate silent 80-second WAF waits.
+#
+# Runs in the OFF-SEASON only: the season gate inverted. The SCRIPT narrows it
+# further, to organisations whose own season is complete or upcoming, so during
+# September the finished competitions are swept and the running ones are not.
 # Manual dispatch ignores the gate.
 #
-# Exit codes: 0 = changed, commit. 2 = nothing changed. 1 = fatal (fails the run).
+# Exit codes: 0 = changed, commit. 2 = nothing changed. 3 = DEGRADED — the walk
+# hit its block ceiling, the data it did collect IS committed and then the job
+# FAILS so GitHub raises it. 1 = fatal, nothing committed.
 
 on:
   workflow_dispatch:
@@ -20,59 +29,61 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
-      # ⚠️ BOTH OF THESE EXIST TO CLEAR A BACKLOG, NOT FOR DAILY USE. Leave them
-      # blank and the run behaves exactly as the schedule does.
-      daily_fraction:
-        description: 'daily_fraction — 7 is one seventh of the cohort (the default). 1 makes the WHOLE cohort due in one run.'
+      # ⚠️ THESE ARE THE MEASURED SAFE VALUES. Six probe runs on 2026-11-24:
+      # blocked at a 270ms and a 450ms gap, clean at 662ms, 776ms and 1,490ms,
+      # at both 8 and 16 sessions. 16 sessions is tested and is the sanctioned
+      # ceiling for a deliberate backfill; 8 is the nightly default because it
+      # sits furthest from anything that blocked.
+      pool_size:
+        description: 'pool_size — independent sessions. Default 8 (about 67 min). 16 is tested and halves that; do not go higher.'
+        required: false
+        default: ''
+        type: string
+      gap_ms:
+        description: 'gap_ms — minimum gap between calls ON ONE SESSION. Default 800. Anything at or below 450 has blocked.'
+        required: false
+        default: ''
+        type: string
+      fraction:
+        description: 'fraction — walk only 1/N of the cohort, oldest first. Default 1 (everyone). A throttle, not a schedule.'
         required: false
         default: ''
         type: string
       time_budget_min:
-        description: 'time_budget_min — wall clock before it stops and commits. Default 100. At 75 calls/min, 170 min is about 12,750 players.'
+        description: 'time_budget_min — wall clock before it stops and commits what it has. Default 110.'
         required: false
         default: ''
         type: string
-      # ⚠️ FOR A CHANGE TO WHAT WE ASK FOR, NOT FOR SPEED. The re-check clock is
-      # 7 days with nothing found and 28 with a registration — right for a steady
-      # state, useless the day a new field is added, because no record carries it
-      # until the player is walked again.
-      ignore_next_check:
-        description: 'ignore_next_check — treat EVERY player as due, whatever their re-check date. One run only; the clock resets itself. Costs a full cohort of calls.'
-        required: false
-        default: 'false'
-        type: choice
-        options: ['false', 'true']
   schedule:
-    # 19:30 UTC = 05:30 AEST, an hour after discovery (18:30 UTC) so the manifest
-    # it reads is that morning's. Both hold the data-write group, so if discovery
-    # is still running this waits rather than overlapping it.
+    # 19:30 UTC = 05:30 AEST, an hour after discovery (18:30 UTC) so the
+    # manifest it reads is that morning's. Both hold the data-write group, so if
+    # discovery is still running this waits rather than overlapping it.
     - cron: '30 19 * * *'
 
 permissions:
   contents: write
 
 # It writes no core.json or season file, but it takes the group anyway: the WAF
-# budget is shared across every PlayHQ run on this account, and a 75-minute walk
-# beside a results run would hand both of them blocks.
+# budget is shared across every PlayHQ run on this account, and an hour-long
+# walk beside a results run would hand both of them blocks.
 concurrency:
   group: playhq-data-write
   cancel-in-progress: false
 
 jobs:
   walk:
-    name: Walk one slice of the cohort
+    name: Walk the cohort
     runs-on: ubuntu-latest
     # ⚠️ 360 IS GITHUB'S CEILING, NOT A TARGET. The SCRIPT stops itself at
     # WALK_TIME_BUDGET_MS and commits what it has; this only stops a hung run
-    # sitting there. Raised from 150 so a backlog run with a 300-minute budget is
-    # not killed mid-walk — which would discard everything since the last push.
+    # sitting there.
     timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Without ref a scheduled run is on a DETACHED HEAD: the commit succeeds
-          # and the push never happens.
+          # Without ref a scheduled run is on a DETACHED HEAD: the commit
+          # succeeds and the push never happens.
           ref: ${{ github.ref_name }}
 
       # ── Off-season gate ─────────────────────────────────────────────────────
@@ -80,6 +91,10 @@ jobs:
       # is complete or upcoming. A manifest with no `state` (pre discover-seasons
       # v4) is treated as in season, so this SKIPS — registrations depend on the
       # state field existing.
+      #
+      # ⚠️ THIS GATE IS COARSER THAN THE WALK. It opens on ANY off-season
+      # tracked season; the script then builds its cohort only from the
+      # organisations that are themselves off-season. Both are deliberate.
       - name: Off-season gate
         id: gate
         env:
@@ -104,16 +119,18 @@ jobs:
         env:
           # Blank means "use the script's default", so the scheduled run is
           # untouched by these existing at all.
-          WALK_DAILY_FRACTION: ${{ github.event.inputs.daily_fraction }}
-          WALK_IGNORE_NEXT_CHECK: ${{ github.event.inputs.ignore_next_check }}
-          # ⚠️ MINUTES HERE, MILLISECONDS IN THE SHELL. GitHub Actions expressions
-          # have NO arithmetic operators — `* 60000` in a ${{ }} is a syntax error
-          # the editor rejects outright. The conversion belongs in bash.
+          WALK_POOL_SIZE: ${{ github.event.inputs.pool_size }}
+          WALK_GAP_MS: ${{ github.event.inputs.gap_ms }}
+          WALK_FRACTION: ${{ github.event.inputs.fraction }}
+          # ⚠️ MINUTES HERE, MILLISECONDS IN THE SHELL. GitHub Actions
+          # expressions have NO arithmetic operators — `* 60000` in a ${{ }} is
+          # a syntax error the editor rejects outright. The conversion belongs
+          # in bash.
           BUDGET_MIN: ${{ github.event.inputs.time_budget_min }}
         run: |
           set +e
           # Only export it when a value was given, so an empty input leaves the
-          # script on its own 100-minute default rather than seeing 0.
+          # script on its own default rather than seeing 0.
           if [ -n "$BUDGET_MIN" ]; then
             export WALK_TIME_BUDGET_MS=$(( BUDGET_MIN * 60000 ))
             echo "time budget: ${BUDGET_MIN} min (${WALK_TIME_BUDGET_MS} ms)"
@@ -123,19 +140,19 @@ jobs:
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" = "1" ]; then
-            echo "Script exited 1 (fatal)."
+            echo "Script exited 1 (fatal) — nothing will be committed."
             exit 1
           fi
           exit 0
 
-      # ⚠️ TRANSFERS IS BUILT HERE, NOT IN ITS OWN WORKFLOW. Every push rebuilds and
-      # redeploys Pages, and a separate daily job would commit a second time at the
-      # same hour for no reason. Same checkout, same commit, one deploy.
+      # ⚠️ TRANSFERS IS BUILT HERE, NOT IN ITS OWN WORKFLOW. Every push rebuilds
+      # and redeploys Pages, and a separate daily job would commit a second time
+      # at the same hour for no reason. Same checkout, same commit, one deploy.
       #
-      # ⚠️ IT RUNS EVEN WHEN THE WALK CHANGED NOTHING (code 2). Its in-season half
-      # is computed from SEASON data, which the walk never touches — so a day with
-      # no registrations due can still have new transfers to find. Only a fatal
-      # walk (code 1) skips it, and that already failed the step above.
+      # ⚠️ IT RUNS EVEN WHEN THE WALK CHANGED NOTHING (code 2) AND WHEN THE WALK
+      # WAS DEGRADED (code 3). Its in-season half is computed from SEASON data,
+      # which the walk never touches, and a degraded walk still collected real
+      # registrations. Only a fatal walk skips it, and that already failed above.
       - name: Build transfers
         id: transfers
         if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code != '1'
@@ -148,20 +165,16 @@ jobs:
           node scripts/build-transfers.js
           code=$?
           # ⚠️ A FAILURE HERE MUST NOT DISCARD THE WALK. The walk may have just
-          # spent two hours filling registrations.json.gz; losing that because a
-          # derived file could not be built would be the worse outcome by far. It
-          # is reported and the commit below still runs.
+          # spent an hour filling registrations.json.gz; losing that because a
+          # derived file could not be built would be the worse outcome by far.
           if [ "$code" != "0" ]; then
             echo "::warning::build-transfers exited $code — the walk's own data is still committed below."
           fi
           exit 0
 
-      # ⚠️ `!= '1'` NOT `== '0'`. The walk exits 2 for "nothing was due", which is a
-      # normal morning once the backlog is clear — and on 2026-11-20 that was every
-      # morning. With `== '0'` the commit was SKIPPED on those days, so a transfers
-      # file built above would never have been pushed. The staged-diff check below
-      # already stops an empty commit, so running this step on a no-change day
-      # costs nothing.
+      # ⚠️ `!= '1'` NOT `== '0'`. The walk exits 2 for "nothing changed" and 3
+      # for "degraded but collected"; both must still commit. With `== '0'` a
+      # degraded run would throw away everything it gathered.
       - name: Commit
         if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code != '1'
         run: |
@@ -169,13 +182,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # -A so the one-off removal of the plain registrations.json is staged too.
           #
-          # ⚠️ `players/` IS STAGED HERE, AND LEAVING IT OUT COSTS A WHOLE RUN. The
-          # walk sets `refetch` on a career file when it sees a season of ours that
-          # file has never held (C2), and those writes land OUTSIDE data/. On
-          # 2026-11-19 run #81 wrote 1,313 of them, staged none, and `git pull
-          # --rebase` then refused — "cannot pull with rebase: You have unstaged
-          # changes" — so a four-hour walk of 18,744 players was committed locally
-          # and never pushed.
+          # ⚠️ `players/` IS STAGED HERE, AND LEAVING IT OUT COSTS A WHOLE RUN.
+          # The walk sets `refetch` on a career file when it sees a season of
+          # ours that file has never held (C2), and those writes land OUTSIDE
+          # data/. On 2026-11-19 run #81 wrote 1,313 of them, staged none, and
+          # `git pull --rebase` then refused — "cannot pull with rebase: You
+          # have unstaged changes" — so a four-hour walk of 18,744 players was
+          # committed locally and never pushed.
           git add -A data/registrations.json.gz data/registrations.json data/transfers.json players/ 2>/dev/null || git add -A data/ players/
 
           # ⚠️ NOTHING MAY BE LEFT UNSTAGED BEFORE THE REBASE. A rebase needs a
@@ -190,3 +203,19 @@ jobs:
           git diff --staged --quiet || git commit -m "registrations + transfers: $(date +'%A %-d %B %Y') (run #${{ github.run_number }})"
           git pull --rebase -X theirs
           git push
+
+      # ⚠️ THIS STEP EXISTS TO MAKE A DEGRADED RUN VISIBLE, AND IT MUST COME
+      # AFTER THE COMMIT. Exit 3 means the walk hit its WAF block ceiling and
+      # stopped early. The data it collected is real and is already pushed by
+      # the step above; failing the job here is what puts a red cross in the
+      # Actions list and sends the notification. Failing any earlier would have
+      # skipped the commit and thrown an hour of collection away.
+      - name: Fail the run if the walk was degraded
+        if: steps.gate.outputs.run == 'true' && steps.walk.outputs.code == '3'
+        run: |
+          echo "::error::The walk was DEGRADED (exit 3): it stopped after hitting its WAF block ceiling."
+          echo "What it collected before stopping has been committed by the step above — nothing is lost."
+          echo "Read the run log for the block list: session index, calls on that session, and timestamp."
+          echo "Blocks clustered within a second across DIFFERENT sessions mean the penalty is runner-wide;"
+          echo "scattered means per-cookie. Either way, widen gap_ms or lower pool_size for the next run."
+          exit 1
