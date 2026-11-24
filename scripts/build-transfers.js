@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v15 2026-11-25 empty-teams';
+const VERSION = 'build-transfers v16 2026-11-25 unplayed-seasons-only';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -273,6 +273,29 @@ function main() {
   // and cannot return its members, which is why the registry exists.
   // Measured on SEJ 2027, 2026-11-25: 117 teams against 59 with a player.
   let emptyAdded = 0, emptySeasons = 0, registryMissing = [];
+  const matchReport = [];   // per season: how well the two name sets agree
+  // ⚠️ v15 ADDED 3,073 "EMPTY" TEAMS ACROSS EIGHT SEASONS, FIVE OF WHICH HAVE
+  // BEEN FULLY PLAYED. A played season cannot have two thousand teams with
+  // nobody in them — every team that played has players. The registry holds
+  // PlayHQ's team name (`Norwood U8 Purple`, `Berwick Springs JFC U08 Mixed
+  // Blue`); the roster holds the MATCH name from rec.home. They largely do not
+  // agree, so almost every real team got a phantom duplicate beside it. Teams
+  // went 1,343 to 4,418.
+  //
+  // This is the same trap written up in refresh-team-logos one day earlier —
+  // "keying off the API name would add keys nothing looks up" — and then walked
+  // straight into here.
+  //
+  // ⚠️ SO EMPTY TEAMS ARE ADDED ONLY FOR A SEASON THAT HAS NOT BEEN PLAYED.
+  // There, the roster's team names come from REGISTRATIONS, which carry
+  // PlayHQ's own name, so the two sets are directly comparable — and an empty
+  // team is a real thing rather than a naming artefact. For a played season an
+  // unmatched registry team is evidence of a name mismatch, not of an empty
+  // team, so it is COUNTED AND REPORTED rather than written.
+  //
+  // Matching on the team ID is the real fix and it is already designed:
+  // team_registry_design.md §3.1, capture hTeamId/aTeamId on match records,
+  // build order step 4. Until that exists this stays conservative.
   // ⚠️ A CLUB KNOWN ONLY FROM THE REGISTRY HAS NO ENTRY IN core.json's `clubs`,
   // so clubLabel() returns the raw 8-character id and the roster heading reads
   // "clubC". That is precisely the club this feature exists to surface — one
@@ -281,20 +304,29 @@ function main() {
   // Football Netball League)", which the README warns is NOT the competition
   // the team plays in; it is stripped for display rather than stored.
   const regClubName = new Map();      // org -> name from the registry
-  function addEmptyTeams(sid) {
+  function addEmptyTeams(sid, played) {
     const f = path.join(TEAMS_DIR, `${sid}.json`);
     if (!fs.existsSync(f)) { registryMissing.push(sid); return; }
     let reg;
     try { reg = JSON.parse(fs.readFileSync(f, 'utf8')); }
     catch (e) { console.error(`  ⚠️ ${path.basename(f)}: ${e.message}`); return; }
     const byClub = rosters.get(sid);
-    let added = 0;
+    let added = 0, matched = 0, unmatched = 0;
+    const sample = [];
     for (const t of Object.values(reg.teams || {})) {
       if (!t || !t.name || !t.org) continue;
       // ⚠️ ONLY WHERE NOBODY IS ALREADY PLACED. A team that has players is the
       // roster's own; the registry must never overwrite it, and must never add
       // a second entry under the same name.
-      if (byClub && byClub.has(t.org) && byClub.get(t.org).has(t.name)) continue;
+      if (byClub && byClub.has(t.org) && byClub.get(t.org).has(t.name)) { matched++; continue; }
+      unmatched++;
+      if (sample.length < 4) {
+        const have = byClub && byClub.has(t.org) ? [...byClub.get(t.org).keys()].slice(0, 2) : [];
+        sample.push(`${t.name}  (club holds: ${have.length ? have.join(', ') : 'nothing'})`);
+      }
+      // ⚠️ A PLAYED SEASON GETS NOTHING. See the note above: there, unmatched
+      // means the names disagree, not that the team is empty.
+      if (played) continue;
       if (!rosters.has(sid)) rosters.set(sid, new Map());
       const cm = rosters.get(sid);
       if (!cm.has(t.org)) cm.set(t.org, new Map());
@@ -313,6 +345,8 @@ function main() {
       added++;
     }
     if (added) { emptyAdded += added; emptySeasons++; }
+    matchReport.push({ sid, played, total: Object.keys(reg.teams || {}).length,
+      matched, unmatched, added, sample });
     return added;
   }
 
@@ -743,7 +777,7 @@ function main() {
   // than outcome. The "already placed" test needs the finished rosters, so it
   // has to sit between the two.
   for (const sid of (rosterSeasons ? [...rosterSeasons] : [...rosters.keys()])) {
-    addEmptyTeams(sid);
+    addEmptyTeams(sid, hasLines(sid));
   }
 
   const rosterOut = { version: 2, builtAt: out.builtAt, seasons: {} };
@@ -878,6 +912,29 @@ function main() {
       for (const t of Object.keys(c.teams)) if (!c.teams[t].length) emptyTeams++;
   log(`  teams with NO player yet : ${emptyTeams}` +
     (emptyAdded ? ` (${emptyAdded} added from the registry across ${emptySeasons} season(s))` : ''));
+  if (matchReport.length) {
+    log('  registry against the roster, per season — a PLAYED season should match');
+    log('  nearly everything; a large unmatched count there is a NAMING problem,');
+    log('  not a discovery, and nothing is added for it:');
+    for (const r of matchReport.sort((a, b) => Number(b.played) - Number(a.played))) {
+      const nm = (byId.get(r.sid) || {}).compName || r.sid;
+      const pct = r.total ? Math.round((r.matched / r.total) * 100) : 0;
+      log(`    ${pad(nm, 14)} ${r.played ? 'played  ' : 'unplayed'} ` +
+        `${String(r.total).padStart(4)} in registry, ${String(r.matched).padStart(4)} matched ` +
+        `(${String(pct).padStart(3)}%), ${String(r.unmatched).padStart(4)} not` +
+        (r.added ? `, ${r.added} added` : ''));
+    }
+    const worst = matchReport.filter(r => r.played && r.unmatched > r.matched);
+    if (worst.length) {
+      log(`  ⚠️ ${worst.length} PLAYED season(s) matched fewer than half. The two name`);
+      log('     sets disagree; matching on team id (team_registry_design §3.1,');
+      log('     step 4) is the fix. Examples:');
+      for (const r of worst.slice(0, 2)) {
+        const nm = (byId.get(r.sid) || {}).compName || r.sid;
+        r.sample.slice(0, 3).forEach(x => log(`       ${nm}: ${x}`));
+      }
+    }
+  }
   if (registryMissing.length) {
     log(`  ⚠️ no registry file for ${registryMissing.length} season(s) in scope — those`);
     log('     seasons can only show teams that already have a player. Run');
