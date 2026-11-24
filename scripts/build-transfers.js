@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v14 2026-11-24 club-from-the-games';
+const VERSION = 'build-transfers v15 2026-11-25 empty-teams';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -98,6 +98,10 @@ const OUT_PATH = path.join(ROOT, process.env.TR_OUT || 'data/transfers.json');
 // Split per season, a normal night rewrites the ~100 KB 2027 files and nothing
 // else, and the page downloads one season instead of eight.
 const ROSTERS_DIR = path.join(ROOT, process.env.TR_ROSTERS_DIR || 'data/rosters');
+// The season team registry — scripts/fetch-teams.js, docs/team_registry_design.md.
+// ⚠️ ITS ABSENCE IS NOT AN ERROR. This script predates it and must keep working
+// without it; a season with no registry file simply contributes no empty teams.
+const TEAMS_DIR = path.join(ROOT, process.env.TR_TEAMS_DIR || 'data/season-teams');
 const ROSTERS_INDEX = path.join(ROSTERS_DIR, 'index.json');
 // The file the split replaces. Removed once, on the first v13 run.
 const ROSTERS_LEGACY = path.join(ROOT, 'data/rosters.json.gz');
@@ -261,6 +265,56 @@ function main() {
   }
   const rosterScope = pickRosterSeasons();
   const rosterSeasons = rosterScope ? rosterScope.keep : null;
+
+  // ── Empty teams ──────────────────────────────────────────────────────────
+  // ⚠️ A TEAM WITH NO PLAYERS IS INVISIBLE TO EVERYTHING ELSE HERE. Both halves
+  // above start from a PERSON — a game line or a registration — so a team the
+  // club has created and not yet filled cannot appear. discoverTeams lists it
+  // and cannot return its members, which is why the registry exists.
+  // Measured on SEJ 2027, 2026-11-25: 117 teams against 59 with a player.
+  let emptyAdded = 0, emptySeasons = 0, registryMissing = [];
+  // ⚠️ A CLUB KNOWN ONLY FROM THE REGISTRY HAS NO ENTRY IN core.json's `clubs`,
+  // so clubLabel() returns the raw 8-character id and the roster heading reads
+  // "clubC". That is precisely the club this feature exists to surface — one
+  // with teams and nobody in them yet — so the registry's own orgName is kept
+  // as a fallback. PlayHQ appends the home association, "Norwood (Eastern
+  // Football Netball League)", which the README warns is NOT the competition
+  // the team plays in; it is stripped for display rather than stored.
+  const regClubName = new Map();      // org -> name from the registry
+  function addEmptyTeams(sid) {
+    const f = path.join(TEAMS_DIR, `${sid}.json`);
+    if (!fs.existsSync(f)) { registryMissing.push(sid); return; }
+    let reg;
+    try { reg = JSON.parse(fs.readFileSync(f, 'utf8')); }
+    catch (e) { console.error(`  ⚠️ ${path.basename(f)}: ${e.message}`); return; }
+    const byClub = rosters.get(sid);
+    let added = 0;
+    for (const t of Object.values(reg.teams || {})) {
+      if (!t || !t.name || !t.org) continue;
+      // ⚠️ ONLY WHERE NOBODY IS ALREADY PLACED. A team that has players is the
+      // roster's own; the registry must never overwrite it, and must never add
+      // a second entry under the same name.
+      if (byClub && byClub.has(t.org) && byClub.get(t.org).has(t.name)) continue;
+      if (!rosters.has(sid)) rosters.set(sid, new Map());
+      const cm = rosters.get(sid);
+      if (!cm.has(t.org)) cm.set(t.org, new Map());
+      const bt = cm.get(t.org);
+      if (bt.has(t.name)) continue;
+      bt.set(t.name, new Map());        // an empty player map — the point of it
+      // The registry's own age and grade, which are better than anything
+      // derivable here: a team with no players has no player ages to read.
+      const ak = `${sid}|${t.org}|${t.name}`;
+      const age = t.age || ageFromTeam(t.name);
+      if (t.orgName && !regClubName.has(t.org)) {
+        regClubName.set(t.org, String(t.orgName).replace(/\s*\([^)]*\)\s*$/, '').trim());
+      }
+      if (age) teamAges.set(ak, new Map([[age, 1]]));
+      if (t.grade) teamGrades.set(ak, t.grade);
+      added++;
+    }
+    if (added) { emptyAdded += added; emptySeasons++; }
+    return added;
+  }
 
   const teamAges = new Map();         // `${sid}|${club}|${team}` -> Map(age -> n)
   const teamGrades = new Map();       // `${sid}|${club}|${team}` -> grade label
@@ -681,6 +735,17 @@ function main() {
   // registration — which is a statement about the player, and false. It was on
   // screen before this line existed. The page now reports the two cases
   // differently, and can only do so because this number moved.
+  // ⚠️ AFTER BOTH HALVES AND BEFORE SERIALISATION — and v15 first put this
+  // AFTER the serialisation loop below, where it added three teams to a map
+  // nothing read again. The log cheerfully said "3 added from the registry"
+  // while the written file contained none of them, which is the exact shape of
+  // failure this project keeps paying for: a count that reports intent rather
+  // than outcome. The "already placed" test needs the finished rosters, so it
+  // has to sit between the two.
+  for (const sid of (rosterSeasons ? [...rosterSeasons] : [...rosters.keys()])) {
+    addEmptyTeams(sid);
+  }
+
   const rosterOut = { version: 2, builtAt: out.builtAt, seasons: {} };
   let rClubs = 0, rTeams = 0, rUnassigned = 0;
   for (const [sid, byClub] of rosters) {
@@ -688,7 +753,10 @@ function main() {
     const season = { compName: m.compName || null, startDate: m.startDate || null, endDate: m.endDate || null, clubs: {} };
     for (const [club, byTeam] of byClub) {
       rClubs++;
-      const c = { name: clubLabel(club), teams: {}, teamAge: {}, teamGrade: {}, unassigned: [] };
+      // clubLabel falls back to the id when the club is not in core.json.
+      const known = clubLabel(club);
+      const c = { name: (known && known !== club) ? known : (regClubName.get(club) || known),
+        teams: {}, teamAge: {}, teamGrade: {}, unassigned: [] };
       for (const [team, byUuid] of byTeam) {
         // ⚠️ SORTED, so the committed file does not churn. An unsorted Map
         // iteration reorders rows whenever the input order shifts, and every
@@ -698,6 +766,8 @@ function main() {
         // "BEN JONES" beside "ava smith" — and a plain localeCompare put every
         // upper-case name in a block of its own ahead of the rest, which on
         // screen reads as a list that is not sorted at all.
+        // ⚠️ A ZERO-LENGTH TEAM IS KEPT. It is the whole point of the registry
+        // merge, and an `if (!rows.length) continue` here would silently undo it.
         const rows = [...byUuid.values()].sort((a, b) =>
           String(a.n || '').toLowerCase().localeCompare(String(b.n || '').toLowerCase()) ||
           a.u.localeCompare(b.u));
@@ -802,6 +872,17 @@ function main() {
   for (const se of Object.values(rosterOut.seasons))
     for (const c of Object.values(se.clubs))
       for (const t of Object.keys(c.teams)) (c.teamAge[t] ? agedTeams++ : unagedTeams++);
+  let emptyTeams = 0;
+  for (const se of Object.values(rosterOut.seasons))
+    for (const c of Object.values(se.clubs))
+      for (const t of Object.keys(c.teams)) if (!c.teams[t].length) emptyTeams++;
+  log(`  teams with NO player yet : ${emptyTeams}` +
+    (emptyAdded ? ` (${emptyAdded} added from the registry across ${emptySeasons} season(s))` : ''));
+  if (registryMissing.length) {
+    log(`  ⚠️ no registry file for ${registryMissing.length} season(s) in scope — those`);
+    log('     seasons can only show teams that already have a player. Run');
+    log('     "Fetch season teams" to fill them in.');
+  }
   log(`  teams with an age : ${agedTeams}; without : ${unagedTeams}` +
     (unagedTeams ? '  (they sort last rather than first)' : ''));
   let gradedTeams = 0, ungradedTeams = 0; const gradeSeasons = new Set();
