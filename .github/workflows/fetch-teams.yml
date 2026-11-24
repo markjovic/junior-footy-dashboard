@@ -1,0 +1,127 @@
+# .github/workflows/fetch-teams.yml
+#
+# The season team registry — docs/team_registry_design.md §3.2, build step 3,
+# with the storage and scope revisions in §9.
+#
+# One discoverTeams call per season. Writes data/season-teams/<seasonId>.json
+# and repairs dead logo URLs in core.json's teamLogos from the same response.
+#
+# ⚠️ IT REPLACES refresh-team-logos.yml. That workflow made this exact call and
+# threw the team list away; two schedules against one endpoint is how they drift
+# apart. Delete refresh-team-logos.yml and scripts/refresh-team-logos.js with
+# this.
+#
+# ⚠️ NIGHTLY, NOT WEEKLY, and the registration window is why. A club creating a
+# team is the signal this exists to catch — on SEJ 2027, 58 of 117 teams had no
+# player the walk could see. Weekly would hide a new team for up to six days.
+#
+# ⚠️ IT WRITES core.json, SO IT TAKES THE DATA-WRITE GROUP. store.saveCore
+# writes the whole file; two writers with overlapping checkouts silently revert
+# each other, and it does not matter that they touch different keys.
+
+name: Fetch season teams
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'dry_run — print the plan and write nothing.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      seasons:
+        description: 'seasons — comma-separated seasonIDs. Blank asks every season in the manifest, one call each.'
+        required: false
+        default: ''
+        type: string
+      no_logos:
+        description: 'no_logos — build the registry only, leave teamLogos alone.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      pace_ms:
+        description: 'pace_ms — gap between calls. Blank uses 800, the walk''s measured-safe value.'
+        required: false
+        default: ''
+        type: string
+  schedule:
+    # 18:10 UTC = 05:10 AEDT. Twenty minutes before the registrations walk
+    # (19:30 UTC is 06:30 AEDT — the walk's own comment says 05:30 AEST, which
+    # is the same instant) and after discovery at 18:30 UTC... deliberately NOT
+    # between them: this runs at 18:10, discovery at 18:30, the walk at 19:30,
+    # so the registry is a little behind the manifest for one night when a new
+    # season appears, and correct from the next. Both hold the data-write
+    # group, so overlap queues rather than clobbering.
+    - cron: '10 18 * * *'
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    name: Fetch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # Without ref the commit lands on a DETACHED HEAD and the push never
+          # happens. Three outages in this repo came from exactly that.
+          ref: ${{ github.ref_name }}
+
+      - name: Fetch teams
+        id: fetch
+        env:
+          # ⚠️ EMPTY ON A SCHEDULED RUN — github.event.inputs.* has no value
+          # when there is no dispatch. The script treats empty as false, which
+          # is what the schedule wants.
+          FT_DRY: ${{ github.event.inputs.dry_run }}
+          FT_SEASONS: ${{ github.event.inputs.seasons }}
+          FT_NO_LOGOS: ${{ github.event.inputs.no_logos }}
+          FT_PACE_MS: ${{ github.event.inputs.pace_ms }}
+        run: |
+          set +e
+          if [ ! -f scripts/fetch-teams.js ]; then
+            echo "scripts/fetch-teams.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/fetch-teams.js
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = something changed, 2 = nothing to change, 1 = fatal.
+          # ⚠️ A FATAL MUST FAIL THE JOB. "No season answered" is a collection
+          # failure, not a clean bill of health, and writing an empty registry
+          # over a good one would delete every team we know about.
+          if [ "$code" = "1" ]; then
+            echo "::error::fetch-teams exited 1 — nothing was written."
+            exit 1
+          fi
+          exit 0
+
+      # ⚠️ ONLY ON 0. Exit 2 means the script found nothing to change and wrote
+      # nothing, so there is no commit to make.
+      - name: Commit
+        if: steps.fetch.outputs.code == '0' && github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # -A so a season file REMOVED because its season left the manifest is
+          # staged as a deletion, not left behind as an unstaged change that
+          # stops the rebase dead.
+          git add -A data/season-teams/ data/core.json
+          if ! git diff --quiet; then
+            echo "Unstaged changes remain after staging — adding them so the rebase can run:"
+            git diff --name-only | sed 's/^/    /'
+            git add -A
+          fi
+          git diff --staged --quiet || git commit -m "season teams + logo repair (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
