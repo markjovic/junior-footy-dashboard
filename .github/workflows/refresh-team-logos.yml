@@ -1,0 +1,113 @@
+# .github/workflows/refresh-team-logos.yml
+#
+# Repairs dead Cloudinary URLs in core.json's teamLogos.
+#
+# A club that replaces its logo file gets a new version stamp, and every stored
+# URL for it 404s. Logos only enter teamLogos during a RESULTS FETCH, and
+# store.fetchTargets() drops a retired season on its first test — so once a
+# season is retired its clubs' logos are frozen for good. Measured on Norwood,
+# 2026-11-24: 27 keys, all pointing at /1696902165682/logo.png, all 404.
+#
+# discoverTeams reaches a retired season (969 teams for EFNL 2026), and
+# organisation { logo { sizes { url } } } carries the CURRENT URL. That is the
+# route a results fetch cannot take.
+#
+# ⚠️ IT WRITES core.json, SO IT TAKES THE DATA-WRITE GROUP. store.saveCore
+# writes the whole file; two writers with overlapping checkouts silently revert
+# each other, and it does not matter that they touch different keys.
+
+name: Refresh team logos
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'dry_run — print the plan and write nothing. Run this first.'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      seasons:
+        description: 'seasons — comma-separated seasonIDs. Blank asks every season in the manifest, one call each.'
+        required: false
+        default: ''
+        type: string
+      pace_ms:
+        description: 'pace_ms — gap between calls. Blank uses 800, the walk''s measured-safe value.'
+        required: false
+        default: ''
+        type: string
+      no_verify:
+        description: 'no_verify — write a URL without checking it resolves. Leave false; an unchecked URL is how the dead ones got there.'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: Refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # Without ref the commit lands on a DETACHED HEAD and the push never
+          # happens. Three outages in this repo came from exactly that.
+          ref: ${{ github.ref_name }}
+
+      - name: Refresh
+        id: refresh
+        env:
+          RL_DRY: ${{ github.event.inputs.dry_run }}
+          RL_SEASONS: ${{ github.event.inputs.seasons }}
+          RL_PACE_MS: ${{ github.event.inputs.pace_ms }}
+          RL_NO_VERIFY: ${{ github.event.inputs.no_verify }}
+        run: |
+          set +e
+          if [ ! -f scripts/refresh-team-logos.js ]; then
+            echo "scripts/refresh-team-logos.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/refresh-team-logos.js
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 0 = changed and written, 2 = nothing to change, 1 = fatal.
+          # ⚠️ A FATAL MUST FAIL THE JOB. "No organisation returned a logo" is a
+          # collection failure, not a clean bill of health, and the script exits
+          # 1 for it deliberately.
+          if [ "$code" = "1" ]; then
+            echo "::error::refresh-team-logos exited 1 — nothing was written."
+            exit 1
+          fi
+          exit 0
+
+      # ⚠️ ONLY ON 0. Exit 2 means the script decided there was nothing to
+      # change and wrote nothing, so there is no commit to make — unlike the
+      # walk, where a 2 can still accompany data worth keeping.
+      - name: Commit
+        if: steps.refresh.outputs.code == '0' && github.event.inputs.dry_run != 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/core.json
+          # Nothing else should have changed. If something did, staging it is
+          # better than letting the rebase refuse on an unstaged file — that
+          # cost a four-hour walk on run #81.
+          if ! git diff --quiet; then
+            echo "Unstaged changes remain after staging — adding them so the rebase can run:"
+            git diff --name-only | sed 's/^/    /'
+            git add -A
+          fi
+          git diff --staged --quiet || git commit -m "teamLogos: refresh dead club logo URLs (run #${{ github.run_number }})"
+          git pull --rebase -X theirs
+          git push
