@@ -705,8 +705,21 @@ body{overflow-x:hidden}
 .rv-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);font-weight:400}
 .rv-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--b1);
   font-size:12px}
-.rv-nm{flex:1 1 180px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.rv-nm{flex:0 1 190px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15)}
+/* Last season and career are separate columns so the eye can run down either
+   one. They were a single run-on string, which made 20 rows unreadable. */
+.rv-prev{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2);
+  flex:1 1 260px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-car{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);
+  flex:0 1 170px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A club or team that is NOT the one this row sits under — the player came
+   from somewhere else. Named for what it is rather than coloured in silence. */
+.rv-xfer{color:#4ade80;border-bottom:1px dotted rgba(74,222,128,.5)}
+/* Age and the source tag sit together at the right edge, whatever the middle
+   columns do. margin-left:auto rather than a fixed width, so a long team name
+   pushes against them instead of wrapping underneath. */
+.rv-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .rv-nm:hover{border-bottom-color:var(--gold)}
 .rv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx3);flex-shrink:0}
 /* PLAYED and REGISTERED are different facts, not two shades of one. Green is a
@@ -728,7 +741,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.14</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.15</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -3103,12 +3116,12 @@ function rvOpen(uuid, sid, src) {
 // it carries LAST season instead: the club and team they played most for, with
 // that season's games and goals. The two are visibly different statements and
 // are never run together into one figure.
-function rvDetail(row) {
+function rvDetailHTML(row, clubId) {
   if (row.s === 'p') {
     const bits = [];
     if (row.gp) bits.push(`${row.gp} game${row.gp === 1 ? '' : 's'}`);
     if (row.gl) bits.push(`${row.gl} goal${row.gl === 1 ? '' : 's'}`);
-    return bits.join(' · ');
+    return tvEsc(bits.join(' · '));
   }
   const p = row.p;
   if (!p) {
@@ -3125,19 +3138,43 @@ function rvDetail(row) {
   if (p.gp) bits.push(`${p.gp} game${p.gp === 1 ? '' : 's'}`);
   if (p.gl) bits.push(`${p.gl} goal${p.gl === 1 ? '' : 's'}`);
   const where = p.t || p.c || '';
-  return `${p.y}: ${where}${bits.length ? ' · ' + bits.join(' · ') : ''}`;
+  const moved = !!(p.ci && clubId && p.ci !== clubId);
+  const whereHTML = moved
+    ? `<span class="rv-xfer" title="Came from another club">${tvEsc(where)}</span>`
+    : tvEsc(where);
+  return `${tvEsc(p.y)}: ${whereHTML}` +
+    (bits.length ? ' · ' + tvEsc(bits.join(' · ')) : '');
 }
 
-function rvRowHTML(row, sid, where) {
+// Career totals, from the player's own career file. Separate from the season
+// figures beside it and never added to them: one is a season, the other is
+// every season PlayHQ holds, and a reader must be able to tell which is which.
+function rvCareer(row) {
+  const c = row.c;
+  if (!c) return '';
+  const bits = [];
+  if (c.gp) bits.push(`${c.gp} game${c.gp === 1 ? '' : 's'}`);
+  if (c.gl) bits.push(`${c.gl} goal${c.gl === 1 ? '' : 's'}`);
+  return bits.length ? `career ${bits.join(' · ')}` : '';
+}
+
+// `clubId` is the club this row sits under. A previous club that is not it
+// means the player is coming FROM somewhere else — a transfer in — and the
+// club and team are marked. ⚠️ COMPARED ON THE ID, never the name: one club
+// spelled two ways would otherwise read as a move.
+function rvRowHTML(row, sid, where, clubId) {
   const nm = toProperCase(row.n || '') || '(no name)';
-  const det = rvDetail(row);
+  const det = rvDetailHTML(row, clubId);
+  const car = rvCareer(row);
   return '<div class="rv-row">' +
     `<span class="rv-nm" onclick="rvOpen('${tvEsc(row.u)}','${tvEsc(sid)}','${row.s === 'p' ? 'p' : 'r'}')" ` +
     `title="Open this player">${tvEsc(nm)}</span>` +
-    `<span class="rv-age">${tvEsc(row.a || '')}</span>` +
-    rvSrcTag(row.s) +
-    (det ? `<span class="rv-det">${tvEsc(det)}</span>` : '') +
+    `<span class="rv-prev">${det}</span>` +
+    `<span class="rv-car">${tvEsc(car)}</span>` +
     (where ? `<span class="rv-where">${tvEsc(where)}</span>` : '') +
+    '<span class="rv-right">' +
+      `<span class="rv-age">${tvEsc(row.a || '')}</span>` + rvSrcTag(row.s) +
+    '</span>' +
     '</div>';
 }
 
@@ -3269,7 +3306,7 @@ function renderRosters() {
       Object.keys(cl).forEach(cid => rvClubRows(cl[cid]).forEach(({ row, team }) => {
         if (!keep(row)) return;
         if (!tvFold(row.n).includes(q)) return;
-        hits.push({ row, sid: x,
+        hits.push({ row, sid: x, cid,
           where: [d.seasons[x].compName, cl[cid].name, team].filter(Boolean).join(' · ') });
       }));
     });
@@ -3279,7 +3316,7 @@ function renderRosters() {
       `matching “${tvEsc(S.rosterSearch)}” across every season` +
       (hits.length > shown.length ? ` — first ${shown.length} shown` : '')) +
       (shown.length
-        ? shown.map(h => rvRowHTML(h.row, h.sid, h.where)).join('')
+        ? shown.map(h => rvRowHTML(h.row, h.sid, h.where, h.cid)).join('')
         : '<div class="tv-note">No match.</div>');
     return;
   }
@@ -3303,13 +3340,13 @@ function renderRosters() {
         blocks.push(`<div class="rv-team">${tvEsc(t)}<span class="rv-meta">` +
           `${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
           `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
-          list.map(row => rvRowHTML(row, sid, '')).join(''));
+          list.map(row => rvRowHTML(row, sid, '', cid)).join(''));
       });
       if (un.length) {
         nPlayers += un.length;
         blocks.push(`<div class="rv-team">No team yet<span class="rv-meta">` +
           `${un.length} player${un.length === 1 ? '' : 's'}</span></div>` +
-          un.map(row => rvRowHTML(row, sid, '')).join(''));
+          un.map(row => rvRowHTML(row, sid, '', cid)).join(''));
       }
       if (blocks.length) {
         html += `<div class="rv-club">${crestHTML(c.name || '', 20)}${tvEsc(c.name || cid)}</div>` +
@@ -3358,6 +3395,10 @@ function renderRosters() {
 
   // ── ONE CLUB: its teams, then anyone with no team ───────────────────────
   const club = clubs[S.rosterClub];
+  // Named once, because the row builder needs the club this branch is showing
+  // and `cid` here would be a free variable — a ReferenceError that renders
+  // nothing and that node --check cannot see.
+  const cid = S.rosterClub;
   const teams = club.teams || {};
   const teamAge = club.teamAge || {};
   const teamGrade = club.teamGrade || {};
@@ -3372,7 +3413,7 @@ function renderRosters() {
     html += `<div class="rv-team">${tvEsc(t)}` +
       `<span class="rv-meta">${a ? tvEsc(a) + ' · ' : ''}${g ? tvEsc(g) + ' · ' : ''}` +
       `${list.length} player${list.length === 1 ? '' : 's'}</span></div>` +
-      list.map(row => rvRowHTML(row, sid, '')).join('');
+      list.map(row => rvRowHTML(row, sid, '', cid)).join('');
   });
   // ⚠️ A registration with no team is NOT dropped. team: null is the normal
   // state of a new registration — the club has signed them and not yet graded
@@ -3382,7 +3423,7 @@ function renderRosters() {
     shown += un.length;
     html += `<div class="rv-team">No team yet` +
       `<span class="rv-meta">${un.length} player${un.length === 1 ? '' : 's'}</span></div>` +
-      un.map(row => rvRowHTML(row, sid, '')).join('');
+      un.map(row => rvRowHTML(row, sid, '', cid)).join('');
   }
   body.innerHTML =
     note(`<span class="rv-club">${crestHTML(club.name || '', 20)}${tvEsc(club.name || S.rosterClub)}</span>` +
