@@ -702,7 +702,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.06</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.07</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -8562,6 +8562,12 @@ async function init() {
       // Guarded on S.selectedAge like `l` and `r`: with no age resolved yet the
       // team set is empty for every value of `t`, and a toast there would be
       // complaining about the missing age, which the `a` key already reports.
+      //
+      // RESET FIRST, like `fc` and `l` in the popstate handler below. The saved
+      // filters were restored above, so without this an unresolved `t` left the
+      // READER'S OWN last team selected and the toast said "showing all teams"
+      // while showing one team's games. v1.06 added the toast and not this.
+      S.selTeam = '';
       const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
         .flatMap(m => [m.home, m.away]));
       if (teams.has(_url.t)) S.selTeam = _url.t;
@@ -8625,7 +8631,22 @@ async function init() {
         if (hit) S.selLdrGrade = hit;
       }
       S.selRound = u.r || null;
-      S.selTeam  = u.t || null;
+      // ⚠️ VALIDATED, like every other key in this handler. `S.selTeam = u.t ||
+      // null` assigned the raw value, so a team that does not exist under this
+      // age — a rename, a regrade, or a hand-edited link — filtered EVERY match
+      // out and rendered "0 matches / No results match current filters" with
+      // nothing said. That is worse than init()'s silent widening, and THIS is the
+      // path a notification link usually takes: tapping a link to the page you
+      // already have open with a different fragment is a same-document
+      // navigation, so popstate runs and init() never does. Measured on a phone
+      // 2026-11-24 against v1.06, which fixed init() alone.
+      S.selTeam = null;
+      if (u.t && S.selectedAge) {
+        const teams = new Set(S.matches.filter(m => m.age === S.selectedAge && matchesComp(m))
+          .flatMap(m => [m.home, m.away]));
+        if (teams.has(u.t)) S.selTeam = u.t;
+        else toast(`Team ${u.t} not found in ${S.selectedAge} — showing all teams`);
+      }
       _lastHash = buildHash();
     } finally {
       // Cleared before render, or the render's own saveFilters calls are swallowed
