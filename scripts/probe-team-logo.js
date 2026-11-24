@@ -2,7 +2,7 @@
 // scripts/probe-team-logo.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'probe-team-logo v1 2026-11-25';
+const VERSION = 'probe-team-logo v3 2026-11-25 chase-the-named-type';
 
 //
 // Where can a CURRENT team or club logo be read from, when the season that
@@ -103,18 +103,40 @@ let calls = 0;
 // Scalar forms come before object forms deliberately: if `logo` is a scalar URL
 // the scalar probe succeeds outright, and if it is an object the rejection NAMES
 // the type, which tells us what to ask for next without spending a guess.
-const LOGO_CANDIDATES = [
-  'logo',
-  'logoUrl',
-  'image',
-  'imageUrl',
-  'avatar',
-  'avatarUrl',
-  'badge',
-  'crest',
-  'logo { url }',
-  'image { url }',
-  'media { url }',
+// ⚠️ TRIMMED AFTER v1. Eleven names were tried on three types — 33 calls — and
+// exactly one existed anywhere: `logo`. These three re-confirm that cheaply and
+// would catch a schema change; the other eight were measured absent on
+// 2026-11-25 and re-asking costs calls out of a shared WAF budget to learn
+// nothing. The full list is in the run log of v1 if it ever needs revisiting.
+const LOGO_CANDIDATES = ['logo', 'logoUrl', 'image'];
+
+// ⚠️ SETTLED BY v1, 2026-11-25: `logo` EXISTS on both DiscoverTeam and
+// DiscoverOrganisation, and its type is `Image` —
+//   Field "logo" of type "Image" must have a selection of subfields.
+// and `logo { url }` came back
+//   Cannot query field "url" on type "Image".
+// with NO "Did you mean", so Image has no field close to "url". The remaining
+// unknown is what Image actually contains, and that is the only thing standing
+// between here and a logo refresh that reaches retired seasons.
+//
+// The stored URL's shape is the clue to what to ask for:
+//   .../upload/h_96,w_96/v1/production/afl/<orgUUID>/<version>/logo.png
+// a Cloudinary transform, a public id and a version stamp. So as well as the
+// obvious accessors, this asks for the pieces that would let the URL be built.
+// Asked one level deeper whenever a rejection names an object type. Kept short
+// on purpose: this runs once per named type, not once per candidate.
+const URLISH = ['url', 'src', 'href', 'uri', 'path', 'key', 'small', 'medium',
+  'large', 'original', 'thumbnail', '__typename'];
+
+const IMAGE_SUBFIELDS = [
+  // ⚠️ NO NESTED FORMS HERE. The chase below handles anything that turns out
+  // to be an object, and listing `sizes { url }` in both places probed it twice
+  // and reported it twice.
+  '__typename',
+  'sizes',
+  'small', 'medium', 'large', 'thumbnail', 'original',
+  'src', 'href', 'uri', 'path', 'key', 'filename', 'name',
+  'id', 'publicId', 'cloudinaryId', 'version', 'format', 'extension',
 ];
 
 async function tryQuery(label, query, variables) {
@@ -133,9 +155,14 @@ async function tryQuery(label, query, variables) {
     const msg = String(json.errors[0].message || '');
     const exists = /must have a selection of subfields|Unknown argument|Cannot return null|cannot be queried on/i.test(msg);
     const hint = /Did you mean/i.test(msg) ? msg.slice(msg.search(/Did you mean/i)) : '';
+    // ⚠️ THE TYPE NAME IN THE REJECTION IS THE NEXT QUESTION, not a footnote.
+    // 'Field "sizes" of type "ImageSizes" must have a selection of subfields'
+    // names a real object one level further down. v2 printed it and stopped,
+    // which left the answer one dispatch away for no reason.
+    const t = /of type "([A-Za-z_][A-Za-z0-9_]*)" must have a selection/.exec(msg);
     log(`    ${label}: ${exists ? 'FIELD EXISTS, asked wrongly' : 'rejected'} — ${msg.slice(0, 150)}`);
     if (hint) log(`      ↳ ${hint.slice(0, 140)}`);
-    return { ok: false, exists };
+    return { ok: false, exists, typeName: t ? t[1] : null };
   }
   // ⚠️ LOG THE SUCCESSES TOO, with their data. A probe that only logs failures
   // hides its single most useful result — that happened to probe-team-roster v3,
@@ -203,12 +230,24 @@ async function main() {
   const yearOf = (c) => Number((String(c).match(/\b(20\d\d)\b/) || [])[1]) || 0;
   const latest = Math.max(...manifest.map(m => yearOf(m.compName)));
 
-  // A season that has been played: it has a players file. That is the class of
-  // season fetchTargets refuses once it is retired, and the one whose logos are
-  // stranded.
+  // ⚠️ IT MUST BE A SEASON fetchTargets ACTUALLY REFUSES, AND v1's DEFAULT WAS
+  // NOT. It took the newest season with a players file, which on 2026-11-25 was
+  // EFNL 2027 — active, not retired, and something fetchTargets would fetch
+  // tomorrow. So the one claim the section exists to test was never tested,
+  // while the log asserted "883 team(s) in a season fetchTargets will not
+  // fetch". A probe that states a conclusion its own evidence does not support
+  // is worse than one that fails.
+  //
+  // Retired first, then merely complete, then anything with a players file —
+  // and the log now says WHICH, and whether fetchTargets would refuse it.
   const hasPlayers = (sid) => fs.existsSync(path.join(store.SEASONS_DIR, `${sid}-players.json`));
-  const playedSeasons = manifest.filter(m => hasPlayers(m.seasonId))
-    .sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
+  const byDate = (a, b) => String(b.startDate || '').localeCompare(String(a.startDate || ''));
+  const withPlayers = manifest.filter(m => hasPlayers(m.seasonId)).sort(byDate);
+  const playedSeasons = [
+    ...withPlayers.filter(m => m.retired),
+    ...withPlayers.filter(m => !m.retired && m.state === 'complete'),
+    ...withPlayers.filter(m => !m.retired && m.state !== 'complete'),
+  ];
   const nextSeasons = manifest.filter(m => yearOf(m.compName) === latest && !hasPlayers(m.seasonId));
 
   const playedID = PLAYED || (playedSeasons[0] && playedSeasons[0].seasonId);
@@ -219,8 +258,15 @@ async function main() {
   log('── what is being probed ──');
   log(`  next season   ${seasonID}  ${nameOf(seasonID)}  ` +
     `[state ${entryOf(seasonID).state}, retired ${!!entryOf(seasonID).retired}]`);
+  const pe = entryOf(playedID);
+  const refused = !!pe.retired;
   log(`  played season ${playedID}  ${nameOf(playedID)}  ` +
-    `[state ${entryOf(playedID).state}, retired ${!!entryOf(playedID).retired}]`);
+    `[state ${pe.state}, retired ${!!pe.retired}]` +
+    (refused ? '  ← fetchTargets REFUSES this one, which is the point'
+             : '  ⚠️ NOT retired, so fetchTargets would fetch it — this does NOT'));
+  if (!refused) {
+    log('     test the claim. Pass a retired seasonID as `played` to test it properly.');
+  }
   log(`  organisation  ${ORG}`);
 
   // What the stored map holds for this organisation, and whether it still works.
@@ -258,7 +304,9 @@ async function main() {
     process.exit(1);
   }
   const playedTeams = (basePlayed.data && basePlayed.data.discoverTeams) || [];
-  log(`  ${playedTeams.length} team(s) in a season fetchTargets will not fetch.`);
+  log(`  ${playedTeams.length} team(s) returned` +
+    (refused ? ' for a season fetchTargets will not fetch.'
+             : ' — but this season is NOT retired, so this proves nothing about one that is.'));
   const ourOrgTeams = playedTeams.filter(t => t.organisation && t.organisation.id === ORG);
   log(`  ${ourOrgTeams.length} of them belong to ${ORG}` +
     (ourOrgTeams.length ? ` — e.g. ${ourOrgTeams.slice(0, 3).map(t => t.name).join(', ')}` : ''));
@@ -345,6 +393,59 @@ async function main() {
     log('  all fail for that reason rather than for the field. Skipped.');
   }
 
+  // ── 6b. WHAT IS INSIDE `Image`? ───────────────────────────────────────────
+  // The whole question reduces to this. One call per candidate; a rejection
+  // naming a type is a hit, and __typename is asked first because it is always
+  // legal and so proves the shape of the query itself before anything is read
+  // into a rejection.
+  log('\n── 6b. subfields of Image, via discoverOrganisation { logo { ? } } ──');
+  const imageFields = [];
+  const chase = [];
+  for (const f of IMAGE_SUBFIELDS) {
+    const r = await tryQuery(`logo { ${f} }`,
+      `query Probe($code: String!) { discoverOrganisation(code: $code) { id logo { ${f} } } }`,
+      { code: ORG });
+    if (r.ok) { imageFields.push(f); found.push({ where: 'DiscoverOrganisation.logo', field: f, data: r.data }); }
+    // A named object type one level down is the next question, so ask it now.
+    else if (r.typeName && !/^\w+ /.test(f)) chase.push({ f, type: r.typeName });
+    if (r.fatal) break;
+  }
+
+  for (const c of chase) {
+    log(`\n  ↳ "${c.f}" is of type ${c.type} — asking what IS inside it`);
+    for (const g of URLISH) {
+      if (imageFields.includes(`${c.f} { ${g} }`)) continue;   // already answered
+      const r = await tryQuery(`logo { ${c.f} { ${g} } }`,
+        `query Probe($code: String!) { discoverOrganisation(code: $code) { id logo { ${c.f} { ${g} } } } }`,
+        { code: ORG });
+      if (r.ok) {
+        imageFields.push(`${c.f} { ${g} }`);
+        found.push({ where: `DiscoverOrganisation.logo.${c.f}`, field: g, data: r.data });
+      }
+      if (r.fatal) break;
+    }
+  }
+  if (imageFields.length) {
+    log(`\n  Image accepts: ${imageFields.join(', ')}`);
+    // ⚠️ THE SAME SHAPE ON A TEAM IS WORTH MORE THAN ON A CLUB. One call per
+    // SEASON over discoverTeams refreshes every club at once; one call per CLUB
+    // over discoverOrganisation needs 165 of them.
+    // Deduped: a shape can be reached both directly and through the chase.
+    const good = [...new Set(imageFields.filter(f => f !== '__typename'))];
+    if (good.length) {
+      log('\n── 6c. the same subfield on a TEAM — one call per season, not per club ──');
+      for (const f of good.slice(0, 3)) {
+        const r = await tryQuery(`discoverTeams → organisation { logo { ${f} } }`,
+          `query Probe($seasonID: ID!) { discoverTeams(filter: { seasonID: $seasonID }) {
+            id organisation { id logo { ${f} } } } }`, { seasonID: playedID });
+        if (r.ok) found.push({ where: 'DiscoverTeam.organisation.logo', field: f, data: r.data });
+      }
+    }
+  } else {
+    log('  Image accepted nothing, not even __typename — which would mean the query');
+    log('  shape itself is wrong rather than the field names. Read the rejections.');
+  }
+
   // ── 7. anything that answered: is the URL alive? ──────────────────────────
   log('\n── 7. verdict ──');
   if (!found.length) {
@@ -357,6 +458,18 @@ async function main() {
   } else {
     for (const f of found) log(`  ACCEPTED  ${f.where}.${f.field}`);
     const urls = [...new Set(found.flatMap(f => urlsIn(f.data)))];
+    if (!urls.length) {
+      // ⚠️ FIELDS ACCEPTED IS NOT THE SAME AS A URL RETURNED, and v2's verdict
+      // said "the field exists and returned a URL" when nothing had. An
+      // accepted __typename proves the shape of the query and nothing else.
+      log('\n  ⇒ Field(s) were accepted but NOT ONE returned a URL. The logo object');
+      log('     is reachable; the accessor that yields its address has not been');
+      log('     found. Read the rejections above for a type name worth chasing,');
+      log('     and add the candidate to IMAGE_SUBFIELDS or URLISH.');
+      log(`\ncalls made: ${calls}`);
+      phq.logSummary();
+      process.exit(0);
+    }
     log(`\n  ${urls.length} distinct URL(s) came back. Checking each actually resolves —`);
     log('  a URL that 404s is exactly the state we are trying to get out of:');
     const live = [], dead = [], unchecked = [];
