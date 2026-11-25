@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.25</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.26</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.25</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.26</span>
         </div>
 
 
@@ -2990,14 +2990,40 @@ function tvClubTotals(rows) {
 function tvFlowsFor(rows, club) {
   const out = new Map(), inn = new Map();
   let lead = 0;
+  // ⚠️ THE ROWS, NOT JUST A COUNT. A band is worth hovering only if it can say
+  // WHO; keeping the rows here is what lets the diagram name them without a
+  // second pass over the data and a second chance to disagree with the list.
+  const put = (m, k, t) => { if (!m.has(k)) m.set(k, []); m.get(k).push(t); };
   for (const t of rows) {
     const isFrom = t.fromClubName === club, isTo = t.toClubName === club;
     if (t.kind === 'lead' && (isFrom || isTo)) lead++;
-    if (isFrom) out.set(t.toClubName || '?', (out.get(t.toClubName || '?') || 0) + 1);
-    if (isTo) inn.set(t.fromClubName || '?', (inn.get(t.fromClubName || '?') || 0) + 1);
+    if (isFrom) put(out, t.toClubName || '?', t);
+    if (isTo) put(inn, t.fromClubName || '?', t);
   }
-  const sort = (m) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const sort = (m) => [...m.entries()]
+    .map(([k, list]) => [k, list.length, list])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   return { out: sort(out), in: sort(inn), lead };
+}
+
+// The hover text for one band. Age then name, the same order the list uses, so
+// hovering and reading the list below give the same sequence.
+const TV_TIP_MAX = 30;
+function tvFlowTip(club, other, isIn, list) {
+  const people = (list || []).slice().sort((a, b) =>
+    tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
+    String(a.name || '').localeCompare(String(b.name || '')));
+  const line = (t) => (t.name || '(unnamed)') +
+    (t.age ? '  ' + tvAge(t.age) : '') +
+    (t.kind === 'lead' ? '  (no team yet)'
+      : t.kind === 'in-season' ? '  (mid-season)' : '');
+  // ⚠️ TRUNCATED, AND IT SAYS SO. A native SVG tooltip of 60 names is unusable
+  // and, worse, a silently clipped one would misreport the band's size.
+  const head = people.slice(0, TV_TIP_MAX).map(line);
+  const rest = people.length - head.length;
+  return (isIn ? other + ' \u2192 ' + club : club + ' \u2192 ' + other) +
+    '  (' + people.length + ')\n' + head.join('\n') +
+    (rest > 0 ? '\n… and ' + rest + ' more' : '');
 }
 
 // ⚠️ SVG, NO LIBRARY, AND NO SANKEY ACROSS 265 CLUBS. A whole-competition flow
@@ -3009,10 +3035,13 @@ function tvFlowSVG(club, flows) {
   const squash = (list) => {
     if (list.length <= TV_FLOW_MAX) return list;
     const head = list.slice(0, TV_FLOW_MAX - 1);
-    const rest = list.slice(TV_FLOW_MAX - 1).reduce((a, x) => a + x[1], 0);
+    const tail = list.slice(TV_FLOW_MAX - 1);
+    const rest = tail.reduce((a, x) => a + x[1], 0);
     // ⚠️ NAMED AS A REMAINDER, NEVER DROPPED. A diagram that silently shows the
-    // top nine of forty clubs reads as the whole picture.
-    return [...head, [`${list.length - head.length} other clubs`, rest]];
+    // top nine of forty clubs reads as the whole picture. The remainder keeps
+    // its rows too, so hovering it still names the players.
+    return [...head, [`${list.length - head.length} other clubs`, rest,
+      tail.flatMap(x => x[2] || [])]];
   };
   const L = squash(flows.in), R = squash(flows.out);
   const rows = Math.max(L.length, R.length, 1);
@@ -3030,19 +3059,30 @@ function tvFlowSVG(club, flows) {
        `fill="var(--tx)" font-weight="600">${e(club.length > 20 ? club.slice(0, 19) + '…' : club)}</text>`;
   const side = (list, isIn) => {
     let out = '';
-    list.forEach(([name, n], i) => {
+    list.forEach(([name, n, rows], i) => {
+      const tip = e(tvFlowTip(club, name, isIn, rows));
       const y = padTop + i * rowH + rowH / 2;
       const x0 = isIn ? 150 : cx + 70;
       const x1 = isIn ? cx - 70 : w - 150;
       const sy = isIn ? y : cy, ey = isIn ? cy : y;
       const mid = (x0 + x1) / 2;
+      // ⚠️ A WIDE INVISIBLE PATH UNDER THE VISIBLE ONE. A 1.5px band is almost
+      // impossible to hover; the hit area is widened without changing what is
+      // drawn. `pointer-events:stroke` keeps the hollow curve from swallowing
+      // clicks meant for the rows behind it.
+      out += `<path d="M ${x0} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${x1} ${ey}" ` +
+        `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
+        `style="pointer-events:stroke"><title>${tip}</title></path>`;
       out += `<path d="M ${x0} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${x1} ${ey}" ` +
         `fill="none" stroke="${isIn ? 'var(--green)' : 'var(--gold)'}" stroke-opacity="0.45" ` +
-        `stroke-width="${band(n)}"/>`;
+        `stroke-width="${band(n)}" style="pointer-events:none"/>`;
       out += `<text x="${isIn ? 144 : w - 144}" y="${y + 4}" text-anchor="${isIn ? 'end' : 'start'}" ` +
-        `font-size="10" fill="var(--tx2)">${e(name.length > 22 ? name.slice(0, 21) + '…' : name)}</text>`;
+        `font-size="10" fill="var(--tx2)" style="cursor:help">` +
+        `<title>${tip}</title>` +
+        `${e(name.length > 22 ? name.slice(0, 21) + '…' : name)}</text>`;
       out += `<text x="${isIn ? x0 + 8 : x1 - 8}" y="${y - 4}" text-anchor="${isIn ? 'start' : 'end'}" ` +
-        `font-size="9" fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
+        `font-size="9" fill="var(--tx3)" font-family="'DM Mono',monospace" ` +
+        `style="cursor:help"><title>${tip}</title>${n}</text>`;
     });
     return out;
   };
@@ -3183,7 +3223,9 @@ function renderTransfers() {
         '<div class="tvs-flow-hd"><span>' + tvEsc(S.transferFlow) + '</span>' +
         '<button class="hdr-btn" onclick="closeTransferFlow()">CLOSE</button></div>' +
         ((flows.in.length || flows.out.length)
-          ? tvFlowSVG(S.transferFlow, flows)
+          ? tvFlowSVG(S.transferFlow, flows) +
+            '<div class="tv-note" style="margin:0">Hover a band to list the ' +
+            'players on it.</div>'
           : '<div class="tv-note">No moves in or out under the current filters.</div>') +
         (flows.lead
           ? '<div class="tv-note">Of these, <b>' + flows.lead + '</b> are registrations ' +
