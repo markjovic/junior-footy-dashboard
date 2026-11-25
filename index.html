@@ -294,6 +294,11 @@ body{overflow-x:hidden}
 .tv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--b1);font-size:12px}
 .tv-name{font-weight:600;min-width:150px}
 .tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tv-sec{display:flex;align-items:center;gap:8px;margin:8px 0 2px 10px;
+  font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.09em;
+  color:var(--gold);font-weight:500}
+.tv-sec::after{content:'';flex:1;height:1px;background:var(--b1)}
+.tv-seccount{order:-1;color:var(--tx3);font-weight:400}
 .tvs-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
 .tvs-tbl th{text-align:right;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;
   color:var(--tx2);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--b1);white-space:nowrap}
@@ -762,7 +767,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.21</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.22</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -987,12 +992,18 @@ body{overflow-x:hidden}
         <select id="tv-club" onchange="setTransferClub(this.value)"
                 style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
                        padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
+        <!-- ⚠️ DEFAULTS TO THE NEWEST SEASON. The file goes back to 2022 and
+             mixing 2024 and 2026 moves in one list invites them to be read as
+             one season's movement. "All seasons" is there, but it is a choice. -->
+        <select id="tv-year" onchange="setTransferYear(this.value)"
+                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                       padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
         <span class="fv-switch">
           <button id="tvv-list" class="on" onclick="setTransferView('list')">LIST</button>
           <button id="tvv-summary"        onclick="setTransferView('summary')">SUMMARY</button>
         </span>
         <button class="hdr-btn" onclick="resetTransferFilters()"
-          title="Clear the competition, age, club, kind and search filters">CLEAR</button>
+          title="Clear the competition, age, club, kind and search filters, and return to the newest season">CLEAR</button>
         <button class="hdr-btn" onclick="openHelp('transfers')"
           title="Where this comes from, and what it cannot see">? About</button>
       </div>
@@ -1271,7 +1282,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.21</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.22</span>
         </div>
 
 
@@ -1740,6 +1751,12 @@ let S = {
   transferClub: '',        // '' = every club; matches EITHER side
   transferView: 'list',    // 'list' | 'summary'
   transferFlow: '',        // club name whose flow diagram is open
+  // ⚠️ DEFAULTS TO THE LATEST SEASON, NOT TO EVERYTHING. The file holds every
+  // in-season move back to 2022, and showing 2024 and 2026 in one list invites
+  // them to be read as one season's movement. null means "not chosen yet" and
+  // is resolved to the newest `fromYear` on first render; '' means the user
+  // explicitly asked for every season.
+  transferYear: null,
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
   // venue; 'venue' the other way. Both orderings answer a real question — "what
@@ -2824,6 +2841,13 @@ function setTransferSort(v) {
   renderTransfers();
 }
 function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); }
+// '\u0000' is the "All seasons" option. A plain '' cannot be used because ''
+// is also what `transferYear` holds once all-seasons is chosen, and the select
+// would then be indistinguishable from "not chosen yet".
+function setTransferYear(v) {
+  S.transferYear = (v === '\u0000') ? '' : String(v || '');
+  renderTransfers();
+}
 function setTransferClub(v) { S.transferClub = String(v || ''); S.transferFlow = ''; renderTransfers(); }
 function setTransferView(v) {
   S.transferView = v;
@@ -2845,6 +2869,9 @@ function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfer
 function resetTransferFilters() {
   S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
   S.transferClub = ''; S.transferFlow = '';
+  // CLEAR returns to the newest season, not to every season — "all seasons" is
+  // a deliberate choice, so clearing the filters must not silently make it.
+  S.transferYear = null;
   const c = document.getElementById('tv-club'); if (c) c.value = '';
   const q = document.getElementById('tv-search'); if (q) q.value = '';
   setTransferKind('all');
@@ -2857,6 +2884,25 @@ function setTransferKind(v) {
     if (b) b.classList.toggle('on', k === v);
   });
   renderTransfers();
+}
+
+// ⚠️ PlayHQ LEAKS RAW i18n KEYS AS AGE GROUPS. `i18n:config.age-groups.senior`
+// arrives verbatim in the stored team data and was being printed as-is. Turn
+// the key into its last segment and title-case it; anything already readable
+// ("U12", "Reserve Men") passes through untouched.
+function tvAge(a) {
+  const t = String(a || '');
+  const m = /^i18n:.*[.:]([a-z0-9-]+)$/i.exec(t);
+  if (!m) return t;
+  return m[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+// U-ages first in numeric order, then everything else alphabetically. rvAgeRank
+// returns 999 for a non-U age, so a bare rank comparison left Senior, Reserve
+// Men and Youth Girls in file order — which is what "abominable sorting" looked
+// like once the U rows were correct.
+function tvAgeKey(a) {
+  const r = rvAgeRank(a);
+  return r === 999 ? '9|' + tvAge(a).toLowerCase() : '1|' + String(r).padStart(3, '0');
 }
 
 // ═══ SUMMARY AND FLOW ═══════════════════════════════════════════════════════
@@ -2978,14 +3024,14 @@ function renderTransfers() {
   // ⚠️ THE OPTION LISTS COME FROM THE DATA, not from a hardcoded list. A new
   // competition or age group appears by itself; one that disappears stops being
   // offered instead of sitting there selecting nothing.
-  const fill = (id, values, label, current) => {
+  const fill = (id, values, label, current, show) => {
     const el = document.getElementById(id);
     if (!el) return;
     const want = ['', ...values];
     const have = [...el.options].map(o => o.value);
     if (have.length !== want.length || want.some((v, i) => have[i] !== v)) {
-      el.innerHTML = want.map(v =>
-        '<option value="' + tvEsc(v) + '">' + tvEsc(v || label) + '</option>').join('');
+      el.innerHTML = want.map(v => '<option value="' + tvEsc(v) + '">' +
+        tvEsc(v ? (show ? show(v) : v) : label) + '</option>').join('');
     }
     el.value = current || '';
   };
@@ -2994,14 +3040,38 @@ function renderTransfers() {
   // showed departures and internal moves while silently hiding every arrival
   // from another competition. Asked "what is happening in EFNL", it answered a
   // different question.
-  fill('tv-comp', [...new Set(all.flatMap(t => [t.fromComp, t.toComp]).filter(Boolean))].sort(),
+  // ⚠️ ONE VOCABULARY. `fromComp` and a non-lead `toComp` are both the SHORT
+  // manifest name ("EFNL"); a LEAD's `toComp` is PlayHQ's full league name
+  // ("Eastern Football Netball League") taken from the destination org's first
+  // competition. v1.20 populated this from both sides and the list then offered
+  // EFNL and Eastern Football Netball League as two entries selecting two
+  // different subsets of one league. Leads are excluded here — their
+  // destination org is usually unprofiled and its name is not comparable.
+  const compOfRow = (t) => [t.fromComp, t.kind === 'lead' ? '' : t.toComp].filter(Boolean);
+  fill('tv-comp', [...new Set(all.flatMap(compOfRow))].sort(),
     'All competitions', S.transferComp);
+  // ⚠️ SEASON IS `fromYear` ON EVERY KIND: the season the move happened in for
+  // an in-season move, the season left for a between-season move, the last
+  // season played for a lead. One axis that means the same thing on all three.
+  const years = [...new Set(all.map(t => t.fromYear).filter(Boolean))]
+    .sort((a, b) => String(b).localeCompare(String(a)));
+  if (S.transferYear === null) S.transferYear = years[0] || '';
+  const yEl = document.getElementById('tv-year');
+  if (yEl) {
+    const want = ['\u0000', ...years];
+    const have = [...yEl.options].map(o => o.value);
+    if (have.length !== want.length || want.some((v, i) => have[i] !== v)) {
+      yEl.innerHTML = want.map(v => '<option value="' + tvEsc(v) + '">' +
+        (v === '\u0000' ? 'All seasons' : tvEsc(v)) + '</option>').join('');
+    }
+    yEl.value = S.transferYear === '' ? '\u0000' : S.transferYear;
+  }
   // ⚠️ IT IS AN AGE, AND THE LABEL SAID GRADE. `t.age` is U12, not A/B/C. The
   // ordering is rvAgeRank, the same one the rosters view uses, so U9 comes
   // before U10 in both.
   fill('tv-grade', [...new Set(all.map(t => t.age).filter(Boolean))]
-    .sort((a, b) => rvAgeRank(a) - rvAgeRank(b) || String(a).localeCompare(String(b))),
-    'All ages', S.transferGrade);
+    .sort((a, b) => tvAgeKey(a).localeCompare(tvAgeKey(b))),
+    'All ages', S.transferGrade, tvAge);
   fill('tv-club', [...new Set(all.flatMap(t => [t.fromClubName, t.toClubName]).filter(Boolean))].sort(),
     'All clubs', S.transferClub);
 
@@ -3011,7 +3081,8 @@ function renderTransfers() {
   const shown = all.filter(t => t
     && (S.transferKind === 'all' || t.kind === S.transferKind)
     // Either side, so "EFNL" means everything touching EFNL — out, in and within.
-    && (!S.transferComp || t.fromComp === S.transferComp || t.toComp === S.transferComp)
+    && (!S.transferComp || compOfRow(t).includes(S.transferComp))
+    && (!S.transferYear || t.fromYear === S.transferYear)
     && (!S.transferGrade || t.age === S.transferGrade)
     && (!S.transferClub || t.fromClubName === S.transferClub || t.toClubName === S.transferClub)
     && (!q || tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q)
@@ -3033,6 +3104,8 @@ function renderTransfers() {
     (S.transferComp ? ' touching <b>' + tvEsc(S.transferComp) + '</b> on either side' : '') +
     (S.transferGrade ? ' at <b>' + tvEsc(S.transferGrade) + '</b>' : '') +
     (S.transferClub ? ' involving <b>' + tvEsc(S.transferClub) + '</b>' : '') +
+    (S.transferYear ? ' from the <b>' + tvEsc(S.transferYear) + '</b> season'
+                    : ' across <b>every season</b>') +
     (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
     (unknown > 0
       ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
@@ -3121,7 +3194,7 @@ function renderTransfers() {
     return String(a.name || '').localeCompare(String(b.name || ''));
   };
 
-  const rowHtml = (t) => {
+  const rowHtml = (t, club) => {
     const kind = t.kind === 'in-season'
       ? '<span class="tv-tag tv-mid">mid-season</span>'
       : t.kind === 'lead'
@@ -3148,10 +3221,20 @@ function renderTransfers() {
     const teams = (t.fromTeam || t.toTeam)
       ? '<span class="tv-teams">' + tvEsc(t.fromTeam || '—') + ' → ' + tvEsc(t.toTeam || '—') + '</span>'
       : '';
+    // ⚠️ THE GROUP'S OWN CLUB IS NOT REPEATED ON EVERY LINE. Under a Norwood
+    // heading, in a section headed OUT, "Norwood (Eastern Football Netball
+    // League) → Heathmont (Eastern Football Netball League)" says one new word.
+    // Only the other club is printed; with no group club (BY NAME, BY COMP,
+    // BY GRADE) both are, because then neither is implied by the heading.
+    const other = club && t.fromClubName === club ? t.toClubName
+      : club && t.toClubName === club ? t.fromClubName : null;
+    const move = other !== null
+      ? tvEsc(other || '?')
+      : tvEsc(t.fromClubName || '?') + ' → ' + tvEsc(t.toClubName || '?');
     return '<div class="tv-row">' +
       '<span class="tv-name">' + tvEsc(t.name || '(unnamed)') + '</span>' +
-      (t.age ? '<span class="tv-age">' + tvEsc(t.age) + '</span>' : '') +
-      '<span class="tv-move">' + tvEsc(t.fromClubName || '?') + ' → ' + tvEsc(t.toClubName || '?') + '</span>' +
+      (t.age ? '<span class="tv-age">' + tvEsc(tvAge(t.age)) + '</span>' : '') +
+      '<span class="tv-move">' + move + '</span>' +
       teams +
       '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')
         || (t.kind === 'lead' ? 'from ' + [t.fromComp, t.fromYear].filter(Boolean).join(' ') : '')) + '</span>' +
@@ -3162,27 +3245,23 @@ function renderTransfers() {
   if (S.transferSort === 'name') {
     parts.push(shown.slice()
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-      .map(rowHtml).join(''));
+      .map(t => rowHtml(t, null)).join(''));
   } else {
     const byJoined = S.transferSort === 'in';
     const byComp = S.transferSort === 'comp';
     const byGrade = S.transferSort === 'grade';
-    // ⚠️ A CLUB GROUP HOLDS BOTH DIRECTIONS. Until v1.21 a group keyed on
-    // `fromClubName` held departures ONLY, while the header carried a "· 44 in"
-    // taken from a separate tally across the WHOLE list — so Norwood announced
-    // 44 arrivals and showed none of them; those rows were filed under whichever
-    // club each player came from. The header described a set the list did not
-    // contain. A move now appears under BOTH clubs, which is the same rule the
-    // SUMMARY table states: OUT and IN count one move twice, once per club.
-    //
-    // CLUB LEFT and CLUB JOINED still differ — they decide which direction is
-    // listed FIRST inside each group, not which rows exist.
+    const byClub = !byComp && !byGrade;
+
+    // ⚠️ A CLUB GROUP HOLDS BOTH DIRECTIONS, AND SHOWS THEM AS SEPARATE
+    // SECTIONS. v1.20 listed departures only while the heading advertised
+    // arrivals that were filed under other clubs; v1.21 brought them into the
+    // group but interleaved them in one run ordered by a hidden direction key,
+    // which reads as unsorted. OUT, IN and REGISTERED are now headed blocks.
     const keysOf = (t) => {
       if (byComp) return [t.fromComp || '(competition unknown)'];
-      if (byGrade) return [t.age || '(grade unknown)'];
+      if (byGrade) return [t.age || '(age unknown)'];
       const a = t.fromClubName || '(club unknown)';
       const b = t.toClubName || '(club unknown)';
-      // A move inside one club is one row in one group, never two.
       return a === b ? [a] : [a, b];
     };
     const groups = new Map();
@@ -3192,42 +3271,63 @@ function renderTransfers() {
         groups.get(k).push(t);
       }
     }
-    // Alphabetical by club. A list people scan for a club they know must be in
-    // the order they would look it up in, not ranked by a count.
-    for (const [club, list] of [...groups.entries()].sort((a, b) => {
-      if (byGrade) {
-        const na = Number((String(a[0]).match(/\d+/) || [])[0]);
-        const nb = Number((String(b[0]).match(/\d+/) || [])[0]);
-        if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
-      }
+
+    // ⚠️ A CHOSEN CLUB IS THE ONLY GROUP. Picking Norwood used to leave a
+    // heading for every club Norwood had dealt with — "Chirnside Park 0 out ·
+    // 0 in · 2 registered" — which is a page about everyone else.
+    const only = byClub && S.transferClub && groups.has(S.transferClub)
+      ? [[S.transferClub, groups.get(S.transferClub)]]
+      : [...groups.entries()];
+
+    const byAgeThenName = (a, b) =>
+      tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
+      String(a.name || '').localeCompare(String(b.name || ''));
+
+    const section = (title, list, club) => list.length
+      ? '<div class="tv-sec">' + title +
+        '<span class="tv-seccount">' + list.length + '</span></div>' +
+        list.slice().sort(byAgeThenName).map(t => rowHtml(t, club)).join('')
+      : '';
+
+    for (const [club, list] of only.sort((a, b) => {
+      if (byGrade) return tvAgeKey(a[0]).localeCompare(tvAgeKey(b[0]));
       return String(a[0]).localeCompare(String(b[0]));
     })) {
-      // ⚠️ ONE COUNTING RULE FOR THE WHOLE LINE, AND IT COUNTS THIS GROUP.
-      // Until v1.21 the "out" figure excluded leads while the "in" figure did
-      // not, so one header line applied two rules. Leads are excluded from both
-      // and reported on their own, because a lead has no season and no date and
-      // is therefore neither an arrival nor a departure.
-      const moves = list.filter(t => t.kind !== 'lead');
-      const ld = list.length - moves.length;
-      // ⚠️ A MOVE WITH THE SAME CLUB ON BOTH SIDES IS NEITHER. It cannot occur
-      // in PlayHQ data — a transfer is between two clubs — but counting it as an
-      // arrival, which is what `toClubName === club` alone did, would inflate IN
-      // by exactly the number of rows the header is meant to account for.
-      const within = (byComp || byGrade) ? 0
-        : moves.filter(t => t.fromClubName === t.toClubName).length;
-      const cIn = (byComp || byGrade) ? 0 : moves.filter(t =>
-        t.toClubName === club && t.fromClubName !== t.toClubName).length;
-      const cOut = (byComp || byGrade) ? 0 : moves.filter(t =>
-        t.fromClubName === club && t.fromClubName !== t.toClubName).length;
+      if (!byClub) {
+        const moves = list.filter(t => t.kind !== 'lead');
+        const ld = list.length - moves.length;
+        parts.push('<div class="tv-club">' + tvEsc(byGrade ? tvAge(club) : club) +
+          '<span class="tv-count">' + moves.length + ' with a team' +
+          (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
+        parts.push(section('MOVES', moves, null) + section('REGISTERED, NO TEAM YET', list.filter(t => t.kind === 'lead'), null));
+        continue;
+      }
+      // ⚠️ A SAME-CLUB MOVE IS NEITHER IN NOR OUT. It cannot occur in PlayHQ
+      // data, but counting it as an arrival would inflate IN by exactly the
+      // rows the heading is meant to account for.
+      const out = [], inn = [], within = [], leadOut = [], leadIn = [];
+      for (const t of list) {
+        const isFrom = t.fromClubName === club, isTo = t.toClubName === club;
+        if (t.kind === 'lead') { (isFrom ? leadOut : leadIn).push(t); continue; }
+        if (isFrom && isTo) within.push(t);
+        else if (isFrom) out.push(t);
+        else inn.push(t);
+      }
       parts.push('<div class="tv-club">' + tvEsc(club) +
         '<span class="tv-count">' +
-        ((byComp || byGrade)
-          ? moves.length + ' with a team'
-          : (byJoined ? cIn + ' in · ' + cOut + ' out' : cOut + ' out · ' + cIn + ' in')) +
-        (within ? ' · ' + within + ' within the club' : '') +
-        (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
-      parts.push(list.slice().sort(tvRowOrder(club, byComp || byGrade, byJoined))
-        .map(rowHtml).join(''));
+        (byJoined ? inn.length + ' in · ' + out.length + ' out'
+                  : out.length + ' out · ' + inn.length + ' in') +
+        (within.length ? ' · ' + within.length + ' within the club' : '') +
+        (leadOut.length + leadIn.length
+          ? ' · ' + (leadOut.length + leadIn.length) + ' registered, no team' : '') +
+        '</span></div>');
+      const blocks = byJoined
+        ? [['IN', inn], ['OUT', out]]
+        : [['OUT', out], ['IN', inn]];
+      for (const [t, l] of blocks) parts.push(section(t, l, club));
+      parts.push(section('WITHIN THE CLUB', within, club));
+      parts.push(section('REGISTERED ELSEWHERE, NO TEAM YET', leadOut, club));
+      parts.push(section('REGISTERED HERE, NO TEAM YET', leadIn, club));
     }
   }
   body.innerHTML = parts.join('');
@@ -8338,13 +8438,24 @@ const HELP = [
       finished in U12 and has registered for next year is listed under U12.
       <b>Club</b> works the same way as competition: either side of the move.
       <br><br>
-      <b>A club heading lists BOTH directions.</b> Everything that club lost and
-      everything it gained sits under its name, ordered by direction, then age,
-      then player. <b>Club left</b> puts its departures first and <b>Club
-      joined</b> its arrivals — the same rows either way, only the order moves.
-      A move therefore appears twice in the list, once under each club, which is
-      the same rule the summary table states. Until v1.21 the heading said
-      something like “10 out · 44 in” while listing only the ten.<br><br>
+      <b>A club heading lists BOTH directions, as separate sections.</b>
+      <b>OUT</b>, <b>IN</b> and, where they exist, <b>within the club</b> and
+      the registered-with-no-team blocks each get their own sub-heading, and
+      each is ordered by age then player. <b>Club left</b> puts OUT first and
+      <b>Club joined</b> puts IN first — the same rows either way, only the
+      order moves. Inside a club's sections the club's own name is left off
+      each line; only the other club is shown. A move appears under both of its
+      clubs, which is the same rule the summary table states. Until v1.21 the
+      heading said “10 out · 44 in” while listing only the ten.<br><br>
+      <b>Choosing a club in the club box shows that club alone</b> — one
+      heading, its own sections. It used to leave a heading for every club it
+      had dealt with.<br><br>
+      <b>Season</b> defaults to the <b>newest</b>, and that is deliberate: the
+      file holds in-season moves back to 2022, and a list mixing 2024 with 2026
+      reads as one season's movement. Pick a year, or <b>All seasons</b>. The
+      season of a row is the season the player came FROM — the season the move
+      happened in for a mid-season move, the season left for a next-season one,
+      and the last season played for a registration with no team.<br><br>
       <b>Summary</b> turns the same filtered rows into one line per club: how
       many left, how many joined, the net, how many of those were mid-season,
       and how many have registered with no team yet. OUT and IN count the same
