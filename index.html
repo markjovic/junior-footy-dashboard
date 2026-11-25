@@ -767,7 +767,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.22</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.23</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1282,7 +1282,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.22</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.23</span>
         </div>
 
 
@@ -2886,6 +2886,27 @@ function setTransferKind(v) {
   renderTransfers();
 }
 
+// ⚠️ THE SEASON A ROW BELONGS TO — THE ONE BEING MOVED INTO, NOT OUT OF.
+// v1.22 keyed this on `fromYear` and a June 2026 mid-season move therefore
+// showed up under 2027 alongside next-season registrations, which are two
+// different questions about two different seasons.
+//
+//   mid-season : the season it happened in          → year / fromYear
+//   between    : the season registered for          → toYear
+//   lead       : the next season, by definition     → fromYear + 1
+//
+// A lead carries no toYear because PlayHQ has not placed the player in a team
+// yet; the registration is nonetheless for the season after the one they last
+// played, so the year is derived rather than left blank. Derived, not read —
+// if PlayHQ ever runs a season that is not n+1 this is the line that is wrong.
+function tvSeasonOf(t) {
+  if (!t) return '';
+  if (t.kind === 'in-season') return String(t.year || t.fromYear || '');
+  if (t.kind === 'between') return String(t.toYear || '');
+  const n = Number(t.fromYear);
+  return isFinite(n) && n > 0 ? String(n + 1) : '';
+}
+
 // ⚠️ PlayHQ LEAKS RAW i18n KEYS AS AGE GROUPS. `i18n:config.age-groups.senior`
 // arrives verbatim in the stored team data and was being printed as-is. Turn
 // the key into its last segment and title-case it; anything already readable
@@ -3053,7 +3074,7 @@ function renderTransfers() {
   // ⚠️ SEASON IS `fromYear` ON EVERY KIND: the season the move happened in for
   // an in-season move, the season left for a between-season move, the last
   // season played for a lead. One axis that means the same thing on all three.
-  const years = [...new Set(all.map(t => t.fromYear).filter(Boolean))]
+  const years = [...new Set(all.map(tvSeasonOf).filter(Boolean))]
     .sort((a, b) => String(b).localeCompare(String(a)));
   if (S.transferYear === null) S.transferYear = years[0] || '';
   const yEl = document.getElementById('tv-year');
@@ -3082,7 +3103,7 @@ function renderTransfers() {
     && (S.transferKind === 'all' || t.kind === S.transferKind)
     // Either side, so "EFNL" means everything touching EFNL — out, in and within.
     && (!S.transferComp || compOfRow(t).includes(S.transferComp))
-    && (!S.transferYear || t.fromYear === S.transferYear)
+    && (!S.transferYear || tvSeasonOf(t) === S.transferYear)
     && (!S.transferGrade || t.age === S.transferGrade)
     && (!S.transferClub || t.fromClubName === S.transferClub || t.toClubName === S.transferClub)
     && (!q || tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q)
@@ -3302,32 +3323,26 @@ function renderTransfers() {
         parts.push(section('MOVES', moves, null) + section('REGISTERED, NO TEAM YET', list.filter(t => t.kind === 'lead'), null));
         continue;
       }
-      // ⚠️ A SAME-CLUB MOVE IS NEITHER IN NOR OUT. It cannot occur in PlayHQ
-      // data, but counting it as an arrival would inflate IN by exactly the
-      // rows the heading is meant to account for.
-      const out = [], inn = [], within = [], leadOut = [], leadIn = [];
-      for (const t of list) {
-        const isFrom = t.fromClubName === club, isTo = t.toClubName === club;
-        if (t.kind === 'lead') { (isFrom ? leadOut : leadIn).push(t); continue; }
-        if (isFrom && isTo) within.push(t);
-        else if (isFrom) out.push(t);
-        else inn.push(t);
-      }
+      // ⚠️ TWO SECTIONS. A row is a departure or an arrival, and that is the
+      // whole of it. v1.22 split further by confidence — OUT beside a separate
+      // REGISTERED ELSEWHERE — which made one concept wear two headings while
+      // the per-row tag was already saying which was which. A registration with
+      // no team yet is still a departure from the club it is leaving.
+      //
+      // A row whose two clubs are the same cannot occur in PlayHQ data; it is
+      // filed under OUT so that the two sections always account for every row
+      // in the group, rather than vanishing from both.
+      const inn = list.filter(t => t.toClubName === club && t.fromClubName !== club);
+      const out = list.filter(t => !(t.toClubName === club && t.fromClubName !== club));
       parts.push('<div class="tv-club">' + tvEsc(club) +
         '<span class="tv-count">' +
         (byJoined ? inn.length + ' in · ' + out.length + ' out'
                   : out.length + ' out · ' + inn.length + ' in') +
-        (within.length ? ' · ' + within.length + ' within the club' : '') +
-        (leadOut.length + leadIn.length
-          ? ' · ' + (leadOut.length + leadIn.length) + ' registered, no team' : '') +
         '</span></div>');
-      const blocks = byJoined
-        ? [['IN', inn], ['OUT', out]]
-        : [['OUT', out], ['IN', inn]];
-      for (const [t, l] of blocks) parts.push(section(t, l, club));
-      parts.push(section('WITHIN THE CLUB', within, club));
-      parts.push(section('REGISTERED ELSEWHERE, NO TEAM YET', leadOut, club));
-      parts.push(section('REGISTERED HERE, NO TEAM YET', leadIn, club));
+      for (const [t, l] of (byJoined ? [['IN', inn], ['OUT', out]]
+                                     : [['OUT', out], ['IN', inn]])) {
+        parts.push(section(t, l, club));
+      }
     }
   }
   body.innerHTML = parts.join('');
@@ -8438,10 +8453,11 @@ const HELP = [
       finished in U12 and has registered for next year is listed under U12.
       <b>Club</b> works the same way as competition: either side of the move.
       <br><br>
-      <b>A club heading lists BOTH directions, as separate sections.</b>
-      <b>OUT</b>, <b>IN</b> and, where they exist, <b>within the club</b> and
-      the registered-with-no-team blocks each get their own sub-heading, and
-      each is ordered by age then player. <b>Club left</b> puts OUT first and
+      <b>A club heading has two sections, OUT and IN.</b> A row is a departure
+      or an arrival and that is the whole of it — a registration with no team
+      yet is still a departure from the club being left, and the tag on the row
+      says how firm it is. Each section is ordered by age then player.
+      <b>Club left</b> puts OUT first and
       <b>Club joined</b> puts IN first — the same rows either way, only the
       order moves. Inside a club's sections the club's own name is left off
       each line; only the other club is shown. A move appears under both of its
@@ -8450,12 +8466,14 @@ const HELP = [
       <b>Choosing a club in the club box shows that club alone</b> — one
       heading, its own sections. It used to leave a heading for every club it
       had dealt with.<br><br>
-      <b>Season</b> defaults to the <b>newest</b>, and that is deliberate: the
-      file holds in-season moves back to 2022, and a list mixing 2024 with 2026
-      reads as one season's movement. Pick a year, or <b>All seasons</b>. The
-      season of a row is the season the player came FROM — the season the move
-      happened in for a mid-season move, the season left for a next-season one,
-      and the last season played for a registration with no team.<br><br>
+      <b>Season is the season the movement BELONGS TO</b> — the one being moved
+      into, not the one being left. A mid-season move counts to the season it
+      happened in; a next-season registration to the season registered for; a
+      registration with no team yet to the season after the player's last. So
+      choosing 2027 shows the registrations for 2027 and nothing else, and a
+      mid-season move made in June 2026 stays under 2026 where it happened.
+      It defaults to the newest season, which is the one registrations are open
+      for. <b>All seasons</b> is there if you want it.<br><br>
       <b>Summary</b> turns the same filtered rows into one line per club: how
       many left, how many joined, the net, how many of those were mid-season,
       and how many have registered with no team yet. OUT and IN count the same
