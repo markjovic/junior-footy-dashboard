@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v16 2026-11-25 unplayed-seasons-only';
+const VERSION = 'build-transfers v17 2026-11-25 age-from-the-last-season';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -357,6 +357,14 @@ function main() {
   // nearly useless without it — "who is this child" is answered by where they
   // played last year, how many games and how many goals.
   const lastPlayed = new Map();       // uuid -> { y, comp, club, team, age, gp, goals }
+  // One accessor so no caller has to remember the fallback. Always an object,
+  // so a missing player yields empty strings rather than a throw.
+  const lp = (uuid) => {
+    const x = lastPlayed.get(uuid);
+    const f = playerInfo.get(uuid) || {};
+    return { age: (x && x.age) || f.age || '', team: (x && x.team) || f.team || '',
+             gp: (x && x.gp) || 0, comp: (x && x.comp) || '' };
+  };
   function rosterAdd(sid, club, team, uuid, name, age, source, stats) {
     if (!sid || !club || !uuid) return;
     // Before placed.add, so a season outside the scope leaves no trace at all
@@ -435,6 +443,12 @@ function main() {
           agg.club = p.team || '';
           if (p.age) agg.age = p.age;
         }
+        // ⚠️ FIRST-WINS OVER MANIFEST ORDER, WHICH IS ARBITRARY. This is kept
+        // only as a fallback for a player who has no entry in `lastPlayed`;
+        // everything that faces the reader uses lastPlayed instead. A between-
+        // season transfer row showed the age from whichever season the loop
+        // reached first — often the player's OLDEST — so a child who moved
+        // clubs at U13 could be listed as U9.
         if (!playerInfo.has(p.uuid)) {
           playerInfo.set(p.uuid, { age: p.age || '', team: p.teamRaw || p.team || '' });
         }
@@ -658,7 +672,7 @@ function main() {
         // club's roster, and leaving them off would make every roster look like
         // a list of departures.
         rosterAdd(t.seasonId, t.club, t.team || null, uuid,
-          r.name || null, (playerInfo.get(uuid) || {}).age || '', 'registered');
+          r.name || null, lp(uuid).age, 'registered');
         if (!t.club || !from.club || t.club === from.club) continue;
         const fs2 = splitSeason(from.compName);
         const ts = splitSeason((byId.get(t.seasonId) || {}).compName || t.compName || '');
@@ -668,10 +682,13 @@ function main() {
           // filtering by grade silently dropped every one of them, which looks
           // like "there are no U12 transfers" rather than "this row has no age".
           kind: 'between', uuid, name: r.name,
-          age: (playerInfo.get(uuid) || {}).age || '',
+          // ⚠️ THE AGE AND TEAM OF THE SEASON THEY ACTUALLY LEFT. lastPlayed is
+          // chosen by latest year then most games; playerInfo is first-wins over
+          // manifest order and is only the fallback.
+          age: lp(uuid).age, 
           comp: fs2.comp, year: fs2.year, seasonId: from.seasonId,
           fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
-          fromTeam: (playerInfo.get(uuid) || {}).team || '', fromGames: null,
+          fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
           toClub: t.club, toClubName: t.clubName || clubLabel(t.club),
           toTeam: t.team || '', toGames: null,
           toComp: ts.comp, toYear: ts.year,
@@ -724,12 +741,12 @@ function main() {
       const f = splitSeason(from.compName);
       leads.push({
         kind: 'lead',
-        uuid, name: r.name, age: (playerInfo.get(uuid) || {}).age || '',
+        uuid, name: r.name, age: lp(uuid).age,
         // ⚠️ NO SEASON AND NO YEAR, deliberately. A lead cannot be placed in time
         // and the view must not be able to imply otherwise.
         comp: '', year: '', seasonId: from.seasonId,
         fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
-        fromTeam: (playerInfo.get(uuid) || {}).team || '', fromGames: null,
+        fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
         toClub: lo.id, toClubName: lo.name || clubLabel(lo.id),
         toTeam: '', toGames: null,
         toComp: (orgs[lo.id] && orgs[lo.id].competitions && orgs[lo.id].competitions[0]
@@ -760,8 +777,19 @@ function main() {
   };
   out.coverage.leads = leads.length;
   out.coverage.leadsUnknownOrg = leadsUnknownOrg;
+  // ⚠️ MEASURED, NOT ASSERTED. v16 and earlier took the age from playerInfo,
+  // which is first-wins over an arbitrary manifest order. This says how many
+  // rows the two sources actually disagree on, so the claim that it mattered
+  // is a number rather than an argument.
+  let ageMoved = 0;
+  for (const t of [...between, ...leads]) {
+    const was = (playerInfo.get(t.uuid) || {}).age || '';
+    if (was && t.age && was !== t.age) ageMoved++;
+  }
   log(`\n  total rows: ${out.transfers.length} (${inSeason.length} in-season, ` +
     `${between.length} between-season, ${leads.length} lead)`);
+  log(`  age corrected on ${ageMoved} row(s) by taking the LAST PLAYED season ` +
+    `rather than the first in manifest order`);
 
   // ── Rosters: serialise and report ──────────────────────────────────────────
   // ⚠️ VERSION 2 MEANS THE ROWS CARRY gp, gl AND p. Without a version bump a
