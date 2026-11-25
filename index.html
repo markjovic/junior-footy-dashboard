@@ -287,17 +287,33 @@ body{overflow-x:hidden}
 /* The view switch, as a full-width row. Shown only below 768px — above that the
    header has room and keeps it. Margins pull it out of .main's padding so it
    spans edge to edge like the section tabs below it. */
-.tv-note{font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px;padding:8px 10px;
+.tv-note{font-size:11px;color:var(--tx2);line-height:1.6;margin-bottom:10px;padding:8px 10px;
   background:var(--s2);border:1px solid var(--b1);border-radius:var(--r)}
 .tv-club{display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-weight:600;font-size:13px;color:var(--tx)}
-.tv-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);font-weight:400}
+.tv-count{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2);font-weight:400}
 .tv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--b1);font-size:12px}
 .tv-name{font-weight:600;min-width:150px}
-.tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
-.tv-move{color:var(--t2);flex:1 1 240px}
-.tv-season{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
-.tv-games{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)}
-.tv-teams{font-family:'DM Mono',monospace;font-size:10px;color:var(--t2);flex:1 1 220px}
+.tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tvs-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+.tvs-tbl th{text-align:right;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;
+  color:var(--tx2);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--b1);white-space:nowrap}
+.tvs-tbl th:first-child{text-align:left}
+.tvs-tbl td{padding:5px 8px;border-bottom:1px solid var(--b2);text-align:right;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--tx)}
+.tvs-tbl td:first-child{text-align:left;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer}
+.tvs-tbl td:first-child:hover{color:var(--gold);text-decoration:underline}
+.tvs-tbl tr:hover td{background:var(--s2)}
+.tvs-pos{color:var(--green)}
+.tvs-neg{color:var(--red)}
+.tvs-zero{color:var(--tx2)}
+.tvs-flow{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);
+  padding:10px 12px;margin:8px 0 14px}
+.tvs-flow-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-weight:600;font-size:13px;color:var(--tx);margin-bottom:2px}
+.tv-move{color:var(--tx2);flex:1 1 240px}
+.tv-season{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tv-games{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tv-teams{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2);flex:1 1 220px}
 .tv-tag{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.5px;padding:1px 6px;border-radius:3px;
   background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.3);color:var(--gold)}
 .tv-tag.tv-mid{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);color:#60a5fa}
@@ -746,7 +762,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.19</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.20</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -966,8 +982,17 @@ body{overflow-x:hidden}
         <select id="tv-grade" onchange="setTransferGrade(this.value)"
                 style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
                        padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
+        <!-- One club, either side of the move: everything it lost and everything
+             it gained, which is the question people actually ask. -->
+        <select id="tv-club" onchange="setTransferClub(this.value)"
+                style="background:var(--s2);color:var(--tx);border:1px solid var(--b1);border-radius:var(--r);
+                       padding:6px 8px;font-family:'DM Mono',monospace;font-size:11px"></select>
+        <span class="fv-switch">
+          <button id="tvv-list" class="on" onclick="setTransferView('list')">LIST</button>
+          <button id="tvv-summary"        onclick="setTransferView('summary')">SUMMARY</button>
+        </span>
         <button class="hdr-btn" onclick="resetTransferFilters()"
-          title="Clear the competition, grade, kind and search filters">CLEAR</button>
+          title="Clear the competition, age, club, kind and search filters">CLEAR</button>
         <button class="hdr-btn" onclick="openHelp('transfers')"
           title="Where this comes from, and what it cannot see">? About</button>
       </div>
@@ -1246,7 +1271,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.05</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.20</span>
         </div>
 
 
@@ -1711,7 +1736,10 @@ let S = {
   transferSort: 'out',     // 'out' (club left) | 'in' (club joined) | 'name'
   transferKind: 'all',     // 'all' | 'between' | 'in-season' | 'lead'
   transferComp: '',        // '' = every competition
-  transferGrade: '',       // '' = every grade
+  transferGrade: '',       // '' = every age
+  transferClub: '',        // '' = every club; matches EITHER side
+  transferView: 'list',    // 'list' | 'summary'
+  transferFlow: '',        // club name whose flow diagram is open
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
   // venue; 'venue' the other way. Both orderings answer a real question — "what
@@ -2796,9 +2824,28 @@ function setTransferSort(v) {
   renderTransfers();
 }
 function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); }
+function setTransferClub(v) { S.transferClub = String(v || ''); S.transferFlow = ''; renderTransfers(); }
+function setTransferView(v) {
+  S.transferView = v;
+  [['list','tvv-list'],['summary','tvv-summary']].forEach(([k, id]) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', k === v);
+  });
+  renderTransfers();
+}
+// Opening a club's flow also pins the filter to it, so the list underneath
+// agrees with the diagram rather than describing a different set.
+function openTransferFlow(club) {
+  S.transferFlow = String(club || '');
+  S.transferClub = S.transferFlow;
+  renderTransfers();
+}
+function closeTransferFlow() { S.transferFlow = ''; renderTransfers(); }
 function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); }
 function resetTransferFilters() {
   S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
+  S.transferClub = ''; S.transferFlow = '';
+  const c = document.getElementById('tv-club'); if (c) c.value = '';
   const q = document.getElementById('tv-search'); if (q) q.value = '';
   setTransferKind('all');
 }
@@ -2810,6 +2857,105 @@ function setTransferKind(v) {
     if (b) b.classList.toggle('on', k === v);
   });
   renderTransfers();
+}
+
+// ═══ SUMMARY AND FLOW ═══════════════════════════════════════════════════════
+// Movement in and out of each club, from the rows already on screen.
+//
+// ⚠️ IT COUNTS WHAT IS FILTERED, NOT THE WHOLE FILE. The table sits under the
+// same competition, age, club, kind and search filters as the list, so the two
+// can never disagree about what is being described.
+//
+// ⚠️ A LEAD IS NOT A MOVE AND IS COUNTED SEPARATELY. It has no season and no
+// date — it says only that PlayHQ now lists the player at another club — so
+// folding it into IN and OUT would state something the data cannot support.
+function tvClubTotals(rows) {
+  const m = new Map();
+  const get = (name) => {
+    if (!m.has(name)) m.set(name, { club: name, out: 0, in: 0, lead: 0, mid: 0 });
+    return m.get(name);
+  };
+  for (const t of rows) {
+    const from = t.fromClubName || '(club unknown)';
+    const to = t.toClubName || '(club unknown)';
+    if (t.kind === 'lead') { get(from).lead++; get(to).lead++; continue; }
+    get(from).out++;
+    get(to).in++;
+    if (t.kind === 'in-season') { get(from).mid++; get(to).mid++; }
+  }
+  for (const v of m.values()) v.net = v.in - v.out;
+  return [...m.values()];
+}
+
+// A club's own flows: who it lost players to, and who it took them from.
+function tvFlowsFor(rows, club) {
+  const out = new Map(), inn = new Map();
+  let lead = 0;
+  for (const t of rows) {
+    if (t.kind === 'lead') {
+      if (t.fromClubName === club || t.toClubName === club) lead++;
+      continue;
+    }
+    if (t.fromClubName === club) out.set(t.toClubName || '?', (out.get(t.toClubName || '?') || 0) + 1);
+    if (t.toClubName === club) inn.set(t.fromClubName || '?', (inn.get(t.fromClubName || '?') || 0) + 1);
+  }
+  const sort = (m) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return { out: sort(out), in: sort(inn), lead };
+}
+
+// ⚠️ SVG, NO LIBRARY, AND NO SANKEY ACROSS 265 CLUBS. A whole-competition flow
+// diagram at this size is an unreadable hairball; one club at a time is a
+// question somebody actually asks. Sources left, the club centre, destinations
+// right, each band's thickness proportional to the number of players.
+const TV_FLOW_MAX = 10;
+function tvFlowSVG(club, flows) {
+  const squash = (list) => {
+    if (list.length <= TV_FLOW_MAX) return list;
+    const head = list.slice(0, TV_FLOW_MAX - 1);
+    const rest = list.slice(TV_FLOW_MAX - 1).reduce((a, x) => a + x[1], 0);
+    // ⚠️ NAMED AS A REMAINDER, NEVER DROPPED. A diagram that silently shows the
+    // top nine of forty clubs reads as the whole picture.
+    return [...head, [`${list.length - head.length} other clubs`, rest]];
+  };
+  const L = squash(flows.in), R = squash(flows.out);
+  const rows = Math.max(L.length, R.length, 1);
+  const rowH = 26, padTop = 34, w = 760;
+  const h = padTop + rows * rowH + 20;
+  const maxN = Math.max(1, ...L.map(x => x[1]), ...R.map(x => x[1]));
+  const band = (n) => Math.max(1.5, (n / maxN) * 14);
+  const cx = w / 2, cyTop = padTop, cyBot = h - 20;
+  const cy = (cyTop + cyBot) / 2;
+  const e = tvEsc;
+  let g = '';
+  g += `<rect x="${cx - 70}" y="${cy - 16}" width="140" height="32" rx="6" ` +
+       `fill="var(--s3)" stroke="var(--gold)" stroke-width="1"/>`;
+  g += `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="11" ` +
+       `fill="var(--tx)" font-weight="600">${e(club.length > 20 ? club.slice(0, 19) + '…' : club)}</text>`;
+  const side = (list, isIn) => {
+    let out = '';
+    list.forEach(([name, n], i) => {
+      const y = padTop + i * rowH + rowH / 2;
+      const x0 = isIn ? 150 : cx + 70;
+      const x1 = isIn ? cx - 70 : w - 150;
+      const sy = isIn ? y : cy, ey = isIn ? cy : y;
+      const mid = (x0 + x1) / 2;
+      out += `<path d="M ${x0} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${x1} ${ey}" ` +
+        `fill="none" stroke="${isIn ? 'var(--green)' : 'var(--gold)'}" stroke-opacity="0.45" ` +
+        `stroke-width="${band(n)}"/>`;
+      out += `<text x="${isIn ? 144 : w - 144}" y="${y + 4}" text-anchor="${isIn ? 'end' : 'start'}" ` +
+        `font-size="10" fill="var(--tx2)">${e(name.length > 22 ? name.slice(0, 21) + '…' : name)}</text>`;
+      out += `<text x="${isIn ? x0 + 8 : x1 - 8}" y="${y - 4}" text-anchor="${isIn ? 'start' : 'end'}" ` +
+        `font-size="9" fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
+    });
+    return out;
+  };
+  g += side(L, true) + side(R, false);
+  g += `<text x="150" y="20" text-anchor="end" font-size="10" fill="var(--green)" ` +
+       `font-weight="600">IN</text>`;
+  g += `<text x="${w - 150}" y="20" text-anchor="start" font-size="10" ` +
+       `fill="var(--gold)" font-weight="600">OUT</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" ` +
+    `style="max-width:${w}px;display:block;margin:4px auto 10px">${g}</svg>`;
 }
 
 function renderTransfers() {
@@ -2843,24 +2989,31 @@ function renderTransfers() {
     }
     el.value = current || '';
   };
-  fill('tv-comp', [...new Set(all.map(t => t.fromComp).filter(Boolean))].sort(),
+  // ⚠️ BOTH SIDES. This listed only `fromComp`, so a competition that only ever
+  // RECEIVES players never appeared in the list at all, and selecting one
+  // showed departures and internal moves while silently hiding every arrival
+  // from another competition. Asked "what is happening in EFNL", it answered a
+  // different question.
+  fill('tv-comp', [...new Set(all.flatMap(t => [t.fromComp, t.toComp]).filter(Boolean))].sort(),
     'All competitions', S.transferComp);
+  // ⚠️ IT IS AN AGE, AND THE LABEL SAID GRADE. `t.age` is U12, not A/B/C. The
+  // ordering is rvAgeRank, the same one the rosters view uses, so U9 comes
+  // before U10 in both.
   fill('tv-grade', [...new Set(all.map(t => t.age).filter(Boolean))]
-    // U9 before U10: sort on the number where there is one.
-    .sort((a, b) => {
-      const na = Number((String(a).match(/\d+/) || [])[0]);
-      const nb = Number((String(b).match(/\d+/) || [])[0]);
-      if (isFinite(na) && isFinite(nb) && na !== nb) return na - nb;
-      return String(a).localeCompare(String(b));
-    }), 'All grades', S.transferGrade);
+    .sort((a, b) => rvAgeRank(a) - rvAgeRank(b) || String(a).localeCompare(String(b))),
+    'All ages', S.transferGrade);
+  fill('tv-club', [...new Set(all.flatMap(t => [t.fromClubName, t.toClubName]).filter(Boolean))].sort(),
+    'All clubs', S.transferClub);
 
   // ⚠️ EVERY FILTER APPLIES AT ONCE. Kind, competition, grade and the search box
   // narrow the same list in turn; none of them resets another.
   const q = tvFold(S.transferSearch || '');
   const shown = all.filter(t => t
     && (S.transferKind === 'all' || t.kind === S.transferKind)
-    && (!S.transferComp || t.fromComp === S.transferComp)
+    // Either side, so "EFNL" means everything touching EFNL — out, in and within.
+    && (!S.transferComp || t.fromComp === S.transferComp || t.toComp === S.transferComp)
     && (!S.transferGrade || t.age === S.transferGrade)
+    && (!S.transferClub || t.fromClubName === S.transferClub || t.toClubName === S.transferClub)
     && (!q || tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q)
       || tvFold(t.toClubName).includes(q)));
 
@@ -2877,8 +3030,9 @@ function renderTransfers() {
   parts.push('<div class="tv-note">' +
     '<b>' + shownMoves + '</b> with a team' +
     (shownLeads ? ' and <b>' + shownLeads + '</b> registered but not yet in a team' : '') + ' shown' +
-    (S.transferComp ? ' in <b>' + tvEsc(S.transferComp) + '</b>' : '') +
+    (S.transferComp ? ' touching <b>' + tvEsc(S.transferComp) + '</b> on either side' : '') +
     (S.transferGrade ? ' at <b>' + tvEsc(S.transferGrade) + '</b>' : '') +
+    (S.transferClub ? ' involving <b>' + tvEsc(S.transferClub) + '</b>' : '') +
     (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
     (unknown > 0
       ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
@@ -2891,6 +3045,49 @@ function renderTransfers() {
 
   if (!shown.length) {
     parts.push('<div class="tv-note">Nothing matches.</div>');
+    body.innerHTML = parts.join('');
+    return;
+  }
+
+  // ═══ SUMMARY ═══════════════════════════════════════════════════════════
+  // ⚠️ IT DESCRIBES THE FILTERED ROWS, NOT THE FILE. Same filters as the list,
+  // so the two can never disagree about what is being counted.
+  if (S.transferView === 'summary') {
+    if (S.transferFlow) {
+      const flows = tvFlowsFor(shown, S.transferFlow);
+      parts.push('<div class="tvs-flow">' +
+        '<div class="tvs-flow-hd"><span>' + tvEsc(S.transferFlow) + '</span>' +
+        '<button class="hdr-btn" onclick="closeTransferFlow()">CLOSE</button></div>' +
+        ((flows.in.length || flows.out.length)
+          ? tvFlowSVG(S.transferFlow, flows)
+          : '<div class="tv-note">No moves in or out under the current filters.</div>') +
+        (flows.lead
+          ? '<div class="tv-note">' + flows.lead + ' registered with no team yet — not drawn, ' +
+            'because a registration has no season and no destination team.</div>'
+          : '') +
+        '</div>');
+    }
+    const rows = tvClubTotals(shown).sort((a, b) =>
+      (b.out + b.in) - (a.out + a.in) || a.club.localeCompare(b.club));
+    const cls = (n) => n > 0 ? 'tvs-pos' : n < 0 ? 'tvs-neg' : 'tvs-zero';
+    parts.push('<table class="tvs-tbl"><thead><tr>' +
+      '<th>Club</th><th title="Players who left">OUT</th>' +
+      '<th title="Players who joined">IN</th>' +
+      '<th title="IN minus OUT">NET</th>' +
+      '<th title="Of those moves, the ones inside a season rather than between two">MID</th>' +
+      '<th title="Registered with a club for next season but not yet in a team. Not counted in OUT or IN.">NO TEAM</th>' +
+      '</tr></thead><tbody>' +
+      rows.map(r => '<tr>' +
+        '<td onclick="openTransferFlow(' + "'" + tvEsc(String(r.club).replace(/'/g, "\\'")) + "'" + ')" ' +
+        'title="Show this club\u2019s flows">' + tvEsc(r.club) + '</td>' +
+        '<td>' + r.out + '</td><td>' + r.in + '</td>' +
+        '<td class="' + cls(r.net) + '">' + (r.net > 0 ? '+' : '') + r.net + '</td>' +
+        '<td>' + (r.mid || '') + '</td><td>' + (r.lead || '') + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table>');
+    parts.push('<div class="tv-note">Click a club to see where its players came ' +
+      'from and went to. OUT and IN count the same move twice — once for each ' +
+      'club — so the columns do not sum to the number of rows in the list.</div>');
     body.innerHTML = parts.join('');
     return;
   }
@@ -8080,10 +8277,26 @@ const HELP = [
       happening across a competition or an age group. Each row shows the team
       they played for and the team they have joined; a dash means no team yet,
       which is normal before a club picks its sides.<br><br>
-      The competition and grade boxes, the kind buttons and the search all apply
-      <b>at the same time</b> — none of them clears another, and the line above
-      the list always describes what is on screen after all of them.
+      The competition, age and club boxes, the kind buttons and the search all
+      apply <b>at the same time</b> — none of them clears another, and the line
+      above the list always describes what is on screen after all of them.
       <b>Clear</b> resets the lot.<br><br>
+      <b>Competition</b> matches <b>either side</b> of a move, so picking EFNL
+      shows players leaving EFNL, players arriving in it, and moves within it.
+      It used to match the competition left only, which hid every arrival.
+      <b>Age</b> is the age group of the <b>last season the player actually
+      played</b>, not of the season they have signed up for — so a player who
+      finished in U12 and has registered for next year is listed under U12.
+      <b>Club</b> works the same way as competition: either side of the move.
+      <br><br>
+      <b>Summary</b> turns the same filtered rows into one line per club: how
+      many left, how many joined, the net, how many of those were mid-season,
+      and how many have registered with no team yet. OUT and IN count the same
+      move twice, once for each club, so they do not add up to the number of
+      rows in the list. Clicking a club draws its flows — where its players came
+      from on the left, where they went on the right, band thickness in
+      proportion to the number of players, and the smallest sources and
+      destinations grouped into a named remainder rather than dropped.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
