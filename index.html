@@ -302,6 +302,9 @@ body{overflow-x:hidden}
 .tvs-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
 .tvs-tbl th{text-align:right;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;
   color:var(--tx2);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--b1);white-space:nowrap}
+.tvs-th{cursor:pointer;user-select:none}
+.tvs-th:hover{color:var(--tx)}
+.tvs-th.on{color:var(--gold)}
 .tvs-tbl th:first-child{text-align:left}
 .tvs-tbl td{padding:5px 8px;border-bottom:1px solid var(--b2);text-align:right;
   font-family:'DM Mono',monospace;font-size:11px;color:var(--tx)}
@@ -767,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.23</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.24</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1282,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.23</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.24</span>
         </div>
 
 
@@ -1757,6 +1760,13 @@ let S = {
   // is resolved to the newest `fromYear` on first render; '' means the user
   // explicitly asked for every season.
   transferYear: null,
+  // ⚠️ ALPHABETICAL BY DEFAULT. It ranked by OUT+IN, which excluded NO TEAM —
+  // by far the largest column — so the order looked arbitrary: 23, 16, 12, 12,
+  // 11, 10, 10 … against a NO TEAM column reading 37, 12, 10, 19. A table
+  // people scan for a club they know has to be in the order they look it up in;
+  // any ranking they actually want is one click on its heading.
+  transferSumKey: 'club',  // club | out | in | net | mid | lead
+  transferSumDir: 1,       // 1 ascending, -1 descending
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
   // Which way round the BY VENUE view nests. 'date' groups by date and then by
   // venue; 'venue' the other way. Both orderings answer a real question — "what
@@ -2844,6 +2854,14 @@ function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(
 // '\u0000' is the "All seasons" option. A plain '' cannot be used because ''
 // is also what `transferYear` holds once all-seasons is chosen, and the select
 // would then be indistinguishable from "not chosen yet".
+// Clicking the heading already sorting sorts the other way. A numeric column
+// opens on its LARGEST value, a name column on A–Z, because that is what each
+// is asked for first.
+function setTransferSum(k) {
+  if (S.transferSumKey === k) S.transferSumDir = -S.transferSumDir;
+  else { S.transferSumKey = k; S.transferSumDir = (k === 'club') ? 1 : -1; }
+  renderTransfers();
+}
 function setTransferYear(v) {
   S.transferYear = (v === '\u0000') ? '' : String(v || '');
   renderTransfers();
@@ -3161,15 +3179,26 @@ function renderTransfers() {
           : '') +
         '</div>');
     }
-    const rows = tvClubTotals(shown).sort((a, b) =>
-      (b.out + b.in) - (a.out + a.in) || a.club.localeCompare(b.club));
+    const k = S.transferSumKey, dir = S.transferSumDir;
+    const rows = tvClubTotals(shown).sort((a, b) => {
+      if (k === 'club') return dir * a.club.localeCompare(b.club);
+      // ⚠️ TIES BREAK ALPHABETICALLY, AND ALWAYS A–Z. Letting the direction
+      // flip the tiebreak as well reverses whole blocks of equal numbers and
+      // reads as the table shuffling itself.
+      return dir * ((a[k] || 0) - (b[k] || 0)) || a.club.localeCompare(b.club);
+    });
     const cls = (n) => n > 0 ? 'tvs-pos' : n < 0 ? 'tvs-neg' : 'tvs-zero';
+    const arrow = (c) => c === k ? (dir === 1 ? ' \u25B4' : ' \u25BE') : '';
+    const th = (c, label, tip) =>
+      '<th class="tvs-th' + (c === k ? ' on' : '') + '" onclick="setTransferSum(\'' + c + '\')"' +
+      ' title="' + tvEsc(tip) + '">' + label + arrow(c) + '</th>';
     parts.push('<table class="tvs-tbl"><thead><tr>' +
-      '<th>Club</th><th title="Players who left">OUT</th>' +
-      '<th title="Players who joined">IN</th>' +
-      '<th title="IN minus OUT">NET</th>' +
-      '<th title="Of those moves, the ones inside a season rather than between two">MID</th>' +
-      '<th title="Registered with a club for next season but not yet in a team. Not counted in OUT or IN.">NO TEAM</th>' +
+      th('club', 'Club', 'Sort by club name') +
+      th('out', 'OUT', 'Players who left. Click to sort.') +
+      th('in', 'IN', 'Players who joined. Click to sort.') +
+      th('net', 'NET', 'IN minus OUT. Click to sort.') +
+      th('mid', 'MID', 'Of those moves, the ones inside a season rather than between two. Click to sort.') +
+      th('lead', 'NO TEAM', 'Registered with a club but not yet placed in a team. Not counted in OUT or IN. Click to sort.') +
       '</tr></thead><tbody>' +
       rows.map(r => '<tr>' +
         '<td onclick="openTransferFlow(' + "'" + tvEsc(String(r.club).replace(/'/g, "\\'")) + "'" + ')" ' +
@@ -3180,8 +3209,11 @@ function renderTransfers() {
         '</tr>').join('') +
       '</tbody></table>');
     parts.push('<div class="tv-note">Click a club to see where its players came ' +
-      'from and went to. OUT and IN count the same move twice — once for each ' +
-      'club — so the columns do not sum to the number of rows in the list.</div>');
+      'from and went to, or a column heading to sort by it. OUT and IN count ' +
+      'the same move twice — once for each club — so the columns do not sum to ' +
+      'the number of rows in the list. <b>NO TEAM</b> is counted in neither: ' +
+      'a registration with no team yet has no season and no destination team, ' +
+      'and it is usually the largest column before a league grades its sides.</div>');
     body.innerHTML = parts.join('');
     return;
   }
