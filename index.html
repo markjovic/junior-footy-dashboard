@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.24</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.25</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.24</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.25</span>
         </div>
 
 
@@ -2960,12 +2960,22 @@ function tvClubTotals(rows) {
     if (!m.has(name)) m.set(name, { club: name, out: 0, in: 0, lead: 0, mid: 0 });
     return m.get(name);
   };
+  // ⚠️ ONE RULE, SHARED WITH THE LIST. Until v1.25 a lead was held out of OUT
+  // and IN and counted only in `lead`, while the list folded it into the
+  // direction it points — so Norwood read "19 out · 25 in" above the list and
+  // "5 out · 0 in · 39 no team" in this table. Same 44 rows, two buckets, and
+  // no way to tell which was the lie.
+  //
+  // A lead HAS a direction: it is a departure from the club being left. It is
+  // counted like any other row here, and `lead` is now a SUBSET of out+in —
+  // how many of those rows are registrations PlayHQ has not placed in a team
+  // yet — not a third bucket beside them.
   for (const t of rows) {
     const from = t.fromClubName || '(club unknown)';
     const to = t.toClubName || '(club unknown)';
-    if (t.kind === 'lead') { get(from).lead++; get(to).lead++; continue; }
     get(from).out++;
     get(to).in++;
+    if (t.kind === 'lead') { get(from).lead++; get(to).lead++; }
     if (t.kind === 'in-season') { get(from).mid++; get(to).mid++; }
   }
   for (const v of m.values()) v.net = v.in - v.out;
@@ -2973,16 +2983,18 @@ function tvClubTotals(rows) {
 }
 
 // A club's own flows: who it lost players to, and who it took them from.
+// ⚠️ LEADS ARE DRAWN. They were skipped on the grounds that a registration has
+// "no destination team" — but the diagram is about CLUBS, and a lead names its
+// club; that is the entire content of a lead. Skipping them left Norwood's IN
+// side empty while 25 players were arriving, and drew 5 bands for 44 rows.
 function tvFlowsFor(rows, club) {
   const out = new Map(), inn = new Map();
   let lead = 0;
   for (const t of rows) {
-    if (t.kind === 'lead') {
-      if (t.fromClubName === club || t.toClubName === club) lead++;
-      continue;
-    }
-    if (t.fromClubName === club) out.set(t.toClubName || '?', (out.get(t.toClubName || '?') || 0) + 1);
-    if (t.toClubName === club) inn.set(t.fromClubName || '?', (inn.get(t.fromClubName || '?') || 0) + 1);
+    const isFrom = t.fromClubName === club, isTo = t.toClubName === club;
+    if (t.kind === 'lead' && (isFrom || isTo)) lead++;
+    if (isFrom) out.set(t.toClubName || '?', (out.get(t.toClubName || '?') || 0) + 1);
+    if (isTo) inn.set(t.fromClubName || '?', (inn.get(t.fromClubName || '?') || 0) + 1);
   }
   const sort = (m) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   return { out: sort(out), in: sort(inn), lead };
@@ -3174,8 +3186,9 @@ function renderTransfers() {
           ? tvFlowSVG(S.transferFlow, flows)
           : '<div class="tv-note">No moves in or out under the current filters.</div>') +
         (flows.lead
-          ? '<div class="tv-note">' + flows.lead + ' registered with no team yet — not drawn, ' +
-            'because a registration has no season and no destination team.</div>'
+          ? '<div class="tv-note">Of these, <b>' + flows.lead + '</b> are registrations ' +
+            'PlayHQ has not yet placed in a team. They are drawn like any other ' +
+            'move — the club is known, only the team is not.</div>'
           : '') +
         '</div>');
     }
@@ -3197,8 +3210,8 @@ function renderTransfers() {
       th('out', 'OUT', 'Players who left. Click to sort.') +
       th('in', 'IN', 'Players who joined. Click to sort.') +
       th('net', 'NET', 'IN minus OUT. Click to sort.') +
-      th('mid', 'MID', 'Of those moves, the ones inside a season rather than between two. Click to sort.') +
-      th('lead', 'NO TEAM', 'Registered with a club but not yet placed in a team. Not counted in OUT or IN. Click to sort.') +
+      th('mid', 'MID', 'A SUBSET of OUT and IN: the moves inside a season rather than between two. Click to sort.') +
+      th('lead', 'NO TEAM', 'A SUBSET of OUT and IN: registered with a club but not yet placed in a team. Click to sort.') +
       '</tr></thead><tbody>' +
       rows.map(r => '<tr>' +
         '<td onclick="openTransferFlow(' + "'" + tvEsc(String(r.club).replace(/'/g, "\\'")) + "'" + ')" ' +
@@ -3211,9 +3224,10 @@ function renderTransfers() {
     parts.push('<div class="tv-note">Click a club to see where its players came ' +
       'from and went to, or a column heading to sort by it. OUT and IN count ' +
       'the same move twice — once for each club — so the columns do not sum to ' +
-      'the number of rows in the list. <b>NO TEAM</b> is counted in neither: ' +
-      'a registration with no team yet has no season and no destination team, ' +
-      'and it is usually the largest column before a league grades its sides.</div>');
+      'the number of rows in the list. <b>NO TEAM</b> and <b>MID</b> are ' +
+      'SUBSETS of those two, not extra columns: NO TEAM is how many are ' +
+      'registrations not yet placed in a team, which is most of them until a ' +
+      'league grades its sides.</div>');
     body.innerHTML = parts.join('');
     return;
   }
@@ -8507,13 +8521,19 @@ const HELP = [
       It defaults to the newest season, which is the one registrations are open
       for. <b>All seasons</b> is there if you want it.<br><br>
       <b>Summary</b> turns the same filtered rows into one line per club: how
-      many left, how many joined, the net, how many of those were mid-season,
-      and how many have registered with no team yet. OUT and IN count the same
+      many left, how many joined and the net. <b>MID</b> and <b>NO TEAM</b> are
+      SUBSETS of those — how many of the same rows are mid-season moves, and how
+      many are registrations PlayHQ has not yet placed in a team — not separate
+      buckets. They are counted exactly as the list counts them, so the heading
+      above a club's list and its row in this table always agree.
+      OUT and IN count the same
       move twice, once for each club, so they do not add up to the number of
       rows in the list. Clicking a club draws its flows — where its players came
       from on the left, where they went on the right, band thickness in
       proportion to the number of players, and the smallest sources and
-      destinations grouped into a named remainder rather than dropped.<br><br>
+      destinations grouped into a named remainder rather than dropped.
+      Registrations with no team yet are drawn like any other move: the diagram
+      is about clubs, and a registration names its club.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
