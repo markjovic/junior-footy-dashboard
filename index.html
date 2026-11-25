@@ -762,7 +762,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.20</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.21</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1271,7 +1271,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.20</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.21</span>
         </div>
 
 
@@ -3092,6 +3092,35 @@ function renderTransfers() {
     return;
   }
 
+  // ⚠️ DIRECTION, THEN AGE, THEN NAME — and the direction is relative to the
+  // CLUB THE GROUP IS ABOUT, not to the row. CLUB LEFT puts that club's
+  // departures first, CLUB JOINED its arrivals; both groups hold the same rows.
+  //
+  // ⚠️ A LEAD GOES LAST. It has no season and no date, so it is neither an in
+  // nor an out, and sorting it as one would assert a direction the data does
+  // not carry.
+  //
+  // Age uses rvAgeRank, so U9 precedes U10 here exactly as in ROSTERS. A plain
+  // string sort puts U10 before U9.
+  const tvRowOrder = (club, ignoreDirection, inFirst) => (a, b) => {
+    if (!ignoreDirection) {
+      // IN or OUT relative to THIS GROUP'S club, never to the row. `inFirst`
+      // is what CLUB JOINED now changes: the group holds the same rows either
+      // way, and only the order moves.
+      const dir = (t) => t.kind === 'lead' ? 2
+        : (t.toClubName === club) === !!inFirst ? 0 : 1;
+      const d = dir(a) - dir(b);
+      if (d) return d;
+    } else if ((a.kind === 'lead') !== (b.kind === 'lead')) {
+      return a.kind === 'lead' ? 1 : -1;
+    }
+    const ra = rvAgeRank(a.age), rb = rvAgeRank(b.age);
+    if (ra !== rb) return ra - rb;
+    const sa = String(a.age || ''), sb = String(b.age || '');
+    if (sa !== sb) return sa.localeCompare(sb);
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  };
+
   const rowHtml = (t) => {
     const kind = t.kind === 'in-season'
       ? '<span class="tv-tag tv-mid">mid-season</span>'
@@ -3135,30 +3164,33 @@ function renderTransfers() {
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
       .map(rowHtml).join(''));
   } else {
-    // ⚠️ GROUPED BY WHICHEVER SIDE WAS ASKED FOR. A club losing players and a
-    // club gaining them are two different questions, and the same row answers
-    // only one of them at a time.
     const byJoined = S.transferSort === 'in';
     const byComp = S.transferSort === 'comp';
     const byGrade = S.transferSort === 'grade';
-    const keyOf = (t) => (byComp ? (t.fromComp || '(competition unknown)')
-      : byGrade ? (t.age || '(grade unknown)')
-      : byJoined ? t.toClubName : t.fromClubName) || '(club unknown)';
-    // Arrivals only mean something when the grouping is a CLUB. Grouping by
-    // competition or grade, an "in" count would be the same number twice.
-    const otherOf = (t) => (byComp || byGrade) ? null
-      : (byJoined ? t.fromClubName : t.toClubName) || '(club unknown)';
+    // ⚠️ A CLUB GROUP HOLDS BOTH DIRECTIONS. Until v1.21 a group keyed on
+    // `fromClubName` held departures ONLY, while the header carried a "· 44 in"
+    // taken from a separate tally across the WHOLE list — so Norwood announced
+    // 44 arrivals and showed none of them; those rows were filed under whichever
+    // club each player came from. The header described a set the list did not
+    // contain. A move now appears under BOTH clubs, which is the same rule the
+    // SUMMARY table states: OUT and IN count one move twice, once per club.
+    //
+    // CLUB LEFT and CLUB JOINED still differ — they decide which direction is
+    // listed FIRST inside each group, not which rows exist.
+    const keysOf = (t) => {
+      if (byComp) return [t.fromComp || '(competition unknown)'];
+      if (byGrade) return [t.age || '(grade unknown)'];
+      const a = t.fromClubName || '(club unknown)';
+      const b = t.toClubName || '(club unknown)';
+      // A move inside one club is one row in one group, never two.
+      return a === b ? [a] : [a, b];
+    };
     const groups = new Map();
     for (const t of shown) {
-      const k = keyOf(t);
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(t);
-    }
-    const arrivals = new Map();
-    for (const t of shown) {
-      const k = otherOf(t);
-      if (k === null) continue;
-      arrivals.set(k, (arrivals.get(k) || 0) + 1);
+      for (const k of keysOf(t)) {
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(t);
+      }
     }
     // Alphabetical by club. A list people scan for a club they know must be in
     // the order they would look it up in, not ranked by a count.
@@ -3170,14 +3202,31 @@ function renderTransfers() {
       }
       return String(a[0]).localeCompare(String(b[0]));
     })) {
-      const ld = list.filter(t => t.kind === 'lead').length;
+      // ⚠️ ONE COUNTING RULE FOR THE WHOLE LINE, AND IT COUNTS THIS GROUP.
+      // Until v1.21 the "out" figure excluded leads while the "in" figure did
+      // not, so one header line applied two rules. Leads are excluded from both
+      // and reported on their own, because a lead has no season and no date and
+      // is therefore neither an arrival nor a departure.
+      const moves = list.filter(t => t.kind !== 'lead');
+      const ld = list.length - moves.length;
+      // ⚠️ A MOVE WITH THE SAME CLUB ON BOTH SIDES IS NEITHER. It cannot occur
+      // in PlayHQ data — a transfer is between two clubs — but counting it as an
+      // arrival, which is what `toClubName === club` alone did, would inflate IN
+      // by exactly the number of rows the header is meant to account for.
+      const within = (byComp || byGrade) ? 0
+        : moves.filter(t => t.fromClubName === t.toClubName).length;
+      const cIn = (byComp || byGrade) ? 0 : moves.filter(t =>
+        t.toClubName === club && t.fromClubName !== t.toClubName).length;
+      const cOut = (byComp || byGrade) ? 0 : moves.filter(t =>
+        t.fromClubName === club && t.fromClubName !== t.toClubName).length;
       parts.push('<div class="tv-club">' + tvEsc(club) +
-        '<span class="tv-count">' + (list.length - ld) +
-        ((byComp || byGrade) ? ' with a team' : byJoined ? ' in' : ' out') +
-        (arrivals.get(club) ? ' · ' + arrivals.get(club) + (byJoined ? ' out' : ' in') : '') +
+        '<span class="tv-count">' +
+        ((byComp || byGrade)
+          ? moves.length + ' with a team'
+          : (byJoined ? cIn + ' in · ' + cOut + ' out' : cOut + ' out · ' + cIn + ' in')) +
+        (within ? ' · ' + within + ' within the club' : '') +
         (ld ? ' · ' + ld + ' registered, no team' : '') + '</span></div>');
-      parts.push(list.slice()
-        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+      parts.push(list.slice().sort(tvRowOrder(club, byComp || byGrade, byJoined))
         .map(rowHtml).join(''));
     }
   }
@@ -8289,6 +8338,13 @@ const HELP = [
       finished in U12 and has registered for next year is listed under U12.
       <b>Club</b> works the same way as competition: either side of the move.
       <br><br>
+      <b>A club heading lists BOTH directions.</b> Everything that club lost and
+      everything it gained sits under its name, ordered by direction, then age,
+      then player. <b>Club left</b> puts its departures first and <b>Club
+      joined</b> its arrivals — the same rows either way, only the order moves.
+      A move therefore appears twice in the list, once under each club, which is
+      the same rule the summary table states. Until v1.21 the heading said
+      something like “10 out · 44 in” while listing only the ten.<br><br>
       <b>Summary</b> turns the same filtered rows into one line per club: how
       many left, how many joined, the net, how many of those were mid-season,
       and how many have registered with no team yet. OUT and IN count the same
