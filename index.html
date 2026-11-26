@@ -777,7 +777,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.39</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.40</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1292,7 +1292,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.39</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.40</span>
         </div>
 
 
@@ -2911,11 +2911,12 @@ function loadTransfers() {
 function setTransferSearch(v) { S.transferSearch = String(v || ''); renderTransfers(); }
 function setTransferSort(v) {
   S.transferSort = v;
-  ['out','in','comp','grade','name'].forEach(k => {
-    const b = document.getElementById('tvs-' + k);
-    if (b) b.classList.toggle('on', k === v);
-  });
+  syncTransferToggles();
   renderTransfers();
+  // ⚠️ THE SORT TRAVELS. buildHash has emitted `to` since v1.33 but nothing
+  // ever called syncURL after a sort, so the key could only ever appear in a
+  // link that was already being rebuilt for some other reason.
+  syncURL();
 }
 function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); syncURL(); }
 // '\u0000' is the "All seasons" option. A plain '' cannot be used because ''
@@ -2954,12 +2955,28 @@ function setTransferTeam(v) {
   renderTransfers();
   syncURL();
 }
+// ⚠️ ONE WRITER FOR EVERY TRANSFERS TOGGLE, and the URL reader calls it too.
+// Each of the three button rows used to be painted by its own setter, and the
+// `on` class in the HTML was the only thing that ran on load. So a link
+// carrying tv=summary rendered the SUMMARY — which has no player rows at all —
+// underneath a LIST button that was still lit, and the page read as a list
+// that had lost every arrival. Same for tk and to. State is the truth; the
+// buttons are drawn from it, never the other way round.
+function syncTransferToggles() {
+  const on = (id, yes) => {
+    const b = document.getElementById(id);
+    if (b) b.classList.toggle('on', !!yes);
+  };
+  ['out','in','comp','grade','name'].forEach(k =>
+    on('tvs-' + k, k === S.transferSort));
+  [['all','tvk-all'],['between','tvk-between'],['in-season','tvk-in'],
+   ['lead','tvk-lead']].forEach(([k, id]) => on(id, k === S.transferKind));
+  on('tvv-list', S.transferView !== 'summary');
+  on('tvv-summary', S.transferView === 'summary');
+}
 function setTransferView(v) {
   S.transferView = v;
-  [['list','tvv-list'],['summary','tvv-summary']].forEach(([k, id]) => {
-    const b = document.getElementById(id);
-    if (b) b.classList.toggle('on', k === v);
-  });
+  syncTransferToggles();
   renderTransfers();
   syncURL();
 }
@@ -2985,13 +3002,14 @@ function resetTransferFilters() {
   setTransferKind('all');
 }
 
+// ⚠️ 'lead' WAS MISSING FROM THIS LIST, so clicking NO TEAM YET filtered the
+// rows and left ALL lit — the one case where the buttons disagreed with the
+// view even without a URL in play.
 function setTransferKind(v) {
   S.transferKind = v;
-  [['all','tvk-all'],['between','tvk-between'],['in-season','tvk-in']].forEach(([k, id]) => {
-    const b = document.getElementById(id);
-    if (b) b.classList.toggle('on', k === v);
-  });
+  syncTransferToggles();
   renderTransfers();
+  syncURL();
 }
 
 // ⚠️ THE SEASON A ROW BELONGS TO — THE ONE BEING MOVED INTO, NOT OUT OF.
@@ -10454,7 +10472,7 @@ async function init() {
     // The club, competition and age are free text — they are matched against
     // the data at render time and simply find nothing if wrong, which the
     // "Nothing matches" line already explains.
-    if (S.view === 'transfers') applyTransferURL(_url);
+    if (S.view === 'transfers') { applyTransferURL(_url); syncTransferToggles(); }
     if (QTR_MODES.includes(_url.q)) S.qtrMode = _url.q;
     if (S.view === 'finals') {
       if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
@@ -10556,7 +10574,7 @@ async function init() {
       S.rosterAge = (S.view === 'rosters' && u.ra) ? u.ra : '';
       S.rosterGrade = (S.view === 'rosters' && u.rg) ? u.rg : '';
       resetTransferState();
-      if (S.view === 'transfers') applyTransferURL(u);
+      if (S.view === 'transfers') { applyTransferURL(u); syncTransferToggles(); }
       S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'cum';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
