@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v19 2026-11-26 permit-home-club';
+const VERSION = 'build-transfers v20 2026-11-26 why-undecidable';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -403,6 +403,11 @@ function main() {
   //   permit  two, and exactly one is the club whose team they played for
   //   unknown two, and the played club matches neither or both — left alone
   let permitResolved = 0, permitUnknown = 0, permitMulti = 0, permitReturned = 0;
+  // ⚠️ "UNDECIDABLE" WAS ONE COUNTER FOR THREE DIFFERENT FAILURES, and on the
+  // first real run it read 127 of 142 with no way to tell which. A single
+  // number that cannot be acted on is barely better than no number.
+  const permitWhy = { noPlayed: 0, matchedNone: 0, matchedAll: 0 };
+  const permitSamples = [];
   let regFileVersion = 0;
   // club name -> players who turned out for its teams on a permit and have
   // gone somewhere other than it. Not transfers; the club lost them anyway.
@@ -413,12 +418,33 @@ function main() {
       host: null, why: 'single' };
     if (!list || list.length < 2) return fallback;
     permitMulti++;
-    const played = (lastPlayed.get(uuid) || {}).clubId || null;
-    if (!played) { permitUnknown++; return { ...fallback, why: 'unknown' }; }
+    const lpRec = lastPlayed.get(uuid) || {};
+    const played = lpRec.clubId || null;
+    const sample = (why) => {
+      if (permitSamples.length < 8) {
+        permitSamples.push(`${why}: ${(playerInfo.get(uuid) || {}).name || uuid}` +
+          `  played=${played || '(none)'} "${lpRec.team || ''}"` +
+          `  registered=[${list.map(x => x.id).join(', ')}]`);
+      }
+    };
+    if (!played) {
+      permitUnknown++; permitWhy.noPlayed++; sample('no played club');
+      return { ...fallback, why: 'unknown' };
+    }
     const other = list.filter(x => x.id !== played);
     // Exactly one registration that is NOT the club they played for: that is
     // home. Any other shape is not decidable here and must not be guessed.
-    if (other.length !== 1) { permitUnknown++; return { ...fallback, why: 'unknown' }; }
+    if (other.length === list.length) {
+      // The club whose team they played for is not among their registrations
+      // at all. Either the ids are from different spaces, or they played for a
+      // club they never registered with — which should not happen.
+      permitUnknown++; permitWhy.matchedNone++; sample('played club not registered');
+      return { ...fallback, why: 'unknown' };
+    }
+    if (other.length !== 1) {
+      permitUnknown++; permitWhy.matchedAll++; sample('more than one left over');
+      return { ...fallback, why: 'unknown' };
+    }
     permitResolved++;
     return { id: other[0].id, name: other[0].name || clubLabel(other[0].id),
       host: played, why: 'permit' };
@@ -811,6 +837,17 @@ function main() {
       log(`  players with two cohort-season registrations : ${permitMulti}`);
       log(`    home club resolved from the played club    : ${permitResolved}`);
       log(`    UNDECIDABLE, left as they were             : ${permitUnknown}`);
+      log(`      no played club on record                 : ${permitWhy.noPlayed}`);
+      log(`      played club is not one they registered with : ${permitWhy.matchedNone}`);
+      log(`      more than one registration left over     : ${permitWhy.matchedAll}`);
+      for (const l of permitSamples) log(`      ${l}`);
+      if (permitWhy.matchedNone > permitResolved) {
+        log('      ⚠️ THE DOMINANT CAUSE IS A CLUB THEY NEVER REGISTERED WITH.');
+        log('         `lastPlayed.clubId` comes from the season files and');
+        log('         `from.clubs[].id` from PlayHQ. If these were the same id');
+        log('         space this would be rare, so suspect they are not before');
+        log('         suspecting the data.');
+      }
       log(`  rows suppressed — a permit player going home : ${permitReturned}`);
       if (permitMulti && !permitResolved) {
         log('  ⚠️ NOT ONE RESOLVED. The rule compares organisation ids:');
@@ -908,6 +945,7 @@ function main() {
   out.coverage.permitMulti = permitMulti;
   out.coverage.permitResolved = permitResolved;
   out.coverage.permitUnknown = permitUnknown;
+  out.coverage.permitWhy = { ...permitWhy };
   out.coverage.permitReturned = permitReturned;
   out.permitAway = Object.fromEntries([...permitAway.entries()].sort((a, b) => b[1] - a[1]));
   out.coverage.leadsUnknownOrg = leadsUnknownOrg;
