@@ -41,11 +41,19 @@ const log = (...a) => console.log(...a);
 const TABLE = {
   'concurrent-comps':       { args: { org: ['PROBE_ORG', '1cf85e52'], season: ['PROBE_SEASON', '4dfaaab5'], age: ['PROBE_AGE', 'U10'], max_calls: ['PROBE_MAX_CALLS', '120'] } },
   'finals-rounds':          { args: { comp: ['IN_COMP', ''], age: ['IN_AGE', ''], grade_id: ['IN_GRADE_ID', ''], limit: ['IN_LIMIT', '0'], fixtures: ['IN_FIXTURES', 'false'], fixture_cap: ['IN_FIXTURE_CAP', '5'], cooldown_every: ['IN_COOLDOWN_EVERY', '60'], cooldown_seconds: ['IN_COOLDOWN_SECONDS', '30'], all_rounds: ['IN_ALL_ROUNDS', 'false'] } },
-  // ⚠️ ITS OWN WORKFLOW PASSED NOTHING. probe-fixture-watch-afl.yml declares
-  // four inputs and has no env block at all, so every value typed into that
-  // form was discarded and the script ran on its defaults. The env names below
-  // are the script's own; see the note printed when this probe is selected.
-  'fixture-watch-afl':      { args: { players: ['PFW_PLAYERS', ''], tenant: ['PFW_TENANT', 'afl'], delay_ms: ['PFW_DELAY_MS', '400'], grade: ['PFW_GRADE', ''] }, unverified: true },
+  // ⚠️ THIS ONE TAKES COMMAND-LINE ARGUMENTS, NOT ENVIRONMENT VARIABLES.
+  // `const argOf = (name, dflt) => args.find(x => x.startsWith(`--${name}=`))`
+  // — it reads `--players=…`, and that is precisely why its own workflow had
+  // no env block and why every value typed into that form was discarded: the
+  // form had no way to reach the script at all.
+  //
+  // ⚠️ AND THE FLAG IS `--delay`, NOT `--delay_ms`. The input keeps the name
+  // the old form used so anything written down still works; `cli` is what it
+  // is actually passed as.
+  'fixture-watch-afl': {
+    cli: { players: ['players', ''], tenant: ['tenant', 'afl'],
+           delay_ms: ['delay', '400'], grade: ['grade', ''] },
+  },
   'game-fields':            { args: { game: ['PROBE_GAME', ''] } },
   'last-interacted':        { args: { sample: ['PL_SAMPLE', '40'], pace_ms: ['PL_PACE_MS', '900'] } },
   'leftovers':              { args: { season: ['PL_SEASON', ''] } },
@@ -78,16 +86,16 @@ function table() {
   log('─────────────────────────  ──────────────────────────────────────────────────');
   for (const name of Object.keys(TABLE).sort()) {
     const t = TABLE[name];
-    const as = Object.entries(t.args)
+    const as = Object.entries(t.args || t.cli)
       .map(([k, [, d]]) => d === '' ? k : `${k}=${d}`).join('  ');
     log(`${name.padEnd(26)} ${as || '(none)'}`);
     if (!fs.existsSync(path.join(ROOT, t.script))) {
       log(`${' '.repeat(26)} ⚠️ ${t.script} is NOT in this checkout`);
     }
-    if (t.unverified) {
-      log(`${' '.repeat(26)} ⚠️ its old workflow passed NO inputs at all, so these`);
-      log(`${' '.repeat(26)}    env names have never been exercised — check the`);
-      log(`${' '.repeat(26)}    script's own header before trusting them`);
+    if (t.cli) {
+      log(`${' '.repeat(26)} (passed on the command line, not as env — its own`);
+      log(`${' '.repeat(26)}  workflow had no env block, which is why nothing`);
+      log(`${' '.repeat(26)}  typed into that form ever reached the script)`);
     }
   }
   log('');
@@ -136,18 +144,12 @@ if (parsed.error) {
 // ⚠️ AN UNKNOWN KEY IS A FAILURE, NOT A SHRUG. A typo that is ignored runs the
 // probe on its defaults and the output looks like a real answer to the
 // question you thought you asked.
-const bad = [...parsed.out.keys()].filter(k => !(k in def.args));
+const accepts = def.args || def.cli;
+const bad = [...parsed.out.keys()].filter(k => !(k in accepts));
 if (bad.length) {
   log(`⚠️ ${probe} does not take: ${bad.join(', ')}`);
-  log(`   it accepts: ${Object.keys(def.args).join(', ') || '(none)'}`);
+  log(`   it accepts: ${Object.keys(accepts).join(', ') || '(none)'}`);
   process.exit(1);
-}
-// ⚠️ BEFORE THE EXISTENCE CHECK. A caveat about a probe is worth saying even
-// when the probe turns out not to be in the checkout, and burying it after an
-// early exit is how a warning never fires.
-if (def.unverified) {
-  log('⚠️ THIS PROBE\'S OLD WORKFLOW PASSED NO INPUTS. Its env names here are');
-  log('   taken from the script and have never been exercised by a dispatch.');
 }
 const script = path.join(ROOT, def.script);
 if (!fs.existsSync(script)) {
@@ -156,21 +158,26 @@ if (!fs.existsSync(script)) {
 }
 
 const env = { ...process.env, ...(def.env || {}) };
+const argv = [];
 const shown = [];
-for (const [key, [varName, dflt]] of Object.entries(def.args)) {
+for (const [key, [target, dflt]] of Object.entries(accepts)) {
   const given = parsed.out.has(key);
   const val = given ? parsed.out.get(key) : dflt;
-  // Blank defaults are NOT exported, so the script sees "unset" and uses its
-  // own default rather than an empty string, which several read differently.
+  // A blank default is NOT passed at all, so the script sees "unset" and uses
+  // its own default rather than an empty string, which several read
+  // differently. Same rule for both styles.
   if (val === '' && !given) continue;
-  env[varName] = val;
+  // ⚠️ `--name=value` AS ONE ARGV ENTRY. spawnSync with an array does no shell
+  // parsing, so a value containing spaces or a pipe arrives whole and nothing
+  // needs quoting.
+  if (def.cli) argv.push(`--${target}=${val}`); else env[target] = val;
   shown.push(`${key}=${JSON.stringify(val)}${given ? '' : ' (default)'}`);
 }
-log(`probe: ${probe}   ->   ${def.script}`);
+log(`probe: ${probe}   ->   ${def.script}${def.cli ? '   (command-line args)' : ''}`);
 log(`args : ${shown.join('   ') || '(none)'}`);
 log('');
 
-const r = spawnSync(process.execPath, [script], { stdio: 'inherit', env, cwd: ROOT });
+const r = spawnSync(process.execPath, [script, ...argv], { stdio: 'inherit', env, cwd: ROOT });
 if (r.error) { log(`⚠️ could not start ${def.script}: ${r.error.message}`); process.exit(1); }
 // ⚠️ THE PROBE'S EXIT CODE IS OURS. Swallowing it would turn a failed probe
 // into a green run.
