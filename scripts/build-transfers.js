@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v21 2026-11-26 one-club-is-one-club';
+const VERSION = 'build-transfers v22 2026-11-26 count-both-halves';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -842,42 +842,6 @@ function main() {
     log(`  never checked                                   : ${notWalked}`);
     log(`  moves found : ${between.length}`);
     // ── permit reverts, docs/permit_revert_design.md ──────────────────────
-    if (regFileVersion && regFileVersion < 4) {
-      log(`  ⚠️ registrations file is version ${regFileVersion}; from.clubs arrives at`);
-      log('     version 4. NO PERMIT CORRECTION HAS BEEN APPLIED — a permit player');
-      log('     returning to their home club is still counted as a departure from');
-      log('     the club whose team they played for. Run walk-registrations v14+.');
-    } else {
-      log(`  players holding the SAME club more than once : ${permitDuped}` +
-        ' (a lightning premiership or similar, not a permit)');
-      log(`  players with two DIFFERENT cohort-season clubs : ${permitMulti}`);
-      log(`    home club resolved from the played club    : ${permitResolved}`);
-      log(`    UNDECIDABLE, left as they were             : ${permitUnknown}`);
-      log(`      no played club on record                 : ${permitWhy.noPlayed}`);
-      log(`      played club is not one they registered with : ${permitWhy.matchedNone}`);
-      log(`      more than one registration left over     : ${permitWhy.matchedAll}`);
-      for (const l of permitSamples) log(`      ${l}`);
-      if (permitWhy.matchedNone > permitResolved) {
-        log('      ⚠️ THE DOMINANT CAUSE IS A CLUB THEY NEVER REGISTERED WITH.');
-        log('         `lastPlayed.clubId` comes from the season files and');
-        log('         `from.clubs[].id` from PlayHQ. If these were the same id');
-        log('         space this would be rare, so suspect they are not before');
-        log('         suspecting the data.');
-      }
-      log(`  rows suppressed — a permit player going home : ${permitReturned}`);
-      if (permitMulti && !permitResolved) {
-        log('  ⚠️ NOT ONE RESOLVED. The rule compares organisation ids:');
-        log('     from.clubs[].id against lastPlayed.clubId. A zero here means one');
-        log('     side is empty or they are different id spaces — not that permits');
-        log('     have stopped existing.');
-      }
-      if (permitAway.size) {
-        log('  permit players who did NOT return, by the club they played for:');
-        for (const [k, v] of [...permitAway.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
-          log(`    ${String(v).padStart(4)}  ${k}`);
-        }
-      }
-    }
     if (staleCheck + notWalked > 0) {
       log(`  ⚠️ ${staleCheck + notWalked} player(s) are UNKNOWN, not "stayed". This count is a FLOOR`);
       log('     until the walk reaches them.');
@@ -942,6 +906,51 @@ function main() {
   log(`  skipped, destination runs carnivals rather than a season : ${leadsSkippedEvent}`);
   log('  ⚠️ NOT TRANSFERS. No season, no date — they say only that PlayHQ now');
   log('     lists the player somewhere else, and are never counted as moves.');
+
+  // ── permits, docs/permit_revert_design.md ───────────────────────────────
+  // ⚠️ REPORTED AFTER THE LEADS LOOP, AND THAT MATTERS. These counters are
+  // incremented by BOTH halves — between-season and leads — and this block
+  // used to sit inside the between-season section, so every permit figure in
+  // the log was the first half only while the page (out.coverage, below) got
+  // the full count. Two numbers for one thing, and the one a human reads was
+  // the wrong one.
+  log('\n── permits ──');
+  if (regFileVersion && regFileVersion < 4) {
+    log(`  ⚠️ registrations file is version ${regFileVersion}; from.clubs arrives at`);
+    log('     version 4. NO PERMIT CORRECTION HAS BEEN APPLIED — a permit player');
+    log('     returning to their home club is still counted as a departure from');
+    log('     the club whose team they played for. Run walk-registrations v14+.');
+  } else {
+    log(`  players holding the SAME club more than once : ${permitDuped}` +
+      ' (a lightning premiership or similar, not a permit)');
+    log(`  players with two DIFFERENT cohort-season clubs : ${permitMulti}`);
+    log(`    home club resolved from the played club    : ${permitResolved}`);
+    log(`    UNDECIDABLE, left as they were             : ${permitUnknown}`);
+    log(`      no played club on record                 : ${permitWhy.noPlayed}`);
+    log(`      played club is not one they registered with : ${permitWhy.matchedNone}`);
+    log(`      more than one registration left over     : ${permitWhy.matchedAll}`);
+    for (const l of permitSamples) log(`      ${l}`);
+    if (permitWhy.matchedNone > permitResolved) {
+      log('      ⚠️ THE DOMINANT CAUSE IS A CLUB THEY NEVER REGISTERED WITH.');
+      log('         `lastPlayed.clubId` comes from the season files and');
+      log('         `from.clubs[].id` from PlayHQ. If these were the same id');
+      log('         space this would be rare, so suspect they are not before');
+      log('         suspecting the data.');
+    }
+    log(`  rows suppressed — a permit player going home : ${permitReturned}`);
+    if (permitMulti && !permitResolved) {
+      log('  ⚠️ NOT ONE RESOLVED. The rule compares organisation ids:');
+      log('     from.clubs[].id against lastPlayed.clubId. A zero here means one');
+      log('     side is empty or they are different id spaces — not that permits');
+      log('     have stopped existing.');
+    }
+    if (permitAway.size) {
+      log('  permit players who did NOT return, by the club they played for:');
+      for (const [k, v] of [...permitAway.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+        log(`    ${String(v).padStart(4)}  ${k}`);
+      }
+    }
+  }
 
   const out = {
     version: 1,
