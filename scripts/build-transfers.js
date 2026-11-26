@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v24 2026-11-26 sample-wording';
+const VERSION = 'build-transfers v25 2026-11-26 not-started-seasons';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -154,6 +154,32 @@ function loadLines(sid) {
   if (!fs.existsSync(p)) return null;
   try { return JSON.parse(zlib.gunzipSync(fs.readFileSync(p)).toString('utf8')); }
   catch (e) { console.error(`  ⚠️ ${path.basename(p)}: ${e.message}`); return null; }
+}
+
+// ⚠️ "NO LINES FILE" IS TWO DIFFERENT FACTS, and the view was reporting them
+// as one. A season nobody has played yet has no per-game lines because there
+// are no games; a season that HAS been played and whose lines we do not hold
+// is a real gap. Both landed in seasonsWithoutLines, so the transfers view
+// warned "mid-season moves cannot be seen in EFNL 2027" all through the
+// registration window, when there was nothing to see.
+//
+// The test is the same one discover-seasons' backstop uses: a match that is
+// not `scheduled: true` and carries a date is a played game. `date` is '' on
+// byes and partial records. Compared as a string, never new Date(str).
+//
+// A missing or unreadable core file counts as NOT STARTED: a season nothing
+// has ever fetched cannot be evidence of a gap in what we hold.
+function seasonHasResult(sid) {
+  const p = path.join(store.SEASONS_DIR, `${sid}-core.json`);
+  if (!fs.existsSync(p)) return false;
+  let payload;
+  try { payload = JSON.parse(fs.readFileSync(p, 'utf8')); }
+  catch (e) { console.error(`  ⚠️ ${path.basename(p)}: ${e.message}`); return false; }
+  const matches = Array.isArray(payload.matches) ? payload.matches : [];
+  for (const m of matches) {
+    if (m && m.scheduled !== true && m.date) return true;
+  }
+  return false;
 }
 
 function main() {
@@ -520,11 +546,18 @@ function main() {
   }
   const gamesHistogram = new Map();   // games at the smaller club -> count
   const overlapHistogram = new Map(); // clean | interleaved | undated -> count
-  let seasonsWithLines = 0, seasonsWithout = [];
+  let seasonsWithLines = 0, seasonsWithout = [], seasonsNotStarted = [];
 
   for (const m of manifest) {
     const f = loadLines(m.seasonId);
-    if (!f) { seasonsWithout.push(m.compName); continue; }
+    if (!f) {
+      // Both lists are written. seasonsWithoutLines keeps its old meaning so
+      // nothing that reads it changes behaviour; seasonsNotStarted is the
+      // subset of it that is not a gap.
+      seasonsWithout.push(m.compName);
+      if (!seasonHasResult(m.seasonId)) seasonsNotStarted.push(m.compName);
+      continue;
+    }
     seasonsWithLines++;
 
     let md = new Map(), players = new Map(), roster = {};
@@ -723,8 +756,17 @@ function main() {
   log('── in-season ──');
   log(`  seasons with per-game lines : ${seasonsWithLines}`);
   if (seasonsWithout.length) {
-    log(`  seasons WITHOUT lines       : ${seasonsWithout.length} — no in-season move can be seen in them:`);
-    for (const c of seasonsWithout) log(`      ${c}`);
+    const started = seasonsWithout.filter(c => !seasonsNotStarted.includes(c));
+    log(`  seasons WITHOUT lines       : ${seasonsWithout.length} ` +
+        `(${started.length} played but not held, ${seasonsNotStarted.length} not yet played)`);
+    if (started.length) {
+      log('    PLAYED, LINES NOT HELD — in-season moves are MISSING from these:');
+      for (const c of started) log(`      ${c}`);
+    }
+    if (seasonsNotStarted.length) {
+      log('    not yet played — no dated result stored, so there is nothing to miss:');
+      for (const c of seasonsNotStarted) log(`      ${c}`);
+    }
   }
   log(`  club lookups                : ${lookupHit} resolved, ${lookupMiss} unresolved`);
   const missRate = lookupHit + lookupMiss ? lookupMiss / (lookupHit + lookupMiss) : 0;
@@ -1001,7 +1043,7 @@ function main() {
     builtAt: new Date().toISOString(),
     minGames: MIN_GAMES,
     coverage: {
-      seasonsWithLines, seasonsWithoutLines: seasonsWithout,
+      seasonsWithLines, seasonsWithoutLines: seasonsWithout, seasonsNotStarted,
       clubLookupsResolved: lookupHit, clubLookupsUnresolved: lookupMiss,
       betweenJudged: walked, betweenUnknown: staleCheck + notWalked,
     },
