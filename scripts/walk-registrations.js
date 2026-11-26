@@ -2,7 +2,7 @@
 // scripts/walk-registrations.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'walk-registrations v14 2026-11-26 every-cohort-club';
+const VERSION = 'walk-registrations v15 2026-11-26 dedupe-own-club';
 const FILE_VERSION = 4;
 
 //
@@ -495,7 +495,7 @@ async function main() {
   // ── Walk ────────────────────────────────────────────────────────────────────
   let answered = 0, notFound = 0, errored = 0;
   let clubsHarvested = 0, trackedFound = 0, otherFound = 0, noOwnRecord = 0;
-  let multiClub = 0, noOwnOrg = 0;
+  let multiClub = 0, noOwnOrg = 0, dupClub = 0;
   let lastOrgChanged = 0, lastOrgDiffers = 0, lastOrgSame = 0, lastOrgNull = 0;
   const rf = { set: 0, noFile: 0, alreadyHeld: 0, unreadable: 0, samples: [] };
   const errorSamples = [], noOwnSamples = [];
@@ -611,7 +611,22 @@ async function main() {
     // ⚠️ WRITTEN ONLY WHEN THE CALL ANSWERED. Clearing it on a failed call
     // would silently drop a player's second club and look like the permit
     // ending, which is the exact confusion this field exists to remove.
+    // ⚠️ THE SAME CLUB TWICE IS ONE CLUB. A player can hold several
+    // registrations with their OWN club inside one season id — a lightning
+    // premiership is the common case, its team name ending " - LP". Measured
+    // 2026-11-26: 125 of 127 players the permit rule could not decide were
+    // this, registered=[f9f163a0, f9f163a0].
+    //
+    // build-transfers dedupes as well, so an existing file is read correctly
+    // without a fresh walk; this stops the duplicates being written at all.
+    // ⚠️ DO NOT REMOVE EITHER ONE on the grounds that the other covers it:
+    // the reader protects old files, the writer keeps new ones clean, and a
+    // reader that trusts its input is how this defect reached production.
     if (Array.isArray(ownRecs) && ownRecs.length) {
+      const seenOrg = new Set();
+      const before = ownRecs.length;
+      ownRecs = ownRecs.filter(x => !seenOrg.has(x.id) && seenOrg.add(x.id));
+      if (ownRecs.length < before) dupClub++;
       rec.from.clubs = ownRecs;
       rec.from.club = ownRecs[0].id;
       rec.from.clubName = ownRecs[0].name;
@@ -707,6 +722,8 @@ async function main() {
   log('  ⚠️ A NOTE, NOT A REGISTRATION — it carries no season, so it is never');
   log('     counted in a transfer total. "DIFFERENT" is a lead to follow.');
   log(`clubs harvested this run: ${clubsHarvested}; with a next-season tracked registration: ${trackedFound}; with an outside one: ${otherFound}`);
+  log(`  ${dupClub} player(s) held the SAME club more than once — a lightning`);
+  log('     premiership or similar; deduped, because that is not a permit.');
   log(`cohort-season registrations per player: ${multiClub} player(s) hold MORE THAN ONE` +
     (noOwnOrg ? `; ${noOwnOrg} had their own season with no organisation on it` : ''));
   log('  ⚠️ MORE THAN ONE MEANS A PERMIT, not a transfer: the player is');

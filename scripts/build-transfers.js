@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v20 2026-11-26 why-undecidable';
+const VERSION = 'build-transfers v21 2026-11-26 one-club-is-one-club';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -403,6 +403,7 @@ function main() {
   //   permit  two, and exactly one is the club whose team they played for
   //   unknown two, and the played club matches neither or both — left alone
   let permitResolved = 0, permitUnknown = 0, permitMulti = 0, permitReturned = 0;
+  let permitDuped = 0;
   // ⚠️ "UNDECIDABLE" WAS ONE COUNTER FOR THREE DIFFERENT FAILURES, and on the
   // first real run it read 127 of 142 with no way to tell which. A single
   // number that cannot be acted on is barely better than no number.
@@ -413,7 +414,20 @@ function main() {
   // gone somewhere other than it. Not transfers; the club lost them anyway.
   const permitAway = new Map();
   const homeOf = (uuid, from) => {
-    const list = Array.isArray(from.clubs) ? from.clubs.filter(x => x && x.id) : null;
+    const raw = Array.isArray(from.clubs) ? from.clubs.filter(x => x && x.id) : null;
+    // ⚠️ TWO REGISTRATIONS WITH THE SAME CLUB ARE ONE CLUB. A player can hold
+    // several registrations with their OWN club inside one season id — the
+    // lightning premiership is the common case, and its team name carries
+    // " - LP". v20 measured the damage: 125 of 127 "undecidable" players were
+    // this, registered=[f9f163a0, f9f163a0]. Removing the played club from a
+    // list of two identical ids leaves nothing, and the rule declared a
+    // question unanswerable when there was never one to ask.
+    //
+    // Deduped by id, first occurrence wins — the team differs between them and
+    // nothing downstream reads it, so which one survives does not matter.
+    const seenIds = new Set();
+    const list = raw ? raw.filter(x => !seenIds.has(x.id) && seenIds.add(x.id)) : null;
+    if (raw && raw.length > (list ? list.length : 0)) permitDuped++;
     const fallback = { id: from.club, name: from.clubName || clubLabel(from.club),
       host: null, why: 'single' };
     if (!list || list.length < 2) return fallback;
@@ -834,7 +848,9 @@ function main() {
       log('     returning to their home club is still counted as a departure from');
       log('     the club whose team they played for. Run walk-registrations v14+.');
     } else {
-      log(`  players with two cohort-season registrations : ${permitMulti}`);
+      log(`  players holding the SAME club more than once : ${permitDuped}` +
+        ' (a lightning premiership or similar, not a permit)');
+      log(`  players with two DIFFERENT cohort-season clubs : ${permitMulti}`);
       log(`    home club resolved from the played club    : ${permitResolved}`);
       log(`    UNDECIDABLE, left as they were             : ${permitUnknown}`);
       log(`      no played club on record                 : ${permitWhy.noPlayed}`);
@@ -946,6 +962,7 @@ function main() {
   out.coverage.permitResolved = permitResolved;
   out.coverage.permitUnknown = permitUnknown;
   out.coverage.permitWhy = { ...permitWhy };
+  out.coverage.permitDuped = permitDuped;
   out.coverage.permitReturned = permitReturned;
   out.permitAway = Object.fromEntries([...permitAway.entries()].sort((a, b) => b[1] - a[1]));
   out.coverage.leadsUnknownOrg = leadsUnknownOrg;
