@@ -777,7 +777,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.38</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.39</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1292,7 +1292,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.38</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.39</span>
         </div>
 
 
@@ -3827,7 +3827,14 @@ function renderTransfers() {
   if (S.transferView === 'summary') {
     parts.push(flowPanel());
     const k = S.transferSumKey, dir = S.transferSumDir;
-    const rows = tvClubTotals(shown).sort((a, b) => {
+    // ⚠️ THE TABLE MUST OBEY THE CLUB BOX, like the list has since v1.22.
+    // Choosing Norwood narrowed the list to Norwood and left the table
+    // listing Heathmont, North Ringwood and everyone else Norwood had dealt
+    // with — the counterparties, directly under a panel headed Norwood. The
+    // rows were right; the question they answered was not the one asked.
+    const rows = tvClubTotals(shown)
+      .filter(r => !S.transferClub || r.club === S.transferClub)
+      .sort((a, b) => {
       if (k === 'club') return dir * a.club.localeCompare(b.club);
       // ⚠️ TIES BREAK ALPHABETICALLY, AND ALWAYS A–Z. Letting the direction
       // flip the tiebreak as well reverses whole blocks of equal numbers and
@@ -3856,7 +3863,12 @@ function renderTransfers() {
         '</tr>').join('') +
       '</tbody></table>');
     parts.push('<div class="tv-note">Click a club to see where its players came ' +
-      'from and went to, or a column heading to sort by it. OUT and IN count ' +
+      'from and went to, or a column heading to sort by it. ' +
+      (S.transferClub
+        ? 'Showing <b>' + tvEsc(S.transferClub) + '</b> alone, because it is ' +
+          'chosen in the club box; clear it to compare every club. '
+        : '') +
+      'OUT and IN count ' +
       'the same move twice — once for each club — so the columns do not sum to ' +
       'the number of rows in the list. <b>NO TEAM</b> and <b>MID</b> are ' +
       'SUBSETS of those two, not extra columns: NO TEAM is how many are ' +
