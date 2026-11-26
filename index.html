@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.30</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.31</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.30</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.31</span>
         </div>
 
 
@@ -3108,6 +3108,56 @@ function tvAgeSquadSize(compName, clubName, age) {
   return n > 0 ? n : null;
 }
 
+// Every age the club actually fielded last season, read from the roster. An
+// arrival is matched against THIS, not against the ages that happen to have
+// departures — otherwise an age group with arrivals and no departures would be
+// treated as foreign and swept into the pot.
+// Returns null when the roster is not held, and the caller then falls back to
+// the ages it can see.
+function tvClubAges(compName, clubName) {
+  const idx = tvRosterSeason(compName);
+  if (!idx) return null;
+  const d = S.rosterData[idx.sid];
+  if (!d) { loadRosterSeason(idx.sid); return null; }
+  const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
+  if (!club || !club.teams) return null;
+  const ages = new Set();
+  for (const list of Object.values(club.teams)) {
+    if (Array.isArray(list)) for (const r of list) if (r && r.a) ages.add(r.a);
+  }
+  return ages.size ? ages : null;
+}
+
+// ⚠️ ARRIVALS GROUPED BY THE AGE THEY ARRIVE AT, and the ones that do not line
+// up kept apart rather than forced into the nearest box. A player coming from
+// another competition carries that competition's age band — U17.5 against our
+// U17 — and quietly filing them under U17 would invent a match PlayHQ has not
+// made. `known` is the set of ages the club fielded; anything outside it, and
+// anything with no age at all, goes to the pot.
+const TV_POT = '\u0000pot';
+function tvInboundFlows(rows, club, known) {
+  const byAge = new Map();
+  for (const t of rows) {
+    if (t.toClubName !== club) continue;
+    const age = t.age || '';
+    const fits = age && (!known || known.has(age));
+    const k = fits ? age : TV_POT;
+    if (!byAge.has(k)) byAge.set(k, new Map());
+    const m = byAge.get(k), from = t.fromClubName || '?';
+    if (!m.has(from)) m.set(from, []);
+    m.get(from).push(t);
+  }
+  const outM = new Map();
+  for (const [k, m] of byAge) {
+    outM.set(k, {
+      total: [...m.values()].reduce((a, l) => a + l.length, 0),
+      srcs: [...m.entries()].map(([c, l]) => [c, l.length, l])
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    });
+  }
+  return outM;
+}
+
 // Age groups, each with the sides it fielded. The middle column of the
 // three-stage diagram hangs off this.
 function tvAgeGroups(teams) {
@@ -3152,64 +3202,119 @@ const TV_FLOW_MAX = 10;
 // in the middle; this puts one node per team the club fielded, so a side that
 // has gone somewhere together is a single thick band rather than 17 of 28
 // spread across a block.
-function tvTeamFlowSVG(club, teams, season) {
+function tvTeamFlowSVG(club, teams, season, inbound) {
   const e = tvEsc;
+  const IN = inbound || new Map();
   const groups = tvAgeGroups(teams);
+  const seen = new Set(groups.map(g => g.age));
+  // An age with arrivals and NO departures is still an age group of this club.
+  // Leaving it out would hide a pure gain entirely.
+  for (const k of IN.keys()) {
+    if (k !== TV_POT && !seen.has(k)) { groups.push({ age: k, teams: [], left: 0 }); seen.add(k); }
+  }
+  groups.sort((a, b) => tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)));
+  const pot = IN.get(TV_POT) || null;
+
   const dests = [...new Set(teams.flatMap(t => t.dests.map(d => d[0])))]
     .sort((a, b) => a.localeCompare(b));
-  const rowH = 30, padTop = 38, w = 940;
-  // ⚠️ THE TEAM COLUMN IS THE BACKBONE. Ages bracket their own teams and
-  // destinations take their own lanes, so the tallest of the three sets the
-  // height and nothing is drawn off the bottom.
-  const lanes = Math.max(teams.length, dests.length, 1);
+  const srcs = [...new Set([...IN.values()].flatMap(v => v.srcs.map(x => x[0])))]
+    .sort((a, b) => a.localeCompare(b));
+
+  // ⚠️ LANES ARE THE MIDDLE COLUMN. Each side gets one; an age with arrivals
+  // but no side gets one too, so its box has somewhere to sit, and the pot
+  // gets the last. Without a lane of their own those boxes stack on top of
+  // whatever is already at that y.
+  const lane = [];
+  for (const g of groups) {
+    if (g.teams.length) for (const t of g.teams) lane.push({ kind: 'team', team: t, age: g.age });
+    else lane.push({ kind: 'none', age: g.age });
+  }
+  if (pot) lane.push({ kind: 'pot' });
+
+  const rowH = 30, padTop = 38, w = 1180;
+  const lanes = Math.max(lane.length, dests.length, srcs.length, 1);
   const h = padTop + lanes * rowH + 22;
-  const maxN = Math.max(1, ...teams.flatMap(t => t.dests.map(d => d[1])));
+  const maxN = Math.max(1,
+    ...teams.flatMap(t => t.dests.map(d => d[1])),
+    ...[...IN.values()].flatMap(v => v.srcs.map(x => x[1])));
   const band = (n) => Math.max(1.5, (n / maxN) * 16);
-  const offT = ((lanes - teams.length) * rowH) / 2;
-  const offD = ((lanes - dests.length) * rowH) / 2;
-  const yT = (i) => padTop + i * rowH + rowH / 2 + offT;
-  const yD = (j) => padTop + j * rowH + rowH / 2 + offD;
-  const xA0 = 14, xA1 = 132, xT0 = 212, xT1 = 470, xD = 690;
-  // The order teams appear in the middle column, grouped by age.
-  const order = groups.flatMap(g => g.teams);
-  const idxOf = (t) => order.indexOf(t);
+  const off = (count) => ((lanes - count) * rowH) / 2;
+  const yL = (i) => padTop + i * rowH + rowH / 2 + off(lane.length);
+  const yD = (j) => padTop + j * rowH + rowH / 2 + off(dests.length);
+  const yS = (j) => padTop + j * rowH + rowH / 2 + off(srcs.length);
+  const xS = 196, xA0 = 268, xA1 = 404, xT0 = 452, xT1 = 716, xD = 930;
+  const laneOf = (t) => lane.findIndex(l => l.kind === 'team' && l.team === t);
   let g = '';
 
-  // ── stage 1: the age group, bracketing its sides ──────────────────────
-  for (const grp of groups) {
-    const is = grp.teams.map(idxOf);
-    const top = yT(Math.min(...is)), bot = yT(Math.max(...is));
-    const cy = (top + bot) / 2;
-    const size = tvAgeSquadSize(season, club, grp.age);
-    const label = size ? grp.left + ' of ' + size : String(grp.left);
-    const tip = e((grp.age ? tvAge(grp.age) : 'age not recorded') + '  \u2014  ' +
-      label + ' left\n' + grp.teams.map(t =>
-        '  ' + t.left + '  ' + t.name).join('\n'));
-    const hh = Math.max(26, bot - top + 26);
+  const netTxt = (n) => (n > 0 ? '+' : '') + n;
+  const netCol = (n) => n > 0 ? 'var(--green)' : n < 0 ? 'var(--red)' : 'var(--tx2)';
+
+  // ── the age boxes, bracketing their sides ─────────────────────────────
+  const drawAgeBox = (idxs, age, left, inn, size, isPot) => {
+    const top = yL(Math.min(...idxs)), bot = yL(Math.max(...idxs));
+    const cy = (top + bot) / 2, hh = Math.max(30, bot - top + 28);
+    const net = inn - left;
+    const title = isPot ? 'other age bands'
+      : (age ? tvAge(age) : 'no age recorded');
+    const sub = size ? left + ' of ' + size + ' left' : left + ' left';
+    const tip = e(title + '\n  out ' + left + (size ? ' of ' + size : '') +
+      '\n  in  ' + inn + '\n  net ' + netTxt(net) +
+      (isPot ? '\n\nArrivals whose age band is not one this club fielded — ' +
+        'usually a different competition. Not matched to an age group, ' +
+        'because PlayHQ has not matched them either.' : ''));
     g += `<rect x="${xA0}" y="${cy - hh / 2}" width="${xA1 - xA0}" height="${hh}" rx="6" ` +
-      `fill="var(--s3)" stroke="${size && grp.left >= size ? 'var(--red)' : 'var(--gold)'}" ` +
-      `stroke-width="1" style="cursor:help"><title>${tip}</title></rect>`;
-    g += `<text x="${(xA0 + xA1) / 2}" y="${cy - 1}" text-anchor="middle" font-size="12" ` +
-      `fill="var(--tx)" font-weight="600" style="pointer-events:none">` +
-      `${e(grp.age ? tvAge(grp.age) : 'no age')}</text>`;
-    g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 12}" text-anchor="middle" font-size="9" ` +
-      `fill="${size && grp.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
-      `font-family="'DM Mono',monospace" style="pointer-events:none">` +
-      `${e(label + ' left')}</text>`;
-    // age → each of its sides
+      `fill="var(--s3)" stroke="${isPot ? 'var(--b3)' : (size && left >= size && left ? 'var(--red)' : 'var(--gold)')}" ` +
+      `stroke-width="1"${isPot ? ' stroke-dasharray="3 3"' : ''} style="cursor:help">` +
+      `<title>${tip}</title></rect>`;
+    g += `<text x="${(xA0 + xA1) / 2}" y="${cy - 4}" text-anchor="middle" font-size="12" ` +
+      `fill="var(--tx)" font-weight="600" style="pointer-events:none">${e(title)}</text>`;
+    g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 9}" text-anchor="middle" font-size="9" ` +
+      `fill="var(--tx2)" font-family="'DM Mono',monospace" style="pointer-events:none">` +
+      `${e(isPot ? inn + ' in' : sub)}</text>`;
+    if (!isPot) {
+      g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 20}" text-anchor="middle" font-size="9" ` +
+        `fill="${netCol(net)}" font-family="'DM Mono',monospace" style="pointer-events:none">` +
+        `${e(inn + ' in  \u00b7  net ' + netTxt(net))}</text>`;
+    }
+    return cy;
+  };
+
+  const drawInBands = (cy, v) => {
+    if (!v) return;
+    for (const [sc, n, list] of v.srcs) {
+      const j = srcs.indexOf(sc), sy = yS(j), mid = (xS + xA0) / 2;
+      const bt = e(tvFlowTip(club, sc, true, list));
+      g += `<path d="M ${xS} ${sy} C ${mid} ${sy}, ${mid} ${cy}, ${xA0} ${cy}" ` +
+        `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
+        `style="pointer-events:stroke"><title>${bt}</title></path>`;
+      g += `<path d="M ${xS} ${sy} C ${mid} ${sy}, ${mid} ${cy}, ${xA0} ${cy}" ` +
+        `fill="none" stroke="var(--green)" stroke-opacity="0.4" ` +
+        `stroke-width="${band(n)}" style="pointer-events:none"/>`;
+    }
+  };
+
+  for (const grp of groups) {
+    const idxs = grp.teams.length
+      ? grp.teams.map(laneOf)
+      : [lane.findIndex(l => l.kind === 'none' && l.age === grp.age)];
+    const v = IN.get(grp.age);
+    const cy = drawAgeBox(idxs, grp.age, grp.left,
+      v ? v.total : 0, tvAgeSquadSize(season, club, grp.age), false);
+    drawInBands(cy, v);
     for (const t of grp.teams) {
-      const y = yT(idxOf(t)), mid = (xA1 + xT0) / 2;
+      const y = yL(laneOf(t)), mid = (xA1 + xT0) / 2;
       g += `<path d="M ${xA1} ${cy} C ${mid} ${cy}, ${mid} ${y}, ${xT0} ${y}" ` +
         `fill="none" stroke="var(--gold)" stroke-opacity="0.3" ` +
         `stroke-width="${band(t.left)}" style="pointer-events:none"/>`;
     }
   }
+  if (pot) drawInBands(drawAgeBox([lane.length - 1], '', 0, pot.total, null, true), pot);
 
-  // ── stage 2: the sides, and where each went ───────────────────────────
-  order.forEach((t) => {
-    const i = idxOf(t), y = yT(i);
+  // ── the sides, and where each went ────────────────────────────────────
+  for (const l of lane) {
+    if (l.kind !== 'team') continue;
+    const t = l.team, y = yL(laneOf(t));
     const size = tvSquadSize(season, club, t.name, t.age);
-    // ⚠️ "11 of 12" ONLY WHEN 12 IS KNOWN. A missing roster shows "11 left".
     const label = size ? t.left + ' of ' + size + ' left' : t.left + ' left';
     const tip = e(t.team + '  \u2014  ' + label + '\n' +
       t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
@@ -3218,7 +3323,7 @@ function tvTeamFlowSVG(club, teams, season) {
       `<title>${tip}</title></rect>`;
     g += `<text x="${xT0 + 10}" y="${y + 4}" font-size="11" fill="var(--tx)" ` +
       `style="pointer-events:none">` +
-      `${e(t.name.length > 28 ? t.name.slice(0, 27) + '\u2026' : t.name)}</text>`;
+      `${e(t.name.length > 30 ? t.name.slice(0, 29) + '\u2026' : t.name)}</text>`;
     g += `<text x="${xT1 - 10}" y="${y + 4}" text-anchor="end" font-size="9" ` +
       `fill="${size && t.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
       `font-family="'DM Mono',monospace" style="pointer-events:none">${e(label)}</text>`;
@@ -3232,9 +3337,17 @@ function tvTeamFlowSVG(club, teams, season) {
         `fill="none" stroke="var(--gold)" stroke-opacity="0.4" ` +
         `stroke-width="${band(n)}" style="pointer-events:none"/>`;
     }
-  });
+  }
 
-  // ── stage 3: the clubs they went to ───────────────────────────────────
+  // ── the two outer columns ─────────────────────────────────────────────
+  srcs.forEach((sc, j) => {
+    const n = [...IN.values()].reduce((a, v) =>
+      a + (v.srcs.find(x => x[0] === sc) || [0, 0])[1], 0);
+    g += `<text x="${xS - 14}" y="${yS(j) + 4}" text-anchor="end" font-size="10" ` +
+      `fill="var(--tx2)">${e(sc.length > 30 ? sc.slice(0, 29) + '\u2026' : sc)}</text>`;
+    g += `<text x="${xS - 6}" y="${yS(j) - 4}" text-anchor="start" font-size="9" ` +
+      `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
+  });
   dests.forEach((d, j) => {
     const n = teams.reduce((a, t) =>
       a + (t.dests.find(x => x[0] === d) || [0, 0])[1], 0);
@@ -3244,9 +3357,10 @@ function tvTeamFlowSVG(club, teams, season) {
       `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
   });
 
-  const hd = (x, t, anchor) => `<text x="${x}" y="22" text-anchor="${anchor}" ` +
-    `font-size="10" fill="var(--gold)" font-weight="600">${e(t)}</text>`;
-  g += hd((xA0 + xA1) / 2, 'AGE', 'middle') +
+  const hd = (x, t, anchor, col) => `<text x="${x}" y="22" text-anchor="${anchor}" ` +
+    `font-size="10" fill="${col || 'var(--gold)'}" font-weight="600">${e(t)}</text>`;
+  g += hd(xS - 14, 'CAME FROM', 'end', 'var(--green)') +
+       hd((xA0 + xA1) / 2, 'AGE', 'middle') +
        hd(xT0 + 10, (season || 'LAST SEASON') + ' TEAMS', 'start') +
        hd(xD + 10, 'WENT TO', 'start');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" ` +
@@ -3457,7 +3571,9 @@ function renderTransfers() {
         '<button class="hdr-btn" onclick="closeTransferFlow()">CLOSE</button></div>' +
         ((flows.in.length || flows.out.length)
           ? ((byTeams && teams.length)
-              ? tvTeamFlowSVG(S.transferFlow, teams, season) +
+              ? tvTeamFlowSVG(S.transferFlow, teams, season,
+                  tvInboundFlows(shown, S.transferFlow,
+                    tvClubAges(season, S.transferFlow))) +
                 '<div class="tv-note" style="margin:0">Each box is a side this ' +
                 'club fielded in ' + tvEsc(season || 'the season being left') +
                 ', read left to right: the age group, the sides it fielded, ' +
@@ -3465,9 +3581,13 @@ function renderTransfers() {
                 'departures against the players who actually played there; ' +
                 'where the season\u2019s roster is not held, only the ' +
                 'departures are shown. Red means everyone has gone. ' +
-                'Arrivals are not drawn here — a player joining has no team of ' +
-                'yours to leave; use BY CLUB for those. Hover anything to ' +
-                'list the players.</div>'
+                'Arrivals feed the age box they land in, with a <b>net</b> ' +
+                'beneath it; they stop there because a player joining has no ' +
+                'team of yours yet. <b>Other age bands</b> collects arrivals ' +
+                'whose age is not one this club fielded — usually another ' +
+                'competition\u2019s bands, and not matched to an age group ' +
+                'because PlayHQ has not matched them either. Hover anything ' +
+                'to list the players.</div>'
               : tvFlowSVG(S.transferFlow, flows) +
                 '<div class="tv-note" style="margin:0">Hover a band to list the ' +
                 'players on it.</div>')
