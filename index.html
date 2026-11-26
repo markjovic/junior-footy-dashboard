@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.29</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.30</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.29</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.30</span>
         </div>
 
 
@@ -3058,8 +3058,7 @@ function tvTeamFlows(rows, club) {
 // unfiltered length would be the same inflated figure the box used to show,
 // and "11 of 30 left" would read as calm where "11 of 12" is a walkout.
 function tvSquadSize(compName, clubName, teamName, age) {
-  const idx = ((S.rosters && S.rosters.seasons) || [])
-    .find(x => (x.compName || '') === compName);
+  const idx = tvRosterSeason(compName);
   if (!idx) return null;
   const d = S.rosterData[idx.sid];
   if (!d) { loadRosterSeason(idx.sid); return null; }
@@ -3077,13 +3076,27 @@ function tvSquadSize(compName, clubName, teamName, age) {
   return n > 0 ? n : null;
 }
 
+// ⚠️ IT ASKS FOR THE INDEX, it does not merely fail to find it. The rosters
+// index is fetched when the ROSTERS view opens; a reader who went straight to
+// TRANSFERS had `S.rosters` empty, so every squad size resolved to null and
+// every box showed a bare count with no sign that anything was missing.
+// Returns null the first time and kicks off the load, which repaints.
+function tvRosterSeason(compName) {
+  if (!compName) return null;
+  if (!S.rosters || !Array.isArray(S.rosters.seasons)) {
+    if (S.rostersState !== 'loading' && S.rostersState !== 'failed') loadRosters();
+    return null;
+  }
+  return S.rosters.seasons.find(x => (x.compName || '') === compName) || null;
+}
+
 // The whole age group's squad, across every side the club fielded at it. Not
 // a sum of the team figures: a player appears in one team, so summing is the
 // same answer, but reading it from the roster keeps one source of truth.
 function tvAgeSquadSize(compName, clubName, age) {
-  const idx = ((S.rosters && S.rosters.seasons) || [])
-    .find(x => (x.compName || '') === compName);
-  if (!idx || !age) return null;
+  if (!age) return null;
+  const idx = tvRosterSeason(compName);
+  if (!idx) return null;
   const d = S.rosterData[idx.sid];
   if (!d) { loadRosterSeason(idx.sid); return null; }
   const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
@@ -3724,6 +3737,10 @@ function loadRosters() {
     }
     rostersLoading = null;
     render();
+    // ⚠️ THE TRANSFERS FLOW READS THIS INDEX for its squad sizes. render()
+    // does not repaint transfers, so without this the index arrives and the
+    // boxes keep their bare counts until something else forces a redraw.
+    if (S.transferFlow) renderTransfers();
     return S.rosters;
   })();
   return rostersLoading;
