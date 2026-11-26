@@ -296,6 +296,9 @@ body{overflow-x:hidden}
 .tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
 .tv-teamlink{cursor:pointer}
 .tv-teamlink:hover{color:var(--gold);text-decoration:underline}
+.tv-permit{color:var(--orange)}
+.tv-permit-tag{background:rgba(249,115,22,0.12);color:var(--orange);
+  border:1px solid rgba(249,115,22,0.3)}
 .tv-clubname{cursor:pointer}
 .tv-clubname:hover{color:var(--gold);text-decoration:underline}
 .tv-sec{display:flex;align-items:center;gap:8px;margin:8px 0 2px 10px;
@@ -774,7 +777,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.36</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.37</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1289,7 +1292,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.36</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.37</span>
         </div>
 
 
@@ -3713,6 +3716,17 @@ function renderTransfers() {
       ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
         'registration yet, so the between-season count is a FLOOR, not a total.'
       : 'Every player has been checked for a next-season registration.') +
+    // ⚠️ "NO PERMITS" AND "CANNOT SEE PERMITS" LOOK IDENTICAL otherwise, and
+    // the second is the state the page is in until walk v14 has run once.
+    ((cov.permitFileVersion && cov.permitFileVersion < 4)
+      ? ' ⚠️ <b>Permit players are not separated in this file</b> — the walk ' +
+        'has not recorded second registrations yet, so a player returning to ' +
+        'their own club after a season on permit still counts as a departure ' +
+        'from the club whose team they played in.'
+      : (cov.permitReturned
+          ? ' <b>' + cov.permitReturned + '</b> permit player(s) returning to ' +
+            'their own club are not counted as transfers.'
+          : '')) +
     (Array.isArray(cov.seasonsWithoutLines) && cov.seasonsWithoutLines.length
       ? ' Mid-season moves cannot be seen in: ' + cov.seasonsWithoutLines.map(tvEsc).join(', ') + '.'
       : '') +
@@ -3916,6 +3930,15 @@ function renderTransfers() {
       '<span class="tv-season">' + tvEsc([t.comp, t.year].filter(Boolean).join(' ')
         || (t.kind === 'lead' ? 'from ' + [t.fromComp, t.fromYear].filter(Boolean).join(' ') : '')) + '</span>' +
       kind + fill + games +
+      // ⚠️ THE SIDE THEY TURNED OUT FOR, when it is not their own club. Without
+      // it the row reads "Heathmont → Vermont" with a Norwood team beside it
+      // and no explanation of why.
+      (t.permitHost
+        ? '<span class="tv-tag tv-permit-tag" title="Registered to ' +
+          tvEsc(t.fromClubName || 'their club') + ', but played the season in ' +
+          tvEsc(t.permitHost) + '\u2019s team on a permit.">permit at ' +
+          tvEsc(t.permitHost) + '</span>'
+        : '') +
       '</div>';
   };
 
@@ -3995,6 +4018,11 @@ function renderTransfers() {
       // ⚠️ THE DIAGRAM HAD ONE WAY IN: a club name in the SUMMARY table. A
       // reader scrolling the list had no route to it at all. The heading is
       // now the same door.
+      // ⚠️ PERMIT PLAYERS ARE NOT TRANSFERS AND ARE NOT NOTHING. They played
+      // in this club's side all season on a permit and have gone somewhere
+      // other than here, so they are excluded from OUT, IN and NET — but a
+      // coach losing twelve of a side has to be told. docs/permit_revert_design.md §5.
+      const away = Number(((S.transfers || {}).permitAway || {})[club] || 0);
       parts.push('<div class="tv-club">' +
         '<span class="tv-clubname" onclick="openTransferFlow(' + "'" +
         tvEsc(String(club).replace(/'/g, "\\'")) + "'" + ')" ' +
@@ -4003,6 +4031,10 @@ function renderTransfers() {
         '<span class="tv-count">' +
         (byJoined ? inn.length + ' in · ' + out.length + ' out'
                   : out.length + ' out · ' + inn.length + ' in') +
+        (away ? '<span class="tv-permit" title="Played in this club\u2019s teams on a ' +
+          'permit and have not come back. Registered to another club, so not ' +
+          'counted as transfers in or out.">' + ' · ' + away +
+          ' permit player' + (away === 1 ? '' : 's') + ' not returning</span>' : '') +
         '</span></div>');
       for (const [t, l] of (byJoined ? [['IN', inn], ['OUT', out]]
                                      : [['OUT', out], ['IN', inn]])) {
