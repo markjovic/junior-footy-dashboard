@@ -34,9 +34,21 @@
 // ⚠️ READ-ONLY. No file is written, nothing is committed. It makes one call per
 // named player — a handful, not a sweep.
 //
+// ⚠️ v2 — WHY A WHOLE TEAM, NOT A SAMPLE. v1 probed five players and all five
+// were registered to Heathmont, so it answered "what does a PERMIT player look
+// like" and nothing else. The design rule turns on the other half: a player
+// registered to the team's OWN club is assumed to hold ONE cohort-season
+// record, and that assumption was never tested. If PlayHQ writes two records
+// for everyone in a joint side, the rule needs another case.
+//
+// PP_TEAM reads the whole side out of the rosters file and probes all of it,
+// which is ~22 calls — the only way to see both kinds of player at once.
+//
 // Env:
-//   PP_PLAYERS  comma-separated names or uuids. Default: the twelve-player
-//               U12 case above, five of them.
+//   PP_TEAM     "<season> | <club> | <team>", e.g.
+//               "EFNL 2026 | Norwood (Eastern Football Netball League) | Norwood Gold/Heathmont U12"
+//               Reads data/rosters/ and probes every player in that team.
+//   PP_PLAYERS  comma-separated names or uuids. Used when PP_TEAM is blank.
 //   PP_PACE_MS  delay between calls, default 900 (about 66/min).
 
 'use strict';
@@ -47,10 +59,12 @@ const zlib = require('zlib');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-permit-club v1 2026-11-26 joint-team-home-club';
+const VERSION = 'probe-permit-club v2 2026-11-26 whole-team';
 
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
+const ROSTER_DIR = path.join(ROOT, 'data', 'rosters');
+const TEAM_SPEC = String(process.env.PP_TEAM || '').trim();
 const DEFAULT_PLAYERS = 'Archie Ward,Harley Thomas,Henry Tsantis,Jake Tomietto,Zach Watson';
 const WANT = String(process.env.PP_PLAYERS || DEFAULT_PLAYERS)
   .split(',').map(s => s.trim()).filter(Boolean);
@@ -88,7 +102,52 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
   // we HOLD beside what PlayHQ SERVES. Without the stored side there is nothing
   // to compare and the dump is just data.
   const targets = [];
-  for (const w of WANT) {
+
+  // ── a whole team, read from the rosters files ─────────────────────────────
+  if (TEAM_SPEC) {
+    const parts = TEAM_SPEC.split('|').map(x => x.trim());
+    if (parts.length !== 3) {
+      die('PP_TEAM must be "<season> | <club> | <team>" — got ' + JSON.stringify(TEAM_SPEC));
+    }
+    const [wantSeason, wantClub, wantTeam] = parts;
+    const idxPath = path.join(ROSTER_DIR, 'index.json');
+    if (!fs.existsSync(idxPath)) die(`${idxPath} is missing — run build-transfers first`);
+    const idx = JSON.parse(fs.readFileSync(idxPath, 'utf8'));
+    const ent = (idx.seasons || []).find(x => (x.compName || '') === wantSeason);
+    if (!ent) {
+      die(`no season "${wantSeason}" in the rosters index. Have: ` +
+        (idx.seasons || []).map(x => x.compName).join(', '));
+    }
+    const f = path.join(ROSTER_DIR, ent.file || `${ent.sid}.json.gz`);
+    if (!fs.existsSync(f)) die(`${f} is missing`);
+    const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(f)).toString('utf8'));
+    const club = Object.values(d.clubs || {}).find(c => (c.name || '') === wantClub);
+    if (!club) {
+      die(`no club "${wantClub}" in ${wantSeason}. Nearest: ` +
+        Object.values(d.clubs || {}).map(c => c.name)
+          .filter(n => fold(n).includes(fold(wantClub).split(' ')[0] || '\u0000'))
+          .slice(0, 5).join(' | ') || '(none)');
+    }
+    const rows = (club.teams || {})[wantTeam];
+    if (!Array.isArray(rows)) {
+      die(`no team "${wantTeam}" at ${wantClub}. That club holds: ` +
+        Object.keys(club.teams || {}).join(' | '));
+    }
+    log(`team "${wantTeam}" at ${wantClub}, ${wantSeason}: ${rows.length} player(s)`);
+    for (const r of rows) {
+      const rec = people[r.u];
+      // ⚠️ A PLAYER WITH NO WALK RECORD IS STILL PROBED. Skipping them would
+      // quietly bias the answer toward players the walk already understands.
+      // ⚠️ THE PLAYED TEAM IS THE TEAM WE ARE ITERATING. It is not in the
+      // registrations file — `lastPlayed` lives in build-transfers — so
+      // reading it off the record would leave `played` null for everyone and
+      // the home-club rule would never be exercised by this probe at all.
+      targets.push({ uuid: r.u, rec: rec || { name: r.n, from: {} },
+        noRec: !rec, played: wantTeam });
+    }
+  }
+
+  for (const w of (TEAM_SPEC ? [] : WANT)) {
     if (people[w]) { targets.push({ uuid: w, rec: people[w] }); continue; }
     const f = fold(w);
     const hits = Object.entries(people).filter(([, r]) => fold(r.name) === f);
@@ -101,11 +160,13 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
   await phq.ensureSession();
 
   let sameSeasonMulti = 0, homeClubFound = 0, checked = 0;
-  for (const { uuid, rec } of targets) {
+  let oneRecord = 0, noRecord = 0;
+  const byHome = new Map();
+  for (const { uuid, rec, noRec, played } of targets) {
     if (checked++) await phq.sleep(PACE_MS);
     const from = rec.from || {};
     log('');
-    log(`── ${rec.name || '(unnamed)'}  ${uuid}`);
+    log(`── ${rec.name || '(unnamed)'}  ${uuid}${noRec ? '   ⚠️ no walk record' : ''}`);
     log(`   stored: cohort season ${from.seasonId || '(none)'} ${from.compName || ''}`);
     log(`           from.club ${from.club || '(none)'}  ${from.clubName || ''}`);
     log(`           lastOrg   ${(rec.lastOrg && rec.lastOrg.id) || '(none)'}  ` +
@@ -149,10 +210,26 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
         log('      → the home club IS visible, and `rec.from.club` is currently');
         log('        whichever of these PlayHQ listed LAST. That is the bug.');
       }
+      // ⚠️ WHICH ONE IS HOME, by the rule the design proposes: the record whose
+      // team is NOT the one they played for. Printed per player so the rule can
+      // be checked against reality rather than trusted.
+      const notPlayed = played ? inCohort.filter(x => x.team !== played) : [];
+      if (notPlayed.length === 1) {
+        log(`      home by the played-team rule: ${notPlayed[0].orgName}`);
+        byHome.set(notPlayed[0].orgName, (byHome.get(notPlayed[0].orgName) || 0) + 1);
+      } else {
+        log(`      ⚠️ cannot apply the rule: ${played
+          ? 'played team "' + played + '" matches ' +
+            (inCohort.length - notPlayed.length) + ' of these ' + inCohort.length + ' records'
+          : 'no played team known (run with PP_TEAM)'}`);
+      }
     } else if (inCohort.length === 1) {
-      log(`   one record for the cohort season: org ${inCohort[0].org} ` +
+      oneRecord++;
+      log(`   ONE record for the cohort season: org ${inCohort[0].org} ` +
         `${inCohort[0].orgName} via "${inCohort[0].team}"`);
+      byHome.set(inCohort[0].orgName, (byHome.get(inCohort[0].orgName) || 0) + 1);
     } else {
+      noRecord++;
       log('   ⚠️ NO record for the cohort season at all.');
     }
   }
@@ -160,8 +237,33 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
   log('');
   log('── verdict ──');
   log(`  players probed                                   : ${checked}`);
+  log(`  with exactly ONE record in the cohort season     : ${oneRecord}`);
   log(`  with MORE THAN ONE record in the cohort season   : ${sameSeasonMulti}`);
   log(`  where those records name DIFFERENT organisations : ${homeClubFound}`);
+  log(`  with NO record for the cohort season             : ${noRecord}`);
+  if (byHome.size) {
+    log('  home club, where this probe could tell:');
+    for (const [k, v] of [...byHome.entries()].sort((a, b) => b[1] - a[1])) {
+      log(`    ${String(v).padStart(4)}  ${k}`);
+    }
+  }
+  // ⚠️ THE QUESTION v2 EXISTS TO ANSWER.
+  if (TEAM_SPEC) {
+    log('');
+    if (oneRecord && sameSeasonMulti) {
+      log('  → BOTH SHAPES ARE PRESENT IN ONE TEAM. A player registered to the');
+      log('    team\'s own club holds one record; a permit player holds two.');
+      log('    The design\'s §4.4 table is complete as written.');
+    } else if (oneRecord && !sameSeasonMulti) {
+      log('  → EVERY player in this side holds one record, so none of them is');
+      log('    on a permit by this measure — which contradicts the five found');
+      log('    earlier. Check the team name before trusting this.');
+    } else if (!oneRecord && sameSeasonMulti) {
+      log('  → ⚠️ EVERY player holds TWO records, including the host club\'s own.');
+      log('    The design assumes a host-club player holds ONE, so §4.4 needs');
+      log('    another case and the rule must NOT be built as written.');
+    }
+  }
   if (homeClubFound) {
     log('  → A permit player\'s home club is recoverable. The walk must keep');
     log('    every cohort-season record instead of letting the last one win,');
