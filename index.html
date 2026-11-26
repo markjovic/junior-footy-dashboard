@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.31</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.32</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.31</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.32</span>
         </div>
 
 
@@ -3158,6 +3158,33 @@ function tvInboundFlows(rows, club, known) {
   return outM;
 }
 
+// ⚠️ THE STORED GRADE IS KEYED BY TEAM NAME ALONE — `teamGrade[team]` in the
+// roster, written from `${sid}|${club}|${team}` with no age in the key. Where
+// one name covers two age groups, as "Montrose Blue" covers U13 and U15, the
+// file holds ONE grade and it belongs to only one of them. Rather than print a
+// grade that may be the other side's, this returns nothing in that case.
+//
+// The fix at the writer is to key teamGrades by age as well; until then a
+// missing grade here is a refusal to guess, not a gap in the data.
+function tvTeamGrade(compName, clubName, teamName, age) {
+  const idx = tvRosterSeason(compName);
+  if (!idx) return '';
+  const d = S.rosterData[idx.sid];
+  if (!d) { loadRosterSeason(idx.sid); return ''; }
+  const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
+  if (!club || !club.teamGrade) return '';
+  const g = club.teamGrade[teamName];
+  if (!g) return '';
+  const rows = (club.teams || {})[teamName];
+  if (!Array.isArray(rows)) return '';
+  const ages = new Set(rows.map(r => r && r.a).filter(Boolean));
+  // One age in the team, or none recorded: the grade is unambiguous.
+  if (ages.size <= 1) return String(g);
+  // Several ages share this name, so the single stored grade cannot be
+  // attributed to the one being asked about.
+  return '';
+}
+
 // Age groups, each with the sides it fielded. The middle column of the
 // three-stage diagram hangs off this.
 function tvAgeGroups(teams) {
@@ -3176,14 +3203,20 @@ function tvAgeGroups(teams) {
 // The hover text for one band. Age then name, the same order the list uses, so
 // hovering and reading the list below give the same sequence.
 const TV_TIP_MAX = 30;
-function tvFlowTip(club, other, isIn, list) {
+function tvFlowTip(club, other, isIn, list, season) {
   const people = (list || []).slice().sort((a, b) =>
     tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
     String(a.name || '').localeCompare(String(b.name || '')));
   const line = (t) => (t.name || '(unnamed)') +
     (t.age ? '  ' + tvAge(t.age) : '') +
-    (t.kind === 'lead' ? '  (no team yet)'
-      : t.kind === 'in-season' ? '  (mid-season)' : '');
+    // The side and grade they were playing in the season they left, which is
+    // the thing you want when the question is "who have we actually lost".
+    (t.fromTeam ? '  \u2014 ' + t.fromTeam : '') +
+    ((season && t.fromTeam &&
+      tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age))
+      ? '  (' + tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age) + ')' : '') +
+    (t.kind === 'lead' ? '  [no team yet]'
+      : t.kind === 'in-season' ? '  [mid-season]' : '');
   // ⚠️ TRUNCATED, AND IT SAYS SO. A native SVG tooltip of 60 names is unusable
   // and, worse, a silently clipped one would misreport the band's size.
   const head = people.slice(0, TV_TIP_MAX).map(line);
@@ -3231,7 +3264,12 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   }
   if (pot) lane.push({ kind: 'pot' });
 
-  const rowH = 30, padTop = 38, w = 1180;
+  // ⚠️ 30px HELD TWO LINES AND THE BOX HAS THREE. The age box carries the
+  // name, the out figure and the in/net line; at rowH 30 with a 30px minimum
+  // the third line fell outside its own rect and under the next box, so every
+  // single-lane age lost its net line. The row and the minimum box now size
+  // for three lines, and AGE_H is the one place that changes.
+  const rowH = 42, padTop = 38, w = 1180, AGE_H = 40;
   const lanes = Math.max(lane.length, dests.length, srcs.length, 1);
   const h = padTop + lanes * rowH + 22;
   const maxN = Math.max(1,
@@ -3242,7 +3280,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   const yL = (i) => padTop + i * rowH + rowH / 2 + off(lane.length);
   const yD = (j) => padTop + j * rowH + rowH / 2 + off(dests.length);
   const yS = (j) => padTop + j * rowH + rowH / 2 + off(srcs.length);
-  const xS = 196, xA0 = 268, xA1 = 404, xT0 = 452, xT1 = 716, xD = 930;
+  const xS = 196, xA0 = 268, xA1 = 428, xT0 = 476, xT1 = 760, xD = 960;
   const laneOf = (t) => lane.findIndex(l => l.kind === 'team' && l.team === t);
   let g = '';
 
@@ -3252,7 +3290,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   // ── the age boxes, bracketing their sides ─────────────────────────────
   const drawAgeBox = (idxs, age, left, inn, size, isPot) => {
     const top = yL(Math.min(...idxs)), bot = yL(Math.max(...idxs));
-    const cy = (top + bot) / 2, hh = Math.max(30, bot - top + 28);
+    const cy = (top + bot) / 2, hh = Math.max(AGE_H, bot - top + 28);
     const net = inn - left;
     const title = isPot ? 'other age bands'
       : (age ? tvAge(age) : 'no age recorded');
@@ -3266,13 +3304,14 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
       `fill="var(--s3)" stroke="${isPot ? 'var(--b3)' : (size && left >= size && left ? 'var(--red)' : 'var(--gold)')}" ` +
       `stroke-width="1"${isPot ? ' stroke-dasharray="3 3"' : ''} style="cursor:help">` +
       `<title>${tip}</title></rect>`;
-    g += `<text x="${(xA0 + xA1) / 2}" y="${cy - 4}" text-anchor="middle" font-size="12" ` +
+    const cx = (xA0 + xA1) / 2;
+    g += `<text x="${cx}" y="${cy - 7}" text-anchor="middle" font-size="12" ` +
       `fill="var(--tx)" font-weight="600" style="pointer-events:none">${e(title)}</text>`;
-    g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 9}" text-anchor="middle" font-size="9" ` +
+    g += `<text x="${cx}" y="${cy + 6}" text-anchor="middle" font-size="9" ` +
       `fill="var(--tx2)" font-family="'DM Mono',monospace" style="pointer-events:none">` +
       `${e(isPot ? inn + ' in' : sub)}</text>`;
     if (!isPot) {
-      g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 20}" text-anchor="middle" font-size="9" ` +
+      g += `<text x="${cx}" y="${cy + 17}" text-anchor="middle" font-size="9" ` +
         `fill="${netCol(net)}" font-family="'DM Mono',monospace" style="pointer-events:none">` +
         `${e(inn + ' in  \u00b7  net ' + netTxt(net))}</text>`;
     }
@@ -3283,7 +3322,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     if (!v) return;
     for (const [sc, n, list] of v.srcs) {
       const j = srcs.indexOf(sc), sy = yS(j), mid = (xS + xA0) / 2;
-      const bt = e(tvFlowTip(club, sc, true, list));
+      const bt = e(tvFlowTip(club, sc, true, list, season));
       g += `<path d="M ${xS} ${sy} C ${mid} ${sy}, ${mid} ${cy}, ${xA0} ${cy}" ` +
         `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
         `style="pointer-events:stroke"><title>${bt}</title></path>`;
@@ -3316,20 +3355,23 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     const t = l.team, y = yL(laneOf(t));
     const size = tvSquadSize(season, club, t.name, t.age);
     const label = size ? t.left + ' of ' + size + ' left' : t.left + ' left';
-    const tip = e(t.team + '  \u2014  ' + label + '\n' +
+    const grade = tvTeamGrade(season, club, t.name, t.age);
+    const tip = e(t.team + (grade ? '  \u2014  ' + grade : '') + '  \u2014  ' + label + '\n' +
       t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
     g += `<rect x="${xT0}" y="${y - 13}" width="${xT1 - xT0}" height="26" rx="5" ` +
       `fill="var(--s2)" stroke="var(--b2)" stroke-width="1" style="cursor:help">` +
       `<title>${tip}</title></rect>`;
+    const nm = t.name.length > 26 ? t.name.slice(0, 25) + '\u2026' : t.name;
     g += `<text x="${xT0 + 10}" y="${y + 4}" font-size="11" fill="var(--tx)" ` +
-      `style="pointer-events:none">` +
-      `${e(t.name.length > 30 ? t.name.slice(0, 29) + '\u2026' : t.name)}</text>`;
+      `style="pointer-events:none">${e(nm)}` +
+      (grade ? `<tspan fill="var(--tx3)" font-size="9" font-family="'DM Mono',monospace">` +
+        `  ${e(grade)}</tspan>` : '') + `</text>`;
     g += `<text x="${xT1 - 10}" y="${y + 4}" text-anchor="end" font-size="9" ` +
       `fill="${size && t.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
       `font-family="'DM Mono',monospace" style="pointer-events:none">${e(label)}</text>`;
     for (const [dc, n, list] of t.dests) {
       const j = dests.indexOf(dc), ey = yD(j), mid = (xT1 + xD) / 2;
-      const bt = e(tvFlowTip(t.team, dc, false, list));
+      const bt = e(tvFlowTip(t.team, dc, false, list, season));
       g += `<path d="M ${xT1} ${y} C ${mid} ${y}, ${mid} ${ey}, ${xD} ${ey}" ` +
         `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
         `style="pointer-events:stroke"><title>${bt}</title></path>`;
@@ -3341,10 +3383,21 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
 
   // ── the two outer columns ─────────────────────────────────────────────
   srcs.forEach((sc, j) => {
-    const n = [...IN.values()].reduce((a, v) =>
-      a + (v.srcs.find(x => x[0] === sc) || [0, 0])[1], 0);
+    const mine = [...IN.values()].flatMap(v =>
+      (v.srcs.find(x => x[0] === sc) || [0, 0, []])[2]);
+    const n = mine.length;
+    // ⚠️ ONE GRADE ONLY IF THEY ALL SHARE IT. A club's arrivals can come from
+    // several of its sides; printing the first one's grade beside the club
+    // name would attribute it to all of them.
+    const grades = mine.map(t => t.fromTeam
+      ? tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age) : '');
+    const gs = new Set(grades.filter(Boolean));
+    const one = (gs.size === 1 && grades.every(Boolean)) ? [...gs][0] : '';
+    const nm = sc.length > 26 ? sc.slice(0, 25) + '\u2026' : sc;
     g += `<text x="${xS - 14}" y="${yS(j) + 4}" text-anchor="end" font-size="10" ` +
-      `fill="var(--tx2)">${e(sc.length > 30 ? sc.slice(0, 29) + '\u2026' : sc)}</text>`;
+      `fill="var(--tx2)">` +
+      (one ? `<tspan fill="var(--tx3)" font-size="9" font-family="'DM Mono',monospace">` +
+        `${e(one)}  </tspan>` : '') + `${e(nm)}</text>`;
     g += `<text x="${xS - 6}" y="${yS(j) - 4}" text-anchor="start" font-size="9" ` +
       `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
   });
@@ -3367,7 +3420,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     `style="max-width:${w}px;display:block;margin:4px auto 10px">${g}</svg>`;
 }
 
-function tvFlowSVG(club, flows) {
+function tvFlowSVG(club, flows, season) {
   const squash = (list) => {
     if (list.length <= TV_FLOW_MAX) return list;
     const head = list.slice(0, TV_FLOW_MAX - 1);
@@ -3396,7 +3449,7 @@ function tvFlowSVG(club, flows) {
   const side = (list, isIn) => {
     let out = '';
     list.forEach(([name, n, rows], i) => {
-      const tip = e(tvFlowTip(club, name, isIn, rows));
+      const tip = e(tvFlowTip(club, name, isIn, rows, season));
       const y = padTop + i * rowH + rowH / 2;
       const x0 = isIn ? 150 : cx + 70;
       const x1 = isIn ? cx - 70 : w - 150;
@@ -3588,7 +3641,7 @@ function renderTransfers() {
                 'competition\u2019s bands, and not matched to an age group ' +
                 'because PlayHQ has not matched them either. Hover anything ' +
                 'to list the players.</div>'
-              : tvFlowSVG(S.transferFlow, flows) +
+              : tvFlowSVG(S.transferFlow, flows, season) +
                 '<div class="tv-note" style="margin:0">Hover a band to list the ' +
                 'players on it.</div>')
           : '<div class="tv-note">No moves in or out under the current filters.</div>') +
