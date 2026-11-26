@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v17 2026-11-25 age-from-the-last-season';
+const VERSION = 'build-transfers v18 2026-11-26 grade-on-the-row';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -352,6 +352,25 @@ function main() {
 
   const teamAges = new Map();         // `${sid}|${club}|${team}` -> Map(age -> n)
   const teamGrades = new Map();       // `${sid}|${club}|${team}` -> grade label
+  // ⚠️ KEYED BY AGE AS WELL, AND THAT IS THE WHOLE POINT. `teamGrades` above is
+  // keyed by team NAME only, and a club fields one "Montrose Blue" at six age
+  // groups — so that map holds one grade for six different sides and can be
+  // attributed to none of them. The dashboard read from it and correctly
+  // refused on nearly every junior team, which looked like missing data.
+  //
+  // This index is keyed `${compName}|${team}|${age}`, the way the stored
+  // `roster` map is already keyed, so the grade that lands on a row is the one
+  // the league gave THAT side.
+  const gradeIdx = new Map();         // `${compName}|${team}|${age}` -> grade
+  // ⚠️ THE AGELESS KEYS ARE A FALLBACK FOR A ROW WITH NO AGE, never for one
+  // that has an age and misses. Falling through on a miss would hand back the
+  // ambiguous grade this index exists to avoid.
+  const gradeFor = (compName, team, age) => {
+    if (!compName || !team) return '';
+    if (age) return gradeIdx.get(`${compName}|${team}|${age}`) || '';
+    return gradeIdx.get(`${compName}|${team}|`) ||
+           gradeIdx.get(`${compName}|${team}`) || '';
+  };
   // ⚠️ THE PLAYER'S LAST PLAYED SEASON, chosen by DATE and not by whichever
   // season the manifest loop reached first. A next-season registration row is
   // nearly useless without it — "who is this child" is answered by where they
@@ -468,6 +487,12 @@ function main() {
       }
       return '';
     };
+
+    // Harvested here because `roster` is only in scope inside this loop, while
+    // the between-season and lead builders below need the same grades.
+    for (const [k, r] of Object.entries(roster)) {
+      if (r && r.grade && !gradeIdx.has(k)) gradeIdx.set(k, String(r.grade));
+    }
 
     const uuidAt = (i) => { const pp = (f.players || [])[i]; return (pp && pp[0]) || null; };
     const nameAt = (i) => { const pp = (f.players || [])[i]; return (pp && pp[1]) || null; };
@@ -589,6 +614,9 @@ function main() {
           uuid: u, name: info.name || nameAt(0) || '(unnamed)', age: info.age || '',
           comp: sm.comp, year: sm.year, seasonId: m.seasonId,
           fromClub: fromId, fromClubName: clubLabel(fromId), fromTeam: fromE.team, fromGames: fromE.games,
+          // The league's grade for the side they left, in the season they left
+          // it. '' when that season holds no grade for it, never a guess.
+          fromGrade: gradeFor(m.compName, fromE.team, info.age || ''),
           toClub: toId, toClubName: clubLabel(toId), toTeam: toE.team, toGames: toE.games,
           // Present on every row so the two kinds share one shape; an in-season
           // move has no destination SEASON, it is the same one.
@@ -689,6 +717,7 @@ function main() {
           comp: fs2.comp, year: fs2.year, seasonId: from.seasonId,
           fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
           fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
+          fromGrade: gradeFor(from.compName, lp(uuid).team, lp(uuid).age),
           toClub: t.club, toClubName: t.clubName || clubLabel(t.club),
           toTeam: t.team || '', toGames: null,
           toComp: ts.comp, toYear: ts.year,
@@ -747,6 +776,7 @@ function main() {
         comp: '', year: '', seasonId: from.seasonId,
         fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
         fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
+        fromGrade: gradeFor(from.compName, lp(uuid).team, lp(uuid).age),
         toClub: lo.id, toClubName: lo.name || clubLabel(lo.id),
         toTeam: '', toGames: null,
         toComp: (orgs[lo.id] && orgs[lo.id].competitions && orgs[lo.id].competitions[0]
@@ -785,6 +815,19 @@ function main() {
   for (const t of [...between, ...leads]) {
     const was = (playerInfo.get(t.uuid) || {}).age || '';
     if (was && t.age && was !== t.age) ageMoved++;
+  }
+  {
+    const all = [...inSeason, ...between, ...leads];
+    const withTeam = all.filter(r => r.fromTeam);
+    const withGrade = withTeam.filter(r => r.fromGrade);
+    log(`  fromGrade on ${withGrade.length} of ${withTeam.length} row(s) that name a team` +
+      ` (${gradeIdx.size} graded team-age key(s) indexed)`);
+    // ⚠️ AN EMPTY FIELD LOOKS LIKE "NO GRADES EXIST". Say so loudly instead.
+    if (withTeam.length && !withGrade.length) {
+      log('  ⚠️ NOT ONE ROW GOT A GRADE. The index is keyed compName|team|age and');
+      log('     the rows are looked up the same way — a zero here means the keys');
+      log('     disagree, and the dashboard will show no grades at all.');
+    }
   }
   log(`\n  total rows: ${out.transfers.length} (${inSeason.length} in-season, ` +
     `${between.length} between-season, ${leads.length} lead)`);
