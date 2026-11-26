@@ -294,6 +294,8 @@ body{overflow-x:hidden}
 .tv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--b1);font-size:12px}
 .tv-name{font-weight:600;min-width:150px}
 .tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tv-teamlink{cursor:pointer}
+.tv-teamlink:hover{color:var(--gold);text-decoration:underline}
 .tv-clubname{cursor:pointer}
 .tv-clubname:hover{color:var(--gold);text-decoration:underline}
 .tv-sec{display:flex;align-items:center;gap:8px;margin:8px 0 2px 10px;
@@ -772,7 +774,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.35</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.36</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1287,7 +1289,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.35</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.36</span>
         </div>
 
 
@@ -1489,6 +1491,7 @@ function buildHash() {
     if (S.transferSort && S.transferSort !== 'out') p.push(['to', S.transferSort]);
     if (S.transferView && S.transferView !== 'list') p.push(['tv', S.transferView]);
     if (S.transferFlow) p.push(['tf', S.transferFlow]);
+    if (S.transferTeam) p.push(['tt', S.transferTeam]);
     if (S.transferFlowBy && S.transferFlowBy !== 'teams') p.push(['tm', S.transferFlowBy]);
   }
 
@@ -1554,6 +1557,7 @@ function resetTransferState() {
   S.transferComp = ''; S.transferGrade = ''; S.transferClub = '';
   S.transferKind = 'all'; S.transferSort = 'out'; S.transferView = 'list';
   S.transferFlow = ''; S.transferFlowBy = 'teams'; S.transferYear = null;
+  S.transferTeam = '';
 }
 function applyTransferURL(u) {
   if (!u) return;
@@ -1569,7 +1573,8 @@ function applyTransferURL(u) {
   // ⚠️ A FLOW IMPLIES THE SUMMARY VIEW. The panel is only drawn there, so a
   // link carrying `tf` without `tv=summary` would land on a list with the
   // diagram silently not shown.
-  if (u.tf) { S.transferFlow = u.tf; S.transferView = 'summary'; }
+  if (u.tf) S.transferFlow = u.tf;
+  if (u.tt) S.transferTeam = u.tt;
 }
 
 const URL_PUSH_KEYS = ['y', 'c', 'v', 'fm'];
@@ -1806,6 +1811,10 @@ let S = {
   transferClub: '',        // '' = every club; matches EITHER side
   transferView: 'list',    // 'list' | 'summary'
   transferFlow: '',        // club name whose flow diagram is open
+  // One side, by its stored name. ⚠️ Stored team names are age-stripped, so
+  // "Norwood Gold/Heathmont" is every age that club fielded under that name;
+  // the age box above it is what separates them.
+  transferTeam: '',
   // ⚠️ DEFAULTS TO THE LATEST SEASON, NOT TO EVERYTHING. The file holds every
   // in-season move back to 2022, and showing 2024 and 2026 in one list invites
   // them to be read as one season's movement. null means "not chosen yet" and
@@ -2922,10 +2931,28 @@ function setTransferYear(v) {
   renderTransfers();
   syncURL();
 }
-function setTransferClub(v) { S.transferClub = String(v || ''); S.transferFlow = ''; renderTransfers(); syncURL(); }
+// ⚠️ CHOOSING A CLUB OPENS ITS DIAGRAM. It used to CLOSE it: picking a club
+// from the box was the one way of naming a club that did not show you its
+// flows. Clearing the box closes it again, and drops the team filter with it —
+// a team filter outliving its club shows an empty list with no explanation.
+function setTransferClub(v) {
+  S.transferClub = String(v || '');
+  S.transferFlow = S.transferClub;
+  if (!S.transferClub) S.transferTeam = '';
+  renderTransfers();
+  syncURL();
+}
+// Clicking a side anywhere — a box in the diagram, a team name in the list.
+function setTransferTeam(v) {
+  const t = String(v || '');
+  // Clicking the side already chosen clears it, so the filter can be undone
+  // where it was set rather than only from CLEAR.
+  S.transferTeam = (t === S.transferTeam) ? '' : t;
+  renderTransfers();
+  syncURL();
+}
 function setTransferView(v) {
   S.transferView = v;
-  if (v !== 'summary') S.transferFlow = '';
   [['list','tvv-list'],['summary','tvv-summary']].forEach(([k, id]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', k === v);
@@ -2938,9 +2965,6 @@ function setTransferView(v) {
 function openTransferFlow(club) {
   S.transferFlow = String(club || '');
   S.transferClub = S.transferFlow;
-  // ⚠️ THE DIAGRAM IS ONLY DRAWN IN SUMMARY. Opening one from the LIST used to
-  // set the state and leave the reader on the list, where nothing appeared.
-  S.transferView = 'summary';
   renderTransfers();
   syncURL();
 }
@@ -2949,7 +2973,7 @@ function setTransferFlowBy(v) { S.transferFlowBy = v; renderTransfers(); syncURL
 function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); syncURL(); }
 function resetTransferFilters() {
   S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
-  S.transferClub = ''; S.transferFlow = '';
+  S.transferClub = ''; S.transferFlow = ''; S.transferTeam = '';
   // CLEAR returns to the newest season, not to every season — "all seasons" is
   // a deliberate choice, so clearing the filters must not silently make it.
   S.transferYear = null;
@@ -3422,9 +3446,15 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     const grade = tvGrade((t.dests[0] || [0, 0, []])[2][0]);
     const tip = e(t.team + (grade ? '  \u2014  ' + grade : '') + '  \u2014  ' + label + '\n' +
       t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
+    // ⚠️ CLICKABLE, AND IT SAYS SO. A box that filters on click and looks
+    // exactly like one that does not is a feature nobody finds.
+    const on = S.transferTeam === t.name;
     g += `<rect x="${xT0}" y="${y - 13}" width="${xT1 - xT0}" height="26" rx="5" ` +
-      `fill="var(--s2)" stroke="var(--b2)" stroke-width="1" style="cursor:help">` +
-      `<title>${tip}</title></rect>`;
+      `fill="${on ? 'var(--gold2)' : 'var(--s2)'}" ` +
+      `stroke="${on ? 'var(--gold)' : 'var(--b2)'}" stroke-width="1" ` +
+      `style="cursor:pointer" onclick="setTransferTeam('${
+        e(String(t.name).replace(/'/g, "\\'"))}')">` +
+      `<title>${tip}\n\nClick to ${on ? 'clear the' : 'show only this'} side.</title></rect>`;
     const nm = t.name.length > 26 ? t.name.slice(0, 25) + '\u2026' : t.name;
     g += `<text x="${xT0 + 10}" y="${y + 4}" font-size="11" fill="var(--tx)" ` +
       `style="pointer-events:none">${e(nm)}` +
@@ -3655,6 +3685,7 @@ function renderTransfers() {
     && (!S.transferYear || tvSeasonOf(t) === S.transferYear)
     && (!S.transferGrade || t.age === S.transferGrade)
     && (!S.transferClub || t.fromClubName === S.transferClub || t.toClubName === S.transferClub)
+    && (!S.transferTeam || t.fromTeam === S.transferTeam)
     && (!q || tvFold(t.name).includes(q) || tvFold(t.fromClubName).includes(q)
       || tvFold(t.toClubName).includes(q)));
 
@@ -3674,6 +3705,7 @@ function renderTransfers() {
     (S.transferComp ? ' touching <b>' + tvEsc(S.transferComp) + '</b> on either side' : '') +
     (S.transferGrade ? ' at <b>' + tvEsc(S.transferGrade) + '</b>' : '') +
     (S.transferClub ? ' involving <b>' + tvEsc(S.transferClub) + '</b>' : '') +
+    (S.transferTeam ? ' from <b>' + tvEsc(S.transferTeam) + '</b>' : '') +
     (S.transferYear ? ' from the <b>' + tvEsc(S.transferYear) + '</b> season'
                     : ' across <b>every season</b>') +
     (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
@@ -3692,11 +3724,15 @@ function renderTransfers() {
     return;
   }
 
-  // ═══ SUMMARY ═══════════════════════════════════════════════════════════
-  // ⚠️ IT DESCRIBES THE FILTERED ROWS, NOT THE FILE. Same filters as the list,
-  // so the two can never disagree about what is being counted.
-  if (S.transferView === 'summary') {
-    if (S.transferFlow) {
+
+  // ═══ THE FLOW PANEL ═══════════════════════════════════════════════════
+  // ⚠️ DRAWN IN BOTH VIEWS. It lived inside the SUMMARY branch, so every
+  // route that opened a diagram had to switch the reader to a table they had
+  // not asked for — and choosing a club from the box could not open one at
+  // all. The panel is about a club, not about which listing is below it.
+  const flowPanel = () => {
+    if (!S.transferFlow) return '';
+    const parts = [];
       const flows = tvFlowsFor(shown, S.transferFlow);
       const teams = tvTeamFlows(shown, S.transferFlow);
       // The season the players are LEAVING, which is the one holding the squad
@@ -3749,7 +3785,14 @@ function renderTransfers() {
             'move — the club is known, only the team is not.</div>'
           : '') +
         '</div>');
-    }
+    return parts.join('');
+  };
+
+  // ═══ SUMMARY ═══════════════════════════════════════════════════════════
+  // ⚠️ IT DESCRIBES THE FILTERED ROWS, NOT THE FILE. Same filters as the list,
+  // so the two can never disagree about what is being counted.
+  if (S.transferView === 'summary') {
+    parts.push(flowPanel());
     const k = S.transferSumKey, dir = S.transferSumDir;
     const rows = tvClubTotals(shown).sort((a, b) => {
       if (k === 'club') return dir * a.club.localeCompare(b.club);
@@ -3844,7 +3887,16 @@ function renderTransfers() {
     // is EMPTY for a registration with no team yet, and an em dash says so
     // rather than leaving a blank that reads as missing data.
     const teams = (t.fromTeam || t.toTeam)
-      ? '<span class="tv-teams">' + tvEsc(t.fromTeam || '—') + ' → ' + tvEsc(t.toTeam || '—') + '</span>'
+      ? '<span class="tv-teams">' +
+        (t.fromTeam
+          // The side they left is a filter; the side they joined is at another
+          // club and filtering on it would narrow this club's list to nothing.
+          ? '<span class="tv-teamlink"' +
+            ' onclick="setTransferTeam(\'' +
+            tvEsc(String(t.fromTeam).replace(/'/g, "\\'")) + '\')"' +
+            ' title="Show only this side">' + tvEsc(t.fromTeam) + '</span>'
+          : '—') +
+        ' → ' + tvEsc(t.toTeam || '—') + '</span>'
       : '';
     // ⚠️ THE GROUP'S OWN CLUB IS NOT REPEATED ON EVERY LINE. Under a Norwood
     // heading, in a section headed OUT, "Norwood (Eastern Football Netball
@@ -3866,6 +3918,8 @@ function renderTransfers() {
       kind + fill + games +
       '</div>';
   };
+
+  parts.push(flowPanel());
 
   if (S.transferSort === 'name') {
     parts.push(shown.slice()
