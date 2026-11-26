@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v18 2026-11-26 grade-on-the-row';
+const VERSION = 'build-transfers v19 2026-11-26 permit-home-club';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -384,6 +384,46 @@ function main() {
     return { age: (x && x.age) || f.age || '', team: (x && x.team) || f.team || '',
              gp: (x && x.gp) || 0, comp: (x && x.comp) || '' };
   };
+  // ⚠️ WHICH CLUB WAS THE PLAYER'S OWN — docs/permit_revert_design.md §4.
+  //
+  // A permit player holds TWO registrations for one season: their home club,
+  // and the club whose team they turned out for. Measured 2026-11-26 on the
+  // Norwood Gold/Heathmont side: 12 of 24. Until walk v14 the second was
+  // discarded and `from.club` was whichever PlayHQ listed last, so twelve
+  // Heathmont players were recorded as Norwood's and showed as Norwood
+  // departures when their permit ended.
+  //
+  // ⚠️ IT MATCHES ORGANISATION IDS, NEVER TEAM NAMES. PlayHQ says "Norwood
+  // Gold/Heathmont U12"; our stored name is age-stripped to "Norwood
+  // Gold/Heathmont". Comparing names failed on all twelve in the probe.
+  //
+  // Returns { id, name, host, why } — `host` is the club they played FOR when
+  // that differs from home, and `why` is one of:
+  //   single  one registration; nothing to decide
+  //   permit  two, and exactly one is the club whose team they played for
+  //   unknown two, and the played club matches neither or both — left alone
+  let permitResolved = 0, permitUnknown = 0, permitMulti = 0, permitReturned = 0;
+  let regFileVersion = 0;
+  // club name -> players who turned out for its teams on a permit and have
+  // gone somewhere other than it. Not transfers; the club lost them anyway.
+  const permitAway = new Map();
+  const homeOf = (uuid, from) => {
+    const list = Array.isArray(from.clubs) ? from.clubs.filter(x => x && x.id) : null;
+    const fallback = { id: from.club, name: from.clubName || clubLabel(from.club),
+      host: null, why: 'single' };
+    if (!list || list.length < 2) return fallback;
+    permitMulti++;
+    const played = (lastPlayed.get(uuid) || {}).clubId || null;
+    if (!played) { permitUnknown++; return { ...fallback, why: 'unknown' }; }
+    const other = list.filter(x => x.id !== played);
+    // Exactly one registration that is NOT the club they played for: that is
+    // home. Any other shape is not decidable here and must not be guessed.
+    if (other.length !== 1) { permitUnknown++; return { ...fallback, why: 'unknown' }; }
+    permitResolved++;
+    return { id: other[0].id, name: other[0].name || clubLabel(other[0].id),
+      host: played, why: 'permit' };
+  };
+
   function rosterAdd(sid, club, team, uuid, name, age, source, stats) {
     if (!sid || !club || !uuid) return;
     // Before placed.add, so a season outside the scope leaves no trace at all
@@ -685,6 +725,11 @@ function main() {
   } else {
     const reg = JSON.parse(zlib.gunzipSync(fs.readFileSync(REG_PATH)).toString('utf8'));
     const people = reg.players || {};
+    // ⚠️ A FILE OLDER THAN v4 CANNOT SUPPORT THE PERMIT RULE, and must not be
+    // read as if every player simply had one registration: an absent
+    // `from.clubs` and "one club" are indistinguishable. The version says
+    // which, and the log and the page both report it.
+    regFileVersion = Number((reg.meta || {}).version || 0);
     for (const [uuid, r] of Object.entries(people)) {
       if (!r.at) { notWalked++; continue; }
       // ⚠️ CHECKED BEFORE THE NEXT SEASON EXISTED IS NOT "NO REGISTRATION". Until
@@ -701,7 +746,23 @@ function main() {
         // a list of departures.
         rosterAdd(t.seasonId, t.club, t.team || null, uuid,
           r.name || null, lp(uuid).age, 'registered');
-        if (!t.club || !from.club || t.club === from.club) continue;
+        if (!t.club || !from.club) continue;
+        // ⚠️ AGAINST HOME, NOT AGAINST from.club. A permit player returning to
+        // their own club was a "transfer" from the host, which is the defect
+        // this version exists to remove.
+        const home = homeOf(uuid, from);
+        if (t.club === home.id) { permitReturned += (home.why === 'permit') ? 1 : 0; continue; }
+        // They have left for somewhere else. If they were on a permit, the
+        // HOST club has lost a player from its side without that being a
+        // transfer on the host's books — counted for the club heading.
+        // ⚠️ ONLY WHEN THE HOST ALSO LOSES THEM. A permit player who signs
+        // WITH the club whose team they played for has not left that side —
+        // counting them here credited Club A with losing a player it had just
+        // gained, which the fixture caught.
+        if (home.why === 'permit' && home.host && t.club !== home.host) {
+          const hn = clubLabel(home.host);
+          permitAway.set(hn, (permitAway.get(hn) || 0) + 1);
+        }
         const fs2 = splitSeason(from.compName);
         const ts = splitSeason((byId.get(t.seasonId) || {}).compName || t.compName || '');
         between.push({
@@ -715,9 +776,13 @@ function main() {
           // manifest order and is only the fallback.
           age: lp(uuid).age, 
           comp: fs2.comp, year: fs2.year, seasonId: from.seasonId,
-          fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
+          fromClub: home.id, fromClubName: home.name,
           fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
           fromGrade: gradeFor(from.compName, lp(uuid).team, lp(uuid).age),
+          // ⚠️ PRESENT ON EVERY ROW, null when not on a permit. A reader must
+          // be able to tell "played for their own club" from "played for
+          // someone else's team", and an absent field cannot say either.
+          permitHost: (home.why === 'permit' && home.host) ? clubLabel(home.host) : null,
           toClub: t.club, toClubName: t.clubName || clubLabel(t.club),
           toTeam: t.team || '', toGames: null,
           toComp: ts.comp, toYear: ts.year,
@@ -736,6 +801,30 @@ function main() {
     log(`  checked before the ${latest} seasons were known : ${staleCheck}`);
     log(`  never checked                                   : ${notWalked}`);
     log(`  moves found : ${between.length}`);
+    // ── permit reverts, docs/permit_revert_design.md ──────────────────────
+    if (regFileVersion && regFileVersion < 4) {
+      log(`  ⚠️ registrations file is version ${regFileVersion}; from.clubs arrives at`);
+      log('     version 4. NO PERMIT CORRECTION HAS BEEN APPLIED — a permit player');
+      log('     returning to their home club is still counted as a departure from');
+      log('     the club whose team they played for. Run walk-registrations v14+.');
+    } else {
+      log(`  players with two cohort-season registrations : ${permitMulti}`);
+      log(`    home club resolved from the played club    : ${permitResolved}`);
+      log(`    UNDECIDABLE, left as they were             : ${permitUnknown}`);
+      log(`  rows suppressed — a permit player going home : ${permitReturned}`);
+      if (permitMulti && !permitResolved) {
+        log('  ⚠️ NOT ONE RESOLVED. The rule compares organisation ids:');
+        log('     from.clubs[].id against lastPlayed.clubId. A zero here means one');
+        log('     side is empty or they are different id spaces — not that permits');
+        log('     have stopped existing.');
+      }
+      if (permitAway.size) {
+        log('  permit players who did NOT return, by the club they played for:');
+        for (const [k, v] of [...permitAway.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)) {
+          log(`    ${String(v).padStart(4)}  ${k}`);
+        }
+      }
+    }
     if (staleCheck + notWalked > 0) {
       log(`  ⚠️ ${staleCheck + notWalked} player(s) are UNKNOWN, not "stayed". This count is a FLOOR`);
       log('     until the walk reaches them.');
@@ -760,7 +849,13 @@ function main() {
     for (const [uuid, r] of Object.entries(reg2.players || {})) {
       const lo = r.lastOrg;
       const from = r.from || {};
-      if (!r.at || !lo || !lo.id || !from.club || lo.id === from.club) continue;
+      if (!r.at || !lo || !lo.id || !from.club) continue;
+      const home = homeOf(uuid, from);
+      if (lo.id === home.id) { permitReturned += (home.why === 'permit') ? 1 : 0; continue; }
+      if (home.why === 'permit' && home.host && lo.id !== home.host) {
+        const hn = clubLabel(home.host);
+        permitAway.set(hn, (permitAway.get(hn) || 0) + 1);
+      }
       if ((r.tracked || []).length) { leadsSkippedKnown++; continue; }
       const kind = (orgs[lo.id] && orgs[lo.id].kind) || 'unknown';
       // ⚠️ A CARNIVAL IS NOT A MOVE. An organisation that runs Nines and nothing
@@ -774,9 +869,10 @@ function main() {
         // ⚠️ NO SEASON AND NO YEAR, deliberately. A lead cannot be placed in time
         // and the view must not be able to imply otherwise.
         comp: '', year: '', seasonId: from.seasonId,
-        fromClub: from.club, fromClubName: from.clubName || clubLabel(from.club),
+        fromClub: home.id, fromClubName: home.name,
         fromTeam: lp(uuid).team, fromGames: lp(uuid).gp || null,
         fromGrade: gradeFor(from.compName, lp(uuid).team, lp(uuid).age),
+        permitHost: (home.why === 'permit' && home.host) ? clubLabel(home.host) : null,
         toClub: lo.id, toClubName: lo.name || clubLabel(lo.id),
         toTeam: '', toGames: null,
         toComp: (orgs[lo.id] && orgs[lo.id].competitions && orgs[lo.id].competitions[0]
@@ -806,6 +902,14 @@ function main() {
     transfers: [...inSeason, ...between, ...leads],
   };
   out.coverage.leads = leads.length;
+  // ⚠️ THE VIEW NEEDS THESE TO EXPLAIN ITSELF. Without permitFileVersion it
+  // cannot tell "no permits here" from "the data cannot show them".
+  out.coverage.permitFileVersion = regFileVersion;
+  out.coverage.permitMulti = permitMulti;
+  out.coverage.permitResolved = permitResolved;
+  out.coverage.permitUnknown = permitUnknown;
+  out.coverage.permitReturned = permitReturned;
+  out.permitAway = Object.fromEntries([...permitAway.entries()].sort((a, b) => b[1] - a[1]));
   out.coverage.leadsUnknownOrg = leadsUnknownOrg;
   // ⚠️ MEASURED, NOT ASSERTED. v16 and earlier took the age from playerInfo,
   // which is first-wins over an arbitrary manifest order. This says how many

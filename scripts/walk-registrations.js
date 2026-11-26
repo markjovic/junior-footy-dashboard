@@ -2,8 +2,8 @@
 // scripts/walk-registrations.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'walk-registrations v13 2026-11-24 playing-not-active';
-const FILE_VERSION = 3;
+const VERSION = 'walk-registrations v14 2026-11-26 every-cohort-club';
+const FILE_VERSION = 4;
 
 //
 // Where is each of our players for NEXT season? One call per person —
@@ -350,6 +350,17 @@ function loadRegistrations() {
     if (r.meta.clubTeams) delete r.meta.clubTeams;
     log(`migrated registrations v${was} -> v3: dropped nextCheck/triggered from ${stripped} record(s) and meta.clubTeams`);
   }
+  // v3 -> v4: `from.clubs` arrives. NOTHING IS MIGRATED — the field is
+  // additive and is written the first time each player is walked, and the
+  // whole cohort is walked nightly, so one run fills it.
+  //
+  // ⚠️ THE BUMP EXISTS SO A READER CAN TELL "not walked yet" FROM "one club".
+  // Without it, a missing `from.clubs` is indistinguishable from a player who
+  // genuinely has one registration, and build-transfers would silently apply
+  // the permit rule to a file that cannot support it. It checks meta.version.
+  if (was < 4) {
+    log(`migrated registrations v${was} -> v4: from.clubs will be written as players are walked`);
+  }
   r.meta.version = FILE_VERSION;
   return r;
 }
@@ -484,6 +495,7 @@ async function main() {
   // ── Walk ────────────────────────────────────────────────────────────────────
   let answered = 0, notFound = 0, errored = 0;
   let clubsHarvested = 0, trackedFound = 0, otherFound = 0, noOwnRecord = 0;
+  let multiClub = 0, noOwnOrg = 0;
   let lastOrgChanged = 0, lastOrgDiffers = 0, lastOrgSame = 0, lastOrgNull = 0;
   const rf = { set: 0, noFile: 0, alreadyHeld: 0, unreadable: 0, samples: [] };
   const errorSamples = [], noOwnSamples = [];
@@ -527,6 +539,7 @@ async function main() {
     const fromEnd = fromSeason ? (fromSeason.endDate || fromSeason.startDate) : '';
     const tracked = [], other = [];
     let sawOwn = false;
+    let ownRecs = null;
 
     for (const t of teams) {
       const sid = t.season?.id || null;
@@ -535,12 +548,35 @@ async function main() {
 
       // Harvest before you strip: the player's own cohort-season record names
       // their club. Take it, then drop the record as already stored.
+      //
+      // ⚠️ A PERMIT PLAYER HAS TWO RECORDS FOR ONE SEASON, one per club, and
+      // until v14 this assignment ran twice and PlayHQ's array order decided
+      // which survived. Measured 2026-11-26 on the whole Norwood
+      // Gold/Heathmont side: 12 of 24 players had two, Heathmont listed first
+      // and Norwood second every time, so the HOST club won and twelve
+      // Heathmont players were recorded as Norwood's. See
+      // docs/permit_revert_design.md.
+      //
+      // Every record is kept now, in PlayHQ's order, and `from.club` is the
+      // FIRST rather than the last — not because first is righter, but so the
+      // field stops depending on array order. Which one is HOME is decided
+      // downstream by build-transfers, which knows the organisation whose team
+      // the player actually played for; this script does not.
       if (sid && sid === rec.from?.seasonId) {
         sawOwn = true;
         if (t.organisation?.id) {
           if (!rec.from.club) clubsHarvested++;
-          rec.from.club = t.organisation.id;
-          rec.from.clubName = t.organisation.name || null;
+          if (!Array.isArray(ownRecs)) ownRecs = [];
+          ownRecs.push({
+            id: t.organisation.id,
+            name: t.organisation.name || null,
+            // ⚠️ THE TEAM TRAVELS, for the log and for a human reading the
+            // file. It is NOT what the home-club rule matches on: stored team
+            // names are age-stripped, so "Norwood Gold/Heathmont U12" here
+            // never equals "Norwood Gold/Heathmont" there. Organisation ids
+            // are compared instead.
+            team: t.name || null,
+          });
         }
       }
       const start = String(t.season?.startDate || '');
@@ -571,6 +607,19 @@ async function main() {
     }
     rec.tracked = tracked;
     rec.other = other;
+
+    // ⚠️ WRITTEN ONLY WHEN THE CALL ANSWERED. Clearing it on a failed call
+    // would silently drop a player's second club and look like the permit
+    // ending, which is the exact confusion this field exists to remove.
+    if (Array.isArray(ownRecs) && ownRecs.length) {
+      rec.from.clubs = ownRecs;
+      rec.from.club = ownRecs[0].id;
+      rec.from.clubName = ownRecs[0].name;
+      if (ownRecs.length > 1) multiClub++;
+    } else if (sawOwn) {
+      // Own season seen but no organisation on it: leave whatever was held.
+      noOwnOrg++;
+    }
 
     // ⚠️ A NOTE, NOT A REGISTRATION. No season and no date, so it cannot be
     // placed in time and must never be counted in a transfer total. Stored
@@ -658,6 +707,17 @@ async function main() {
   log('  ⚠️ A NOTE, NOT A REGISTRATION — it carries no season, so it is never');
   log('     counted in a transfer total. "DIFFERENT" is a lead to follow.');
   log(`clubs harvested this run: ${clubsHarvested}; with a next-season tracked registration: ${trackedFound}; with an outside one: ${otherFound}`);
+  log(`cohort-season registrations per player: ${multiClub} player(s) hold MORE THAN ONE` +
+    (noOwnOrg ? `; ${noOwnOrg} had their own season with no organisation on it` : ''));
+  log('  ⚠️ MORE THAN ONE MEANS A PERMIT, not a transfer: the player is');
+  log('     registered to one club and played in another\'s team. `from.clubs`');
+  log('     holds them all; build-transfers decides which is home from the');
+  log('     organisation whose team they actually played for.');
+  if (!multiClub) {
+    log('  ⚠️ ZERO IS SUSPICIOUS. 12 of the 24 players in one joint side had two');
+    log('     on 2026-11-26. A zero here means the harvest is no longer seeing');
+    log('     the second record, not that joint teams have stopped existing.');
+  }
   log(`career refetch flags: ${rf.set} set, ${rf.alreadyHeld} already complete, ` +
     `${rf.noFile} with no career file` + (rf.unreadable ? `, ${rf.unreadable} UNREADABLE` : ''));
   for (const l of rf.samples) log('  ' + l);
