@@ -777,7 +777,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.40</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.41</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1292,7 +1292,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.40</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.41</span>
         </div>
 
 
@@ -3739,35 +3739,55 @@ function renderTransfers() {
   // support. Two numbers, always.
   const shownLeads = shown.filter(t => t.kind === 'lead').length;
   const shownMoves = shown.length - shownLeads;
-  parts.push('<div class="tv-note">' +
-    '<b>' + shownMoves + '</b> with a team' +
-    (shownLeads ? ' and <b>' + shownLeads + '</b> registered but not yet in a team' : '') + ' shown' +
-    (S.transferComp ? ' touching <b>' + tvEsc(S.transferComp) + '</b> on either side' : '') +
-    (S.transferGrade ? ' at <b>' + tvEsc(S.transferGrade) + '</b>' : '') +
-    (S.transferClub ? ' involving <b>' + tvEsc(S.transferClub) + '</b>' : '') +
-    (S.transferTeam ? ' from <b>' + tvEsc(S.transferTeam) + '</b>' : '') +
-    (S.transferYear ? ' from the <b>' + tvEsc(S.transferYear) + '</b> season'
-                    : ' across <b>every season</b>') +
-    (q ? ' matching “' + tvEsc(S.transferSearch) + '”' : '') + '. ' +
-    (unknown > 0
-      ? '⚠️ <b>' + unknown + '</b> player(s) have not been checked for a next-season ' +
-        'registration yet, so the between-season count is a FLOOR, not a total.'
-      : 'Every player has been checked for a next-season registration.') +
-    // ⚠️ "NO PERMITS" AND "CANNOT SEE PERMITS" LOOK IDENTICAL otherwise, and
-    // the second is the state the page is in until walk v14 has run once.
-    ((cov.permitFileVersion && cov.permitFileVersion < 4)
-      ? ' ⚠️ <b>Permit players are not separated in this file</b> — the walk ' +
-        'has not recorded second registrations yet, so a player returning to ' +
-        'their own club after a season on permit still counts as a departure ' +
-        'from the club whose team they played in.'
-      : (cov.permitReturned
-          ? ' <b>' + cov.permitReturned + '</b> permit player(s) returning to ' +
-            'their own club are not counted as transfers.'
-          : '')) +
-    (Array.isArray(cov.seasonsWithoutLines) && cov.seasonsWithoutLines.length
-      ? ' Mid-season moves cannot be seen in: ' + cov.seasonsWithoutLines.map(tvEsc).join(', ') + '.'
-      : '') +
-    '</div>');
+  // ⚠️ COUNTS AND FILTERS, NOTHING ELSE. This line used to carry four
+  // sentences of standing explanation — what a floor is, how permits are
+  // handled, that every player had been checked — every one of which the
+  // ? About panel already says at length. A caveat that is on screen
+  // permanently is not read, it is furniture, and it buried the counts it was
+  // attached to. Explanation lives in About; this line states what is shown.
+  //
+  // ⚠️ A WARNING IS NOT A CAVEAT. The three below are suppressed when they
+  // are not true of what is on screen, so one appearing means something.
+  // "Every player has been checked" is the normal state and is now silence.
+  const bits = [];
+  if (shownMoves) bits.push('<b>' + shownMoves + '</b> with a team');
+  if (shownLeads) bits.push('<b>' + shownLeads + '</b> registered, no team');
+  if (!bits.length) bits.push('<b>0</b> shown');
+  if (S.transferComp) bits.push(tvEsc(S.transferComp));
+  if (S.transferGrade) bits.push(tvEsc(S.transferGrade));
+  if (S.transferClub) bits.push(tvEsc(S.transferClub));
+  if (S.transferTeam) bits.push(tvEsc(S.transferTeam));
+  bits.push(S.transferYear ? tvEsc(S.transferYear) : 'every season');
+  if (q) bits.push('“' + tvEsc(S.transferSearch) + '”');
+  parts.push('<div class="tv-note">' + bits.join(' · ') + '</div>');
+
+  const warn = [];
+  if (unknown > 0) {
+    warn.push('<b>' + unknown + '</b> not yet checked for a next-season ' +
+      'registration — the between-season count is a floor.');
+  }
+  // ⚠️ "NO PERMITS" AND "CANNOT SEE PERMITS" LOOK IDENTICAL otherwise, and
+  // the second is the state the page is in until walk v14 has run once.
+  if (cov.permitFileVersion && cov.permitFileVersion < 4) {
+    warn.push('<b>Permit players are not separated in this file</b> — a ' +
+      'player returning to their own club still counts as a departure.');
+  }
+  // ⚠️ A SEASON NOBODY HAS PLAYED IS NOT A GAP. seasonsWithoutLines means
+  // "no per-game lines file", which is true both of a season we are missing
+  // and of one that has not kicked off — so this warned about EFNL 2027 all
+  // through the registration window, when there were no games to miss.
+  // build-transfers v25 writes seasonsNotStarted as the subset that has no
+  // dated result stored. Absent (a file written before v25) it is [], which
+  // restores the old behaviour rather than silently hiding a real gap.
+  const noLines = Array.isArray(cov.seasonsWithoutLines) ? cov.seasonsWithoutLines : [];
+  const notStarted = new Set(Array.isArray(cov.seasonsNotStarted) ? cov.seasonsNotStarted : []);
+  const missing = noLines.filter(c => !notStarted.has(c));
+  if (missing.length) {
+    warn.push('No mid-season moves held for ' + missing.map(tvEsc).join(', ') + '.');
+  }
+  if (warn.length) {
+    parts.push('<div class="tv-note">⚠️ ' + warn.join(' ') + '</div>');
+  }
 
   if (!shown.length) {
     parts.push('<div class="tv-note">Nothing matches.</div>');
@@ -3804,20 +3824,14 @@ function renderTransfers() {
               ? tvTeamFlowSVG(S.transferFlow, teams, season,
                   tvInboundFlows(shown, S.transferFlow,
                     tvClubAges(season, S.transferFlow))) +
-                '<div class="tv-note" style="margin:0">Each box is a side this ' +
-                'club fielded in ' + tvEsc(season || 'the season being left') +
-                ', read left to right: the age group, the sides it fielded, ' +
-                'and the clubs they went to. <b>“11 of 12 left”</b> counts ' +
-                'departures against the players who actually played there; ' +
-                'where the season\u2019s roster is not held, only the ' +
-                'departures are shown. Red means everyone has gone. ' +
-                'Arrivals feed the age box they land in, with a <b>net</b> ' +
-                'beneath it; they stop there because a player joining has no ' +
-                'team of yours yet. <b>Other age bands</b> collects arrivals ' +
-                'whose age is not one this club fielded — usually another ' +
-                'competition\u2019s bands, and not matched to an age group ' +
-                'because PlayHQ has not matched them either. Hover anything ' +
-                'to list the players.</div>' +
+                // ⚠️ THE LEGEND IS IN ? ABOUT, not under the diagram. 120
+                // words of it sat here on every draw, explaining "11 of 12
+                // left", the red fill and the Other age bands box to a reader
+                // who had read it the first time. One line stays, because
+                // hovering is the only thing the picture does not advertise.
+                '<div class="tv-note" style="margin:0">' +
+                tvEsc(season || 'the season being left') +
+                ' · hover any box or band to list the players.</div>' +
                 // ⚠️ AN ABSENT FIELD AND AN EMPTY ONE LOOK IDENTICAL ON SCREEN.
                 // Without this, a file written before build-transfers v18 shows
                 // a diagram with no grades anywhere and nothing to say why.
@@ -3830,11 +3844,9 @@ function renderTransfers() {
                 '<div class="tv-note" style="margin:0">Hover a band to list the ' +
                 'players on it.</div>')
           : '<div class="tv-note">No moves in or out under the current filters.</div>') +
-        (flows.lead
-          ? '<div class="tv-note">Of these, <b>' + flows.lead + '</b> are registrations ' +
-            'PlayHQ has not yet placed in a team. They are drawn like any other ' +
-            'move — the club is known, only the team is not.</div>'
-          : '') +
+        // ⚠️ THE LEAD COUNT IS ALREADY ON SCREEN TWICE — in the line above
+        // the diagram and on every row's own tag. A third copy under the
+        // picture said nothing the reader had not just been told.
         '</div>');
     return parts.join('');
   };
@@ -3880,18 +3892,12 @@ function renderTransfers() {
         '<td>' + (r.mid || '') + '</td><td>' + (r.lead || '') + '</td>' +
         '</tr>').join('') +
       '</tbody></table>');
-    parts.push('<div class="tv-note">Click a club to see where its players came ' +
-      'from and went to, or a column heading to sort by it. ' +
-      (S.transferClub
-        ? 'Showing <b>' + tvEsc(S.transferClub) + '</b> alone, because it is ' +
-          'chosen in the club box; clear it to compare every club. '
-        : '') +
-      'OUT and IN count ' +
-      'the same move twice — once for each club — so the columns do not sum to ' +
-      'the number of rows in the list. <b>NO TEAM</b> and <b>MID</b> are ' +
-      'SUBSETS of those two, not extra columns: NO TEAM is how many are ' +
-      'registrations not yet placed in a team, which is most of them until a ' +
-      'league grades its sides.</div>');
+    // ⚠️ THE COLUMN RULES ARE IN THE HEADER TOOLTIPS AND IN ? ABOUT. Both
+    // were written before this caption and both still say it. What is left is
+    // the one thing neither says: that the cells are clickable.
+    parts.push('<div class="tv-note">Click a club for its flows, or a heading ' +
+      'to sort. OUT and IN count each move twice, once per club.' +
+      (S.transferClub ? ' This club only.' : '') + '</div>');
     body.innerHTML = parts.join('');
     return;
   }
@@ -9242,6 +9248,18 @@ const HELP = [
       destinations grouped into a named remainder rather than dropped.
       Registrations with no team yet are drawn like any other move: the diagram
       is about clubs, and a registration names its club.<br><br>
+      <b>The BY TEAM diagram</b> reads left to right: the clubs players came
+      from, the age group, the sides this club fielded that season, and the
+      clubs they went to. <b>“11 of 12 left”</b> counts departures against the
+      players who actually turned out for that side — where the season's roster
+      is not held, only the departures are shown. A box filled red means
+      everyone has gone. Arrivals feed the age box they land in and stop there,
+      with a <b>net</b> beneath it, because a player joining has no team of
+      yours yet. <b>Other age bands</b> collects arrivals whose age is not one
+      this club fielded, usually another competition's bands. Band thickness is
+      in proportion to the number of players, and the smallest sources and
+      destinations are grouped into a named remainder rather than dropped.
+      Hover any box or band to list the players by name.<br><br>
       What it cannot see: a move to a league the dashboard does not cover shows the
       departure but not the arrival, and a season with no team sheets shows no
       mid-season moves at all.` },
