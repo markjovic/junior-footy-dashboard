@@ -777,7 +777,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.37</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.38</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1292,7 +1292,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.37</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.38</span>
         </div>
 
 
@@ -3143,6 +3143,17 @@ function tvTeamFlows(rows, club) {
 // `teams['Lysterfield Teal']` holds every age that fielded a Teal, so an
 // unfiltered length would be the same inflated figure the box used to show,
 // and "11 of 30 left" would read as calm where "11 of 12" is a walkout.
+// ⚠️ PERMIT PLAYERS COME OUT OF THE DENOMINATOR. The roster is built from
+// GAMES, so a permit player is a row at the club whose team they played in.
+// Norwood U12 read "1 of 47 left" with a numerator that excludes those twelve
+// and a denominator that includes them — one figure about the club's own
+// players over one about everyone who took the field.
+// build-transfers v23 publishes the counts; docs/permit_revert_design.md §8.
+function tvPermit(map, key) {
+  const m = (S.transfers || {})[map] || {};
+  return Number(m[key] || 0);
+}
+
 function tvSquadSize(compName, clubName, teamName, age) {
   const idx = tvRosterSeason(compName);
   if (!idx) return null;
@@ -3159,7 +3170,13 @@ function tvSquadSize(compName, clubName, teamName, age) {
   const n = t.filter(r => (r && r.a) === age).length;
   // ⚠️ ZERO MEANS THE AGE IS NOT IN THIS TEAM, which is a mismatch, not a
   // squad of none. Returning 0 would render "11 of 0 left".
-  return n > 0 ? n : null;
+  if (n <= 0) return null;
+  const own = n - tvPermit('permitSquadTeam', `${compName}|${clubName}|${teamName}|${age}`);
+  // ⚠️ NEVER BELOW ZERO, AND NEVER ZERO. More permit rows than roster rows
+  // cannot happen, but if the two files ever disagree the fraction must not
+  // read "3 of -2 left" — fall back to the uncorrected figure and show
+  // something honest rather than something impossible.
+  return own > 0 ? own : n;
 }
 
 // ⚠️ IT ASKS FOR THE INDEX, it does not merely fail to find it. The rosters
@@ -3191,7 +3208,9 @@ function tvAgeSquadSize(compName, clubName, age) {
   for (const list of Object.values(club.teams)) {
     if (Array.isArray(list)) n += list.filter(r => (r && r.a) === age).length;
   }
-  return n > 0 ? n : null;
+  if (n <= 0) return null;
+  const own = n - tvPermit('permitSquadAge', `${compName}|${clubName}|${age}`);
+  return own > 0 ? own : n;
 }
 
 // Every age the club actually fielded last season, read from the roster. An
