@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.26</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.27</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.26</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.27</span>
         </div>
 
 
@@ -1765,6 +1765,9 @@ let S = {
   // 11, 10, 10 … against a NO TEAM column reading 37, 12, 10, 19. A table
   // people scan for a club they know has to be in the order they look it up in;
   // any ranking they actually want is one click on its heading.
+  // 'clubs' draws the club as one block; 'teams' splits it into the sides it
+  // fielded last season, which is the only way to see a whole team walk out.
+  transferFlowBy: 'teams',
   transferSumKey: 'club',  // club | out | in | net | mid | lead
   transferSumDir: 1,       // 1 ascending, -1 descending
   finalsMode: 'age',    // 'age' | 'club' | 'venue' | 'winners'
@@ -2883,6 +2886,7 @@ function openTransferFlow(club) {
   renderTransfers();
 }
 function closeTransferFlow() { S.transferFlow = ''; renderTransfers(); }
+function setTransferFlowBy(v) { S.transferFlowBy = v; renderTransfers(); }
 function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); }
 function resetTransferFilters() {
   S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
@@ -3006,6 +3010,48 @@ function tvFlowsFor(rows, club) {
   return { out: sort(out), in: sort(inn), lead };
 }
 
+// ⚠️ GROUPED BY THE TEAM LEFT, NOT BY THE CLUB. Lysterfield showed as one
+// block of 28 against eight destinations, which hides the thing worth seeing:
+// whether one side has gone somewhere together. `fromTeam` is the team the
+// player last PLAYED for, written by build-transfers from the season files.
+function tvTeamFlows(rows, club) {
+  const teams = new Map();
+  for (const t of rows) {
+    if (t.fromClubName !== club) continue;
+    // A row with no recorded team is kept and labelled, never folded into a
+    // team it did not come from.
+    const k = t.fromTeam || '(no team recorded)';
+    if (!teams.has(k)) teams.set(k, new Map());
+    const d = teams.get(k), to = t.toClubName || '?';
+    if (!d.has(to)) d.set(to, []);
+    d.get(to).push(t);
+  }
+  return [...teams.entries()].map(([team, d]) => ({
+    team,
+    left: [...d.values()].reduce((a, l) => a + l.length, 0),
+    dests: [...d.entries()].map(([c, l]) => [c, l.length, l])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+  })).sort((a, b) => b.left - a.left || a.team.localeCompare(b.team));
+}
+
+// How many played for that team in the season being left — the denominator for
+// "17 of 24 left". Read from the ROSTERS files, which the rosters view already
+// loads; returns null when the season is not held, and the caller then shows
+// the bare count rather than inventing a total.
+//
+// ⚠️ NULL IS NOT ZERO. A missing roster must never render as "17 of 0".
+function tvSquadSize(compName, clubName, teamName) {
+  const idx = ((S.rosters && S.rosters.seasons) || [])
+    .find(x => (x.compName || '') === compName);
+  if (!idx) return null;
+  const d = S.rosterData[idx.sid];
+  if (!d) { loadRosterSeason(idx.sid); return null; }
+  const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
+  if (!club || !club.teams) return null;
+  const t = club.teams[teamName];
+  return Array.isArray(t) ? t.length : null;
+}
+
 // The hover text for one band. Age then name, the same order the list uses, so
 // hovering and reading the list below give the same sequence.
 const TV_TIP_MAX = 30;
@@ -3031,6 +3077,68 @@ function tvFlowTip(club, other, isIn, list) {
 // question somebody actually asks. Sources left, the club centre, destinations
 // right, each band's thickness proportional to the number of players.
 const TV_FLOW_MAX = 10;
+// ⚠️ TEAMS LEFT, DESTINATION CLUBS RIGHT. The club-level diagram puts one node
+// in the middle; this puts one node per team the club fielded, so a side that
+// has gone somewhere together is a single thick band rather than 17 of 28
+// spread across a block.
+function tvTeamFlowSVG(club, teams, season) {
+  const e = tvEsc;
+  const dests = [...new Set(teams.flatMap(t => t.dests.map(d => d[0])))]
+    .sort((a, b) => a.localeCompare(b));
+  const rowH = 30, padTop = 34, w = 820;
+  const lanes = Math.max(teams.length, dests.length, 1);
+  const h = padTop + lanes * rowH + 20;
+  const maxN = Math.max(1, ...teams.flatMap(t => t.dests.map(d => d[1])));
+  const band = (n) => Math.max(1.5, (n / maxN) * 16);
+  const yL = (i) => padTop + i * rowH + rowH / 2 +
+    ((lanes - teams.length) * rowH) / 2;
+  const yR = (i) => padTop + i * rowH + rowH / 2 +
+    ((lanes - dests.length) * rowH) / 2;
+  const xL = 260, xR = w - 260, mid = w / 2;
+  let g = '';
+  teams.forEach((t, i) => {
+    const size = tvSquadSize(season, club, t.team);
+    // ⚠️ "17 of 24" ONLY WHEN 24 IS KNOWN. A missing roster shows "17 left".
+    const label = size ? t.left + ' of ' + size + ' left' : t.left + ' left';
+    const tip = e(t.team + '  \u2014  ' + label + '\n' +
+      t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
+    g += `<rect x="20" y="${yL(i) - 13}" width="${xL - 30}" height="26" rx="5" ` +
+      `fill="var(--s3)" stroke="var(--gold)" stroke-width="1" style="cursor:help">` +
+      `<title>${tip}</title></rect>`;
+    g += `<text x="30" y="${yL(i) + 4}" font-size="11" fill="var(--tx)" ` +
+      `font-weight="600" style="pointer-events:none">` +
+      `${e(t.team.length > 26 ? t.team.slice(0, 25) + '\u2026' : t.team)}</text>`;
+    g += `<text x="${xL - 20}" y="${yL(i) + 4}" text-anchor="end" font-size="10" ` +
+      `fill="${size && t.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
+      `font-family="'DM Mono',monospace" style="pointer-events:none">${e(label)}</text>`;
+    for (const [dc, n, list] of t.dests) {
+      const j = dests.indexOf(dc);
+      const sy = yL(i), ey = yR(j);
+      const bt = e(tvFlowTip(t.team, dc, false, list));
+      g += `<path d="M ${xL} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${xR} ${ey}" ` +
+        `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
+        `style="pointer-events:stroke"><title>${bt}</title></path>`;
+      g += `<path d="M ${xL} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${xR} ${ey}" ` +
+        `fill="none" stroke="var(--gold)" stroke-opacity="0.4" ` +
+        `stroke-width="${band(n)}" style="pointer-events:none"/>`;
+    }
+  });
+  dests.forEach((d, j) => {
+    const n = teams.reduce((a, t) =>
+      a + (t.dests.find(x => x[0] === d) || [0, 0])[1], 0);
+    g += `<text x="${xR + 10}" y="${yR(j) + 4}" font-size="10" fill="var(--tx2)">` +
+      `${e(d.length > 28 ? d.slice(0, 27) + '\u2026' : d)}</text>`;
+    g += `<text x="${xR - 8}" y="${yR(j) - 4}" text-anchor="end" font-size="9" ` +
+      `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
+  });
+  g += `<text x="20" y="20" font-size="10" fill="var(--gold)" font-weight="600">` +
+    `${e(season || 'LAST SEASON')} TEAMS</text>`;
+  g += `<text x="${xR + 10}" y="20" font-size="10" fill="var(--gold)" ` +
+    `font-weight="600">WENT TO</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" ` +
+    `style="max-width:${w}px;display:block;margin:4px auto 10px">${g}</svg>`;
+}
+
 function tvFlowSVG(club, flows) {
   const squash = (list) => {
     if (list.length <= TV_FLOW_MAX) return list;
@@ -3219,13 +3327,35 @@ function renderTransfers() {
   if (S.transferView === 'summary') {
     if (S.transferFlow) {
       const flows = tvFlowsFor(shown, S.transferFlow);
+      const teams = tvTeamFlows(shown, S.transferFlow);
+      // The season the players are LEAVING, which is the one holding the squad
+      // sizes — one season behind the one being viewed.
+      const leaving = shown.find(t => t.fromClubName === S.transferFlow);
+      const season = leaving ? [leaving.fromComp, leaving.fromYear].filter(Boolean).join(' ') : '';
+      const byTeams = S.transferFlowBy === 'teams';
       parts.push('<div class="tvs-flow">' +
         '<div class="tvs-flow-hd"><span>' + tvEsc(S.transferFlow) + '</span>' +
+        '<span class="fv-switch" style="margin-left:auto">' +
+        '<button' + (byTeams ? ' class="on"' : '') +
+        ' onclick="setTransferFlowBy(\'teams\')">BY TEAM</button>' +
+        '<button' + (byTeams ? '' : ' class="on"') +
+        ' onclick="setTransferFlowBy(\'clubs\')">BY CLUB</button></span>' +
         '<button class="hdr-btn" onclick="closeTransferFlow()">CLOSE</button></div>' +
         ((flows.in.length || flows.out.length)
-          ? tvFlowSVG(S.transferFlow, flows) +
-            '<div class="tv-note" style="margin:0">Hover a band to list the ' +
-            'players on it.</div>'
+          ? ((byTeams && teams.length)
+              ? tvTeamFlowSVG(S.transferFlow, teams, season) +
+                '<div class="tv-note" style="margin:0">Each box is a side this ' +
+                'club fielded in ' + tvEsc(season || 'the season being left') +
+                '. <b>“17 of 24 left”</b> counts that team\u2019s departures ' +
+                'against the players who actually played for it; where the ' +
+                'season\u2019s roster is not held, only the departures are ' +
+                'shown. A figure in red means the whole side has gone. ' +
+                'Arrivals are not drawn here — a player joining has no team of ' +
+                'yours to leave; use BY CLUB for those. Hover anything to ' +
+                'list the players.</div>'
+              : tvFlowSVG(S.transferFlow, flows) +
+                '<div class="tv-note" style="margin:0">Hover a band to list the ' +
+                'players on it.</div>')
           : '<div class="tv-note">No moves in or out under the current filters.</div>') +
         (flows.lead
           ? '<div class="tv-note">Of these, <b>' + flows.lead + '</b> are registrations ' +
@@ -3521,6 +3651,10 @@ function loadRosterSeason(sid) {
     }
     rosterSeasonLoading[sid] = null;
     renderRosters();
+    // ⚠️ THE TRANSFERS FLOW READS ROSTERS TOO, for the "17 of 24" denominator.
+    // Without this the squad size arrives and nothing repaints, so the panel
+    // sits on "17 left" forever and the load looks like a failure.
+    if (S.transferFlow) renderTransfers();
     return S.rosterData[sid] || null;
   })();
   return rosterSeasonLoading[sid];
