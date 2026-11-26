@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.27</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.29</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.27</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.29</span>
         </div>
 
 
@@ -3014,24 +3014,37 @@ function tvFlowsFor(rows, club) {
 // block of 28 against eight destinations, which hides the thing worth seeing:
 // whether one side has gone somewhere together. `fromTeam` is the team the
 // player last PLAYED for, written by build-transfers from the season files.
+// ⚠️ A TEAM IS A NAME **AND** AN AGE. Stored team names are age-stripped:
+// every age group at a club fields a "Teal", so grouping on `fromTeam` alone
+// put U12, U13 and U15 Teal in one box reading "30 left" — a number belonging
+// to no side that ever took the field. This is the same age-stripping that
+// costs the registry its match rate (team_registry_design §3.1, step 4).
 function tvTeamFlows(rows, club) {
   const teams = new Map();
   for (const t of rows) {
     if (t.fromClubName !== club) continue;
     // A row with no recorded team is kept and labelled, never folded into a
     // team it did not come from.
-    const k = t.fromTeam || '(no team recorded)';
-    if (!teams.has(k)) teams.set(k, new Map());
-    const d = teams.get(k), to = t.toClubName || '?';
+    const name = t.fromTeam || '(no team recorded)';
+    const age = t.age || '';
+    const k = age + '\u0000' + name;
+    if (!teams.has(k)) teams.set(k, { name, age, dests: new Map() });
+    const d = teams.get(k).dests, to = t.toClubName || '?';
     if (!d.has(to)) d.set(to, []);
     d.get(to).push(t);
   }
-  return [...teams.entries()].map(([team, d]) => ({
-    team,
-    left: [...d.values()].reduce((a, l) => a + l.length, 0),
-    dests: [...d.entries()].map(([c, l]) => [c, l.length, l])
+  return [...teams.values()].map(v => ({
+    name: v.name,
+    age: v.age,
+    // What the box is labelled. The age is appended rather than assumed to be
+    // in the name, because it never is.
+    team: v.name + (v.age ? ' ' + tvAge(v.age) : ''),
+    left: [...v.dests.values()].reduce((a, l) => a + l.length, 0),
+    dests: [...v.dests.entries()].map(([c, l]) => [c, l.length, l])
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
-  })).sort((a, b) => b.left - a.left || a.team.localeCompare(b.team));
+  })).sort((a, b) =>
+    tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
+    a.name.localeCompare(b.name));
 }
 
 // How many played for that team in the season being left — the denominator for
@@ -3040,7 +3053,11 @@ function tvTeamFlows(rows, club) {
 // the bare count rather than inventing a total.
 //
 // ⚠️ NULL IS NOT ZERO. A missing roster must never render as "17 of 0".
-function tvSquadSize(compName, clubName, teamName) {
+// ⚠️ COUNTED FOR THAT AGE WITHIN THE TEAM, not for the team name. A roster's
+// `teams['Lysterfield Teal']` holds every age that fielded a Teal, so an
+// unfiltered length would be the same inflated figure the box used to show,
+// and "11 of 30 left" would read as calm where "11 of 12" is a walkout.
+function tvSquadSize(compName, clubName, teamName, age) {
   const idx = ((S.rosters && S.rosters.seasons) || [])
     .find(x => (x.compName || '') === compName);
   if (!idx) return null;
@@ -3049,7 +3066,48 @@ function tvSquadSize(compName, clubName, teamName) {
   const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
   if (!club || !club.teams) return null;
   const t = club.teams[teamName];
-  return Array.isArray(t) ? t.length : null;
+  if (!Array.isArray(t)) return null;
+  // ⚠️ NO AGE, NO DENOMINATOR. Falling back to the whole stored team here would
+  // put the combined all-ages figure behind a row whose age is unknown — "1 of
+  // 30 left" — which is the same inflated number by another route.
+  if (!age) return null;
+  const n = t.filter(r => (r && r.a) === age).length;
+  // ⚠️ ZERO MEANS THE AGE IS NOT IN THIS TEAM, which is a mismatch, not a
+  // squad of none. Returning 0 would render "11 of 0 left".
+  return n > 0 ? n : null;
+}
+
+// The whole age group's squad, across every side the club fielded at it. Not
+// a sum of the team figures: a player appears in one team, so summing is the
+// same answer, but reading it from the roster keeps one source of truth.
+function tvAgeSquadSize(compName, clubName, age) {
+  const idx = ((S.rosters && S.rosters.seasons) || [])
+    .find(x => (x.compName || '') === compName);
+  if (!idx || !age) return null;
+  const d = S.rosterData[idx.sid];
+  if (!d) { loadRosterSeason(idx.sid); return null; }
+  const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
+  if (!club || !club.teams) return null;
+  let n = 0;
+  for (const list of Object.values(club.teams)) {
+    if (Array.isArray(list)) n += list.filter(r => (r && r.a) === age).length;
+  }
+  return n > 0 ? n : null;
+}
+
+// Age groups, each with the sides it fielded. The middle column of the
+// three-stage diagram hangs off this.
+function tvAgeGroups(teams) {
+  const m = new Map();
+  for (const t of teams) {
+    const k = t.age || '';
+    if (!m.has(k)) m.set(k, { age: k, teams: [], left: 0 });
+    const g = m.get(k);
+    g.teams.push(t);
+    g.left += t.left;
+  }
+  return [...m.values()]
+    .sort((a, b) => tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)));
 }
 
 // The hover text for one band. Age then name, the same order the list uses, so
@@ -3083,58 +3141,101 @@ const TV_FLOW_MAX = 10;
 // spread across a block.
 function tvTeamFlowSVG(club, teams, season) {
   const e = tvEsc;
+  const groups = tvAgeGroups(teams);
   const dests = [...new Set(teams.flatMap(t => t.dests.map(d => d[0])))]
     .sort((a, b) => a.localeCompare(b));
-  const rowH = 30, padTop = 34, w = 820;
+  const rowH = 30, padTop = 38, w = 940;
+  // ⚠️ THE TEAM COLUMN IS THE BACKBONE. Ages bracket their own teams and
+  // destinations take their own lanes, so the tallest of the three sets the
+  // height and nothing is drawn off the bottom.
   const lanes = Math.max(teams.length, dests.length, 1);
-  const h = padTop + lanes * rowH + 20;
+  const h = padTop + lanes * rowH + 22;
   const maxN = Math.max(1, ...teams.flatMap(t => t.dests.map(d => d[1])));
   const band = (n) => Math.max(1.5, (n / maxN) * 16);
-  const yL = (i) => padTop + i * rowH + rowH / 2 +
-    ((lanes - teams.length) * rowH) / 2;
-  const yR = (i) => padTop + i * rowH + rowH / 2 +
-    ((lanes - dests.length) * rowH) / 2;
-  const xL = 260, xR = w - 260, mid = w / 2;
+  const offT = ((lanes - teams.length) * rowH) / 2;
+  const offD = ((lanes - dests.length) * rowH) / 2;
+  const yT = (i) => padTop + i * rowH + rowH / 2 + offT;
+  const yD = (j) => padTop + j * rowH + rowH / 2 + offD;
+  const xA0 = 14, xA1 = 132, xT0 = 212, xT1 = 470, xD = 690;
+  // The order teams appear in the middle column, grouped by age.
+  const order = groups.flatMap(g => g.teams);
+  const idxOf = (t) => order.indexOf(t);
   let g = '';
-  teams.forEach((t, i) => {
-    const size = tvSquadSize(season, club, t.team);
-    // ⚠️ "17 of 24" ONLY WHEN 24 IS KNOWN. A missing roster shows "17 left".
+
+  // ── stage 1: the age group, bracketing its sides ──────────────────────
+  for (const grp of groups) {
+    const is = grp.teams.map(idxOf);
+    const top = yT(Math.min(...is)), bot = yT(Math.max(...is));
+    const cy = (top + bot) / 2;
+    const size = tvAgeSquadSize(season, club, grp.age);
+    const label = size ? grp.left + ' of ' + size : String(grp.left);
+    const tip = e((grp.age ? tvAge(grp.age) : 'age not recorded') + '  \u2014  ' +
+      label + ' left\n' + grp.teams.map(t =>
+        '  ' + t.left + '  ' + t.name).join('\n'));
+    const hh = Math.max(26, bot - top + 26);
+    g += `<rect x="${xA0}" y="${cy - hh / 2}" width="${xA1 - xA0}" height="${hh}" rx="6" ` +
+      `fill="var(--s3)" stroke="${size && grp.left >= size ? 'var(--red)' : 'var(--gold)'}" ` +
+      `stroke-width="1" style="cursor:help"><title>${tip}</title></rect>`;
+    g += `<text x="${(xA0 + xA1) / 2}" y="${cy - 1}" text-anchor="middle" font-size="12" ` +
+      `fill="var(--tx)" font-weight="600" style="pointer-events:none">` +
+      `${e(grp.age ? tvAge(grp.age) : 'no age')}</text>`;
+    g += `<text x="${(xA0 + xA1) / 2}" y="${cy + 12}" text-anchor="middle" font-size="9" ` +
+      `fill="${size && grp.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
+      `font-family="'DM Mono',monospace" style="pointer-events:none">` +
+      `${e(label + ' left')}</text>`;
+    // age → each of its sides
+    for (const t of grp.teams) {
+      const y = yT(idxOf(t)), mid = (xA1 + xT0) / 2;
+      g += `<path d="M ${xA1} ${cy} C ${mid} ${cy}, ${mid} ${y}, ${xT0} ${y}" ` +
+        `fill="none" stroke="var(--gold)" stroke-opacity="0.3" ` +
+        `stroke-width="${band(t.left)}" style="pointer-events:none"/>`;
+    }
+  }
+
+  // ── stage 2: the sides, and where each went ───────────────────────────
+  order.forEach((t) => {
+    const i = idxOf(t), y = yT(i);
+    const size = tvSquadSize(season, club, t.name, t.age);
+    // ⚠️ "11 of 12" ONLY WHEN 12 IS KNOWN. A missing roster shows "11 left".
     const label = size ? t.left + ' of ' + size + ' left' : t.left + ' left';
     const tip = e(t.team + '  \u2014  ' + label + '\n' +
       t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
-    g += `<rect x="20" y="${yL(i) - 13}" width="${xL - 30}" height="26" rx="5" ` +
-      `fill="var(--s3)" stroke="var(--gold)" stroke-width="1" style="cursor:help">` +
+    g += `<rect x="${xT0}" y="${y - 13}" width="${xT1 - xT0}" height="26" rx="5" ` +
+      `fill="var(--s2)" stroke="var(--b2)" stroke-width="1" style="cursor:help">` +
       `<title>${tip}</title></rect>`;
-    g += `<text x="30" y="${yL(i) + 4}" font-size="11" fill="var(--tx)" ` +
-      `font-weight="600" style="pointer-events:none">` +
-      `${e(t.team.length > 26 ? t.team.slice(0, 25) + '\u2026' : t.team)}</text>`;
-    g += `<text x="${xL - 20}" y="${yL(i) + 4}" text-anchor="end" font-size="10" ` +
+    g += `<text x="${xT0 + 10}" y="${y + 4}" font-size="11" fill="var(--tx)" ` +
+      `style="pointer-events:none">` +
+      `${e(t.name.length > 28 ? t.name.slice(0, 27) + '\u2026' : t.name)}</text>`;
+    g += `<text x="${xT1 - 10}" y="${y + 4}" text-anchor="end" font-size="9" ` +
       `fill="${size && t.left >= size ? 'var(--red)' : 'var(--tx2)'}" ` +
       `font-family="'DM Mono',monospace" style="pointer-events:none">${e(label)}</text>`;
     for (const [dc, n, list] of t.dests) {
-      const j = dests.indexOf(dc);
-      const sy = yL(i), ey = yR(j);
+      const j = dests.indexOf(dc), ey = yD(j), mid = (xT1 + xD) / 2;
       const bt = e(tvFlowTip(t.team, dc, false, list));
-      g += `<path d="M ${xL} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${xR} ${ey}" ` +
+      g += `<path d="M ${xT1} ${y} C ${mid} ${y}, ${mid} ${ey}, ${xD} ${ey}" ` +
         `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
         `style="pointer-events:stroke"><title>${bt}</title></path>`;
-      g += `<path d="M ${xL} ${sy} C ${mid} ${sy}, ${mid} ${ey}, ${xR} ${ey}" ` +
+      g += `<path d="M ${xT1} ${y} C ${mid} ${y}, ${mid} ${ey}, ${xD} ${ey}" ` +
         `fill="none" stroke="var(--gold)" stroke-opacity="0.4" ` +
         `stroke-width="${band(n)}" style="pointer-events:none"/>`;
     }
   });
+
+  // ── stage 3: the clubs they went to ───────────────────────────────────
   dests.forEach((d, j) => {
     const n = teams.reduce((a, t) =>
       a + (t.dests.find(x => x[0] === d) || [0, 0])[1], 0);
-    g += `<text x="${xR + 10}" y="${yR(j) + 4}" font-size="10" fill="var(--tx2)">` +
-      `${e(d.length > 28 ? d.slice(0, 27) + '\u2026' : d)}</text>`;
-    g += `<text x="${xR - 8}" y="${yR(j) - 4}" text-anchor="end" font-size="9" ` +
+    g += `<text x="${xD + 10}" y="${yD(j) + 4}" font-size="10" fill="var(--tx2)">` +
+      `${e(d.length > 30 ? d.slice(0, 29) + '\u2026' : d)}</text>`;
+    g += `<text x="${xD - 8}" y="${yD(j) - 4}" text-anchor="end" font-size="9" ` +
       `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
   });
-  g += `<text x="20" y="20" font-size="10" fill="var(--gold)" font-weight="600">` +
-    `${e(season || 'LAST SEASON')} TEAMS</text>`;
-  g += `<text x="${xR + 10}" y="20" font-size="10" fill="var(--gold)" ` +
-    `font-weight="600">WENT TO</text>`;
+
+  const hd = (x, t, anchor) => `<text x="${x}" y="22" text-anchor="${anchor}" ` +
+    `font-size="10" fill="var(--gold)" font-weight="600">${e(t)}</text>`;
+  g += hd((xA0 + xA1) / 2, 'AGE', 'middle') +
+       hd(xT0 + 10, (season || 'LAST SEASON') + ' TEAMS', 'start') +
+       hd(xD + 10, 'WENT TO', 'start');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" ` +
     `style="max-width:${w}px;display:block;margin:4px auto 10px">${g}</svg>`;
 }
@@ -3346,10 +3447,11 @@ function renderTransfers() {
               ? tvTeamFlowSVG(S.transferFlow, teams, season) +
                 '<div class="tv-note" style="margin:0">Each box is a side this ' +
                 'club fielded in ' + tvEsc(season || 'the season being left') +
-                '. <b>“17 of 24 left”</b> counts that team\u2019s departures ' +
-                'against the players who actually played for it; where the ' +
-                'season\u2019s roster is not held, only the departures are ' +
-                'shown. A figure in red means the whole side has gone. ' +
+                ', read left to right: the age group, the sides it fielded, ' +
+                'and the clubs they went to. <b>“11 of 12 left”</b> counts ' +
+                'departures against the players who actually played there; ' +
+                'where the season\u2019s roster is not held, only the ' +
+                'departures are shown. Red means everyone has gone. ' +
                 'Arrivals are not drawn here — a player joining has no team of ' +
                 'yours to leave; use BY CLUB for those. Hover anything to ' +
                 'list the players.</div>'
