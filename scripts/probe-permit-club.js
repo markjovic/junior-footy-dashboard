@@ -59,7 +59,7 @@ const zlib = require('zlib');
 const phq = require('./lib/playhq');
 const store = require('./lib/store');
 
-const VERSION = 'probe-permit-club v2 2026-11-26 whole-team';
+const VERSION = 'probe-permit-club v3 2026-11-26 match-on-org';
 
 const ROOT = path.resolve(__dirname, '..');
 const REG_PATH = path.join(ROOT, 'data', 'registrations.json.gz');
@@ -121,7 +121,12 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
     const f = path.join(ROSTER_DIR, ent.file || `${ent.sid}.json.gz`);
     if (!fs.existsSync(f)) die(`${f} is missing`);
     const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(f)).toString('utf8'));
-    const club = Object.values(d.clubs || {}).find(c => (c.name || '') === wantClub);
+    // ⚠️ THE KEY IS THE ORGANISATION ID. Taking Object.values() threw it away
+    // and left only the name to compare against, which is exactly the mistake
+    // this version exists to stop making.
+    const hit = Object.entries(d.clubs || {}).find(([, c]) => (c.name || '') === wantClub);
+    const clubId = hit ? hit[0] : null;
+    const club = hit ? hit[1] : null;
     if (!club) {
       die(`no club "${wantClub}" in ${wantSeason}. Nearest: ` +
         Object.values(d.clubs || {}).map(c => c.name)
@@ -142,8 +147,12 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
       // registrations file — `lastPlayed` lives in build-transfers — so
       // reading it off the record would leave `played` null for everyone and
       // the home-club rule would never be exercised by this probe at all.
+      // ⚠️ THE ORGANISATION, NOT THE TEAM NAME. v2 compared names and failed
+      // on all twelve permit players: PlayHQ says "Norwood Gold/Heathmont U12"
+      // and our stored name is age-stripped to "Norwood Gold/Heathmont".
+      // The club fielding the team we are iterating IS the played org.
       targets.push({ uuid: r.u, rec: rec || { name: r.n, from: {} },
-        noRec: !rec, played: wantTeam });
+        noRec: !rec, played: wantTeam, playedOrg: clubId });
     }
   }
 
@@ -162,7 +171,7 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
   let sameSeasonMulti = 0, homeClubFound = 0, checked = 0;
   let oneRecord = 0, noRecord = 0;
   const byHome = new Map();
-  for (const { uuid, rec, noRec, played } of targets) {
+  for (const { uuid, rec, noRec, played, playedOrg } of targets) {
     if (checked++) await phq.sleep(PACE_MS);
     const from = rec.from || {};
     log('');
@@ -213,15 +222,15 @@ const Q = `query PublicProfileTeams($profileID: ID!) {
       // ⚠️ WHICH ONE IS HOME, by the rule the design proposes: the record whose
       // team is NOT the one they played for. Printed per player so the rule can
       // be checked against reality rather than trusted.
-      const notPlayed = played ? inCohort.filter(x => x.team !== played) : [];
+      const notPlayed = playedOrg ? inCohort.filter(x => x.org !== playedOrg) : [];
       if (notPlayed.length === 1) {
-        log(`      home by the played-team rule: ${notPlayed[0].orgName}`);
+        log(`      home by the played-organisation rule: ${notPlayed[0].orgName}`);
         byHome.set(notPlayed[0].orgName, (byHome.get(notPlayed[0].orgName) || 0) + 1);
       } else {
-        log(`      ⚠️ cannot apply the rule: ${played
-          ? 'played team "' + played + '" matches ' +
+        log(`      ⚠️ cannot apply the rule: ${playedOrg
+          ? 'played org ' + playedOrg + ' matches ' +
             (inCohort.length - notPlayed.length) + ' of these ' + inCohort.length + ' records'
-          : 'no played team known (run with PP_TEAM)'}`);
+          : 'no played organisation known (run with PP_TEAM)'}`);
       }
     } else if (inCohort.length === 1) {
       oneRecord++;
