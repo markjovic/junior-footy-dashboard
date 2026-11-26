@@ -13,9 +13,14 @@
 #
 # ⚠️ READ-ONLY, LIKE EVERY PROBE IT RUNS. Nothing is written or committed.
 #
-# ⚠️ IT HOLDS THE DATA-WRITE GROUP. Probes write nothing, but the WAF call
-# budget is shared across every run on the account, so a probe must not sit
-# beside a walk or a results fetch.
+# ⚠️ IT HOLDS THE DATA-WRITE GROUP — EXCEPT FOR `list`. Probes write nothing,
+# but the WAF call budget is shared across every run on the account, so a probe
+# must not sit beside a walk or a results fetch.
+#
+# `list` calls nothing at all: it prints the table and exits. Making it queue
+# behind a 68-minute walk to print twenty-six lines is a cost with no purpose,
+# and the first thing anyone does with this workflow is ask it what it can do.
+# The group is therefore chosen per run, at job level.
 
 name: Probe
 
@@ -61,16 +66,20 @@ on:
         default: ''
         type: string
 
-concurrency:
-  group: playhq-data-write
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
 jobs:
   probe:
     runs-on: ubuntu-latest
+    # ⚠️ THE TEST IS EXACT, and it has to be: anything that is not literally
+    # `list` falls into the shared group. A loose match that let a real probe
+    # out would put PlayHQ calls beside a walk, which is what the group exists
+    # to prevent — and the symptom would be a WAF block in the walk's log,
+    # miles from the cause.
+    concurrency:
+      group: ${{ github.event.inputs.probe == 'list' && 'probe-list' || 'playhq-data-write' }}
+      cancel-in-progress: false
     timeout-minutes: 60
     steps:
       - name: Check out
