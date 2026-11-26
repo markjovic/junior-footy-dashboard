@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v23 2026-11-26 permit-squad-counts';
+const VERSION = 'build-transfers v24 2026-11-26 sample-wording';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -890,12 +890,11 @@ function main() {
       if (!r.at || !lo || !lo.id || !from.club) continue;
       const home = homeOf(uuid, from);
       if (lo.id === home.id) { permitReturned += (home.why === 'permit') ? 1 : 0; continue; }
-      // ⚠️ A MULTI-CLUB PLAYER WHOSE LEAD IS **NOT** SUPPRESSED is the case to
-      // watch: Heathmont showed 9 arriving from Norwood on 2026-11-26, which
-      // is what a permit ending looks like when `home` resolved to the wrong
-      // one of the two. The suspicion is that the joint team's club id in OUR
-      // match data is not the organisation PlayHQ attributes the registration
-      // to, so `played` names the home club and the rule inverts.
+      // A permit player whose lead is NOT suppressed is signing somewhere
+      // other than their own club — usually with the host whose team they
+      // played in, which is a real transfer. Sampled so the rule can be
+      // checked against reality; measured 2026-11-26, every sample was this
+      // legitimate case and none was a misresolution.
       if (home.why === 'permit' && leadKeptSamples.length < 8) {
         leadKeptSamples.push(
           `[lead] ${r.name || uuid}  played=${(lastPlayed.get(uuid) || {}).clubId || '(none)'}` +
@@ -973,9 +972,14 @@ function main() {
     }
     log(`  rows suppressed — a permit player going home : ${permitReturned}`);
   if (leadKeptSamples.length) {
-    log('  ⚠️ permit players whose LEAD was kept rather than suppressed — if the');
-    log('     home club below is the club whose team they played in, the rule has');
-    log('     resolved the wrong way round and `played` is naming their own club:');
+    // ⚠️ THIS IS NOT A WARNING, AND v23's WORDING SAID IT WAS. Every sample on
+    // the first real run showed home != played — the rule working — but the
+    // header invited the reader to treat the list as a fault report. A
+    // diagnostic that cries wolf gets ignored the day it matters.
+    log('  permit players whose row was KEPT, for inspection. A kept row is');
+    log('  correct when `home` differs from `played`: the player was on permit');
+    log('  at `played` and is moving from their own club, `home`. ⚠️ ONLY if');
+    log('  home EQUALS played has the rule resolved the wrong way round:');
     for (const l of leadKeptSamples) log(`      ${l}`);
   }
     if (permitMulti && !permitResolved) {
