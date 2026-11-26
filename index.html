@@ -770,7 +770,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.32</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.33</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1285,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.32</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.33</span>
         </div>
 
 
@@ -3158,32 +3158,17 @@ function tvInboundFlows(rows, club, known) {
   return outM;
 }
 
-// ⚠️ THE STORED GRADE IS KEYED BY TEAM NAME ALONE — `teamGrade[team]` in the
-// roster, written from `${sid}|${club}|${team}` with no age in the key. Where
-// one name covers two age groups, as "Montrose Blue" covers U13 and U15, the
-// file holds ONE grade and it belongs to only one of them. Rather than print a
-// grade that may be the other side's, this returns nothing in that case.
+// ⚠️ THE GRADE COMES OFF THE ROW, written by build-transfers v18 as
+// `fromGrade` from an index keyed `compName|team|age`. The view used to read
+// the roster's `teamGrade`, which is keyed by team NAME alone — one club
+// fields a "Montrose Blue" at six age groups, so that map held one grade for
+// six sides and the view correctly refused to attribute it. The effect was a
+// diagram with almost no junior grades on it.
 //
-// The fix at the writer is to key teamGrades by age as well; until then a
-// missing grade here is a refusal to guess, not a gap in the data.
-function tvTeamGrade(compName, clubName, teamName, age) {
-  const idx = tvRosterSeason(compName);
-  if (!idx) return '';
-  const d = S.rosterData[idx.sid];
-  if (!d) { loadRosterSeason(idx.sid); return ''; }
-  const club = Object.values(d.clubs || {}).find(c => (c.name || '') === clubName);
-  if (!club || !club.teamGrade) return '';
-  const g = club.teamGrade[teamName];
-  if (!g) return '';
-  const rows = (club.teams || {})[teamName];
-  if (!Array.isArray(rows)) return '';
-  const ages = new Set(rows.map(r => r && r.a).filter(Boolean));
-  // One age in the team, or none recorded: the grade is unambiguous.
-  if (ages.size <= 1) return String(g);
-  // Several ages share this name, so the single stored grade cannot be
-  // attributed to the one being asked about.
-  return '';
-}
+// '' on a row written by v18 means that season holds no grade for that side.
+// EVERY row being empty means the file predates v18 — not that grades are
+// missing — so the panel says which it is rather than showing blanks.
+const tvGrade = (t) => (t && t.fromGrade) || '';
 
 // Age groups, each with the sides it fielded. The middle column of the
 // three-stage diagram hangs off this.
@@ -3212,9 +3197,7 @@ function tvFlowTip(club, other, isIn, list, season) {
     // The side and grade they were playing in the season they left, which is
     // the thing you want when the question is "who have we actually lost".
     (t.fromTeam ? '  \u2014 ' + t.fromTeam : '') +
-    ((season && t.fromTeam &&
-      tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age))
-      ? '  (' + tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age) + ')' : '') +
+    (tvGrade(t) ? '  (' + tvGrade(t) + ')' : '') +
     (t.kind === 'lead' ? '  [no team yet]'
       : t.kind === 'in-season' ? '  [mid-season]' : '');
   // ⚠️ TRUNCATED, AND IT SAYS SO. A native SVG tooltip of 60 names is unusable
@@ -3269,7 +3252,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   // the third line fell outside its own rect and under the next box, so every
   // single-lane age lost its net line. The row and the minimum box now size
   // for three lines, and AGE_H is the one place that changes.
-  const rowH = 42, padTop = 38, w = 1180, AGE_H = 40;
+  const rowH = 42, padTop = 38, w = 1220, AGE_H = 40;
   const lanes = Math.max(lane.length, dests.length, srcs.length, 1);
   const h = padTop + lanes * rowH + 22;
   const maxN = Math.max(1,
@@ -3280,7 +3263,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   const yL = (i) => padTop + i * rowH + rowH / 2 + off(lane.length);
   const yD = (j) => padTop + j * rowH + rowH / 2 + off(dests.length);
   const yS = (j) => padTop + j * rowH + rowH / 2 + off(srcs.length);
-  const xS = 196, xA0 = 268, xA1 = 428, xT0 = 476, xT1 = 760, xD = 960;
+  const xSB = 14, xS = 240, xA0 = 300, xA1 = 460, xT0 = 508, xT1 = 792, xD = 990;
   const laneOf = (t) => lane.findIndex(l => l.kind === 'team' && l.team === t);
   let g = '';
 
@@ -3355,7 +3338,8 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     const t = l.team, y = yL(laneOf(t));
     const size = tvSquadSize(season, club, t.name, t.age);
     const label = size ? t.left + ' of ' + size + ' left' : t.left + ' left';
-    const grade = tvTeamGrade(season, club, t.name, t.age);
+    // Every row in this box shares a team and an age, so they share a grade.
+    const grade = tvGrade((t.dests[0] || [0, 0, []])[2][0]);
     const tip = e(t.team + (grade ? '  \u2014  ' + grade : '') + '  \u2014  ' + label + '\n' +
       t.dests.map(d => '  ' + d[1] + ' \u2192 ' + d[0]).join('\n'));
     g += `<rect x="${xT0}" y="${y - 13}" width="${xT1 - xT0}" height="26" rx="5" ` +
@@ -3382,24 +3366,37 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   }
 
   // ── the two outer columns ─────────────────────────────────────────────
+  // ⚠️ A BOX, LIKE THE OTHER TWO COLUMNS. Bare text has nothing to hover and
+  // no edge for a band to meet, so the one column you cannot interrogate was
+  // the one answering "who is arriving".
   srcs.forEach((sc, j) => {
     const mine = [...IN.values()].flatMap(v =>
       (v.srcs.find(x => x[0] === sc) || [0, 0, []])[2]);
-    const n = mine.length;
+    const n = mine.length, y = yS(j);
     // ⚠️ ONE GRADE ONLY IF THEY ALL SHARE IT. A club's arrivals can come from
-    // several of its sides; printing the first one's grade beside the club
-    // name would attribute it to all of them.
-    const grades = mine.map(t => t.fromTeam
-      ? tvTeamGrade(season, t.fromClubName, t.fromTeam, t.age) : '');
-    const gs = new Set(grades.filter(Boolean));
-    const one = (gs.size === 1 && grades.every(Boolean)) ? [...gs][0] : '';
-    const nm = sc.length > 26 ? sc.slice(0, 25) + '\u2026' : sc;
-    g += `<text x="${xS - 14}" y="${yS(j) + 4}" text-anchor="end" font-size="10" ` +
-      `fill="var(--tx2)">` +
+    // several of its sides; the first one's grade beside the club name would
+    // attribute it to all of them.
+    const gs = new Set(mine.map(tvGrade).filter(Boolean));
+    const one = (gs.size === 1 && mine.every(tvGrade)) ? [...gs][0] : '';
+    const tip = e(sc + '  \u2014  ' + n + ' arriving\n' +
+      mine.slice().sort((a, b) =>
+        tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
+        String(a.name || '').localeCompare(String(b.name || '')))
+        .map(t => '  ' + (t.name || '(unnamed)') +
+          (t.age ? '  ' + tvAge(t.age) : '') +
+          (t.fromTeam ? '  \u2014 ' + t.fromTeam : '') +
+          (tvGrade(t) ? '  (' + tvGrade(t) + ')' : '')).join('\n'));
+    g += `<rect x="${xSB}" y="${y - 13}" width="${xS - xSB}" height="26" rx="5" ` +
+      `fill="var(--s2)" stroke="var(--b2)" stroke-width="1" style="cursor:help">` +
+      `<title>${tip}</title></rect>`;
+    const nm = sc.length > 24 ? sc.slice(0, 23) + '\u2026' : sc;
+    g += `<text x="${xSB + 10}" y="${y + 4}" font-size="10" fill="var(--tx2)" ` +
+      `style="pointer-events:none">${e(nm)}` +
       (one ? `<tspan fill="var(--tx3)" font-size="9" font-family="'DM Mono',monospace">` +
-        `${e(one)}  </tspan>` : '') + `${e(nm)}</text>`;
-    g += `<text x="${xS - 6}" y="${yS(j) - 4}" text-anchor="start" font-size="9" ` +
-      `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
+        `  ${e(one)}</tspan>` : '') + `</text>`;
+    g += `<text x="${xS - 10}" y="${y + 4}" text-anchor="end" font-size="9" ` +
+      `fill="var(--tx3)" font-family="'DM Mono',monospace" style="pointer-events:none">` +
+      `${n}</text>`;
   });
   dests.forEach((d, j) => {
     const n = teams.reduce((a, t) =>
@@ -3412,7 +3409,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
 
   const hd = (x, t, anchor, col) => `<text x="${x}" y="22" text-anchor="${anchor}" ` +
     `font-size="10" fill="${col || 'var(--gold)'}" font-weight="600">${e(t)}</text>`;
-  g += hd(xS - 14, 'CAME FROM', 'end', 'var(--green)') +
+  g += hd(xSB + 10, 'CAME FROM', 'start', 'var(--green)') +
        hd((xA0 + xA1) / 2, 'AGE', 'middle') +
        hd(xT0 + 10, (season || 'LAST SEASON') + ' TEAMS', 'start') +
        hd(xD + 10, 'WENT TO', 'start');
@@ -3640,7 +3637,15 @@ function renderTransfers() {
                 'whose age is not one this club fielded — usually another ' +
                 'competition\u2019s bands, and not matched to an age group ' +
                 'because PlayHQ has not matched them either. Hover anything ' +
-                'to list the players.</div>'
+                'to list the players.</div>' +
+                // ⚠️ AN ABSENT FIELD AND AN EMPTY ONE LOOK IDENTICAL ON SCREEN.
+                // Without this, a file written before build-transfers v18 shows
+                // a diagram with no grades anywhere and nothing to say why.
+                (shown.some(t => t.fromTeam) && !shown.some(t => t.fromGrade)
+                  ? '<div class="tv-note" style="margin:6px 0 0">No grades in ' +
+                    'this file: <code>fromGrade</code> is written by ' +
+                    'build-transfers v18 and up. Re-run it to fill them in.</div>'
+                  : '')
               : tvFlowSVG(S.transferFlow, flows, season) +
                 '<div class="tv-note" style="margin:0">Hover a band to list the ' +
                 'players on it.</div>')
