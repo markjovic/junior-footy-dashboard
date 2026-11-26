@@ -294,6 +294,8 @@ body{overflow-x:hidden}
 .tv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--b1);font-size:12px}
 .tv-name{font-weight:600;min-width:150px}
 .tv-age{font-family:'DM Mono',monospace;font-size:10px;color:var(--tx2)}
+.tv-clubname{cursor:pointer}
+.tv-clubname:hover{color:var(--gold);text-decoration:underline}
 .tv-sec{display:flex;align-items:center;gap:8px;margin:8px 0 2px 10px;
   font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.09em;
   color:var(--gold);font-weight:500}
@@ -770,7 +772,7 @@ body{overflow-x:hidden}
 <div id="toast-host"></div>
 <header class="hdr">
   <div class="logo">Local Footy <span>Dashboard</span></div>
-  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.33</span>
+  <span class="hdr-meta" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:var(--gold);background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.25);border-radius:4px;padding:2px 8px">v1.35</span>
   <span id="dev-badge" style="display:none;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1px;color:#f97316;background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:4px;padding:2px 8px">DEV MODE</span>
   <button class="hdr-btn" id="filter-toggle" onclick="toggleSidebar()" style="display:none">⊟ Filters</button>
   <span class="fv-switch" id="view-switch" style="display:none">
@@ -1285,7 +1287,7 @@ body{overflow-x:hidden}
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 10px;background:var(--s2);border-radius:var(--r)">
           <span style="color:var(--tx3);font-family:'DM Mono',monospace;letter-spacing:0.5px">VERSION</span>
-          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.33</span>
+          <span style="color:var(--gold);font-family:'DM Mono',monospace;font-weight:500">v1.35</span>
         </div>
 
 
@@ -1464,6 +1466,30 @@ function buildHash() {
     const se = S.rosterData && S.rosterData[S.rosterSeason];
     const cl = se && (se.clubs || {})[S.rosterClub];
     if (cl && cl.name) p.push(['rc', cl.name]);
+    // Plain labels, and only when set — "our U12s" is as much the point of a
+    // shared rosters link as the club is.
+    if (S.rosterAge) p.push(['ra', S.rosterAge]);
+    if (S.rosterGrade) p.push(['rg', S.rosterGrade]);
+  }
+
+  // ── TRANSFERS VIEW STATE ──────────────────────────────────────────────────
+  // ⚠️ THIS VIEW CARRIED NOTHING BUT `v=transfers`. Every filter, the season,
+  // the list/summary choice and the open flow diagram were all unshareable —
+  // "look at what is happening at Lysterfield" could not be sent to anyone.
+  // Same rule as the finals keys: only what is worth SHARING, and only when it
+  // differs from the default, so a plain link stays plain.
+  if (S.view === 'transfers') {
+    if (S.transferComp) p.push(['tc', S.transferComp]);
+    if (S.transferGrade) p.push(['ta', S.transferGrade]);
+    if (S.transferClub) p.push(['tb', S.transferClub]);
+    // ⚠️ '' IS A CHOICE HERE, not an absence: it means "all seasons", which is
+    // NOT the default. null means not yet resolved and travels as nothing.
+    if (S.transferYear !== null) p.push(['ts', S.transferYear || 'all']);
+    if (S.transferKind && S.transferKind !== 'all') p.push(['tk', S.transferKind]);
+    if (S.transferSort && S.transferSort !== 'out') p.push(['to', S.transferSort]);
+    if (S.transferView && S.transferView !== 'list') p.push(['tv', S.transferView]);
+    if (S.transferFlow) p.push(['tf', S.transferFlow]);
+    if (S.transferFlowBy && S.transferFlowBy !== 'teams') p.push(['tm', S.transferFlowBy]);
   }
 
   // ── FINALS VIEW STATE ─────────────────────────────────────────────────────
@@ -1520,6 +1546,32 @@ function parseHash(h) {
 // `fm` is here because switching by-age to by-club is a navigation, not a filter
 // tweak — a reader who lands on a by-club link and presses back expects to leave,
 // not to shuffle through finals modes.
+// ⚠️ ONE READER FOR BOTH ENTRY POINTS. The first-load path and the popstate
+// path each restore state, and a key handled in one but not the other is a
+// back button that half-works — which is how the finals view got its
+// "reset first" comments. Everything transfers-related lives here.
+function resetTransferState() {
+  S.transferComp = ''; S.transferGrade = ''; S.transferClub = '';
+  S.transferKind = 'all'; S.transferSort = 'out'; S.transferView = 'list';
+  S.transferFlow = ''; S.transferFlowBy = 'teams'; S.transferYear = null;
+}
+function applyTransferURL(u) {
+  if (!u) return;
+  if (u.tc) S.transferComp = u.tc;
+  if (u.ta) S.transferGrade = u.ta;
+  if (u.tb) S.transferClub = u.tb;
+  // 'all' is the explicit every-season choice; anything else is a year.
+  if (u.ts) S.transferYear = (u.ts === 'all') ? '' : u.ts;
+  if (['all', 'between', 'in-season', 'lead'].includes(u.tk)) S.transferKind = u.tk;
+  if (['out', 'in', 'comp', 'grade', 'name'].includes(u.to)) S.transferSort = u.to;
+  if (['list', 'summary'].includes(u.tv)) S.transferView = u.tv;
+  if (['teams', 'clubs'].includes(u.tm)) S.transferFlowBy = u.tm;
+  // ⚠️ A FLOW IMPLIES THE SUMMARY VIEW. The panel is only drawn there, so a
+  // link carrying `tf` without `tv=summary` would land on a list with the
+  // diagram silently not shown.
+  if (u.tf) { S.transferFlow = u.tf; S.transferView = 'summary'; }
+}
+
 const URL_PUSH_KEYS = ['y', 'c', 'v', 'fm'];
 // Every value S.view may legally hold. The saved-filter reader, the URL reader
 // and the popstate reader all validate against THIS, so a new view cannot be
@@ -2853,7 +2905,7 @@ function setTransferSort(v) {
   });
   renderTransfers();
 }
-function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); }
+function setTransferComp(v) { S.transferComp = String(v || ''); renderTransfers(); syncURL(); }
 // '\u0000' is the "All seasons" option. A plain '' cannot be used because ''
 // is also what `transferYear` holds once all-seasons is chosen, and the select
 // would then be indistinguishable from "not chosen yet".
@@ -2868,26 +2920,33 @@ function setTransferSum(k) {
 function setTransferYear(v) {
   S.transferYear = (v === '\u0000') ? '' : String(v || '');
   renderTransfers();
+  syncURL();
 }
-function setTransferClub(v) { S.transferClub = String(v || ''); S.transferFlow = ''; renderTransfers(); }
+function setTransferClub(v) { S.transferClub = String(v || ''); S.transferFlow = ''; renderTransfers(); syncURL(); }
 function setTransferView(v) {
   S.transferView = v;
+  if (v !== 'summary') S.transferFlow = '';
   [['list','tvv-list'],['summary','tvv-summary']].forEach(([k, id]) => {
     const b = document.getElementById(id);
     if (b) b.classList.toggle('on', k === v);
   });
   renderTransfers();
+  syncURL();
 }
 // Opening a club's flow also pins the filter to it, so the list underneath
 // agrees with the diagram rather than describing a different set.
 function openTransferFlow(club) {
   S.transferFlow = String(club || '');
   S.transferClub = S.transferFlow;
+  // ⚠️ THE DIAGRAM IS ONLY DRAWN IN SUMMARY. Opening one from the LIST used to
+  // set the state and leave the reader on the list, where nothing appeared.
+  S.transferView = 'summary';
   renderTransfers();
+  syncURL();
 }
-function closeTransferFlow() { S.transferFlow = ''; renderTransfers(); }
-function setTransferFlowBy(v) { S.transferFlowBy = v; renderTransfers(); }
-function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); }
+function closeTransferFlow() { S.transferFlow = ''; renderTransfers(); syncURL(); }
+function setTransferFlowBy(v) { S.transferFlowBy = v; renderTransfers(); syncURL(); }
+function setTransferGrade(v) { S.transferGrade = String(v || ''); renderTransfers(); syncURL(); }
 function resetTransferFilters() {
   S.transferComp = ''; S.transferGrade = ''; S.transferSearch = '';
   S.transferClub = ''; S.transferFlow = '';
@@ -3170,6 +3229,14 @@ function tvInboundFlows(rows, club, known) {
 // missing — so the panel says which it is rather than showing blanks.
 const tvGrade = (t) => (t && t.fromGrade) || '';
 
+// ⚠️ THE LEAGUE IN BRACKETS EATS THE BOX. Stored club names carry their
+// competition — "Bayswater (Eastern Football Netball League)" — 43 characters
+// of which 9 identify the club, so every diagram label truncated to
+// "Bayswater (Eastern Football N…" and the useful part sat beside an ellipsis.
+// Dropped for DIAGRAM LABELS only; the tooltip and the list keep the stored
+// name, because two clubs can share a short name across leagues.
+const tvShortClub = (n) => String(n || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || String(n || '');
+
 // Age groups, each with the sides it fielded. The middle column of the
 // three-stage diagram hangs off this.
 function tvAgeGroups(teams) {
@@ -3233,8 +3300,20 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
 
   const dests = [...new Set(teams.flatMap(t => t.dests.map(d => d[0])))]
     .sort((a, b) => a.localeCompare(b));
-  const srcs = [...new Set([...IN.values()].flatMap(v => v.srcs.map(x => x[0])))]
-    .sort((a, b) => a.localeCompare(b));
+  // ⚠️ ONE BOX PER SOURCE CLUB **AND AGE**. A box per club had to describe
+  // arrivals that feed several different age boxes, so it could show an age or
+  // a grade only when every one of them happened to agree — which for Knox
+  // sending two U12 Girls meant a grade and no age, and for a club sending two
+  // ages meant neither. Split this way each box feeds exactly one age box and
+  // can state its own age and grade outright.
+  const srcs = [];
+  for (const [ageKey, v] of IN) {
+    for (const [cName, n, list] of v.srcs) srcs.push({ ageKey, club: cName, n, rows: list });
+  }
+  srcs.sort((a, b) =>
+    tvAgeKey(a.ageKey === TV_POT ? '' : a.ageKey)
+      .localeCompare(tvAgeKey(b.ageKey === TV_POT ? '' : b.ageKey)) ||
+    a.club.localeCompare(b.club));
 
   // ⚠️ LANES ARE THE MIDDLE COLUMN. Each side gets one; an age with arrivals
   // but no side gets one too, so its box has somewhere to sit, and the pot
@@ -3252,7 +3331,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   // the third line fell outside its own rect and under the next box, so every
   // single-lane age lost its net line. The row and the minimum box now size
   // for three lines, and AGE_H is the one place that changes.
-  const rowH = 42, padTop = 38, w = 1220, AGE_H = 40;
+  const rowH = 42, padTop = 38, w = 1300, AGE_H = 40;
   const lanes = Math.max(lane.length, dests.length, srcs.length, 1);
   const h = padTop + lanes * rowH + 22;
   const maxN = Math.max(1,
@@ -3263,7 +3342,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   const yL = (i) => padTop + i * rowH + rowH / 2 + off(lane.length);
   const yD = (j) => padTop + j * rowH + rowH / 2 + off(dests.length);
   const yS = (j) => padTop + j * rowH + rowH / 2 + off(srcs.length);
-  const xSB = 14, xS = 240, xA0 = 300, xA1 = 460, xT0 = 508, xT1 = 792, xD = 990;
+  const xSB = 14, xS = 288, xA0 = 348, xA1 = 508, xT0 = 556, xT1 = 840, xD = 1030;
   const laneOf = (t) => lane.findIndex(l => l.kind === 'team' && l.team === t);
   let g = '';
 
@@ -3301,10 +3380,11 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     return cy;
   };
 
-  const drawInBands = (cy, v) => {
-    if (!v) return;
-    for (const [sc, n, list] of v.srcs) {
-      const j = srcs.indexOf(sc), sy = yS(j), mid = (xS + xA0) / 2;
+  const drawInBands = (cy, ageKey) => {
+    for (let j = 0; j < srcs.length; j++) {
+      if (srcs[j].ageKey !== ageKey) continue;
+      const { club: sc, n, rows: list } = srcs[j];
+      const sy = yS(j), mid = (xS + xA0) / 2;
       const bt = e(tvFlowTip(club, sc, true, list, season));
       g += `<path d="M ${xS} ${sy} C ${mid} ${sy}, ${mid} ${cy}, ${xA0} ${cy}" ` +
         `fill="none" stroke="transparent" stroke-width="${Math.max(14, band(n) + 8)}" ` +
@@ -3322,7 +3402,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
     const v = IN.get(grp.age);
     const cy = drawAgeBox(idxs, grp.age, grp.left,
       v ? v.total : 0, tvAgeSquadSize(season, club, grp.age), false);
-    drawInBands(cy, v);
+    drawInBands(cy, grp.age);
     for (const t of grp.teams) {
       const y = yL(laneOf(t)), mid = (xA1 + xT0) / 2;
       g += `<path d="M ${xA1} ${cy} C ${mid} ${cy}, ${mid} ${y}, ${xT0} ${y}" ` +
@@ -3330,7 +3410,7 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
         `stroke-width="${band(t.left)}" style="pointer-events:none"/>`;
     }
   }
-  if (pot) drawInBands(drawAgeBox([lane.length - 1], '', 0, pot.total, null, true), pot);
+  if (pot) drawInBands(drawAgeBox([lane.length - 1], '', 0, pot.total, null, true), TV_POT);
 
   // ── the sides, and where each went ────────────────────────────────────
   for (const l of lane) {
@@ -3369,31 +3449,41 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   // ⚠️ A BOX, LIKE THE OTHER TWO COLUMNS. Bare text has nothing to hover and
   // no edge for a band to meet, so the one column you cannot interrogate was
   // the one answering "who is arriving".
-  srcs.forEach((sc, j) => {
-    const mine = [...IN.values()].flatMap(v =>
-      (v.srcs.find(x => x[0] === sc) || [0, 0, []])[2]);
-    const n = mine.length, y = yS(j);
-    // ⚠️ ONE GRADE ONLY IF THEY ALL SHARE IT. A club's arrivals can come from
-    // several of its sides; the first one's grade beside the club name would
-    // attribute it to all of them.
+  srcs.forEach((src, j) => {
+    const { club: sc, n, rows: mine, ageKey } = src;
+    const y = yS(j);
+    // Every row in this box shares a club and an age, so the age is always
+    // printable. The grade still needs agreement: one club can send a U13 A
+    // and a U13 B in the same age group.
     const gs = new Set(mine.map(tvGrade).filter(Boolean));
     const one = (gs.size === 1 && mine.every(tvGrade)) ? [...gs][0] : '';
-    const tip = e(sc + '  \u2014  ' + n + ' arriving\n' +
+    const ageTxt = ageKey === TV_POT ? '' : tvAge(ageKey);
+    // ⚠️ "U13 U13 A" IS WHAT NAIVE CONCATENATION GIVES. Some grades are bare
+    // letters ("D2", "C") and some already carry the age ("U13 A"), depending
+    // on whether the league or the registry supplied them.
+    const gradeTxt = (one && ageTxt && one.toLowerCase().startsWith(ageTxt.toLowerCase()))
+      ? one.slice(ageTxt.length).trim() : one;
+    const sub = [ageTxt, gradeTxt].filter(Boolean).join(' ');
+    // The sides they are coming off, named when there is more than one — the
+    // box cannot show them all, and silently showing the first would be wrong.
+    const tms = [...new Set(mine.map(t => t.fromTeam).filter(Boolean))];
+    const tip = e(sc + (sub ? '  \u2014  ' + sub : '') + '  \u2014  ' + n + ' arriving' +
+      (tms.length > 1 ? '  (from ' + tms.length + ' sides)' : '') + '\n' +
       mine.slice().sort((a, b) =>
-        tvAgeKey(a.age).localeCompare(tvAgeKey(b.age)) ||
         String(a.name || '').localeCompare(String(b.name || '')))
         .map(t => '  ' + (t.name || '(unnamed)') +
-          (t.age ? '  ' + tvAge(t.age) : '') +
           (t.fromTeam ? '  \u2014 ' + t.fromTeam : '') +
           (tvGrade(t) ? '  (' + tvGrade(t) + ')' : '')).join('\n'));
     g += `<rect x="${xSB}" y="${y - 13}" width="${xS - xSB}" height="26" rx="5" ` +
       `fill="var(--s2)" stroke="var(--b2)" stroke-width="1" style="cursor:help">` +
       `<title>${tip}</title></rect>`;
-    const nm = sc.length > 24 ? sc.slice(0, 23) + '\u2026' : sc;
+    const short = tvShortClub(sc);
+    const room = sub ? 22 : 30;
+    const nm = short.length > room ? short.slice(0, room - 1) + '\u2026' : short;
     g += `<text x="${xSB + 10}" y="${y + 4}" font-size="10" fill="var(--tx2)" ` +
       `style="pointer-events:none">${e(nm)}` +
-      (one ? `<tspan fill="var(--tx3)" font-size="9" font-family="'DM Mono',monospace">` +
-        `  ${e(one)}</tspan>` : '') + `</text>`;
+      (sub ? `<tspan fill="var(--tx3)" font-size="9" font-family="'DM Mono',monospace">` +
+        `  ${e(sub)}</tspan>` : '') + `</text>`;
     g += `<text x="${xS - 10}" y="${y + 4}" text-anchor="end" font-size="9" ` +
       `fill="var(--tx3)" font-family="'DM Mono',monospace" style="pointer-events:none">` +
       `${n}</text>`;
@@ -3401,8 +3491,10 @@ function tvTeamFlowSVG(club, teams, season, inbound) {
   dests.forEach((d, j) => {
     const n = teams.reduce((a, t) =>
       a + (t.dests.find(x => x[0] === d) || [0, 0])[1], 0);
-    g += `<text x="${xD + 10}" y="${yD(j) + 4}" font-size="10" fill="var(--tx2)">` +
-      `${e(d.length > 30 ? d.slice(0, 29) + '\u2026' : d)}</text>`;
+    const sd = tvShortClub(d);
+    g += `<text x="${xD + 10}" y="${yD(j) + 4}" font-size="10" fill="var(--tx2)" ` +
+      `style="cursor:help"><title>${e(d)}</title>` +
+      `${e(sd.length > 34 ? sd.slice(0, 33) + '\u2026' : sd)}</text>`;
     g += `<text x="${xD - 8}" y="${yD(j) - 4}" text-anchor="end" font-size="9" ` +
       `fill="var(--tx3)" font-family="'DM Mono',monospace">${n}</text>`;
   });
@@ -3442,7 +3534,8 @@ function tvFlowSVG(club, flows, season) {
   g += `<rect x="${cx - 70}" y="${cy - 16}" width="140" height="32" rx="6" ` +
        `fill="var(--s3)" stroke="var(--gold)" stroke-width="1"/>`;
   g += `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="11" ` +
-       `fill="var(--tx)" font-weight="600">${e(club.length > 20 ? club.slice(0, 19) + '…' : club)}</text>`;
+       `fill="var(--tx)" font-weight="600"><title>${e(club)}</title>` +
+       `${e(tvShortClub(club).length > 22 ? tvShortClub(club).slice(0, 21) + '…' : tvShortClub(club))}</text>`;
   const side = (list, isIn) => {
     let out = '';
     list.forEach(([name, n, rows], i) => {
@@ -3465,7 +3558,7 @@ function tvFlowSVG(club, flows, season) {
       out += `<text x="${isIn ? 144 : w - 144}" y="${y + 4}" text-anchor="${isIn ? 'end' : 'start'}" ` +
         `font-size="10" fill="var(--tx2)" style="cursor:help">` +
         `<title>${tip}</title>` +
-        `${e(name.length > 22 ? name.slice(0, 21) + '…' : name)}</text>`;
+        `${e(tvShortClub(name).length > 26 ? tvShortClub(name).slice(0, 25) + '…' : tvShortClub(name))}</text>`;
       out += `<text x="${isIn ? x0 + 8 : x1 - 8}" y="${y - 4}" text-anchor="${isIn ? 'start' : 'end'}" ` +
         `font-size="9" fill="var(--tx3)" font-family="'DM Mono',monospace" ` +
         `style="cursor:help"><title>${tip}</title>${n}</text>`;
@@ -3845,7 +3938,14 @@ function renderTransfers() {
       // in the group, rather than vanishing from both.
       const inn = list.filter(t => t.toClubName === club && t.fromClubName !== club);
       const out = list.filter(t => !(t.toClubName === club && t.fromClubName !== club));
-      parts.push('<div class="tv-club">' + tvEsc(club) +
+      // ⚠️ THE DIAGRAM HAD ONE WAY IN: a club name in the SUMMARY table. A
+      // reader scrolling the list had no route to it at all. The heading is
+      // now the same door.
+      parts.push('<div class="tv-club">' +
+        '<span class="tv-clubname" onclick="openTransferFlow(' + "'" +
+        tvEsc(String(club).replace(/'/g, "\\'")) + "'" + ')" ' +
+        'title="Show where this club\u2019s players came from and went to">' +
+        tvEsc(club) + '</span>' +
         '<span class="tv-count">' +
         (byJoined ? inn.length + ' in · ' + out.length + ' out'
                   : out.length + ' out · ' + inn.length + ' in') +
@@ -10228,6 +10328,16 @@ async function init() {
     // compName cannot be turned into a season id without it. renderRosters
     // resolves it on the first draw after the data arrives.
     if (S.view === 'rosters' && _url.rs) S.rosterWant = { s: _url.rs, c: _url.rc || '' };
+    if (S.view === 'rosters') {
+      if (_url.ra) S.rosterAge = _url.ra;
+      if (_url.rg) S.rosterGrade = _url.rg;
+    }
+    // ⚠️ VALIDATED, NOT TRUSTED. A hand-edited `to=banana` would otherwise set
+    // a sort nothing matches and render an empty view with no explanation.
+    // The club, competition and age are free text — they are matched against
+    // the data at render time and simply find nothing if wrong, which the
+    // "Nothing matches" line already explains.
+    if (S.view === 'transfers') applyTransferURL(_url);
     if (QTR_MODES.includes(_url.q)) S.qtrMode = _url.q;
     if (S.view === 'finals') {
       if (['age', 'club', 'venue', 'winners'].includes(_url.fm)) S.finalsMode = _url.fm;
@@ -10324,6 +10434,12 @@ async function init() {
       // must not leave that club selected.
       S.rosterClub = ''; S.rosterSearch = '';
       S.rosterWant = (S.view === 'rosters' && u.rs) ? { s: u.rs, c: u.rc || '' } : null;
+      // Reset before applying, like the finals keys: going BACK from a filtered
+      // link must not leave the filter on.
+      S.rosterAge = (S.view === 'rosters' && u.ra) ? u.ra : '';
+      S.rosterGrade = (S.view === 'rosters' && u.rg) ? u.rg : '';
+      resetTransferState();
+      if (S.view === 'transfers') applyTransferURL(u);
       S.qtrMode = QTR_MODES.includes(u.q) ? u.q : 'cum';
       // Reset to the defaults first, or going BACK from a by-club link would keep
       // the club selected — a back button that leaves state behind is worse than
