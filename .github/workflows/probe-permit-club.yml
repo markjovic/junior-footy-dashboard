@@ -18,8 +18,13 @@ name: Probe permit club
 on:
   workflow_dispatch:
     inputs:
+      team:
+        description: 'team — "<season> | <club> | <team>". Probes the WHOLE side, which is the only way to see a host-club player and a permit player together. Blank uses players below.'
+        required: false
+        default: ''
+        type: string
       players:
-        description: 'players — comma-separated names or uuids. Blank uses the five U12 joint-team players.'
+        description: 'players — comma-separated names or uuids. Ignored when team is set. Blank uses the five U12 joint-team players.'
         required: false
         default: ''
         type: string
@@ -48,6 +53,7 @@ jobs:
 
       - name: Probe
         env:
+          PP_TEAM: ${{ github.event.inputs.team }}
           PP_PLAYERS: ${{ github.event.inputs.players }}
           PP_PACE_MS: ${{ github.event.inputs.pace_ms }}
         run: |
