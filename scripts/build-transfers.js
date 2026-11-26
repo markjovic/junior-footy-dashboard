@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v22 2026-11-26 count-both-halves';
+const VERSION = 'build-transfers v23 2026-11-26 permit-squad-counts';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -404,6 +404,12 @@ function main() {
   //   unknown two, and the played club matches neither or both — left alone
   let permitResolved = 0, permitUnknown = 0, permitMulti = 0, permitReturned = 0;
   let permitDuped = 0;
+  let regPeople = null;
+  const leadKeptSamples = [];
+  // ⚠️ DECLARED HERE, FILLED IN THE ROSTER PASS, LOGGED THERE TOO. They were
+  // referenced from the permits summary, which runs first — a TDZ crash that
+  // `node --check` passes without a word and only running the thing finds.
+  let permitRows = 0, permitRowsNoRec = 0;
   // ⚠️ "UNDECIDABLE" WAS ONE COUNTER FOR THREE DIFFERENT FAILURES, and on the
   // first real run it read 127 of 142 with no way to tell which. A single
   // number that cannot be acted on is barely better than no number.
@@ -413,7 +419,8 @@ function main() {
   // club name -> players who turned out for its teams on a permit and have
   // gone somewhere other than it. Not transfers; the club lost them anyway.
   const permitAway = new Map();
-  const homeOf = (uuid, from) => {
+  const homeOf = (uuid, from, count = true) => {
+    const bump = (n) => { if (count) n(); };
     const raw = Array.isArray(from.clubs) ? from.clubs.filter(x => x && x.id) : null;
     // ⚠️ TWO REGISTRATIONS WITH THE SAME CLUB ARE ONE CLUB. A player can hold
     // several registrations with their OWN club inside one season id — the
@@ -427,11 +434,11 @@ function main() {
     // nothing downstream reads it, so which one survives does not matter.
     const seenIds = new Set();
     const list = raw ? raw.filter(x => !seenIds.has(x.id) && seenIds.add(x.id)) : null;
-    if (raw && raw.length > (list ? list.length : 0)) permitDuped++;
+    if (raw && raw.length > (list ? list.length : 0)) bump(() => permitDuped++);
     const fallback = { id: from.club, name: from.clubName || clubLabel(from.club),
       host: null, why: 'single' };
     if (!list || list.length < 2) return fallback;
-    permitMulti++;
+    bump(() => permitMulti++);
     const lpRec = lastPlayed.get(uuid) || {};
     const played = lpRec.clubId || null;
     const sample = (why) => {
@@ -442,7 +449,7 @@ function main() {
       }
     };
     if (!played) {
-      permitUnknown++; permitWhy.noPlayed++; sample('no played club');
+      bump(() => { permitUnknown++; permitWhy.noPlayed++; sample('no played club'); });
       return { ...fallback, why: 'unknown' };
     }
     const other = list.filter(x => x.id !== played);
@@ -452,14 +459,14 @@ function main() {
       // The club whose team they played for is not among their registrations
       // at all. Either the ids are from different spaces, or they played for a
       // club they never registered with — which should not happen.
-      permitUnknown++; permitWhy.matchedNone++; sample('played club not registered');
+      bump(() => { permitUnknown++; permitWhy.matchedNone++; sample('played club not registered'); });
       return { ...fallback, why: 'unknown' };
     }
     if (other.length !== 1) {
-      permitUnknown++; permitWhy.matchedAll++; sample('more than one left over');
+      bump(() => { permitUnknown++; permitWhy.matchedAll++; sample('more than one left over'); });
       return { ...fallback, why: 'unknown' };
     }
-    permitResolved++;
+    bump(() => permitResolved++);
     return { id: other[0].id, name: other[0].name || clubLabel(other[0].id),
       host: played, why: 'permit' };
   };
@@ -770,6 +777,10 @@ function main() {
     // `from.clubs` and "one club" are indistinguishable. The version says
     // which, and the log and the page both report it.
     regFileVersion = Number((reg.meta || {}).version || 0);
+    // ⚠️ KEPT FOR THE ROSTER PASS BELOW. The rosters are built in the manifest
+    // loop, long before this file is read, so the permit counts per squad can
+    // only be worked out afterwards — and only if the records are still here.
+    regPeople = people;
     for (const [uuid, r] of Object.entries(people)) {
       if (!r.at) { notWalked++; continue; }
       // ⚠️ CHECKED BEFORE THE NEXT SEASON EXISTED IS NOT "NO REGISTRATION". Until
@@ -802,6 +813,16 @@ function main() {
         if (home.why === 'permit' && home.host && t.club !== home.host) {
           const hn = clubLabel(home.host);
           permitAway.set(hn, (permitAway.get(hn) || 0) + 1);
+        }
+        // Same sample as the leads half: a permit player leaving for a third
+        // club is attributed to HOME, and if home is the club whose team they
+        // played in, the rule has resolved the wrong way round.
+        if (home.why === 'permit' && leadKeptSamples.length < 8) {
+          leadKeptSamples.push(
+            `[between] ${r.name || uuid}  played=${(lastPlayed.get(uuid) || {}).clubId || '(none)'}` +
+            ` "${(lastPlayed.get(uuid) || {}).team || ''}"` +
+            `  registered=[${(from.clubs || []).map(x => x.id).join(', ')}]` +
+            `  home=${home.id}  to=${t.club}`);
         }
         const fs2 = splitSeason(from.compName);
         const ts = splitSeason((byId.get(t.seasonId) || {}).compName || t.compName || '');
@@ -869,6 +890,19 @@ function main() {
       if (!r.at || !lo || !lo.id || !from.club) continue;
       const home = homeOf(uuid, from);
       if (lo.id === home.id) { permitReturned += (home.why === 'permit') ? 1 : 0; continue; }
+      // ⚠️ A MULTI-CLUB PLAYER WHOSE LEAD IS **NOT** SUPPRESSED is the case to
+      // watch: Heathmont showed 9 arriving from Norwood on 2026-11-26, which
+      // is what a permit ending looks like when `home` resolved to the wrong
+      // one of the two. The suspicion is that the joint team's club id in OUR
+      // match data is not the organisation PlayHQ attributes the registration
+      // to, so `played` names the home club and the rule inverts.
+      if (home.why === 'permit' && leadKeptSamples.length < 8) {
+        leadKeptSamples.push(
+          `[lead] ${r.name || uuid}  played=${(lastPlayed.get(uuid) || {}).clubId || '(none)'}` +
+          ` "${(lastPlayed.get(uuid) || {}).team || ''}"` +
+          `  registered=[${(from.clubs || []).map(x => x.id).join(', ')}]` +
+          `  home=${home.id}  lastOrg=${lo.id}`);
+      }
       if (home.why === 'permit' && home.host && lo.id !== home.host) {
         const hn = clubLabel(home.host);
         permitAway.set(hn, (permitAway.get(hn) || 0) + 1);
@@ -938,6 +972,12 @@ function main() {
       log('         suspecting the data.');
     }
     log(`  rows suppressed — a permit player going home : ${permitReturned}`);
+  if (leadKeptSamples.length) {
+    log('  ⚠️ permit players whose LEAD was kept rather than suppressed — if the');
+    log('     home club below is the club whose team they played in, the rule has');
+    log('     resolved the wrong way round and `played` is naming their own club:');
+    for (const l of leadKeptSamples) log(`      ${l}`);
+  }
     if (permitMulti && !permitResolved) {
       log('  ⚠️ NOT ONE RESOLVED. The rule compares organisation ids:');
       log('     from.clubs[].id against lastPlayed.clubId. A zero here means one');
@@ -1064,6 +1104,49 @@ function main() {
     rosterOut.seasons[sid] = season;
   }
 
+  // ── Permit players inside each squad ───────────────────────────────────────
+  //
+  // ⚠️ THE ROSTER IS BUILT FROM GAMES, so a permit player is a row at the club
+  // whose TEAM they played in, not at the club they are registered to. The
+  // dashboard's "1 of 47 left" therefore divided a numerator that excludes
+  // permit players by a denominator that includes them — one figure about a
+  // club's own players over one about everyone who took the field.
+  // docs/permit_revert_design.md §8.
+  //
+  // ⚠️ NO FIELD IS ADDED TO THE ROSTER ROW. `{u, n, a, s}` is read by the
+  // rosters view, the player panel, the cross-season search and the career
+  // join; changing it means re-reading all four. These counts go in
+  // transfers.json instead, which only the transfers view reads.
+  //
+  // Keys are ids and labels the view already holds: compName, the club NAME as
+  // the roster stores it, then the age, and for a team the stored team name.
+  const permitSquadAge = new Map();   // `${compName}|${clubName}|${age}` -> n
+  const permitSquadTeam = new Map();  // `${compName}|${clubName}|${team}|${age}` -> n
+  if (regPeople) {
+    for (const [sid, season] of Object.entries(rosterOut.seasons)) {
+      const comp = season.compName || sid;
+      for (const [clubId, c] of Object.entries(season.clubs || {})) {
+        for (const [team, rows] of Object.entries(c.teams || {})) {
+          for (const row of rows) {
+            // ⚠️ PLAYED ROWS ONLY. A registration row ('r') is the player's own
+            // club by definition — it IS the registration — so it can never be
+            // a permit and counting it would subtract a player twice.
+            if (!row || row.s !== 'p') continue;
+            const rec = regPeople[row.u];
+            if (!rec || !rec.from) { permitRowsNoRec++; continue; }
+            const home = homeOf(row.u, rec.from, false);
+            if (!home.id || home.id === clubId) continue;
+            permitRows++;
+            const ck = `${comp}|${c.name}|${row.a || ''}`;
+            permitSquadAge.set(ck, (permitSquadAge.get(ck) || 0) + 1);
+            const tk = `${comp}|${c.name}|${team}|${row.a || ''}`;
+            permitSquadTeam.set(tk, (permitSquadTeam.get(tk) || 0) + 1);
+          }
+        }
+      }
+    }
+  }
+
   // ── Career totals ─────────────────────────────────────────────────────────
   // ⚠️ READ ONCE PER PERSON, NOT ONCE PER ROW. A player appears in several
   // rows — two clubs in a season, or a played row and a registration — and
@@ -1179,6 +1262,18 @@ function main() {
     log('     seasons can only show teams that already have a player. Run');
     log('     "Fetch season teams" to fill them in.');
   }
+  // ⚠️ ASSIGNED HERE, NOT BESIDE THE OTHER coverage KEYS. `out` is built
+  // before the roster pass, so assigning these up there read them before they
+  // existed — the same TDZ mistake twice in one change, both found by running
+  // it and neither by `node --check`.
+  out.coverage.permitRows = permitRows;
+  out.coverage.permitRowsNoRec = permitRowsNoRec;
+  out.permitSquadAge = Object.fromEntries(permitSquadAge);
+  out.permitSquadTeam = Object.fromEntries(permitSquadTeam);
+  log(`  roster rows that are a permit player : ${permitRows}` +
+    (permitRowsNoRec ? `  (${permitRowsNoRec} played row(s) have no walk record)` : ''));
+  log('     Subtracted from the squad size behind "N of M left", so both halves');
+  log('     of that fraction describe the same group of players.');
   log(`  teams with an age : ${agedTeams}; without : ${unagedTeams}` +
     (unagedTeams ? '  (they sort last rather than first)' : ''));
   let gradedTeams = 0, ungradedTeams = 0; const gradeSeasons = new Set();
