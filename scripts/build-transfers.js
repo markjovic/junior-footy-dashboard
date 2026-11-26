@@ -2,7 +2,7 @@
 // scripts/build-transfers.js
 
 // ⚠️ THE VERSION GOES AT THE TOP, visible without scrolling past the comments.
-const VERSION = 'build-transfers v25 2026-11-26 not-started-seasons';
+const VERSION = 'build-transfers v26 2026-11-27 practice-match-teams';
 
 //
 // Builds data/transfers.json: every player who has changed club, from two
@@ -329,6 +329,23 @@ function main() {
   // as a fallback. PlayHQ appends the home association, "Norwood (Eastern
   // Football Netball League)", which the README warns is NOT the competition
   // the team plays in; it is stripped for display rather than stored.
+  // ⚠️ PlayHQ'S OWN FIXED PHRASE for a scratch side a club creates to run
+  // a practice match. MEASURED on 2026-11-27: 89 of them in EFNL 2027, every
+  // single one carrying ZERO players, every one a senior, reserves or U19
+  // side. They are registry entities, never competition teams, and they will
+  // never have a roster — so the empty-team merge was inventing 89 rows a
+  // reader has to scroll past.
+  //
+  // ⚠️ "SQUAD" IS DELIBERATELY NOT IN HERE, and was the reason this was
+  // measured rather than guessed. There is exactly ONE such team in the whole
+  // file — "Lilydale Falcons U14 Boys SQUAD", EFNL 2027 — and it holds 30
+  // real registrations with two transfers into it. It is a club holding squad
+  // for players signed before the league grades its sides, which is a fact
+  // worth showing, not a placeholder. A word blocklist would have deleted it.
+  //
+  // Anything added here needs the same treatment: count the teams AND their
+  // players first. An empty name pattern is junk; a populated one is data.
+  const NON_COMPETITION = /\bpractice match team\b/i;
   const regClubName = new Map();      // org -> name from the registry
   function addEmptyTeams(sid, played) {
     const f = path.join(TEAMS_DIR, `${sid}.json`);
@@ -337,10 +354,15 @@ function main() {
     try { reg = JSON.parse(fs.readFileSync(f, 'utf8')); }
     catch (e) { console.error(`  ⚠️ ${path.basename(f)}: ${e.message}`); return; }
     const byClub = rosters.get(sid);
-    let added = 0, matched = 0, unmatched = 0;
+    let added = 0, matched = 0, unmatched = 0, skipped = 0;
     const sample = [];
     for (const t of Object.values(reg.teams || {})) {
       if (!t || !t.name || !t.org) continue;
+      // Dropped before the match test, and taken out of the denominator with
+      // it: a practice-match side is neither a match nor a naming problem, so
+      // counting it either way would move the per-season percentage for a
+      // reason that has nothing to do with naming.
+      if (NON_COMPETITION.test(t.name)) { skipped++; continue; }
       // ⚠️ ONLY WHERE NOBODY IS ALREADY PLACED. A team that has players is the
       // roster's own; the registry must never overwrite it, and must never add
       // a second entry under the same name.
@@ -371,8 +393,8 @@ function main() {
       added++;
     }
     if (added) { emptyAdded += added; emptySeasons++; }
-    matchReport.push({ sid, played, total: Object.keys(reg.teams || {}).length,
-      matched, unmatched, added, sample });
+    matchReport.push({ sid, played, total: Object.keys(reg.teams || {}).length - skipped,
+      matched, unmatched, added, skipped, sample });
     return added;
   }
 
@@ -1290,7 +1312,8 @@ function main() {
       log(`    ${pad(nm, 14)} ${r.played ? 'played  ' : 'unplayed'} ` +
         `${String(r.total).padStart(4)} in registry, ${String(r.matched).padStart(4)} matched ` +
         `(${String(pct).padStart(3)}%), ${String(r.unmatched).padStart(4)} not` +
-        (r.added ? `, ${r.added} added` : ''));
+        (r.added ? `, ${r.added} added` : '') +
+        (r.skipped ? `, ${r.skipped} practice-match side(s) skipped` : ''));
     }
     const worst = matchReport.filter(r => r.played && r.unmatched > r.matched);
     if (worst.length) {
