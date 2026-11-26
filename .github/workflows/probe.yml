@@ -1,0 +1,91 @@
+# .github/workflows/probe.yml
+#
+# One dispatcher for every probe. Replaces the 26 probe-*.yml workflows.
+#
+# ⚠️ GITHUB CANNOT SHOW DIFFERENT FIELDS PER CHOICE. workflow_dispatch inputs
+# are static — no conditional display, no dependency between inputs — so a
+# per-probe form is not available at any price. Every field of every probe on
+# one screen would be fifty-odd boxes, nearly all irrelevant to whatever you
+# picked. The arguments therefore come in as one key=value string, and
+# scripts/probe.js makes that discoverable: pick `list` to print every probe
+# with its arguments and defaults, mistype a key and it prints the ones that
+# probe accepts.
+#
+# ⚠️ READ-ONLY, LIKE EVERY PROBE IT RUNS. Nothing is written or committed.
+#
+# ⚠️ IT HOLDS THE DATA-WRITE GROUP. Probes write nothing, but the WAF call
+# budget is shared across every run on the account, so a probe must not sit
+# beside a walk or a results fetch.
+
+name: Probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: 'probe — pick "list" to print every probe with its arguments and defaults, without calling anything.'
+        required: true
+        default: 'list'
+        type: choice
+        options:
+          - list
+          - concurrent-comps
+          - finals-rounds
+          - fixture-watch-afl
+          - game-fields
+          - last-interacted
+          - leftovers
+          - nonfinal-scores
+          - org-profile
+          - org-registrations
+          - permit-club
+          - preseason-roster
+          - quarter-scores
+          - rate
+          - rate-sharded
+          - registration-budget
+          - registration-date
+          - registrations-and-config
+          - round-flags
+          - round-periods
+          - search-by-id
+          - signings
+          - team-join
+          - team-logo
+          - team-roster
+          - waf-state
+          - waf-window
+      args:
+        description: 'args — key=value pairs separated by ";" or newlines, e.g. "team=EFNL 2026 | Norwood (EFNL) | Norwood Gold/Heathmont; pace_ms=900". Blank uses that probe''s defaults. An unknown key fails the run and prints the accepted ones.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: playhq-data-write
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Probe
+        env:
+          PROBE_NAME: ${{ github.event.inputs.probe }}
+          PROBE_ARGS: ${{ github.event.inputs.args }}
+        run: |
+          if [ ! -f scripts/probe.js ]; then
+            echo "scripts/probe.js is not in this checkout — commit it first."
+            exit 1
+          fi
+          node --version
+          node scripts/probe.js
